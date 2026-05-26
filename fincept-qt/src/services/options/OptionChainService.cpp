@@ -5,10 +5,14 @@
 #include "datahub/DataHubMetaTypes.h"
 #include "datahub/TopicPolicy.h"
 #include "python/OptionGreeksWorker.h"
+#include "python/PythonRunner.h"
+#include "services/databento/DatabentoService.h"
 #include "storage/repositories/IvHistoryRepository.h"
 #include "storage/repositories/SettingsRepository.h"
+#include "trading/AccountManager.h"
 #include "trading/BrokerInterface.h"
 #include "trading/BrokerRegistry.h"
+#include "trading/brokers/BrokerHttp.h"
 #include "trading/instruments/InstrumentService.h"
 
 #include <QDate>
@@ -37,8 +41,8 @@ using fincept::trading::InstrumentType;
 namespace {
 
 constexpr int kMaxRequestsPerSec = 5;          // chain refresh cap (REST batch heavy)
-constexpr int kChainTtlMs = 5'000;             // chain freshness window
-constexpr int kChainMinIntervalMs = 3'000;     // floor between consecutive refreshes per topic
+constexpr int kChainTtlMs = 300'000;           // 5 min — chain freshness window
+constexpr int kChainMinIntervalMs = 60'000;    // 1 min floor between consecutive refreshes per topic
 constexpr int kChainCoalesceMs = 250;          // collapse rapid republishes (e.g. WS Phase 3)
 constexpr int kChainTimeoutMs = 30'000;
 
@@ -54,6 +58,10 @@ const QString kMaxPainPrefix = QStringLiteral("fno:max_pain:");
 constexpr int kGreeksThrottleMs = 500;        // per-strike Greeks recompute floor
 constexpr int kPerLegTickCoalesceMs = 100;    // option:tick coalesce window
 constexpr double kDefaultRiskFreeRate = 0.067; // RBI 91-day T-bill ballpark
+constexpr double kUSRiskFreeRate = 0.043;     // US 3-month T-bill ballpark
+
+const QString kDatabentoBrokerId = QStringLiteral("databento");
+const QString kDatabentoScript = QStringLiteral("databento_fno_chain.py");
 
 QString cache_key(const QString& broker, const QString& underlying) {
     return broker + "|" + underlying;
@@ -150,11 +158,67 @@ QString OptionChainService::chain_topic(const QString& broker_id, const QString&
 }
 
 QStringList OptionChainService::list_underlyings(const QString& broker_id) const {
+    if (broker_id == kDatabentoBrokerId)
+        return databento_underlyings();
     return InstrumentService::instance().list_underlyings(broker_id, QStringLiteral("NFO"));
 }
 
 QStringList OptionChainService::list_expiries(const QString& broker_id, const QString& underlying) const {
+    if (broker_id == kDatabentoBrokerId)
+        return databento_expiry_cache_.value(underlying);
     return InstrumentService::instance().list_expiries(broker_id, underlying, QStringLiteral("NFO"));
+}
+
+QStringList OptionChainService::databento_underlyings() {
+    return {
+        QStringLiteral("SPY"),  QStringLiteral("QQQ"),  QStringLiteral("IWM"),  QStringLiteral("DIA"),
+        QStringLiteral("AAPL"), QStringLiteral("MSFT"), QStringLiteral("AMZN"), QStringLiteral("GOOGL"),
+        QStringLiteral("TSLA"), QStringLiteral("NVDA"), QStringLiteral("META"), QStringLiteral("AMD"),
+        QStringLiteral("JPM"),  QStringLiteral("BAC"),  QStringLiteral("GS"),
+        QStringLiteral("XLF"),  QStringLiteral("XLE"),  QStringLiteral("XLK"),
+        QStringLiteral("GLD"),  QStringLiteral("SLV"),
+    };
+}
+
+void OptionChainService::list_databento_expiries(const QString& underlying,
+                                                  std::function<void(QStringList)> callback) {
+    if (databento_expiry_cache_.contains(underlying)) {
+        callback(databento_expiry_cache_.value(underlying));
+        return;
+    }
+    auto& db_svc = fincept::DatabentoService::instance();
+    if (!db_svc.has_api_key()) {
+        callback({});
+        return;
+    }
+    QJsonObject json_args;
+    json_args[QStringLiteral("api_key")] = db_svc.api_key();
+    json_args[QStringLiteral("symbol")] = underlying;
+    QStringList script_args = {
+        QStringLiteral("list_expiries"),
+        QString::fromUtf8(QJsonDocument(json_args).toJson(QJsonDocument::Compact)),
+    };
+    QPointer<OptionChainService> self = this;
+    fincept::python::PythonRunner::instance().run(
+        kDatabentoScript, script_args,
+        [self, underlying, callback](fincept::python::PythonResult result) {
+            if (!self) return;
+            QStringList expiries;
+            if (result.success) {
+                QJsonParseError err;
+                auto doc = QJsonDocument::fromJson(result.output.toUtf8(), &err);
+                if (err.error == QJsonParseError::NoError && doc.isObject()) {
+                    auto j = doc.object();
+                    if (!j[QStringLiteral("error")].toBool(false)) {
+                        for (const auto& v : j[QStringLiteral("expiries")].toArray())
+                            expiries.append(v.toString());
+                    }
+                }
+            }
+            if (!expiries.isEmpty())
+                self->databento_expiry_cache_[underlying] = expiries;
+            callback(expiries);
+        });
 }
 
 bool OptionChainService::parse_chain_topic(const QString& topic, QString& broker, QString& underlying,
@@ -182,11 +246,23 @@ double OptionChainService::resolve_spot(const QString& broker_id, const QString&
 
 void OptionChainService::refresh_chain(const QString& broker_id, const QString& underlying,
                                        const QString& expiry) {
+    if (broker_id == kDatabentoBrokerId) {
+        refresh_chain_databento(underlying, expiry);
+        return;
+    }
+    if (broker_id == QLatin1String("fyers")) {
+        refresh_chain_fyers(broker_id, underlying, expiry);
+        return;
+    }
+
     const QString topic = chain_topic(broker_id, underlying, expiry);
+    LOG_INFO("OptionChain", QString("refresh_chain: broker='%1' underlying='%2' expiry='%3' topic='%4'")
+                                .arg(broker_id, underlying, expiry, topic));
 
     auto& reg = BrokerRegistry::instance();
     IBroker* broker = reg.get(broker_id);
     if (!broker) {
+        LOG_ERROR("OptionChain", QString("refresh_chain: broker '%1' not in registry").arg(broker_id));
         in_flight_.remove(topic);
         fincept::datahub::DataHub::instance().publish_error(topic, "broker not registered: " + broker_id);
         return;
@@ -194,6 +270,7 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
 
     QVector<Instrument> instruments =
         InstrumentService::instance().find_options_for_underlying(broker_id, underlying, expiry, "NFO");
+    LOG_INFO("OptionChain", QString("refresh_chain: find_options_for_underlying → %1 instruments").arg(instruments.size()));
     if (instruments.isEmpty()) {
         in_flight_.remove(topic);
         fincept::datahub::DataHub::instance().publish_error(topic,
@@ -206,22 +283,46 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
     QStringList quote_syms;
     for (const auto& inst : instruments) {
         if (inst.instrument_type == InstrumentType::CE || inst.instrument_type == InstrumentType::PE)
-            quote_syms.append(inst.exchange + ":" + inst.brsymbol);
+            quote_syms.append(inst.brexchange + ":" + inst.brsymbol);
+    }
+    // Nearest FUT as spot price fallback — works across all brokers since
+    // it uses brexchange:brsymbol (the broker's native symbol format).
+    QString fut_sym;
+    for (const auto& inst : instruments) {
+        if (inst.instrument_type == InstrumentType::FUT) {
+            fut_sym = inst.brexchange + ":" + inst.brsymbol;
+            quote_syms.append(fut_sym);
+            break;
+        }
     }
     // Underlying spot — index symbols use NSE_INDEX exchange (Zerodha) or
     // appropriate per-broker mapping. Phase 1 assumes NSE for stocks and
-    // NSE_INDEX for the four indices.
+    // NSE_INDEX for the four indices. Brokers that use different index
+    // formats (e.g. Fyers: NSE:NIFTY50-INDEX) will miss this and fall
+    // back to the FUT price above.
     static const QSet<QString> kIndexNames = {"NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"};
     const bool is_index = kIndexNames.contains(underlying);
     const QString underlying_sym =
         is_index ? "NSE_INDEX:" + underlying : "NSE:" + underlying;
     quote_syms.append(underlying_sym);
 
-    BrokerCredentials creds = broker->load_credentials();
+    // Load credentials via AccountManager (keys are account.{uuid}.*),
+    // not IBroker::load_credentials (which looks for broker.{id}.*).
+    BrokerCredentials creds;
+    auto accounts = fincept::trading::AccountManager::instance().list_accounts(broker_id);
+    for (const auto& acct : accounts) {
+        if (acct.is_active) {
+            creds = fincept::trading::AccountManager::instance().load_credentials(acct.account_id);
+            break;
+        }
+    }
+    if (creds.access_token.isEmpty() && !accounts.isEmpty())
+        creds = fincept::trading::AccountManager::instance().load_credentials(accounts.first().account_id);
+    LOG_INFO("OptionChain", QString("refresh_chain: credentials loaded, token_len=%1").arg(creds.access_token.size()));
 
     QPointer<OptionChainService> self = this;
     (void)QtConcurrent::run([self, broker, creds, quote_syms, instruments, broker_id, underlying, expiry, topic,
-                             underlying_sym]() {
+                             underlying_sym, fut_sym]() {
         // Run on worker thread — broker REST calls block (BrokerHttp uses
         // QEventLoop internally per the broker_http_blocking memory).
         auto resp = broker->get_quotes(creds, QVector<QString>(quote_syms.begin(), quote_syms.end()));
@@ -229,16 +330,20 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
             return;
         QMetaObject::invokeMethod(
             self.data(),
-            [self, resp, instruments, broker_id, underlying, expiry, topic, underlying_sym]() {
+            [self, resp, instruments, broker_id, underlying, expiry, topic, underlying_sym, fut_sym]() {
                 if (!self)
                     return;
                 self->in_flight_.remove(topic);
 
                 if (!resp.success || !resp.data.has_value()) {
+                    LOG_ERROR("OptionChain", QString("get_quotes failed: %1").arg(resp.error));
                     fincept::datahub::DataHub::instance().publish_error(topic, resp.error);
                     emit self->chain_failed(topic, resp.error);
                     return;
                 }
+
+                LOG_INFO("OptionChain", QString("get_quotes returned %1 quotes for %2")
+                                            .arg(resp.data->size()).arg(topic));
 
                 // Build a quick lookup from "EXCH:brsymbol" → BrokerQuote.
                 QHash<QString, BrokerQuote> by_sym;
@@ -247,10 +352,16 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
                     by_sym.insert(q.symbol, q);
                 }
 
-                // Pull underlying spot
+                // Pull underlying spot — try index symbol first, then FUT fallback
                 double spot = 0;
                 if (auto it = by_sym.find(underlying_sym); it != by_sym.end())
                     spot = it->ltp;
+                if (spot <= 0 && !fut_sym.isEmpty()) {
+                    if (auto it = by_sym.find(fut_sym); it != by_sym.end())
+                        spot = it->ltp;
+                }
+                LOG_INFO("OptionChain", QString("spot=%1 (underlying_sym='%2', fut_sym='%3')")
+                                            .arg(spot).arg(underlying_sym, fut_sym));
                 if (spot > 0)
                     self->spot_cache_.insert(cache_key(broker_id, underlying), spot);
 
@@ -290,7 +401,7 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
                         row.ce_token = sit->ce.instrument_token;
                         row.ce_symbol = sit->ce.symbol;
                         row.lot_size = sit->ce.lot_size;
-                        const QString k = sit->ce.exchange + ":" + sit->ce.brsymbol;
+                        const QString k = sit->ce.brexchange + ":" + sit->ce.brsymbol;
                         if (auto qit = by_sym.find(k); qit != by_sym.end())
                             row.ce_quote = *qit;
                     }
@@ -299,7 +410,7 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
                         row.pe_symbol = sit->pe.symbol;
                         if (row.lot_size == 0)
                             row.lot_size = sit->pe.lot_size;
-                        const QString k = sit->pe.exchange + ":" + sit->pe.brsymbol;
+                        const QString k = sit->pe.brexchange + ":" + sit->pe.brsymbol;
                         if (auto qit = by_sym.find(k); qit != by_sym.end())
                             row.pe_quote = *qit;
                     }
@@ -325,6 +436,7 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
                 hub.publish(kMaxPainPrefix + broker_id + ":" + underlying + ":" + expiry,
                             QVariant::fromValue(chain.max_pain));
                 self->publish_per_leg_ticks(chain);
+                self->last_chain_ = chain;
                 emit self->chain_published(chain);
                 LOG_INFO("OptionChain",
                          QString("Published %1 strikes for %2/%3/%4 (spot=%5, ATM=%6, PCR=%7)")
@@ -338,6 +450,311 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
                 self->enrich_with_greeks(chain, topic);
             },
             Qt::QueuedConnection);
+    });
+}
+
+void OptionChainService::refresh_chain_databento(const QString& underlying, const QString& expiry) {
+    const QString topic = chain_topic(kDatabentoBrokerId, underlying, expiry);
+    if (in_flight_.value(topic, false))
+        return;
+
+    auto& db_svc = fincept::DatabentoService::instance();
+    if (!db_svc.has_api_key()) {
+        fincept::datahub::DataHub::instance().publish_error(topic, "No Databento API key configured");
+        return;
+    }
+
+    in_flight_[topic] = true;
+
+    QJsonObject json_args;
+    json_args[QStringLiteral("api_key")] = db_svc.api_key();
+    json_args[QStringLiteral("symbol")] = underlying;
+    json_args[QStringLiteral("expiry")] = expiry;
+    QStringList script_args = {
+        QStringLiteral("get_chain"),
+        QString::fromUtf8(QJsonDocument(json_args).toJson(QJsonDocument::Compact)),
+    };
+
+    QPointer<OptionChainService> self = this;
+    fincept::python::PythonRunner::instance().run(
+        kDatabentoScript, script_args,
+        [self, topic, underlying, expiry](fincept::python::PythonResult result) {
+            if (!self) return;
+            self->in_flight_.remove(topic);
+
+            if (!result.success) {
+                fincept::datahub::DataHub::instance().publish_error(topic, result.error);
+                emit self->chain_failed(topic, result.error);
+                return;
+            }
+
+            QJsonParseError err;
+            auto doc = QJsonDocument::fromJson(result.output.toUtf8(), &err);
+            if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+                fincept::datahub::DataHub::instance().publish_error(topic, "JSON parse error: " + err.errorString());
+                return;
+            }
+            auto j = doc.object();
+            if (j[QStringLiteral("error")].toBool(false)) {
+                QString msg = j[QStringLiteral("message")].toString(QStringLiteral("Unknown error"));
+                fincept::datahub::DataHub::instance().publish_error(topic, msg);
+                emit self->chain_failed(topic, msg);
+                return;
+            }
+
+            double spot = j[QStringLiteral("spot")].toDouble(0);
+            QJsonArray rows_arr = j[QStringLiteral("rows")].toArray();
+
+            OptionChain chain;
+            chain.broker_id = kDatabentoBrokerId;
+            chain.underlying = underlying;
+            chain.expiry = expiry;
+            chain.spot = spot;
+            chain.kind = UnderlyingKind::Stock;
+            chain.timestamp_ms = QDateTime::currentMSecsSinceEpoch();
+            chain.rows.reserve(rows_arr.size());
+
+            for (const auto& rv : rows_arr) {
+                auto ro = rv.toObject();
+                OptionChainRow row;
+                row.strike = ro[QStringLiteral("strike")].toDouble();
+                row.lot_size = ro[QStringLiteral("lot_size")].toInt(100);
+                row.ce_token = static_cast<qint64>(ro[QStringLiteral("ce_token")].toDouble());
+                row.pe_token = static_cast<qint64>(ro[QStringLiteral("pe_token")].toDouble());
+                row.ce_symbol = ro[QStringLiteral("ce_symbol")].toString();
+                row.pe_symbol = ro[QStringLiteral("pe_symbol")].toString();
+
+                row.ce_quote.symbol = row.ce_symbol;
+                row.ce_quote.ltp = ro[QStringLiteral("ce_ltp")].toDouble();
+                row.ce_quote.bid = ro[QStringLiteral("ce_bid")].toDouble();
+                row.ce_quote.ask = ro[QStringLiteral("ce_ask")].toDouble();
+                row.ce_quote.volume = static_cast<qint64>(ro[QStringLiteral("ce_volume")].toDouble());
+                row.ce_quote.oi = static_cast<qint64>(ro[QStringLiteral("ce_oi")].toDouble());
+
+                row.pe_quote.symbol = row.pe_symbol;
+                row.pe_quote.ltp = ro[QStringLiteral("pe_ltp")].toDouble();
+                row.pe_quote.bid = ro[QStringLiteral("pe_bid")].toDouble();
+                row.pe_quote.ask = ro[QStringLiteral("pe_ask")].toDouble();
+                row.pe_quote.volume = static_cast<qint64>(ro[QStringLiteral("pe_volume")].toDouble());
+                row.pe_quote.oi = static_cast<qint64>(ro[QStringLiteral("pe_oi")].toDouble());
+
+                chain.rows.append(row);
+            }
+
+            if (spot > 0)
+                self->spot_cache_.insert(cache_key(kDatabentoBrokerId, underlying), spot);
+
+            chain.atm_strike = compute_atm(chain.rows, spot);
+            chain.pcr = compute_pcr(chain.rows, chain.total_ce_oi, chain.total_pe_oi);
+            chain.max_pain = compute_max_pain(chain.rows);
+            for (auto& row : chain.rows)
+                row.is_atm = (std::abs(row.strike - chain.atm_strike) < 1e-6);
+
+            auto& hub = fincept::datahub::DataHub::instance();
+            hub.publish(topic, QVariant::fromValue(chain));
+            hub.publish(kPcrPrefix + kDatabentoBrokerId + ":" + underlying + ":" + expiry,
+                        QVariant::fromValue(chain.pcr));
+            hub.publish(kMaxPainPrefix + kDatabentoBrokerId + ":" + underlying + ":" + expiry,
+                        QVariant::fromValue(chain.max_pain));
+            self->publish_per_leg_ticks(chain);
+            self->last_chain_ = chain;
+            emit self->chain_published(chain);
+            LOG_INFO("OptionChain",
+                     QString("Published %1 strikes from Databento for %2/%3 (spot=%4, ATM=%5)")
+                         .arg(chain.rows.size())
+                         .arg(underlying, expiry)
+                         .arg(spot, 0, 'f', 2)
+                         .arg(chain.atm_strike, 0, 'f', 2));
+
+            self->enrich_with_greeks(chain, topic);
+        });
+}
+
+// ── Fyers option chain via /data/options-chain-v3 ─────────────────────────────
+// Single REST call returns OI, Greeks, IV, volume, spot, expiries — no Python.
+
+void OptionChainService::refresh_chain_fyers(const QString& broker_id, const QString& underlying,
+                                              const QString& expiry) {
+    const QString topic = chain_topic(broker_id, underlying, expiry);
+    LOG_INFO("OptionChain", QString("refresh_chain_fyers: %1/%2/%3").arg(broker_id, underlying, expiry));
+
+    // Map underlying to Fyers API symbol
+    static const QHash<QString, QString> kIndexMap = {
+        {"NIFTY", "NSE:NIFTY50-INDEX"},
+        {"BANKNIFTY", "NSE:NIFTYBANK-INDEX"},
+        {"FINNIFTY", "NSE:FINNIFTY-INDEX"},
+        {"MIDCPNIFTY", "NSE:MIDCPNIFTY-INDEX"},
+    };
+    QString api_sym = kIndexMap.value(underlying);
+    if (api_sym.isEmpty())
+        api_sym = "NSE:" + underlying + "-EQ";
+
+    // Convert expiry "26-MAY-26" → unix timestamp for the API
+    qint64 expiry_ts = 0;
+    if (expiry.length() >= 9 && expiry[2] == QLatin1Char('-') && expiry[6] == QLatin1Char('-')) {
+        static const QHash<QString, int> kMon = {
+            {"JAN",1},{"FEB",2},{"MAR",3},{"APR",4},{"MAY",5},{"JUN",6},
+            {"JUL",7},{"AUG",8},{"SEP",9},{"OCT",10},{"NOV",11},{"DEC",12},
+        };
+        int day = QStringView(expiry).left(2).toInt();
+        int month = kMon.value(expiry.mid(3, 3).toUpper(), 0);
+        int year = 2000 + QStringView(expiry).mid(7, 2).toInt();
+        if (month > 0) {
+            QDateTime dt(QDate(year, month, day), QTime(15, 30), Qt::UTC);
+            constexpr int kIstOffset = 5 * 3600 + 30 * 60;
+            expiry_ts = dt.toSecsSinceEpoch() - kIstOffset;
+        }
+    }
+
+    // Load credentials via AccountManager
+    BrokerCredentials creds;
+    auto accounts = fincept::trading::AccountManager::instance().list_accounts(broker_id);
+    for (const auto& acct : accounts) {
+        if (acct.is_active) {
+            creds = fincept::trading::AccountManager::instance().load_credentials(acct.account_id);
+            break;
+        }
+    }
+    if (creds.access_token.isEmpty() && !accounts.isEmpty())
+        creds = fincept::trading::AccountManager::instance().load_credentials(accounts.first().account_id);
+
+    QString url = QString("https://api-t1.fyers.in/data/options-chain-v3?symbol=%1&strikecount=50&greeks=1")
+                      .arg(api_sym);
+    if (expiry_ts > 0)
+        url += QString("&timestamp=%1").arg(expiry_ts);
+
+    QPointer<OptionChainService> self = this;
+    (void)QtConcurrent::run([self, creds, url, broker_id, underlying, expiry, topic]() {
+        QMap<QString, QString> headers = {
+            {"Authorization", creds.api_key + ":" + creds.access_token},
+            {"Content-Type", "application/json"},
+            {"Accept", "application/json"},
+            {"version", "3"},
+        };
+        auto resp = fincept::trading::BrokerHttp::instance().get(url, headers);
+        if (!self)
+            return;
+
+        QMetaObject::invokeMethod(self.data(), [self, resp, broker_id, underlying, expiry, topic]() {
+            if (!self)
+                return;
+            self->in_flight_.remove(topic);
+
+            if (!resp.success || resp.json.value("s").toString() != "ok") {
+                const QString err = resp.success ? resp.json.value("message").toString("API error")
+                                                 : resp.error;
+                LOG_ERROR("OptionChain", QString("Fyers option chain failed: %1").arg(err));
+                fincept::datahub::DataHub::instance().publish_error(topic, err);
+                emit self->chain_failed(topic, err);
+                return;
+            }
+
+            auto data = resp.json.value("data").toObject();
+            auto arr = data.value("optionsChain").toArray();
+            LOG_INFO("OptionChain", QString("Fyers option chain: %1 entries").arg(arr.size()));
+
+            double spot = 0;
+            static const QSet<QString> kIdx = {"NIFTY","BANKNIFTY","FINNIFTY","MIDCPNIFTY"};
+
+            // Group by strike: CE + PE
+            struct StrikePair {
+                OptionChainRow row;
+                bool has_ce = false, has_pe = false;
+            };
+            QMap<double, StrikePair> by_strike;
+
+            for (const auto& v : arr) {
+                auto o = v.toObject();
+                double strike = o.value("strike_price").toDouble();
+                QString opt_type = o.value("option_type").toString();
+
+                if (strike < 0 || opt_type.isEmpty()) {
+                    spot = o.value("ltp").toDouble();
+                    continue;
+                }
+
+                BrokerQuote q;
+                q.symbol = o.value("symbol").toString();
+                q.ltp = o.value("ltp").toDouble();
+                q.bid = o.value("bid").toDouble();
+                q.ask = o.value("ask").toDouble();
+                q.volume = o.value("volume").toDouble();
+                q.change = o.value("ltpch").toDouble();
+                q.change_pct = o.value("ltpchp").toDouble();
+                q.oi = qint64(o.value("oi").toDouble());
+                q.oi_change_pct = o.value("oichp").toDouble();
+
+                auto greeks_obj = o.value("greeks").toObject();
+                OptionGreeks greeks;
+                greeks.delta = greeks_obj.value("delta").toDouble();
+                greeks.gamma = greeks_obj.value("gamma").toDouble();
+                greeks.theta = greeks_obj.value("theta").toDouble();
+                greeks.vega = greeks_obj.value("vega").toDouble();
+                greeks.valid = true;
+                double iv = greeks_obj.value("iv").toDouble() / 100.0; // API returns %, we store decimal
+
+                qint64 token = qint64(o.value("fyToken").toString().toLongLong());
+
+                auto& pair = by_strike[strike];
+                pair.row.strike = strike;
+                if (opt_type == "CE") {
+                    pair.has_ce = true;
+                    pair.row.ce_quote = q;
+                    pair.row.ce_token = token;
+                    pair.row.ce_symbol = q.symbol;
+                    pair.row.ce_greeks = greeks;
+                    pair.row.ce_iv = iv;
+                } else if (opt_type == "PE") {
+                    pair.has_pe = true;
+                    pair.row.pe_quote = q;
+                    pair.row.pe_token = token;
+                    pair.row.pe_symbol = q.symbol;
+                    pair.row.pe_greeks = greeks;
+                    pair.row.pe_iv = iv;
+                }
+            }
+
+            OptionChain chain;
+            chain.broker_id = broker_id;
+            chain.underlying = underlying;
+            chain.expiry = expiry;
+            chain.spot = spot;
+            chain.kind = kIdx.contains(underlying) ? UnderlyingKind::Index : UnderlyingKind::Stock;
+            chain.timestamp_ms = QDateTime::currentMSecsSinceEpoch();
+            chain.rows.reserve(by_strike.size());
+
+            for (auto it = by_strike.constBegin(); it != by_strike.constEnd(); ++it)
+                chain.rows.append(it->row);
+
+            chain.atm_strike = compute_atm(chain.rows, spot);
+            chain.pcr = compute_pcr(chain.rows, chain.total_ce_oi, chain.total_pe_oi);
+            chain.max_pain = compute_max_pain(chain.rows);
+            for (auto& row : chain.rows)
+                row.is_atm = (std::abs(row.strike - chain.atm_strike) < 1e-6);
+
+            if (spot > 0)
+                self->spot_cache_.insert(cache_key(broker_id, underlying), spot);
+
+            auto& hub = fincept::datahub::DataHub::instance();
+            hub.publish(topic, QVariant::fromValue(chain));
+            hub.publish(kPcrPrefix + broker_id + ":" + underlying + ":" + expiry,
+                        QVariant::fromValue(chain.pcr));
+            hub.publish(kMaxPainPrefix + broker_id + ":" + underlying + ":" + expiry,
+                        QVariant::fromValue(chain.max_pain));
+            self->publish_per_leg_ticks(chain);
+            self->publish_atm_iv(chain);
+            self->last_chain_ = chain;
+            emit self->chain_published(chain);
+
+            LOG_INFO("OptionChain",
+                     QString("Fyers chain: %1 strikes, spot=%2, ATM=%3, PCR=%4, OI CE=%5 PE=%6")
+                         .arg(chain.rows.size())
+                         .arg(spot, 0, 'f', 2)
+                         .arg(chain.atm_strike, 0, 'f', 0)
+                         .arg(chain.pcr, 0, 'f', 3)
+                         .arg(chain.total_ce_oi, 0, 'f', 0)
+                         .arg(chain.total_pe_oi, 0, 'f', 0));
+        }, Qt::QueuedConnection);
     });
 }
 
@@ -465,7 +882,7 @@ void OptionChainService::enrich_with_greeks(const OptionChain& chain, const QStr
     if (chain.rows.isEmpty() || chain.spot <= 0)
         return;
 
-    const double r = risk_free_rate();
+    const double r = (chain.broker_id == kDatabentoBrokerId) ? kUSRiskFreeRate : risk_free_rate();
     const double t = compute_t_years(chain.expiry);
     // q=0 for indices and stocks v1 (no per-stock dividend lookup yet).
     const double q = 0.0;

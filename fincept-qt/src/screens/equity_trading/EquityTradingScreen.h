@@ -4,7 +4,7 @@
 // Each account has its own data stream (WS/polling), portfolio, and credentials.
 
 #include "core/symbol/IGroupLinked.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "screens/equity_trading/EquityTypes.h"
 #include "trading/BrokerAccount.h"
 #include "trading/TradingTypes.h"
@@ -31,7 +31,7 @@ class EquityBottomPanel;
 
 namespace fincept::screens {
 
-class EquityTradingScreen : public QWidget, public IGroupLinked {
+class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefulScreen {
     Q_OBJECT
     Q_INTERFACES(fincept::IGroupLinked)
   public:
@@ -43,6 +43,11 @@ class EquityTradingScreen : public QWidget, public IGroupLinked {
     SymbolGroup group() const override { return link_group_; }
     void on_group_symbol_changed(const SymbolRef& ref) override;
     SymbolRef current_symbol() const override;
+
+    // IStatefulScreen
+    QVariantMap save_state() const override;
+    void restore_state(const QVariantMap& state) override;
+    QString state_key() const override { return QStringLiteral("equity_trading"); }
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -74,7 +79,9 @@ class EquityTradingScreen : public QWidget, public IGroupLinked {
     void on_stream_orderbook_fetched(const QString& account_id,
                                      const QVector<QPair<double, double>>& bids,
                                      const QVector<QPair<double, double>>& asks,
-                                     double spread, double spread_pct);
+                                     double spread, double spread_pct,
+                                     const QVector<int>& bid_orders,
+                                     const QVector<int>& ask_orders);
     void on_stream_time_sales_fetched(const QString& account_id, const QVector<trading::BrokerTrade>& trades);
     void on_stream_latest_trade_fetched(const QString& account_id, const trading::BrokerTrade& trade);
     void on_stream_calendar_fetched(const QString& account_id, const QVector<trading::MarketCalendarDay>& days);

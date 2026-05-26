@@ -15,6 +15,8 @@ class FredPanel : public EconPanelBase {
   public:
     explicit FredPanel(QWidget* parent = nullptr);
     void activate() override;
+    QVariantMap save_panel_state() const override;
+    void restore_panel_state(const QVariantMap& state) override;
 
   protected:
     void build_controls(QHBoxLayout* thl) override;

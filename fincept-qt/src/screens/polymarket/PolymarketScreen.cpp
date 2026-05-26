@@ -1046,11 +1046,13 @@ void PolymarketScreen::on_kalshi_series_detail(const QString& series_ticker,
 // ── IStatefulScreen ─────────────────────────────────────────────────────────
 
 QVariantMap PolymarketScreen::save_state() const {
-    return {
+    QVariantMap state{
         {"category", active_category_},
         {"view", active_view_},
         {"sort", active_sort_},
     };
+    if (command_bar_) state["search"] = command_bar_->search_text();
+    return state;
 }
 
 void PolymarketScreen::restore_state(const QVariantMap& state) {
@@ -1061,6 +1063,8 @@ void PolymarketScreen::restore_state(const QVariantMap& state) {
     active_sort_ = sort;
     active_view_ = view;
     on_category_changed(cat);
+    if (command_bar_ && state.contains("search"))
+        command_bar_->set_search_text(state.value("search").toString());
 }
 
 } // namespace fincept::screens

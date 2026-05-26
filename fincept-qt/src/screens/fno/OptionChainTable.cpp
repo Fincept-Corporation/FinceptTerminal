@@ -120,6 +120,16 @@ OptionChainTable::OptionChainTable(QWidget* parent) : QTableView(parent) {
     verticalHeader()->setVisible(false);
     verticalHeader()->setDefaultSectionSize(22);
 
+    connect(model_, &QAbstractItemModel::modelReset, this, [this]() {
+        for (int row = 0; row < model_->rowCount(); ++row) {
+            if (model_->index(row, 0).data(OptionChainModel::IsAtmRole).toBool()) {
+                scrollTo(model_->index(row, OptionChainModel::ColStrike),
+                         QAbstractItemView::PositionAtCenter);
+                break;
+            }
+        }
+    });
+
     setStyleSheet(QStringLiteral(
         "QTableView { background:%1; color:%2; border:1px solid %3; gridline-color:%3; selection-background-color:%4; }"
         "QHeaderView::section { background:%5; color:%6; border:none; border-bottom:1px solid %3; padding:4px 6px; "

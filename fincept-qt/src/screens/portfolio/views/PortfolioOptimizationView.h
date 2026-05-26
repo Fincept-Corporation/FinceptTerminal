@@ -28,8 +28,12 @@ class PortfolioOptimizationView : public QWidget {
 
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
+    void retranslateUi();
 
     // Tab builders
     QWidget* build_optimize_tab();
@@ -49,6 +53,15 @@ class PortfolioOptimizationView : public QWidget {
     void update_compare(const QJsonObject& comparison);
 
     QTabWidget* tabs_ = nullptr;
+    int optimize_tab_index_ = -1;
+    int frontier_tab_index_ = -1;
+    int allocation_tab_index_ = -1;
+    int strategies_tab_index_ = -1;
+    int compare_tab_index_ = -1;
+    int backtest_tab_index_ = -1;
+    int risk_tab_index_ = -1;
+    int stress_tab_index_ = -1;
+    int bl_tab_index_ = -1;
 
     // ── OPTIMIZE tab ──────────────────────────────────────────────────────────
     QComboBox* method_cb_ = nullptr;
@@ -57,6 +70,30 @@ class PortfolioOptimizationView : public QWidget {
     QPushButton* run_btn_ = nullptr;
     QLabel* status_label_ = nullptr;
     QTableWidget* result_table_ = nullptr;
+    QLabel* method_field_label_ = nullptr;
+    QLabel* returns_field_label_ = nullptr;
+    QLabel* risk_model_field_label_ = nullptr;
+
+    // Section titles + placeholders for stub tabs
+    QLabel* frontier_title_ = nullptr;
+    QLabel* frontier_placeholder_ = nullptr;
+    QLabel* strategies_title_ = nullptr;
+    QLabel* strategies_placeholder_ = nullptr;
+    QLabel* compare_title_ = nullptr;
+    QLabel* compare_placeholder_ = nullptr;
+    QLabel* backtest_title_ = nullptr;
+    QLabel* backtest_body_ = nullptr;
+    QPushButton* backtest_current_btn_ = nullptr;
+    QPushButton* backtest_optimal_btn_ = nullptr;
+    QStackedWidget* backtest_stack_ = nullptr; // 0=buttons, 1=results
+    QTableWidget* backtest_metrics_table_ = nullptr;
+    QLabel* backtest_status_label_ = nullptr;
+    QLabel* risk_title_ = nullptr;
+    QLabel* risk_body_ = nullptr;
+    QLabel* stress_title_ = nullptr;
+    QLabel* stress_body_ = nullptr;
+    QLabel* bl_title_ = nullptr;
+    QLabel* bl_body_ = nullptr;
 
     // ── FRONTIER tab ──────────────────────────────────────────────────────────
     QStackedWidget* frontier_stack_ = nullptr; // 0=placeholder, 1=chart
@@ -78,6 +115,7 @@ class PortfolioOptimizationView : public QWidget {
     portfolio::PortfolioSummary summary_;
     QString currency_;
     bool running_ = false;
+    bool has_data_ = false;
 };
 
 } // namespace fincept::screens

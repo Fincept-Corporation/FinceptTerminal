@@ -62,24 +62,17 @@ def extract_full_metrics(
     initial_capital: float,
     close_series: pd.Series,
     vbt=None,
+    risk_free_rate: float = 0.0,
 ) -> Dict[str, Any]:
     """
     Extract comprehensive metrics from a VBT Portfolio.
-
-    Returns a dictionary with:
-    - performance: Core performance metrics
-    - statistics: General statistics
-    - extended_stats: SQN, Kelly, CAGR, exposure, etc.
-    - trade_analysis: Detailed trade breakdown
-    - drawdown_analysis: Drawdown details
-    - returns_analysis: Returns distribution stats
-    - risk_metrics: VaR, CVaR, capture ratios
 
     Args:
         portfolio: vbt.Portfolio instance
         initial_capital: Starting capital
         close_series: Original price series
         vbt: vectorbt module reference
+        risk_free_rate: Annualized risk-free rate (0.04 = 4%)
 
     Returns:
         Dict with all extracted metrics
@@ -87,7 +80,7 @@ def extract_full_metrics(
     stats = portfolio.stats()
 
     # --- Core Performance Metrics ---
-    performance = _extract_performance(portfolio, stats, initial_capital)
+    performance = _extract_performance(portfolio, stats, initial_capital, risk_free_rate)
 
     # --- Statistics ---
     statistics = _extract_statistics(portfolio, stats, initial_capital, close_series)
@@ -124,7 +117,8 @@ def extract_full_metrics(
 # Performance Metrics
 # ============================================================================
 
-def _extract_performance(portfolio, stats, initial_capital: float) -> Dict[str, Any]:
+def _extract_performance(portfolio, stats, initial_capital: float,
+                         risk_free_rate: float = 0.0) -> Dict[str, Any]:
     """Extract core performance metrics."""
     total_return = safe_float(portfolio.total_return())
 
@@ -171,16 +165,39 @@ def _extract_performance(portfolio, stats, initial_capital: float) -> Dict[str, 
 
     win_rate = winning_trades / total_trades if total_trades > 0 else 0.0
 
+    ann_return = safe_stat(stats, 'Annualized Return [%]', 0) / 100
+    ann_vol = safe_stat(stats, 'Annualized Volatility [%]', 0) / 100
+    sharpe = safe_stat(stats, 'Sharpe Ratio', 0)
+    sortino = safe_stat(stats, 'Sortino Ratio', 0)
+
+    # Recalculate Sharpe/Sortino with user-specified risk-free rate
+    if risk_free_rate > 0 and ann_vol > 0:
+        sharpe = (ann_return - risk_free_rate) / ann_vol
+        # Sortino uses downside deviation
+        try:
+            equity_vals = portfolio.value().values.astype(float)
+            daily_rets = np.diff(equity_vals) / np.where(equity_vals[:-1] != 0, equity_vals[:-1], 1.0)
+            daily_rets = daily_rets[np.isfinite(daily_rets)]
+            daily_rf = risk_free_rate / 252
+            excess = daily_rets - daily_rf
+            downside = excess[excess < 0]
+            if len(downside) > 0:
+                downside_std = float(np.std(downside) * np.sqrt(252))
+                if downside_std > 0:
+                    sortino = (ann_return - risk_free_rate) / downside_std
+        except Exception:
+            pass
+
     return {
         'totalReturn': total_return,
-        'annualizedReturn': safe_stat(stats, 'Annualized Return [%]', 0) / 100,
-        'sharpeRatio': safe_stat(stats, 'Sharpe Ratio', 0),
-        'sortinoRatio': safe_stat(stats, 'Sortino Ratio', 0),
+        'annualizedReturn': ann_return,
+        'sharpeRatio': sharpe,
+        'sortinoRatio': sortino,
         'maxDrawdown': abs(safe_stat(stats, 'Max Drawdown [%]', 0)) / 100,
         'winRate': win_rate,
         'lossRate': 1 - win_rate,
         'profitFactor': profit_factor,
-        'volatility': safe_stat(stats, 'Annualized Volatility [%]', 0) / 100,
+        'volatility': ann_vol,
         'calmarRatio': safe_stat(stats, 'Calmar Ratio', 0),
         'totalTrades': total_trades,
         'winningTrades': winning_trades,

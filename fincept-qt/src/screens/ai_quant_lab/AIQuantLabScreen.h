@@ -1,6 +1,6 @@
 // src/screens/ai_quant_lab/AIQuantLabScreen.h
 #pragma once
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/ai_quant_lab/AIQuantLabTypes.h"
 
 #include <QHideEvent>
@@ -33,6 +33,7 @@ class AIQuantLabScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_module_selected(int index);
@@ -44,6 +45,7 @@ class AIQuantLabScreen : public QWidget, public IStatefulScreen {
     QWidget* build_right_sidebar();
     QWidget* build_status_bar();
     void refresh_theme();
+    void retranslateUi();
     void update_right_panel();
     void update_sidebar_selection();
 
@@ -70,8 +72,16 @@ class AIQuantLabScreen : public QWidget, public IStatefulScreen {
     QWidget* right_panel_ = nullptr;
     QWidget* status_bar_ = nullptr;
     QLabel* sidebar_title_ = nullptr;
+    QLabel* info_title_ = nullptr;
+    QLabel* brand_lbl_ = nullptr;
+    QLabel* module_count_lbl_ = nullptr;
+    QLabel* engine_lbl_ = nullptr;
     QWidget* stats_card_ = nullptr;
     QLabel* stats_title_ = nullptr;
+    QLabel* stat_modules_lbl_ = nullptr;
+    QLabel* stat_ml_lbl_ = nullptr;
+    QLabel* stat_rl_lbl_ = nullptr;
+    QLabel* stat_py_lbl_ = nullptr;
 
     QVBoxLayout* left_items_layout_ = nullptr;
 

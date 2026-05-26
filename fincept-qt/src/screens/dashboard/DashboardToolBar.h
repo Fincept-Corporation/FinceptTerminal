@@ -29,19 +29,27 @@ class DashboardToolBar : public QWidget {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void update_clock();
     void refresh_theme();
+    void retranslateUi();
 
     QWidget* left_container_ = nullptr;
     QWidget* right_container_ = nullptr;
     QPushButton* clock_btn_ = nullptr;
     bool clock_is_utc_ = true;
+    bool connected_ = true;
+    int  widget_count_value_ = 0;
     QLabel* status_text_ = nullptr;
     QLabel* widget_count_ = nullptr;
     QPushButton* pulse_btn_ = nullptr;
     QPushButton* compact_btn_ = nullptr;
+    QPushButton* refresh_btn_ = nullptr;
+    QPushButton* add_btn_ = nullptr;
+    QPushButton* save_btn_ = nullptr;
+    QPushButton* reset_btn_ = nullptr;
     QTimer clock_timer_;
 };
 

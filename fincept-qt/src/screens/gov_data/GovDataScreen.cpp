@@ -13,6 +13,7 @@
 #include "services/gov_data/GovDataService.h"
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -86,6 +87,7 @@ static QString build_screen_style() {
 GovDataScreen::GovDataScreen(QWidget* parent) : QWidget(parent) {
     setObjectName("govScreen");
     build_ui();
+    retranslateUi();
 
     connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this, &GovDataScreen::refresh_theme);
     refresh_theme();
@@ -107,6 +109,13 @@ void GovDataScreen::showEvent(QShowEvent* event) {
 
 void GovDataScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
+}
+
+void GovDataScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
 }
 
 // ── Build UI ─────────────────────────────────────────────────────────────────
@@ -152,8 +161,8 @@ void GovDataScreen::build_ui() {
                                             "data.gov.hk", "opendata.swiss", "data.gouv.fr",
                                             "data.gov", "openafrica.net"};
             ckan_opts.portal_combo_tooltip =
-                "This panel uses datagovuk_api.py which queries data.gov.uk.\n"
-                "The selector shows all CKAN portals covered by the universal provider.";
+                tr("This panel uses datagovuk_api.py which queries data.gov.uk.\n"
+                   "The selector shows all CKAN portals covered by the universal provider.");
             panel = new GovDataProviderPanel(prov.script, prov.color, "Publishers", ckan_opts, panel_stack_);
         } else if (prov.id == "australia") {
             panel = new GovDataAustraliaPanel(panel_stack_);
@@ -180,7 +189,7 @@ QWidget* GovDataScreen::build_toolbar() {
     hl->setContentsMargins(14, 0, 14, 0);
     hl->setSpacing(8);
 
-    header_title_ = new QLabel("GOVERNMENT DATA EXPLORER");
+    header_title_ = new QLabel;
     header_title_->setObjectName("govToolbarTitle");
     header_title_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     hl->addWidget(header_title_);
@@ -191,8 +200,7 @@ QWidget* GovDataScreen::build_toolbar() {
     sep->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     hl->addWidget(sep);
 
-    header_subtitle_ = new QLabel(
-        QString("Open government portals · %1 sovereign sources").arg(services::GovDataService::providers().size()));
+    header_subtitle_ = new QLabel;
     header_subtitle_->setObjectName("govToolbarSub");
     header_subtitle_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     hl->addWidget(header_subtitle_);
@@ -200,8 +208,7 @@ QWidget* GovDataScreen::build_toolbar() {
     hl->addStretch(1);
 
     // Source count badge — compact pill, stored as member for refresh_theme()
-    const auto& providers = services::GovDataService::providers();
-    provider_badge_ = new QLabel(QString::number(providers.size()) + " PORTALS");
+    provider_badge_ = new QLabel;
     provider_badge_->setFixedHeight(20);
     provider_badge_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     hl->addWidget(provider_badge_);
@@ -227,13 +234,13 @@ QWidget* GovDataScreen::build_sidebar() {
     auto* hhl = new QHBoxLayout(hdr);
     hhl->setContentsMargins(12, 0, 8, 0);
     hhl->setSpacing(6);
-    auto* htitle = new QLabel("SOVEREIGN PORTALS");
-    htitle->setObjectName("govSidebarTitle");
+    sidebar_title_ = new QLabel;
+    sidebar_title_->setObjectName("govSidebarTitle");
     const auto& providers = services::GovDataService::providers();
     sidebar_count_ = new QLabel(QString::number(providers.size()));
     sidebar_count_->setFixedHeight(16);
     sidebar_count_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    hhl->addWidget(htitle);
+    hhl->addWidget(sidebar_title_);
     hhl->addStretch(1);
     hhl->addWidget(sidebar_count_);
     vl->addWidget(hdr);
@@ -274,24 +281,24 @@ QWidget* GovDataScreen::build_status_bar() {
         return l;
     };
 
-    auto* lbl = new QLabel("GOVT");
-    lbl->setObjectName("govStatusText");
-    hl->addWidget(lbl);
+    status_govt_lbl_ = new QLabel;
+    status_govt_lbl_->setObjectName("govStatusText");
+    hl->addWidget(status_govt_lbl_);
     hl->addWidget(sep());
 
-    auto* pl = new QLabel("PORTAL:");
-    pl->setObjectName("govStatusText");
+    status_portal_lbl_ = new QLabel;
+    status_portal_lbl_->setObjectName("govStatusText");
     status_portal_ = new QLabel("—");
     status_portal_->setObjectName("govStatusVal");
-    hl->addWidget(pl);
+    hl->addWidget(status_portal_lbl_);
     hl->addWidget(status_portal_);
     hl->addWidget(sep());
 
-    auto* cl = new QLabel("COUNTRY:");
-    cl->setObjectName("govStatusText");
+    status_country_lbl_ = new QLabel;
+    status_country_lbl_->setObjectName("govStatusText");
     status_country_ = new QLabel("—");
     status_country_->setObjectName("govStatusVal");
-    hl->addWidget(cl);
+    hl->addWidget(status_country_lbl_);
     hl->addWidget(status_country_);
 
     hl->addStretch(1);
@@ -301,12 +308,38 @@ QWidget* GovDataScreen::build_status_bar() {
     dot->setFixedSize(6, 6);
     dot->setStyleSheet(QString("background:%1; border-radius:3px;").arg(colors::POSITIVE()));
     hl->addWidget(dot);
-    auto* ready = new QLabel("READY");
-    ready->setObjectName("govStatusText");
-    ready->setStyleSheet(QString("color:%1; font-size:9px; background:transparent;").arg(colors::POSITIVE()));
-    hl->addWidget(ready);
+    status_ready_lbl_ = new QLabel;
+    status_ready_lbl_->setObjectName("govStatusText");
+    status_ready_lbl_->setStyleSheet(QString("color:%1; font-size:9px; background:transparent;").arg(colors::POSITIVE()));
+    hl->addWidget(status_ready_lbl_);
 
     return bar;
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void GovDataScreen::retranslateUi() {
+    const int n_providers = services::GovDataService::providers().size();
+
+    if (header_title_)
+        header_title_->setText(tr("GOVERNMENT DATA EXPLORER"));
+
+    // Subtitle: when a provider is active, activate_provider() overwrites this
+    // with "{flag} {full_name}" — which is data, not translatable. Only set
+    // the default landing-page text when no provider has been selected yet.
+    if (header_subtitle_ && active_index_ < 0)
+        header_subtitle_->setText(tr("Open government portals · %1 sovereign sources").arg(n_providers));
+
+    if (provider_badge_)
+        provider_badge_->setText(tr("%1 PORTALS").arg(n_providers));
+
+    if (sidebar_title_)
+        sidebar_title_->setText(tr("SOVEREIGN PORTALS"));
+
+    if (status_govt_lbl_)    status_govt_lbl_->setText(tr("GOVT"));
+    if (status_portal_lbl_)  status_portal_lbl_->setText(tr("PORTAL:"));
+    if (status_country_lbl_) status_country_lbl_->setText(tr("COUNTRY:"));
+    if (status_ready_lbl_)   status_ready_lbl_->setText(tr("READY"));
 }
 
 // ── Theme refresh ────────────────────────────────────────────────────────────

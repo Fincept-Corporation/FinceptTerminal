@@ -1,5 +1,6 @@
 #pragma once
 #include "trading/BrokerInterface.h"
+#include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
 namespace fincept::trading {
@@ -75,8 +76,8 @@ class IBKRBroker : public IBroker {
     // Extract gateway base URL from access_token (stored as gateway URL)
     static QString gateway_url(const BrokerCredentials& creds);
 
-    static QString ibkr_order_type(OrderType t);
-    static QString ibkr_tif(ProductType p);
+    /// IBKR "tif" is GTC for delivery, DAY otherwise — modelled as `product_or(...)`.
+    static const BrokerEnumMap<QString>& ibkr_enum_map();
     // Map resolution string to IBKR bar size and period
     struct HistoryParams {
         QString bar;

@@ -1246,26 +1246,47 @@ def _daemon_write_frame(stream, data_bytes):
 
 
 def _daemon_dispatch(action, payload):
-    """Run one action and return the raw result object (not wrapped)."""
+    """Run one action and return the raw result object (not wrapped).
+
+    Mirrors the CLI dispatch in main() — every action a C++ caller might pass
+    through PythonRunner is wired here so the daemon can handle it without the
+    ~3s subprocess + import cost.
+    """
+    p = payload or {}
     if action == "batch_all":
-        return get_batch_all(payload or {})
+        return get_batch_all(p)
     if action == "batch_quotes":
-        syms = (payload or {}).get("symbols") or []
-        return get_batch_quotes(syms)
+        return get_batch_quotes(p.get("symbols") or [])
     if action == "batch_sparklines":
-        syms = (payload or {}).get("symbols") or []
-        return get_batch_sparklines(syms)
+        return get_batch_sparklines(p.get("symbols") or [])
     if action == "historical_period":
-        p = payload or {}
         return get_historical_period(
             p.get("symbol"), p.get("period", "6mo"), p.get("interval", "1d"))
+    if action == "historical":
+        return get_historical(
+            p.get("symbol"), p.get("start_date"), p.get("end_date"), p.get("interval", "1d"))
     if action == "quote":
-        return get_quote((payload or {}).get("symbol"))
+        return get_quote(p.get("symbol"))
     if action == "info":
-        return get_info((payload or {}).get("symbol"))
+        return get_info(p.get("symbol"))
     if action == "news":
-        p = payload or {}
         return get_news(p.get("symbol"), p.get("count", 20))
+    if action == "financials":
+        return get_financials(p.get("symbol"))
+    if action == "company_profile":
+        return get_company_profile(p.get("symbol"))
+    if action == "financial_ratios":
+        return get_financial_ratios(p.get("symbol"))
+    if action == "multiple_ratios":
+        return get_multiple_ratios(p.get("symbols") or [])
+    if action == "multiple_profiles":
+        return get_multiple_profiles(p.get("symbols") or [])
+    if action == "search":
+        return search_symbols(p.get("query") or "", int(p.get("limit", 50)))
+    if action == "portfolio_nav_history":
+        return get_portfolio_nav_history(p.get("positions") or [], p.get("period", "1y"))
+    if action == "portfolio_nav_history_replay":
+        return get_portfolio_nav_history_replay(p.get("transactions") or [])
     return {"error": f"Unknown action: {action}"}
 
 

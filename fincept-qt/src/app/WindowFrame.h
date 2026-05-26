@@ -1,6 +1,5 @@
 ﻿#pragma once
-#include "ai_chat/AiChatBubble.h"
-#include "app/ScreenRouter.h"
+#include "screens/ai_chat/AiChatBubble.h"
 #include "core/identity/Uuid.h"
 #include "core/layout/LayoutTypes.h"
 
@@ -257,6 +256,7 @@ class WindowFrame : public QMainWindow {
     // Without this, layout changes only survive clean shutdown (closeEvent),
     // so a crash or kill loses the user's dock setup.
     QTimer* dock_layout_save_timer_ = nullptr;
+    bool suppress_layout_save_ = false;
     void schedule_dock_layout_save();
 
     // Chat mode
@@ -266,10 +266,8 @@ class WindowFrame : public QMainWindow {
     screens::LockScreen* lock_screen_ = nullptr;
 
     void setup_auth_screens();
-    void setup_app_screens();
     void setup_docking_mode();
     void setup_dock_screens();
-    void setup_navigation();
     void on_auth_state_changed();
     void toggle_chat_mode();
     void show_lock_screen();

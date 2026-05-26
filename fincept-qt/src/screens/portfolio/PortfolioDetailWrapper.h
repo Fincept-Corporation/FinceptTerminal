@@ -23,6 +23,9 @@ class PortfolioDetailWrapper : public QWidget {
     void update_snapshots(const QVector<portfolio::PortfolioSnapshot>& snapshots);
     void update_metrics(const portfolio::ComputedMetrics& metrics);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   signals:
     void back_requested();
     void sector_selected(QString sector); // forwarded from AnalyticsSectorsView
@@ -31,6 +34,7 @@ class PortfolioDetailWrapper : public QWidget {
     void build_ui();
     QWidget* get_or_create_view(portfolio::DetailView view);
     QString view_title(portfolio::DetailView view) const;
+    void retranslateUi();
 
     QLabel* title_label_ = nullptr;
     QLabel* portfolio_label_ = nullptr;

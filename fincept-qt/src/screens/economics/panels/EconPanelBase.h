@@ -7,6 +7,7 @@
 #pragma once
 
 #include "services/economics/EconomicsService.h"
+#include "ui/widgets/PaginationBar.h"
 
 #include <QDate>
 #include <QJsonArray>
@@ -26,6 +27,11 @@ class EconPanelBase : public QWidget {
 
     /// Called by EconomicsScreen when user switches to this panel.
     virtual void activate() = 0;
+
+    /// Panel-level state for persistence (text fields, selections).
+    /// Default returns empty — subclasses override to save their inputs.
+    virtual QVariantMap save_panel_state() const { return {}; }
+    virtual void restore_panel_state(const QVariantMap& /*state*/) {}
 
   protected:
     // ── Subclass API ──────────────────────────────────────────────────────────
@@ -83,15 +89,20 @@ class EconPanelBase : public QWidget {
 
   private:
     void update_stats(const QJsonArray& rows);
+    void render_page();
 
-    QWidget* container_ = nullptr; // root widget that owns panel_style()
+    QWidget* container_ = nullptr;
     QWidget* cards_row_ = nullptr;
     QWidget* title_bar_ = nullptr;
-    QStackedWidget* stack_ = nullptr; // 0=empty/status  1=table
+    QStackedWidget* stack_ = nullptr; // 0=empty/status  1=table+pager
     QLabel* empty_lbl_ = nullptr;
     QTableWidget* table_ = nullptr;
     QLabel* title_lbl_ = nullptr;
     QLabel* row_count_ = nullptr;
+    ui::PaginationBar* pager_ = nullptr;
+
+    QJsonArray all_rows_;
+    QStringList columns_;
 };
 
 } // namespace fincept::screens

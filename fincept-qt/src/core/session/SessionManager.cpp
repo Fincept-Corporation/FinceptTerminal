@@ -80,14 +80,6 @@ QByteArray SessionManager::load_state(int window_id) const {
     return val;
 }
 
-void SessionManager::save_window_count(int count) {
-    settings_.setValue("window_count", count);
-}
-
-int SessionManager::load_window_count() const {
-    return settings_.value("window_count", 1).toInt();
-}
-
 void SessionManager::save_window_ids(const QList<int>& ids) {
     QVariantList v;
     v.reserve(ids.size());

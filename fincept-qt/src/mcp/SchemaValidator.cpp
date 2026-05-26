@@ -3,6 +3,7 @@
 #include "mcp/SchemaValidator.h"
 
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QRegularExpression>
 
 namespace fincept::mcp {
@@ -122,6 +123,57 @@ Result<void> validate_args(const ToolSchema& schema, QJsonObject& args) {
     for (const QString& key : all_required) {
         if (!args.contains(key))
             return Result<void>::err(("Missing required parameter: " + key).toStdString());
+    }
+
+    // ── Step 2.5: coerce stringified primitives, objects, arrays ─────────
+    // Two common LLM mistakes:
+    //   - emit nested JSON as an escaped string ("config": "{\"a\":1}")
+    //   - emit numbers / booleans as strings from <parameter> XML bodies
+    //     ("id": "2", "enabled": "true") because text-tool extraction can't
+    //     tell scalars apart from prose without type hints.
+    // Coerce based on the schema's expected type before rejection.
+    auto expected_type = [&](const QString& key) -> QString {
+        if (schema.params.contains(key))
+            return schema.params[key].type;
+        if (schema.properties.contains(key))
+            return schema.properties[key].toObject()["type"].toString();
+        return {};
+    };
+    const QStringList keys = args.keys();
+    for (const QString& key : keys) {
+        const QString want = expected_type(key);
+        const QJsonValue cur = args.value(key);
+        if (!cur.isString())
+            continue;
+        const QString s = cur.toString().trimmed();
+        if (s.isEmpty())
+            continue;
+
+        if (want == "object" || want == "array") {
+            const auto doc = QJsonDocument::fromJson(s.toUtf8());
+            if (doc.isNull())
+                continue;
+            if (want == "object" && doc.isObject())
+                args[key] = doc.object();
+            else if (want == "array" && doc.isArray())
+                args[key] = doc.array();
+        } else if (want == "integer") {
+            bool ok = false;
+            const qint64 n = s.toLongLong(&ok);
+            if (ok)
+                args[key] = static_cast<double>(n);
+        } else if (want == "number") {
+            bool ok = false;
+            const double d = s.toDouble(&ok);
+            if (ok)
+                args[key] = d;
+        } else if (want == "boolean") {
+            const QString lower = s.toLower();
+            if (lower == "true" || lower == "1")
+                args[key] = true;
+            else if (lower == "false" || lower == "0")
+                args[key] = false;
+        }
     }
 
     // ── Step 3: per-param type / range / enum / pattern ─────────────────

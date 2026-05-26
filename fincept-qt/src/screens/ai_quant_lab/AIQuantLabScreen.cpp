@@ -7,6 +7,7 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QScrollArea>
@@ -46,6 +47,8 @@ void AIQuantLabScreen::build_ui() {
 
     root->addWidget(build_top_bar());
 
+    // (called at bottom of build_ui — after all child widgets exist)
+
     auto* body = new QHBoxLayout;
     body->setContentsMargins(0, 0, 0, 0);
     body->setSpacing(0);
@@ -64,6 +67,7 @@ void AIQuantLabScreen::build_ui() {
 
     root->addWidget(build_status_bar());
 
+    retranslateUi();
     refresh_theme();
 }
 
@@ -79,10 +83,10 @@ QWidget* AIQuantLabScreen::build_top_bar() {
     hl->setContentsMargins(8, 0, 8, 0);
     hl->setSpacing(8);
 
-    // Brand chip
-    auto* brand = new QLabel("AI QUANT LAB", top_bar_);
-    brand->setObjectName("aqBrand");
-    hl->addWidget(brand);
+    // Brand chip (text set in retranslateUi)
+    brand_lbl_ = new QLabel(top_bar_);
+    brand_lbl_->setObjectName("aqBrand");
+    hl->addWidget(brand_lbl_);
 
     // Separator
     auto* div = new QWidget(top_bar_);
@@ -119,10 +123,10 @@ QWidget* AIQuantLabScreen::build_top_bar() {
     badge_scroll_->setWidget(badge_bar_);
     hl->addWidget(badge_scroll_, 1);
 
-    // Module count chip
-    auto* count_lbl = new QLabel(QString("%1 MODULES").arg(modules_.size()), top_bar_);
-    count_lbl->setObjectName("aqModuleCount");
-    hl->addWidget(count_lbl);
+    // Module count chip (text set in retranslateUi)
+    module_count_lbl_ = new QLabel(top_bar_);
+    module_count_lbl_->setObjectName("aqModuleCount");
+    hl->addWidget(module_count_lbl_);
 
     return top_bar_;
 }
@@ -143,7 +147,7 @@ QWidget* AIQuantLabScreen::build_left_sidebar() {
     header->setFixedHeight(36);
     auto* hhl = new QHBoxLayout(header);
     hhl->setContentsMargins(12, 0, 12, 0);
-    sidebar_title_ = new QLabel("MODULES", header);
+    sidebar_title_ = new QLabel(header);
     sidebar_title_->setObjectName("aqSidebarTitle");
     hhl->addWidget(sidebar_title_);
     hhl->addStretch();
@@ -199,9 +203,9 @@ QWidget* AIQuantLabScreen::build_right_sidebar() {
     vl->setContentsMargins(12, 12, 12, 12);
     vl->setSpacing(10);
 
-    auto* info_title = new QLabel("MODULE INFO", right_panel_);
-    info_title->setObjectName("aqInfoTitle");
-    vl->addWidget(info_title);
+    info_title_ = new QLabel(right_panel_);
+    info_title_->setObjectName("aqInfoTitle");
+    vl->addWidget(info_title_);
 
     right_title_ = new QLabel(right_panel_);
     right_title_->setObjectName("aqRightTitle");
@@ -227,27 +231,29 @@ QWidget* AIQuantLabScreen::build_right_sidebar() {
     svl->setContentsMargins(10, 10, 10, 10);
     svl->setSpacing(4);
 
-    stats_title_ = new QLabel("PLATFORM STATS", stats_card_);
+    stats_title_ = new QLabel(stats_card_);
     stats_title_->setObjectName("aqStatsTitle");
     svl->addWidget(stats_title_);
 
-    auto add_stat = [&](const QString& label, const QString& value) {
+    // Stat labels stored as members so retranslateUi can reset them. The
+    // values ("30+", "5", "25+") are constants displayed verbatim.
+    auto add_stat = [&](QLabel*& label_out, const QString& value) {
         auto* row = new QWidget(stats_card_);
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(0, 0, 0, 0);
-        auto* lbl = new QLabel(label, row);
-        lbl->setObjectName("aqStatLabel");
+        label_out = new QLabel(row);
+        label_out->setObjectName("aqStatLabel");
         auto* val = new QLabel(value, row);
         val->setObjectName("aqStatValue");
-        rl->addWidget(lbl);
+        rl->addWidget(label_out);
         rl->addStretch();
         rl->addWidget(val);
         svl->addWidget(row);
     };
-    add_stat("Modules", QString::number(modules_.size()));
-    add_stat("ML Models", "30+");
-    add_stat("RL Algorithms", "5");
-    add_stat("Python Scripts", "25+");
+    add_stat(stat_modules_lbl_, QString::number(modules_.size()));
+    add_stat(stat_ml_lbl_,      "30+");
+    add_stat(stat_rl_lbl_,      "5");
+    add_stat(stat_py_lbl_,      "25+");
     vl->addWidget(stats_card_);
 
     vl->addStretch();
@@ -264,15 +270,16 @@ QWidget* AIQuantLabScreen::build_status_bar() {
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(16);
 
-    auto* engine_lbl = new QLabel("ENGINE:", status_bar_);
-    engine_lbl->setObjectName("aqStatusLabel");
+    engine_lbl_ = new QLabel(status_bar_);
+    engine_lbl_->setObjectName("aqStatusLabel");
+    // Engine value is a fixed product/tech identifier — kept as-is.
     status_engine_val_ = new QLabel("QLIB + GS QUANT + PYTHON", status_bar_);
     status_engine_val_->setObjectName("aqStatusValue");
-    hl->addWidget(engine_lbl);
+    hl->addWidget(engine_lbl_);
     hl->addWidget(status_engine_val_);
     hl->addStretch();
 
-    status_ready_lbl_ = new QLabel("READY", status_bar_);
+    status_ready_lbl_ = new QLabel(status_bar_);
     status_ready_lbl_->setObjectName("aqStatusReady");
     hl->addWidget(status_ready_lbl_);
 
@@ -443,9 +450,40 @@ void AIQuantLabScreen::update_right_panel() {
     right_title_->setText(mod.label.toUpper());
     right_title_->setStyleSheet(
         QString("color:%1; font-weight:700; font-size:11px; background:transparent;").arg(mod.color.name()));
-    right_category_->setText(QString(mod.category).replace('_', '/') + " module");
+    right_category_->setText(tr("%1 module").arg(QString(mod.category).replace('_', '/')));
     right_desc_->setText(mod.description);
-    right_script_->setText("Script: " + mod.script);
+    right_script_->setText(tr("Script: %1").arg(mod.script));
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+// Static chrome only: top-bar brand + module count, sidebar headers, info
+// panel title, stats card, status bar. Module labels + categories are
+// data-derived (see services::quant::QuantModule), kept verbatim.
+
+void AIQuantLabScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
+}
+
+void AIQuantLabScreen::retranslateUi() {
+    if (brand_lbl_)        brand_lbl_->setText(tr("AI QUANT LAB"));
+    if (module_count_lbl_) module_count_lbl_->setText(tr("%1 MODULES").arg(modules_.size()));
+    if (sidebar_title_)    sidebar_title_->setText(tr("MODULES"));
+    if (info_title_)       info_title_->setText(tr("MODULE INFO"));
+    if (stats_title_)      stats_title_->setText(tr("PLATFORM STATS"));
+    if (stat_modules_lbl_) stat_modules_lbl_->setText(tr("Modules"));
+    if (stat_ml_lbl_)      stat_ml_lbl_->setText(tr("ML Models"));
+    if (stat_rl_lbl_)      stat_rl_lbl_->setText(tr("RL Algorithms"));
+    if (stat_py_lbl_)      stat_py_lbl_->setText(tr("Python Scripts"));
+    if (engine_lbl_)       engine_lbl_->setText(tr("ENGINE:"));
+    if (status_ready_lbl_) status_ready_lbl_->setText(tr("READY"));
+
+    // Re-render the active module's info panel so the "{category} module" /
+    // "Script: {path}" sub-labels pick up the new language.
+    if (!modules_.isEmpty())
+        update_right_panel();
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────

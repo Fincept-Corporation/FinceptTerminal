@@ -42,24 +42,24 @@ void ProfilesSection::build_ui() {
     vl->setContentsMargins(24, 20, 24, 20);
     vl->setSpacing(16);
 
-    auto* title = new QLabel("Profiles");
+    auto* title = new QLabel(tr("Profiles"));
     title->setStyleSheet(section_title_ss());
     vl->addWidget(title);
 
-    auto* desc = new QLabel("Each profile has its own isolated database, credentials, logs and workspaces.\n"
-                            "Launch the terminal with  --profile <name>  to open a specific profile.\n"
-                            "Different profiles can run simultaneously — useful for separate trading accounts.");
+    auto* desc = new QLabel(tr("Each profile has its own isolated database, credentials, logs and workspaces.\n"
+                               "Launch the terminal with  --profile <name>  to open a specific profile.\n"
+                               "Different profiles can run simultaneously — useful for separate trading accounts."));
     desc->setWordWrap(true);
     desc->setStyleSheet(label_ss());
     vl->addWidget(desc);
     vl->addWidget(make_sep());
 
     auto& pm = ProfileManager::instance();
-    auto* active_lbl = new QLabel(QString("Active profile:  <b>%1</b>").arg(pm.active()));
+    auto* active_lbl = new QLabel(tr("Active profile:  <b>%1</b>").arg(pm.active()));
     active_lbl->setStyleSheet(label_ss());
     vl->addWidget(active_lbl);
 
-    auto* list_title = new QLabel("All profiles");
+    auto* list_title = new QLabel(tr("All profiles"));
     list_title->setStyleSheet(sub_title_ss());
     vl->addWidget(list_title);
 
@@ -80,12 +80,12 @@ void ProfilesSection::build_ui() {
         hl->addWidget(name_lbl, 1);
 
         if (name == pm.active()) {
-            auto* badge = new QLabel("ACTIVE");
+            auto* badge = new QLabel(tr("ACTIVE"));
             badge->setStyleSheet(QString("color:%1;font-weight:700;font-size:10px;background:transparent;")
                                      .arg(ui::colors::AMBER()));
             hl->addWidget(badge);
         } else {
-            auto* switch_btn = new QPushButton("Switch");
+            auto* switch_btn = new QPushButton(tr("Switch"));
             switch_btn->setFixedWidth(72);
             switch_btn->setStyleSheet(btn_secondary_ss());
             connect(switch_btn, &QPushButton::clicked, this, [name]() {
@@ -100,7 +100,7 @@ void ProfilesSection::build_ui() {
     vl->addWidget(list_widget);
     vl->addWidget(make_sep());
 
-    auto* new_title = new QLabel("Create new profile");
+    auto* new_title = new QLabel(tr("Create new profile"));
     new_title->setStyleSheet(sub_title_ss());
     vl->addWidget(new_title);
 
@@ -110,11 +110,11 @@ void ProfilesSection::build_ui() {
     new_hl->setSpacing(8);
 
     auto* name_input = new QLineEdit;
-    name_input->setPlaceholderText("profile-name  (alphanumeric, - and _ only)");
+    name_input->setPlaceholderText(tr("profile-name  (alphanumeric, - and _ only)"));
     name_input->setStyleSheet(input_ss());
     new_hl->addWidget(name_input, 1);
 
-    auto* create_btn = new QPushButton("Create & Switch");
+    auto* create_btn = new QPushButton(tr("Create & Switch"));
     create_btn->setStyleSheet(btn_primary_ss());
     connect(create_btn, &QPushButton::clicked, this, [name_input]() {
         const QString name = name_input->text().trimmed().toLower();
@@ -127,8 +127,8 @@ void ProfilesSection::build_ui() {
     new_hl->addWidget(create_btn);
     vl->addWidget(new_row);
 
-    auto* hint = new QLabel("Creating a profile sets up a fresh data directory. "
-                            "The app will restart with the new profile active.");
+    auto* hint = new QLabel(tr("Creating a profile sets up a fresh data directory. "
+                               "The app will restart with the new profile active."));
     hint->setWordWrap(true);
     hint->setStyleSheet(label_ss());
     vl->addWidget(hint);

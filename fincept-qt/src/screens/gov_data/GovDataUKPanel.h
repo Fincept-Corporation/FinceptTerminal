@@ -4,6 +4,7 @@
 #pragma once
 
 #include "services/gov_data/GovDataService.h"
+#include "ui/widgets/PaginationBar.h"
 
 #include <QJsonArray>
 #include <QLabel>
@@ -23,6 +24,9 @@ class GovDataUKPanel : public QWidget {
   public slots:
     void load_initial_data();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_result(const QString& request_id, const services::GovDataResult& result);
     void on_publisher_doubleclicked(int row, int col);
@@ -37,6 +41,7 @@ class GovDataUKPanel : public QWidget {
     // UI construction
     void build_ui();
     QWidget* build_toolbar();
+    void retranslateUi();
 
     // Table population
     void populate_publishers(const QJsonArray& data);
@@ -85,6 +90,14 @@ class GovDataUKPanel : public QWidget {
     QJsonArray current_publishers_;
     QJsonArray current_datasets_;
     QJsonArray current_resources_;
+
+    ui::PaginationBar* pub_pager_ = nullptr;
+    ui::PaginationBar* ds_pager_ = nullptr;
+    ui::PaginationBar* res_pager_ = nullptr;
+
+    void render_publishers_page();
+    void render_datasets_page();
+    void render_resources_page();
 };
 
 } // namespace fincept::screens

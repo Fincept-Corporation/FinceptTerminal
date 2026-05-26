@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "services/options/OptionChainService.h"
 #include "screens/fno/IntradayOIChart.h"
 #include "screens/fno/MaxPainChart.h"
 #include "screens/fno/MultiStrikeOIChart.h"
@@ -58,6 +59,17 @@ OISubTab::OISubTab(QWidget* parent) : QWidget(parent) {
                            colors::AMBER()));
 
     setup_ui();
+
+    connect(&fincept::services::options::OptionChainService::instance(),
+            &fincept::services::options::OptionChainService::chain_published,
+            this, [this](const OptionChain& chain) {
+                on_chain_published({}, QVariant::fromValue(chain));
+            });
+    subscribed_ = true;
+
+    const auto& cached = fincept::services::options::OptionChainService::instance().last_chain();
+    if (!cached.rows.isEmpty())
+        on_chain_published({}, QVariant::fromValue(cached));
 }
 
 OISubTab::~OISubTab() {
@@ -152,10 +164,6 @@ void OISubTab::showEvent(QShowEvent* e) {
 
 void OISubTab::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
-    if (!subscribed_)
-        return;
-    fincept::datahub::DataHub::instance().unsubscribe_pattern(this, QStringLiteral("option:chain:*"));
-    subscribed_ = false;
 }
 
 void OISubTab::on_chain_published(const QString& topic, const QVariant& v) {

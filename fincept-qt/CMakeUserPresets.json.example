@@ -1,0 +1,35 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "my-win-release",
+      "displayName": "My Windows Release",
+      "inherits": "win-release",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "C:/Qt/6.8.3/msvc2022_64"
+      }
+    },
+    {
+      "name": "my-linux-release",
+      "displayName": "My Linux Release",
+      "inherits": "linux-release",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "$env{HOME}/Qt/6.8.3/gcc_64"
+      }
+    },
+    {
+      "name": "my-macos-release",
+      "displayName": "My macOS Release",
+      "inherits": "macos-release",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "$env{HOME}/Qt/6.8.3/macos"
+      }
+    }
+  ],
+
+  "buildPresets": [
+    { "name": "my-win-release",   "configurePreset": "my-win-release"   },
+    { "name": "my-linux-release", "configurePreset": "my-linux-release" },
+    { "name": "my-macos-release", "configurePreset": "my-macos-release" }
+  ]
+}

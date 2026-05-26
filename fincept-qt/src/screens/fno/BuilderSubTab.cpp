@@ -6,12 +6,14 @@
 #include "screens/fno/BuilderAnalyticsRibbon.h"
 #include "screens/fno/LegEditorTable.h"
 #include "screens/fno/OrderConfirmDialog.h"
-#include "screens/fno/PayoffChartWidget.h"
-#include "screens/fno/TemplatePickerPanel.h"
+#include "screens/fno/PayoffStripWidget.h"
+#include "screens/fno/TemplateToolbar.h"
+#include "services/options/OptionChainService.h"
 #include "services/options/StrategyAnalytics.h"
 #include "services/options/StrategyTemplates.h"
 #include "storage/repositories/StrategiesRepository.h"
 #include "trading/PaperTrading.h"
+#include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
@@ -23,7 +25,6 @@
 #include <QPushButton>
 #include <QShowEvent>
 #include <QSpinBox>
-#include <QSplitter>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -33,36 +34,69 @@
 namespace fincept::screens::fno {
 
 using fincept::services::options::OptionChain;
+using fincept::services::options::OptionChainService;
 using fincept::services::options::Strategy;
 using fincept::services::options::StrategyAnalytics;
 using fincept::services::options::StrategyInstantiationOptions;
+using fincept::services::options::StrategyLeg;
 using fincept::services::options::analytics::PayoffComputeOptions;
 using namespace fincept::ui;
 
 BuilderSubTab::BuilderSubTab(QWidget* parent) : QWidget(parent) {
     setObjectName("fnoBuilderTab");
-    setStyleSheet(QString("#fnoBuilderTab { background:%1; }"
-                          "#fnoBldrFooter { background:%2; border-top:1px solid %3; }"
-                          "#fnoSaveBtn, #fnoLoadBtn { background:%2; color:%4; border:1px solid %3; "
-                          "                            padding:5px 14px; font-size:10px; font-weight:700; "
-                          "                            letter-spacing:0.4px; }"
-                          "#fnoSaveBtn:hover, #fnoLoadBtn:hover { background:%5; }"
-                          "#fnoTradeBtn { background:%3; color:%6; border:none; padding:5px 14px; "
-                          "                font-size:10px; font-weight:700; letter-spacing:0.4px; }"
-                          "QToolButton::menu-indicator { width:14px; }")
-                      .arg(colors::BG_BASE(),     // %1 panel bg
-                           colors::BG_RAISED(),   // %2 footer bg
-                           colors::BORDER_DIM(),  // %3 border
-                           colors::TEXT_PRIMARY(), // %4 primary text
-                           colors::BG_HOVER(),    // %5 hover
-                           colors::TEXT_SECONDARY())); // %6 disabled text
+    setStyleSheet(QString(
+        "#fnoBuilderTab { background:%1; }"
+        "#fnoBldrFooter { background:%2; border-top:1px solid %3; }"
+        "#fnoSaveBtn, #fnoLoadBtn { background:%2; color:%4; border:1px solid %3; "
+        "  padding:5px 14px; font-size:10px; font-weight:700; letter-spacing:0.4px; }"
+        "#fnoSaveBtn:hover, #fnoLoadBtn:hover { background:%5; }"
+        "#fnoTradeBtn { background:%3; color:%6; border:none; padding:5px 14px; "
+        "  font-size:10px; font-weight:700; letter-spacing:0.4px; }"
+        "#fnoBldrOiLabel { color:%6; font-size:10px; font-weight:700; "
+        "  letter-spacing:0.4px; background:transparent; }"
+        "#fnoBldrOiValue { color:%4; font-size:10px; font-weight:700; background:transparent; }"
+        "QToolButton::menu-indicator { width:14px; }")
+                      .arg(colors::BG_BASE(),
+                           colors::BG_RAISED(),
+                           colors::BORDER_DIM(),
+                           colors::TEXT_PRIMARY(),
+                           colors::BG_HOVER(),
+                           colors::TEXT_SECONDARY()));
 
     setup_ui();
-    connect(picker_, &TemplatePickerPanel::template_chosen, this, &BuilderSubTab::on_template_chosen);
+    connect(toolbar_, &TemplateToolbar::template_chosen, this, &BuilderSubTab::on_template_chosen);
+    connect(toolbar_, &TemplateToolbar::add_leg_requested, this, [this]() {
+        StrategyLeg blank;
+        blank.type = fincept::trading::InstrumentType::CE;
+        blank.lots = 1;
+        blank.lot_size = 1;
+        legs_view_->leg_model()->append_leg(blank);
+    });
     connect(legs_view_->leg_model(), &LegEditorModel::legs_changed, this, &BuilderSubTab::on_legs_changed);
     connect(save_btn_, &QPushButton::clicked, this, &BuilderSubTab::on_save_clicked);
     connect(load_btn_, &QToolButton::clicked, this, &BuilderSubTab::on_load_clicked);
     connect(trade_btn_, &QPushButton::clicked, this, &BuilderSubTab::on_trade_clicked);
+
+    connect(&OptionChainService::instance(), &OptionChainService::chain_published,
+            this, [this](const OptionChain& chain) {
+                last_chain_ = chain;
+                legs_view_->leg_model()->set_chain(chain);
+                if (pcr_label_)
+                    pcr_label_->setText(QString::number(chain.pcr, 'f', 2));
+                if (ce_oi_label_)
+                    ce_oi_label_->setText(QString::number(chain.total_ce_oi / 1000.0, 'f', 0) + "K");
+                if (pe_oi_label_)
+                    pe_oi_label_->setText(QString::number(chain.total_pe_oi / 1000.0, 'f', 0) + "K");
+                refresh_analytics();
+            });
+    chain_subscribed_ = true;
+
+    const auto& cached = OptionChainService::instance().last_chain();
+    if (!cached.rows.isEmpty()) {
+        last_chain_ = cached;
+        legs_view_->leg_model()->set_chain(cached);
+        refresh_analytics();
+    }
 }
 
 BuilderSubTab::~BuilderSubTab() {
@@ -74,34 +108,23 @@ void BuilderSubTab::setup_ui() {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    // ── Top ribbon ────────────────────────────────────────────────────────
+    // Row 1: analytics ribbon (2 rows, ~44px)
     ribbon_ = new BuilderAnalyticsRibbon(this);
     root->addWidget(ribbon_);
 
-    // ── Body — left (picker over leg editor) | right (payoff chart) ──────
-    auto* body = new QSplitter(Qt::Horizontal, this);
-    body->setHandleWidth(1);
-    body->setChildrenCollapsible(false);
+    // Row 2: template toolbar (28px)
+    toolbar_ = new TemplateToolbar(this);
+    root->addWidget(toolbar_);
 
-    auto* left = new QSplitter(Qt::Vertical, body);
-    left->setHandleWidth(1);
-    left->setChildrenCollapsible(false);
-    picker_ = new TemplatePickerPanel(left);
-    legs_view_ = new LegEditorTable(left);
-    left->addWidget(picker_);
-    left->addWidget(legs_view_);
-    left->setStretchFactor(0, 3);
-    left->setStretchFactor(1, 2);
+    // Row 3: leg editor (stretch)
+    legs_view_ = new LegEditorTable(this);
+    root->addWidget(legs_view_, 1);
 
-    chart_ = new PayoffChartWidget(body);
+    // Row 4: payoff strip (fixed 80px)
+    chart_ = new PayoffStripWidget(this);
+    root->addWidget(chart_);
 
-    body->addWidget(left);
-    body->addWidget(chart_);
-    body->setStretchFactor(0, 2);
-    body->setStretchFactor(1, 3);
-    root->addWidget(body, 1);
-
-    // ── Footer — Save / Load / Trade ──────────────────────────────────────
+    // Row 5: footer
     auto* footer = new QWidget(this);
     footer->setObjectName("fnoBldrFooter");
     auto* foot_lay = new QHBoxLayout(footer);
@@ -115,27 +138,23 @@ void BuilderSubTab::setup_ui() {
 
     load_btn_ = new QToolButton(footer);
     load_btn_->setObjectName("fnoLoadBtn");
-    load_btn_->setText("LOAD ▾");
+    load_btn_->setText("LOAD \xe2\x96\xbe");
     load_btn_->setCursor(Qt::PointingHandCursor);
     load_btn_->setPopupMode(QToolButton::InstantPopup);
     foot_lay->addWidget(load_btn_);
 
     foot_lay->addSpacing(16);
     auto* tgt_label = new QLabel("TARGET +", footer);
-    tgt_label->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; "
-                                     "letter-spacing:0.4px; background:transparent;")
-                                  .arg(colors::TEXT_SECONDARY()));
+    tgt_label->setObjectName("fnoBldrOiLabel");
     days_to_target_spin_ = new QSpinBox(footer);
     days_to_target_spin_->setRange(0, 365);
     days_to_target_spin_->setValue(0);
     days_to_target_spin_->setSuffix(" d");
     days_to_target_spin_->setToolTip(
-        "Days from today for the dashed target-day P/L curve. 0 = T+0 "
-        "(curve coincides with today's mark-to-market). Capped at the "
-        "strategy's nearest expiry.");
+        "Days from today for the dashed target-day P/L curve. 0 = T+0.");
     days_to_target_spin_->setStyleSheet(QString(
         "QSpinBox { background:%1; color:%2; border:1px solid %3; padding:2px 4px; "
-        "            font-size:11px; min-width:54px; }")
+        "  font-size:11px; min-width:54px; }")
                                               .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY(),
                                                    colors::BORDER_DIM()));
     connect(days_to_target_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this,
@@ -144,6 +163,32 @@ void BuilderSubTab::setup_ui() {
     foot_lay->addWidget(days_to_target_spin_);
 
     foot_lay->addStretch(1);
+
+    // PCR / OI labels on the right
+    auto* pcr_key = new QLabel("PCR", footer);
+    pcr_key->setObjectName("fnoBldrOiLabel");
+    pcr_label_ = new QLabel(QString::fromUtf8("—"), footer);
+    pcr_label_->setObjectName("fnoBldrOiValue");
+    foot_lay->addWidget(pcr_key);
+    foot_lay->addWidget(pcr_label_);
+    foot_lay->addSpacing(8);
+
+    auto* ce_key = new QLabel("CE OI", footer);
+    ce_key->setObjectName("fnoBldrOiLabel");
+    ce_oi_label_ = new QLabel(QString::fromUtf8("—"), footer);
+    ce_oi_label_->setObjectName("fnoBldrOiValue");
+    foot_lay->addWidget(ce_key);
+    foot_lay->addWidget(ce_oi_label_);
+    foot_lay->addSpacing(8);
+
+    auto* pe_key = new QLabel("PE OI", footer);
+    pe_key->setObjectName("fnoBldrOiLabel");
+    pe_oi_label_ = new QLabel(QString::fromUtf8("—"), footer);
+    pe_oi_label_->setObjectName("fnoBldrOiValue");
+    foot_lay->addWidget(pe_key);
+    foot_lay->addWidget(pe_oi_label_);
+    foot_lay->addSpacing(16);
+
     trade_btn_ = new QPushButton("TRADE ALL (PAPER)", footer);
     trade_btn_->setObjectName("fnoTradeBtn");
     trade_btn_->setEnabled(false);
@@ -155,9 +200,6 @@ void BuilderSubTab::setup_ui() {
 
 QVariantMap BuilderSubTab::save_state() const {
     QVariantMap m;
-    // Phase 5 keeps state in-memory only — Saved Strategies tab covers
-    // persistence for hand-built strategies. Splitter sizes etc. could be
-    // stashed here later.
     return m;
 }
 
@@ -181,10 +223,6 @@ void BuilderSubTab::showEvent(QShowEvent* e) {
 
 void BuilderSubTab::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
-    if (!chain_subscribed_)
-        return;
-    fincept::datahub::DataHub::instance().unsubscribe_pattern(this, QStringLiteral("option:chain:*"));
-    chain_subscribed_ = false;
 }
 
 void BuilderSubTab::on_chain_published(const QString& topic, const QVariant& v) {
@@ -192,6 +230,13 @@ void BuilderSubTab::on_chain_published(const QString& topic, const QVariant& v) 
     if (!v.canConvert<OptionChain>())
         return;
     last_chain_ = v.value<OptionChain>();
+    legs_view_->leg_model()->set_chain(last_chain_);
+    if (pcr_label_)
+        pcr_label_->setText(QString::number(last_chain_.pcr, 'f', 2));
+    if (ce_oi_label_)
+        ce_oi_label_->setText(QString::number(last_chain_.total_ce_oi / 1000.0, 'f', 0) + "K");
+    if (pe_oi_label_)
+        pe_oi_label_->setText(QString::number(last_chain_.total_pe_oi / 1000.0, 'f', 0) + "K");
     refresh_analytics();
 }
 
@@ -212,9 +257,6 @@ void BuilderSubTab::on_template_chosen(const QString& template_id, const Strateg
         return;
     }
     legs_view_->leg_model()->set_legs(r.value().legs);
-    // Picking a template starts a new strategy — clear the loaded-id so
-    // the next Save inserts a fresh row instead of overwriting whatever
-    // was loaded before.
     loaded_strategy_id_ = 0;
     loaded_strategy_name_.clear();
     refresh_analytics();
@@ -276,8 +318,6 @@ QString BuilderSubTab::ensure_paper_portfolio() {
     auto existing = fincept::trading::pt_find_portfolio(name, exchange);
     if (existing.has_value())
         return existing->id;
-    // Create a fresh portfolio — INR ledger, no leverage so margin checks
-    // mirror real-account behaviour, default fee 0.05% (broker average).
     auto p = fincept::trading::pt_create_portfolio(name, /*balance*/ 1'000'000.0,
                                                    /*currency*/ "INR",
                                                    /*leverage*/ 1.0,
@@ -294,7 +334,6 @@ void BuilderSubTab::on_trade_clicked() {
         return;
     Strategy s = current_strategy();
 
-    // Recompute analytics for accurate dialog values.
     fincept::services::options::analytics::PayoffComputeOptions opts;
     opts.current_spot = last_chain_.spot;
     auto a = fincept::services::options::analytics::compute_all(s, last_chain_, opts);
@@ -303,7 +342,6 @@ void BuilderSubTab::on_trade_clicked() {
     if (dlg.exec() != QDialog::Accepted)
         return;
 
-    // Push margin into the ribbon if the dialog managed to fetch one.
     if (auto m = dlg.basket_margin(); m.has_value()) {
         const double val = m->final_margin > 0 ? m->final_margin : m->initial_margin;
         ribbon_->set_margin(val, /*estimated*/ false);
@@ -348,8 +386,6 @@ void BuilderSubTab::on_save_clicked() {
         return;
     }
 
-    // Branch: existing row → UPDATE silently; new strategy → prompt for a
-    // name and INSERT.
     auto& repo = fincept::StrategiesRepository::instance();
     if (loaded_strategy_id_ != 0) {
         Strategy s = current_strategy();
@@ -376,7 +412,6 @@ void BuilderSubTab::on_save_clicked() {
         QMessageBox::warning(this, "Save failed", QString::fromStdString(r.error()));
         return;
     }
-    // Stamp the new id so subsequent Save clicks update in place.
     loaded_strategy_id_ = r.value();
     loaded_strategy_name_ = s.name;
     LOG_INFO("FnoBuilder", QString("Saved new strategy '%1' (id=%2)").arg(s.name).arg(r.value()));
@@ -393,7 +428,6 @@ void BuilderSubTab::on_load_clicked() {
             QString label = row.strategy.name;
             if (!row.strategy.underlying.isEmpty())
                 label += "  —  " + row.strategy.underlying;
-            // Modified-at suffix in muted relative form ("today, 2h ago, ...").
             if (row.strategy.modified.isValid()) {
                 const QString iso = row.strategy.modified.toString("yyyy-MM-dd HH:mm");
                 label += "    [" + iso + "]";

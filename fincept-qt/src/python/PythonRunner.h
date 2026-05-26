@@ -63,6 +63,9 @@ class PythonRunner : public QObject {
     /// Set max concurrent Python processes (default: 3)
     void set_max_concurrent(int n) { max_concurrent_ = n; }
 
+  signals:
+    void python_ready();
+
   private:
     PythonRunner();
     QString find_python_sync() const;

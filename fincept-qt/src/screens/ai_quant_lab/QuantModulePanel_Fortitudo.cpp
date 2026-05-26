@@ -15,6 +15,7 @@
 #include <QAbstractItemView>
 #include <QColor>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QHash>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -69,7 +70,7 @@ FortAssetInputs build_fort_asset_row(const QString& key_prefix, QWidget* parent,
     hl->setSpacing(8);
 
     auto* tk = new QLineEdit(row);
-    tk->setPlaceholderText("Tickers (comma-separated, >= 2). Returns fetched via Yahoo Finance.");
+    tk->setPlaceholderText(QCoreApplication::translate("QuantModulePanel", "Tickers (comma-separated, >= 2). Returns fetched via Yahoo Finance."));
     tk->setText(default_tickers);
     tk->setStyleSheet(input_ss());
     text_inputs[key_prefix + "_tickers"] = tk;
@@ -89,7 +90,9 @@ FortAssetInputs build_fort_asset_row(const QString& key_prefix, QWidget* parent,
 // Build a weights table: asset / weight / weight % with color-coded bars.
 QTableWidget* fort_weights_table(const QJsonArray& weights, QWidget* parent) {
     auto* table = new QTableWidget(weights.size(), 3, parent);
-    table->setHorizontalHeaderLabels({"Asset", "Weight", "% of Portfolio"});
+    table->setHorizontalHeaderLabels({QCoreApplication::translate("QuantModulePanel", "Asset"),
+                                       QCoreApplication::translate("QuantModulePanel", "Weight"),
+                                       QCoreApplication::translate("QuantModulePanel", "% of Portfolio")});
     table->verticalHeader()->setVisible(false);
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->setSelectionMode(QAbstractItemView::NoSelection);
@@ -137,24 +140,24 @@ QWidget* QuantModulePanel::build_fortitudo_panel() {
     pml->setSpacing(8);
 
     auto pm_assets = build_fort_asset_row("ft_pm", pm, text_inputs_, combo_inputs_);
-    pml->addWidget(build_input_row("Tickers", pm_assets.tickers_edit, pm));
-    pml->addWidget(build_input_row("History Period", pm_assets.period_combo, pm));
+    pml->addWidget(build_input_row(tr("Tickers"), pm_assets.tickers_edit, pm));
+    pml->addWidget(build_input_row(tr("History Period"), pm_assets.period_combo, pm));
 
     auto* pm_weights = new QLineEdit(pm);
-    pm_weights->setPlaceholderText("Weights (comma-separated, will be normalized to 1.0). Equal-weight if blank.");
+    pm_weights->setPlaceholderText(tr("Weights (comma-separated, will be normalized to 1.0). Equal-weight if blank."));
     pm_weights->setStyleSheet(input_ss());
     text_inputs_["ft_pm_weights"] = pm_weights;
-    pml->addWidget(build_input_row("Portfolio Weights", pm_weights, pm));
+    pml->addWidget(build_input_row(tr("Portfolio Weights"), pm_weights, pm));
 
     auto* pm_alpha = make_double_spin(0.001, 0.499, 0.05, 3, "", pm);
     double_inputs_["ft_pm_alpha"] = pm_alpha;
-    pml->addWidget(build_input_row("CVaR α (tail probability)", pm_alpha, pm));
+    pml->addWidget(build_input_row(tr("CVaR α (tail probability)"), pm_alpha, pm));
 
-    auto* pm_run = make_run_button("COMPUTE PORTFOLIO METRICS", pm);
+    auto* pm_run = make_run_button(tr("COMPUTE PORTFOLIO METRICS"), pm);
     connect(pm_run, &QPushButton::clicked, this, [this]() {
         const QString tk = text_inputs_["ft_pm_tickers"]->text().trimmed();
         if (tk.isEmpty()) {
-            display_error("Enter at least 2 tickers (e.g. AAPL,MSFT,GOOG).");
+            display_error(tr("Enter at least 2 tickers (e.g. AAPL,MSFT,GOOG)."));
             return;
         }
         QJsonObject params;
@@ -166,17 +169,17 @@ QWidget* QuantModulePanel::build_fortitudo_panel() {
             QJsonArray w;
             QString bad;
             if (!parse_doubles(w_text, w, &bad)) {
-                display_error(QString("Weights: '%1' is not numeric.").arg(bad));
+                display_error(tr("Weights: '%1' is not numeric.").arg(bad));
                 return;
             }
             params["weights"] = w;
         }
-        show_loading(QString("Fetching %1 from yfinance and computing metrics...").arg(tk));
+        show_loading(tr("Fetching %1 from yfinance and computing metrics...").arg(tk));
         AIQuantLabService::instance().fort_portfolio_metrics(params);
     });
     pml->addWidget(pm_run);
     pml->addStretch();
-    tabs->addTab(pm, "Portfolio Metrics");
+    tabs->addTab(pm, tr("Portfolio Metrics"));
 
     // ── Covariance / Correlation ─────────────────────────────────────────────
     auto* cv = new QWidget(this);
@@ -185,32 +188,32 @@ QWidget* QuantModulePanel::build_fortitudo_panel() {
     cvl->setSpacing(8);
 
     auto cv_assets = build_fort_asset_row("ft_cv", cv, text_inputs_, combo_inputs_);
-    cvl->addWidget(build_input_row("Tickers", cv_assets.tickers_edit, cv));
-    cvl->addWidget(build_input_row("History Period", cv_assets.period_combo, cv));
+    cvl->addWidget(build_input_row(tr("Tickers"), cv_assets.tickers_edit, cv));
+    cvl->addWidget(build_input_row(tr("History Period"), cv_assets.period_combo, cv));
 
     auto* cv_hint = new QLabel(
-        "Computes the full covariance matrix, correlation matrix, and per-asset moments "
-        "(mean, vol, skew, kurtosis). Asset count is capped — keep it under 12 for readability.", cv);
+        tr("Computes the full covariance matrix, correlation matrix, and per-asset moments "
+        "(mean, vol, skew, kurtosis). Asset count is capped — keep it under 12 for readability."), cv);
     cv_hint->setWordWrap(true);
     cv_hint->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     cvl->addWidget(cv_hint);
 
-    auto* cv_run = make_run_button("COMPUTE COV + CORR + MOMENTS", cv);
+    auto* cv_run = make_run_button(tr("COMPUTE COV + CORR + MOMENTS"), cv);
     connect(cv_run, &QPushButton::clicked, this, [this]() {
         const QString tk = text_inputs_["ft_cv_tickers"]->text().trimmed();
         if (tk.isEmpty()) {
-            display_error("Enter at least 2 tickers.");
+            display_error(tr("Enter at least 2 tickers."));
             return;
         }
         QJsonObject params;
         params["tickers"] = tk;
         params["period"] = combo_inputs_["ft_cv_period"]->currentText();
-        show_loading(QString("Fetching %1 and computing covariance...").arg(tk));
+        show_loading(tr("Fetching %1 and computing covariance...").arg(tk));
         AIQuantLabService::instance().fort_covariance_matrix(params);
     });
     cvl->addWidget(cv_run);
     cvl->addStretch();
-    tabs->addTab(cv, "Covariance");
+    tabs->addTab(cv, tr("Covariance"));
 
     // ── Mean-Variance Optimization ───────────────────────────────────────────
     auto* mv = new QWidget(this);
@@ -219,39 +222,39 @@ QWidget* QuantModulePanel::build_fortitudo_panel() {
     mvl->setSpacing(8);
 
     auto mv_assets = build_fort_asset_row("ft_mv", mv, text_inputs_, combo_inputs_);
-    mvl->addWidget(build_input_row("Tickers", mv_assets.tickers_edit, mv));
-    mvl->addWidget(build_input_row("History Period", mv_assets.period_combo, mv));
+    mvl->addWidget(build_input_row(tr("Tickers"), mv_assets.tickers_edit, mv));
+    mvl->addWidget(build_input_row(tr("History Period"), mv_assets.period_combo, mv));
 
     auto* mv_obj = new QComboBox(mv);
     mv_obj->addItems({"min_variance", "max_sharpe", "target_return"});
     mv_obj->setStyleSheet(combo_ss());
     combo_inputs_["ft_mv_objective"] = mv_obj;
-    mvl->addWidget(build_input_row("Objective", mv_obj, mv));
+    mvl->addWidget(build_input_row(tr("Objective"), mv_obj, mv));
 
     auto* mv_target = make_double_spin(0, 100, 8.0, 2, "%", mv);
     double_inputs_["ft_mv_target"] = mv_target;
-    mvl->addWidget(build_input_row("Target Annualized Return", mv_target, mv));
+    mvl->addWidget(build_input_row(tr("Target Annualized Return"), mv_target, mv));
 
     auto* mv_long = new QComboBox(mv);
     mv_long->addItems({"true", "false"});
     mv_long->setStyleSheet(combo_ss());
     combo_inputs_["ft_mv_long_only"] = mv_long;
-    mvl->addWidget(build_input_row("Long Only", mv_long, mv));
+    mvl->addWidget(build_input_row(tr("Long Only"), mv_long, mv));
 
     auto* mv_max = make_double_spin(0.0, 1.0, 0.5, 2, "", mv);
-    mv_max->setSpecialValueText("none");
+    mv_max->setSpecialValueText(tr("none"));
     double_inputs_["ft_mv_max"] = mv_max;
-    mvl->addWidget(build_input_row("Max Single-Asset Weight (0 = none)", mv_max, mv));
+    mvl->addWidget(build_input_row(tr("Max Single-Asset Weight (0 = none)"), mv_max, mv));
 
     auto* mv_rf = make_double_spin(0, 20, 4.5, 2, "%", mv);
     double_inputs_["ft_mv_rf"] = mv_rf;
-    mvl->addWidget(build_input_row("Risk-Free Rate (annual)", mv_rf, mv));
+    mvl->addWidget(build_input_row(tr("Risk-Free Rate (annual)"), mv_rf, mv));
 
-    auto* mv_run = make_run_button("OPTIMIZE PORTFOLIO", mv);
+    auto* mv_run = make_run_button(tr("OPTIMIZE PORTFOLIO"), mv);
     connect(mv_run, &QPushButton::clicked, this, [this]() {
         const QString tk = text_inputs_["ft_mv_tickers"]->text().trimmed();
         if (tk.isEmpty()) {
-            display_error("Enter at least 2 tickers.");
+            display_error(tr("Enter at least 2 tickers."));
             return;
         }
         const QString obj = combo_inputs_["ft_mv_objective"]->currentText();
@@ -270,12 +273,12 @@ QWidget* QuantModulePanel::build_fortitudo_panel() {
             params["target_return"] = std::pow(1.0 + double_inputs_["ft_mv_target"]->value() / 100.0,
                                                 1.0 / 252.0) - 1.0;
         }
-        show_loading(QString("Fetching %1 and solving %2...").arg(tk, obj));
+        show_loading(tr("Fetching %1 and solving %2...").arg(tk, obj));
         AIQuantLabService::instance().fort_mean_variance_optimize(params);
     });
     mvl->addWidget(mv_run);
     mvl->addStretch();
-    tabs->addTab(mv, "MV Optimize");
+    tabs->addTab(mv, tr("MV Optimize"));
 
     // ── Mean-CVaR Optimization ───────────────────────────────────────────────
     auto* cvopt = new QWidget(this);
@@ -284,39 +287,39 @@ QWidget* QuantModulePanel::build_fortitudo_panel() {
     cvol->setSpacing(8);
 
     auto cv_opt_assets = build_fort_asset_row("ft_cvopt", cvopt, text_inputs_, combo_inputs_);
-    cvol->addWidget(build_input_row("Tickers", cv_opt_assets.tickers_edit, cvopt));
-    cvol->addWidget(build_input_row("History Period", cv_opt_assets.period_combo, cvopt));
+    cvol->addWidget(build_input_row(tr("Tickers"), cv_opt_assets.tickers_edit, cvopt));
+    cvol->addWidget(build_input_row(tr("History Period"), cv_opt_assets.period_combo, cvopt));
 
     auto* cvopt_obj = new QComboBox(cvopt);
     cvopt_obj->addItems({"min_cvar", "target_return"});
     cvopt_obj->setStyleSheet(combo_ss());
     combo_inputs_["ft_cvopt_objective"] = cvopt_obj;
-    cvol->addWidget(build_input_row("Objective", cvopt_obj, cvopt));
+    cvol->addWidget(build_input_row(tr("Objective"), cvopt_obj, cvopt));
 
     auto* cvopt_alpha = make_double_spin(0.001, 0.499, 0.05, 3, "", cvopt);
     double_inputs_["ft_cvopt_alpha"] = cvopt_alpha;
-    cvol->addWidget(build_input_row("CVaR α (tail probability)", cvopt_alpha, cvopt));
+    cvol->addWidget(build_input_row(tr("CVaR α (tail probability)"), cvopt_alpha, cvopt));
 
     auto* cvopt_target = make_double_spin(0, 100, 8.0, 2, "%", cvopt);
     double_inputs_["ft_cvopt_target"] = cvopt_target;
-    cvol->addWidget(build_input_row("Target Annualized Return", cvopt_target, cvopt));
+    cvol->addWidget(build_input_row(tr("Target Annualized Return"), cvopt_target, cvopt));
 
     auto* cvopt_long = new QComboBox(cvopt);
     cvopt_long->addItems({"true", "false"});
     cvopt_long->setStyleSheet(combo_ss());
     combo_inputs_["ft_cvopt_long_only"] = cvopt_long;
-    cvol->addWidget(build_input_row("Long Only", cvopt_long, cvopt));
+    cvol->addWidget(build_input_row(tr("Long Only"), cvopt_long, cvopt));
 
     auto* cvopt_max = make_double_spin(0.0, 1.0, 0.5, 2, "", cvopt);
-    cvopt_max->setSpecialValueText("none");
+    cvopt_max->setSpecialValueText(tr("none"));
     double_inputs_["ft_cvopt_max"] = cvopt_max;
-    cvol->addWidget(build_input_row("Max Single-Asset Weight (0 = none)", cvopt_max, cvopt));
+    cvol->addWidget(build_input_row(tr("Max Single-Asset Weight (0 = none)"), cvopt_max, cvopt));
 
-    auto* cvopt_run = make_run_button("MINIMIZE TAIL RISK", cvopt);
+    auto* cvopt_run = make_run_button(tr("MINIMIZE TAIL RISK"), cvopt);
     connect(cvopt_run, &QPushButton::clicked, this, [this]() {
         const QString tk = text_inputs_["ft_cvopt_tickers"]->text().trimmed();
         if (tk.isEmpty()) {
-            display_error("Enter at least 2 tickers.");
+            display_error(tr("Enter at least 2 tickers."));
             return;
         }
         const QString obj = combo_inputs_["ft_cvopt_objective"]->currentText();
@@ -332,12 +335,12 @@ QWidget* QuantModulePanel::build_fortitudo_panel() {
             params["target_return"] = std::pow(1.0 + double_inputs_["ft_cvopt_target"]->value() / 100.0,
                                                 1.0 / 252.0) - 1.0;
         }
-        show_loading(QString("Fetching %1 and solving %2...").arg(tk, obj));
+        show_loading(tr("Fetching %1 and solving %2...").arg(tk, obj));
         AIQuantLabService::instance().fort_mean_cvar_optimize(params);
     });
     cvol->addWidget(cvopt_run);
     cvol->addStretch();
-    tabs->addTab(cvopt, "CVaR Optimize");
+    tabs->addTab(cvopt, tr("CVaR Optimize"));
 
     // ── Efficient Frontier ───────────────────────────────────────────────────
     auto* ef = new QWidget(this);
@@ -346,36 +349,36 @@ QWidget* QuantModulePanel::build_fortitudo_panel() {
     efl->setSpacing(8);
 
     auto ef_assets = build_fort_asset_row("ft_ef", ef, text_inputs_, combo_inputs_);
-    efl->addWidget(build_input_row("Tickers", ef_assets.tickers_edit, ef));
-    efl->addWidget(build_input_row("History Period", ef_assets.period_combo, ef));
+    efl->addWidget(build_input_row(tr("Tickers"), ef_assets.tickers_edit, ef));
+    efl->addWidget(build_input_row(tr("History Period"), ef_assets.period_combo, ef));
 
     auto* ef_n = new QSpinBox(ef);
     ef_n->setRange(5, 50);
     ef_n->setValue(20);
     ef_n->setStyleSheet(spinbox_ss());
     int_inputs_["ft_ef_n_points"] = ef_n;
-    efl->addWidget(build_input_row("Frontier Points", ef_n, ef));
+    efl->addWidget(build_input_row(tr("Frontier Points"), ef_n, ef));
 
     auto* ef_long = new QComboBox(ef);
     ef_long->addItems({"true", "false"});
     ef_long->setStyleSheet(combo_ss());
     combo_inputs_["ft_ef_long_only"] = ef_long;
-    efl->addWidget(build_input_row("Long Only", ef_long, ef));
+    efl->addWidget(build_input_row(tr("Long Only"), ef_long, ef));
 
     auto* ef_max = make_double_spin(0.0, 1.0, 0.5, 2, "", ef);
-    ef_max->setSpecialValueText("none");
+    ef_max->setSpecialValueText(tr("none"));
     double_inputs_["ft_ef_max"] = ef_max;
-    efl->addWidget(build_input_row("Max Single-Asset Weight (0 = none)", ef_max, ef));
+    efl->addWidget(build_input_row(tr("Max Single-Asset Weight (0 = none)"), ef_max, ef));
 
     auto* ef_rf = make_double_spin(0, 20, 4.5, 2, "%", ef);
     double_inputs_["ft_ef_rf"] = ef_rf;
-    efl->addWidget(build_input_row("Risk-Free Rate (annual)", ef_rf, ef));
+    efl->addWidget(build_input_row(tr("Risk-Free Rate (annual)"), ef_rf, ef));
 
-    auto* ef_run = make_run_button("BUILD EFFICIENT FRONTIER", ef);
+    auto* ef_run = make_run_button(tr("BUILD EFFICIENT FRONTIER"), ef);
     connect(ef_run, &QPushButton::clicked, this, [this]() {
         const QString tk = text_inputs_["ft_ef_tickers"]->text().trimmed();
         if (tk.isEmpty()) {
-            display_error("Enter at least 2 tickers.");
+            display_error(tr("Enter at least 2 tickers."));
             return;
         }
         QJsonObject params;
@@ -386,13 +389,13 @@ QWidget* QuantModulePanel::build_fortitudo_panel() {
         const double maxw = double_inputs_["ft_ef_max"]->value();
         if (maxw > 0.0) params["max_weight"] = maxw;
         params["risk_free_rate"] = double_inputs_["ft_ef_rf"]->value() / 100.0 / 252.0;
-        show_loading(QString("Fetching %1 and tracing %2-point frontier...")
+        show_loading(tr("Fetching %1 and tracing %2-point frontier...")
                          .arg(tk).arg(int_inputs_["ft_ef_n_points"]->value()));
         AIQuantLabService::instance().fort_efficient_frontier(params);
     });
     efl->addWidget(ef_run);
     efl->addStretch();
-    tabs->addTab(ef, "Efficient Frontier");
+    tabs->addTab(ef, tr("Efficient Frontier"));
 
     // ── Exponential Decay Probabilities ──────────────────────────────────────
     auto* ed = new QWidget(this);
@@ -401,42 +404,42 @@ QWidget* QuantModulePanel::build_fortitudo_panel() {
     edl->setSpacing(8);
 
     auto ed_assets = build_fort_asset_row("ft_ed", ed, text_inputs_, combo_inputs_);
-    edl->addWidget(build_input_row("Tickers", ed_assets.tickers_edit, ed));
-    edl->addWidget(build_input_row("History Period", ed_assets.period_combo, ed));
+    edl->addWidget(build_input_row(tr("Tickers"), ed_assets.tickers_edit, ed));
+    edl->addWidget(build_input_row(tr("History Period"), ed_assets.period_combo, ed));
 
     auto* ed_hl = new QSpinBox(ed);
     ed_hl->setRange(5, 1000);
     ed_hl->setValue(60);
-    ed_hl->setSuffix(" obs");
+    ed_hl->setSuffix(tr(" obs"));
     ed_hl->setStyleSheet(spinbox_ss());
     int_inputs_["ft_ed_half_life"] = ed_hl;
-    edl->addWidget(build_input_row("Half-Life (observations)", ed_hl, ed));
+    edl->addWidget(build_input_row(tr("Half-Life (observations)"), ed_hl, ed));
 
     auto* ed_hint = new QLabel(
-        "Builds exponentially-decayed scenario weights so recent observations dominate. "
-        "ESS (Kish effective sample size) tells you how much of the history you're effectively using.", ed);
+        tr("Builds exponentially-decayed scenario weights so recent observations dominate. "
+        "ESS (Kish effective sample size) tells you how much of the history you're effectively using."), ed);
     ed_hint->setWordWrap(true);
     ed_hint->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     edl->addWidget(ed_hint);
 
-    auto* ed_run = make_run_button("COMPUTE DECAY WEIGHTS", ed);
+    auto* ed_run = make_run_button(tr("COMPUTE DECAY WEIGHTS"), ed);
     connect(ed_run, &QPushButton::clicked, this, [this]() {
         const QString tk = text_inputs_["ft_ed_tickers"]->text().trimmed();
         if (tk.isEmpty()) {
-            display_error("Enter at least 2 tickers (used only for series length).");
+            display_error(tr("Enter at least 2 tickers (used only for series length)."));
             return;
         }
         QJsonObject params;
         params["tickers"] = tk;
         params["period"] = combo_inputs_["ft_ed_period"]->currentText();
         params["half_life"] = int_inputs_["ft_ed_half_life"]->value();
-        show_loading(QString("Computing %1-day half-life decay on %2...")
+        show_loading(tr("Computing %1-day half-life decay on %2...")
                          .arg(int_inputs_["ft_ed_half_life"]->value()).arg(tk));
         AIQuantLabService::instance().fort_exp_decay_probabilities(params);
     });
     edl->addWidget(ed_run);
     edl->addStretch();
-    tabs->addTab(ed, "Decay Weights");
+    tabs->addTab(ed, tr("Decay Weights"));
 
     vl->addWidget(tabs);
 
@@ -456,11 +459,11 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
     clear_results();
 
     if (!payload.value("success").toBool(false)) {
-        const QString err = payload.value("error").toString("Unknown error");
+        const QString err = payload.value("error").toString(tr("Unknown error"));
         const QString kind = payload.value("error_kind").toString();
-        const QString prefix = kind == "validation" ? "Input error: "
-                              : kind == "runtime"    ? "Computation failed: "
-                                                     : "";
+        const QString prefix = kind == "validation" ? tr("Input error: ")
+                              : kind == "runtime"    ? tr("Computation failed: ")
+                                                     : QString();
         display_error(prefix + err);
         return;
     }
@@ -472,37 +475,37 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
     QString header_text = command.toUpper();
     header_text.replace('_', ' ');
     if (d.contains("n_assets"))
-        header_text += QString("  |  %1 ASSETS").arg(d.value("n_assets").toInt());
+        header_text += tr("  |  %1 ASSETS").arg(d.value("n_assets").toInt());
     if (d.contains("n_scenarios"))
-        header_text += QString("  |  %1 SCENARIOS").arg(d.value("n_scenarios").toInt());
+        header_text += tr("  |  %1 SCENARIOS").arg(d.value("n_scenarios").toInt());
     else if (d.contains("n_observations"))
-        header_text += QString("  |  %1 OBS").arg(d.value("n_observations").toInt());
+        header_text += tr("  |  %1 OBS").arg(d.value("n_observations").toInt());
     results_layout_->addWidget(gs_section_header(header_text, accent));
 
     // ── 1. CHECK STATUS ──────────────────────────────────────────────────────
     if (command == "check_status") {
         auto bool_card = [this](const QString& label, bool ok) {
-            return gs_make_card(label, ok ? "AVAILABLE" : "MISSING", this,
+            return gs_make_card(label, ok ? tr("AVAILABLE") : tr("MISSING"), this,
                                 ok ? ui::colors::POSITIVE() : ui::colors::NEGATIVE());
         };
         QList<QWidget*> deps = {
-            bool_card("OPTIMIZATION", d.value("wrappers_optimization").toBool()),
-            bool_card("FUNCTIONS", d.value("wrappers_functions").toBool()),
-            bool_card("NATIVE FORTITUDO", d.value("native_fortitudo_tech").toBool()),
-            gs_make_card("MODE", d.value("mode").toString().toUpper(), this, ui::colors::INFO()),
+            bool_card(tr("OPTIMIZATION"), d.value("wrappers_optimization").toBool()),
+            bool_card(tr("FUNCTIONS"), d.value("wrappers_functions").toBool()),
+            bool_card(tr("NATIVE FORTITUDO"), d.value("native_fortitudo_tech").toBool()),
+            gs_make_card(tr("MODE"), d.value("mode").toString().toUpper(), this, ui::colors::INFO()),
         };
         results_layout_->addWidget(gs_card_row(deps, this));
         const auto ops = d.value("ops_available").toArray();
         QStringList names;
         for (const auto& v : ops) names << v.toString();
-        auto* lbl = new QLabel(QString("Operations: %1").arg(names.join(", ")));
+        auto* lbl = new QLabel(tr("Operations: %1").arg(names.join(", ")));
         lbl->setWordWrap(true);
         lbl->setStyleSheet(QString("color:%1; font-size:10px; font-family:'Courier New';"
                                    "padding:8px 10px; background:%2; border:1px solid %3;")
                                .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(),
                                     ui::colors::BORDER_DIM()));
         results_layout_->addWidget(lbl);
-        status_label_->setText("Fortitudo backend ready");
+        status_label_->setText(tr("Fortitudo backend ready"));
         return;
     }
 
@@ -518,35 +521,35 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
         const double hhi = d.value("concentration_hhi").toDouble();
 
         QList<QWidget*> ann = {
-            gs_make_card("ANN. RETURN", QString::number(ann_ret * 100, 'f', 2) + "%", this,
+            gs_make_card(tr("ANN. RETURN"), QString::number(ann_ret * 100, 'f', 2) + "%", this,
                          gs_pos_neg_color(ann_ret)),
-            gs_make_card("ANN. VOLATILITY", QString::number(ann_vol * 100, 'f', 2) + "%", this),
-            gs_make_card("SHARPE RATIO", gs_fmt_num(sharpe, 4), this,
+            gs_make_card(tr("ANN. VOLATILITY"), QString::number(ann_vol * 100, 'f', 2) + "%", this),
+            gs_make_card(tr("SHARPE RATIO"), gs_fmt_num(sharpe, 4), this,
                          sharpe >= 1.0 ? ui::colors::POSITIVE()
                                       : sharpe >= 0  ? ui::colors::TEXT_PRIMARY()
                                                      : ui::colors::NEGATIVE()),
-            gs_make_card("ALPHA (CVaR)", QString::number(d.value("alpha").toDouble() * 100, 'f', 1) + "%",
+            gs_make_card(tr("ALPHA (CVaR)"), QString::number(d.value("alpha").toDouble() * 100, 'f', 1) + "%",
                          this, ui::colors::INFO()),
         };
         results_layout_->addWidget(gs_card_row(ann, this));
 
         QList<QWidget*> daily = {
-            gs_make_card("DAILY RETURN", QString::number(exp_ret * 100, 'f', 4) + "%", this,
+            gs_make_card(tr("DAILY RETURN"), QString::number(exp_ret * 100, 'f', 4) + "%", this,
                          gs_pos_neg_color(exp_ret)),
-            gs_make_card("DAILY VOL", QString::number(vol * 100, 'f', 4) + "%", this),
-            gs_make_card("VaR", QString::number(var_pct, 'f', 2) + "%", this,
+            gs_make_card(tr("DAILY VOL"), QString::number(vol * 100, 'f', 4) + "%", this),
+            gs_make_card(tr("VaR"), QString::number(var_pct, 'f', 2) + "%", this,
                          var_pct < -2 ? ui::colors::NEGATIVE() : ui::colors::WARNING()),
-            gs_make_card("CVaR (Expected Shortfall)", QString::number(cvar_pct, 'f', 2) + "%", this,
+            gs_make_card(tr("CVaR (Expected Shortfall)"), QString::number(cvar_pct, 'f', 2) + "%", this,
                          cvar_pct < -2 ? ui::colors::NEGATIVE() : ui::colors::WARNING()),
         };
         results_layout_->addWidget(gs_card_row(daily, this));
 
         QList<QWidget*> conc = {
-            gs_make_card("CONCENTRATION (HHI)", gs_fmt_num(hhi, 4), this,
+            gs_make_card(tr("CONCENTRATION (HHI)"), gs_fmt_num(hhi, 4), this,
                          hhi > 0.4 ? ui::colors::WARNING() : ui::colors::POSITIVE()),
-            gs_make_card("MAX WEIGHT", QString::number(d.value("max_weight").toDouble() * 100, 'f', 2) + "%", this),
-            gs_make_card("MIN WEIGHT", QString::number(d.value("min_weight").toDouble() * 100, 'f', 2) + "%", this),
-            gs_make_card("EFFECTIVE ASSETS",
+            gs_make_card(tr("MAX WEIGHT"), QString::number(d.value("max_weight").toDouble() * 100, 'f', 2) + "%", this),
+            gs_make_card(tr("MIN WEIGHT"), QString::number(d.value("min_weight").toDouble() * 100, 'f', 2) + "%", this),
+            gs_make_card(tr("EFFECTIVE ASSETS"),
                          hhi > 0 ? gs_fmt_num(1.0 / hhi, 2) : QString("—"), this,
                          ui::colors::INFO()),
         };
@@ -557,7 +560,7 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
             results_layout_->addWidget(fort_weights_table(weights, this));
         }
 
-        status_label_->setText(QString("Sharpe %1  |  Ann. Ret %2%  |  Ann. Vol %3%  |  HHI %4")
+        status_label_->setText(tr("Sharpe %1  |  Ann. Ret %2%  |  Ann. Vol %3%  |  HHI %4")
                                    .arg(sharpe, 0, 'f', 3)
                                    .arg(ann_ret * 100, 0, 'f', 2)
                                    .arg(ann_vol * 100, 0, 'f', 2)
@@ -569,12 +572,12 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
     if (command == "covariance_matrix") {
         const double avg_corr = d.value("avg_off_diag_correlation").toDouble();
         QList<QWidget*> top = {
-            gs_make_card("ASSETS", QString::number(d.value("n_assets").toInt()), this),
-            gs_make_card("OBSERVATIONS", QString::number(d.value("n_observations").toInt()), this),
-            gs_make_card("AVG OFF-DIAG ρ", gs_fmt_num(avg_corr, 4), this,
+            gs_make_card(tr("ASSETS"), QString::number(d.value("n_assets").toInt()), this),
+            gs_make_card(tr("OBSERVATIONS"), QString::number(d.value("n_observations").toInt()), this),
+            gs_make_card(tr("AVG OFF-DIAG ρ"), gs_fmt_num(avg_corr, 4), this,
                          std::abs(avg_corr) > 0.5 ? ui::colors::WARNING()
                                                   : ui::colors::TEXT_PRIMARY()),
-            gs_make_card("MAX |ρ|", gs_fmt_num(std::max(std::abs(d.value("max_off_diag_correlation").toDouble()),
+            gs_make_card(tr("MAX |ρ|"), gs_fmt_num(std::max(std::abs(d.value("max_off_diag_correlation").toDouble()),
                                                          std::abs(d.value("min_off_diag_correlation").toDouble())), 4),
                          this),
         };
@@ -584,7 +587,7 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
         const QJsonArray moments = d.value("moments").toArray();
         if (!moments.isEmpty()) {
             const auto first = moments[0].toObject();
-            QStringList headers = {"Asset"};
+            QStringList headers = {tr("Asset")};
             QStringList keys;
             for (auto it = first.begin(); it != first.end(); ++it) {
                 if (it.key() == "asset") continue;
@@ -611,7 +614,7 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
                 }
                 mt->setRowHeight(r, 22);
             }
-            auto* mlbl = new QLabel("PER-ASSET MOMENTS");
+            auto* mlbl = new QLabel(tr("PER-ASSET MOMENTS"));
             mlbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; padding:4px 0 0 2px;")
                                     .arg(ui::colors::TEXT_TERTIARY()));
             results_layout_->addWidget(mlbl);
@@ -622,7 +625,7 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
         const QJsonArray corr = d.value("correlation_matrix").toArray();
         if (!corr.isEmpty()) {
             const auto first = corr[0].toObject();
-            QStringList headers = {"Asset"};
+            QStringList headers = {tr("Asset")};
             QStringList keys;
             for (auto it = first.begin(); it != first.end(); ++it) {
                 if (it.key() == "asset") continue;
@@ -654,14 +657,14 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
                 }
                 ct->setRowHeight(r, 22);
             }
-            auto* clbl = new QLabel("CORRELATION MATRIX");
+            auto* clbl = new QLabel(tr("CORRELATION MATRIX"));
             clbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; padding:4px 0 0 2px;")
                                     .arg(ui::colors::TEXT_TERTIARY()));
             results_layout_->addWidget(clbl);
             results_layout_->addWidget(ct);
         }
 
-        status_label_->setText(QString("%1 assets  |  %2 obs  |  avg ρ = %3")
+        status_label_->setText(tr("%1 assets  |  %2 obs  |  avg ρ = %3")
                                    .arg(d.value("n_assets").toInt())
                                    .arg(d.value("n_observations").toInt())
                                    .arg(avg_corr, 0, 'f', 4));
@@ -678,49 +681,49 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
         const double cvar = d.value("cvar").toDouble();
         const double hhi = d.value("concentration_hhi").toDouble();
 
-        auto* hdr = new QLabel(QString("OBJECTIVE: %1   |   LONG-ONLY: %2")
+        auto* hdr = new QLabel(tr("OBJECTIVE: %1   |   LONG-ONLY: %2")
                                    .arg(objective.toUpper().replace('_', ' '))
-                                   .arg(d.value("long_only").toBool() ? "YES" : "NO"));
+                                   .arg(d.value("long_only").toBool() ? tr("YES") : tr("NO")));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border-left:3px solid %3;")
                                .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), accent));
         results_layout_->addWidget(hdr);
 
         QList<QWidget*> top = {
-            gs_make_card("ANN. RETURN", QString::number(ann_ret * 100, 'f', 2) + "%", this,
+            gs_make_card(tr("ANN. RETURN"), QString::number(ann_ret * 100, 'f', 2) + "%", this,
                          gs_pos_neg_color(ann_ret)),
-            gs_make_card("ANN. VOLATILITY", QString::number(ann_vol * 100, 'f', 2) + "%", this),
-            gs_make_card("SHARPE RATIO", gs_fmt_num(sharpe, 4), this,
+            gs_make_card(tr("ANN. VOLATILITY"), QString::number(ann_vol * 100, 'f', 2) + "%", this),
+            gs_make_card(tr("SHARPE RATIO"), gs_fmt_num(sharpe, 4), this,
                          sharpe >= 1.0 ? ui::colors::POSITIVE()
                                       : sharpe >= 0  ? ui::colors::TEXT_PRIMARY()
                                                      : ui::colors::NEGATIVE()),
-            gs_make_card("CONCENTRATION (HHI)", gs_fmt_num(hhi, 4), this,
+            gs_make_card(tr("CONCENTRATION (HHI)"), gs_fmt_num(hhi, 4), this,
                          hhi > 0.4 ? ui::colors::WARNING() : ui::colors::POSITIVE()),
         };
         results_layout_->addWidget(gs_card_row(top, this));
 
         if (command == "mean_cvar_optimize") {
             QList<QWidget*> tail = {
-                gs_make_card("CVaR @ α", QString::number(cvar * 100, 'f', 4) + "%", this,
+                gs_make_card(tr("CVaR @ α"), QString::number(cvar * 100, 'f', 4) + "%", this,
                              ui::colors::NEGATIVE()),
-                gs_make_card("VaR @ α", QString::number(var * 100, 'f', 4) + "%", this,
+                gs_make_card(tr("VaR @ α"), QString::number(var * 100, 'f', 4) + "%", this,
                              ui::colors::WARNING()),
-                gs_make_card("ALPHA",
+                gs_make_card(tr("ALPHA"),
                              QString::number(d.value("alpha").toDouble() * 100, 'f', 1) + "%",
                              this, ui::colors::INFO()),
-                gs_make_card("MAX WEIGHT",
+                gs_make_card(tr("MAX WEIGHT"),
                              QString::number(d.value("max_weight").toDouble() * 100, 'f', 2) + "%", this),
             };
             results_layout_->addWidget(gs_card_row(tail, this));
         } else {
             QList<QWidget*> mv_extra = {
-                gs_make_card("VARIANCE", gs_fmt_num(d.value("variance").toDouble(), 6), this),
-                gs_make_card("DAILY RETURN",
+                gs_make_card(tr("VARIANCE"), gs_fmt_num(d.value("variance").toDouble(), 6), this),
+                gs_make_card(tr("DAILY RETURN"),
                              QString::number(d.value("expected_return").toDouble() * 100, 'f', 4) + "%",
                              this),
-                gs_make_card("MAX WEIGHT",
+                gs_make_card(tr("MAX WEIGHT"),
                              QString::number(d.value("max_weight").toDouble() * 100, 'f', 2) + "%", this),
-                gs_make_card("MIN WEIGHT",
+                gs_make_card(tr("MIN WEIGHT"),
                              QString::number(d.value("min_weight").toDouble() * 100, 'f', 2) + "%", this),
             };
             results_layout_->addWidget(gs_card_row(mv_extra, this));
@@ -728,14 +731,14 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
 
         const QJsonArray weights = d.value("weights").toArray();
         if (!weights.isEmpty()) {
-            auto* wlbl = new QLabel("OPTIMAL WEIGHTS");
+            auto* wlbl = new QLabel(tr("OPTIMAL WEIGHTS"));
             wlbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; padding:4px 0 0 2px;")
                                     .arg(ui::colors::TEXT_TERTIARY()));
             results_layout_->addWidget(wlbl);
             results_layout_->addWidget(fort_weights_table(weights, this));
         }
 
-        status_label_->setText(QString("%1 — Sharpe %2  |  Ann. Ret %3%  |  Ann. Vol %4%")
+        status_label_->setText(tr("%1 — Sharpe %2  |  Ann. Ret %3%  |  Ann. Vol %4%")
                                    .arg(objective)
                                    .arg(sharpe, 0, 'f', 3)
                                    .arg(ann_ret * 100, 0, 'f', 2)
@@ -750,24 +753,24 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
         const int min_var_idx = d.value("min_var_index").toInt();
         const double best_sharpe = d.value("best_sharpe").toDouble();
 
-        auto* hdr = new QLabel(QString("FRONTIER: %1 POINTS  |  ASSETS: %2  |  LONG-ONLY: %3")
+        auto* hdr = new QLabel(tr("FRONTIER: %1 POINTS  |  ASSETS: %2  |  LONG-ONLY: %3")
                                    .arg(n).arg(d.value("n_assets").toInt())
-                                   .arg(d.value("long_only").toBool() ? "YES" : "NO"));
+                                   .arg(d.value("long_only").toBool() ? tr("YES") : tr("NO")));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border-left:3px solid %3;")
                                .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), accent));
         results_layout_->addWidget(hdr);
 
         QList<QWidget*> top = {
-            gs_make_card("BEST SHARPE", gs_fmt_num(best_sharpe, 4), this,
+            gs_make_card(tr("BEST SHARPE"), gs_fmt_num(best_sharpe, 4), this,
                          best_sharpe >= 1.0 ? ui::colors::POSITIVE()
                                             : best_sharpe >= 0 ? ui::colors::TEXT_PRIMARY()
                                                                : ui::colors::NEGATIVE()),
-            gs_make_card("MAX SHARPE @", QString("Point #%1").arg(max_sharpe_idx + 1),
+            gs_make_card(tr("MAX SHARPE @"), tr("Point #%1").arg(max_sharpe_idx + 1),
                          this, ui::colors::POSITIVE()),
-            gs_make_card("MIN VARIANCE @", QString("Point #%1").arg(min_var_idx + 1),
+            gs_make_card(tr("MIN VARIANCE @"), tr("Point #%1").arg(min_var_idx + 1),
                          this, ui::colors::INFO()),
-            gs_make_card("RANGE", QString::number(d.value("min_volatility").toDouble() * 100, 'f', 2) +
+            gs_make_card(tr("RANGE"), QString::number(d.value("min_volatility").toDouble() * 100, 'f', 2) +
                                        "%  →  " +
                                        QString::number(d.value("max_volatility").toDouble() * 100, 'f', 2) + "%",
                          this),
@@ -778,7 +781,7 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
         const QJsonArray frontier = d.value("frontier").toArray();
         if (!frontier.isEmpty()) {
             auto* table = new QTableWidget(frontier.size(), 5, this);
-            table->setHorizontalHeaderLabels({"#", "Daily Vol", "Daily Ret", "Sharpe", "Ann. Vol → Ret"});
+            table->setHorizontalHeaderLabels({tr("#"), tr("Daily Vol"), tr("Daily Ret"), tr("Sharpe"), tr("Ann. Vol → Ret")});
             table->verticalHeader()->setVisible(false);
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -835,7 +838,7 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
                         o["weight_pct"] = o.value("weight").toDouble() * 100.0;
                         with_pct.append(o);
                     }
-                    auto* lbl = new QLabel(QString("MAX-SHARPE PORTFOLIO WEIGHTS  (★ Point #%1)")
+                    auto* lbl = new QLabel(tr("MAX-SHARPE PORTFOLIO WEIGHTS  (★ Point #%1)")
                                                .arg(max_sharpe_idx + 1));
                     lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; padding:6px 0 0 2px;")
                                             .arg(ui::colors::POSITIVE()));
@@ -845,7 +848,7 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
             }
         }
 
-        status_label_->setText(QString("%1 frontier points  |  best Sharpe %2 @ point %3")
+        status_label_->setText(tr("%1 frontier points  |  best Sharpe %2 @ point %3")
                                    .arg(n).arg(best_sharpe, 0, 'f', 3).arg(max_sharpe_idx + 1));
         return;
     }
@@ -858,24 +861,24 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
         const double ratio = d.value("weight_ratio_last_to_first").toDouble();
 
         QList<QWidget*> top = {
-            gs_make_card("HALF-LIFE", QString("%1 obs").arg(hl), this, ui::colors::INFO()),
-            gs_make_card("EFFECTIVE SAMPLE", gs_fmt_num(ess, 1), this,
+            gs_make_card(tr("HALF-LIFE"), tr("%1 obs").arg(hl), this, ui::colors::INFO()),
+            gs_make_card(tr("EFFECTIVE SAMPLE"), gs_fmt_num(ess, 1), this,
                          ess_pct > 50 ? ui::colors::POSITIVE()
                                       : ess_pct > 25 ? ui::colors::WARNING()
                                                      : ui::colors::NEGATIVE()),
-            gs_make_card("ESS % OF N", QString::number(ess_pct, 'f', 1) + "%", this,
+            gs_make_card(tr("ESS % OF N"), QString::number(ess_pct, 'f', 1) + "%", this,
                          ess_pct > 50 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
-            gs_make_card("LAST/FIRST RATIO", QString("%1×").arg(ratio, 0, 'f', 2),
+            gs_make_card(tr("LAST/FIRST RATIO"), QString("%1×").arg(ratio, 0, 'f', 2),
                          this, ui::colors::INFO()),
         };
         results_layout_->addWidget(gs_card_row(top, this));
 
         QList<QWidget*> bounds = {
-            gs_make_card("FIRST WEIGHT", gs_fmt_num(d.value("first_weight").toDouble(), 6), this),
-            gs_make_card("LAST WEIGHT", gs_fmt_num(d.value("last_weight").toDouble(), 6), this,
+            gs_make_card(tr("FIRST WEIGHT"), gs_fmt_num(d.value("first_weight").toDouble(), 6), this),
+            gs_make_card(tr("LAST WEIGHT"), gs_fmt_num(d.value("last_weight").toDouble(), 6), this,
                          ui::colors::POSITIVE()),
-            gs_make_card("MIN WEIGHT", gs_fmt_num(d.value("min_weight").toDouble(), 6), this),
-            gs_make_card("MAX WEIGHT", gs_fmt_num(d.value("max_weight").toDouble(), 6), this),
+            gs_make_card(tr("MIN WEIGHT"), gs_fmt_num(d.value("min_weight").toDouble(), 6), this),
+            gs_make_card(tr("MAX WEIGHT"), gs_fmt_num(d.value("max_weight").toDouble(), 6), this),
         };
         results_layout_->addWidget(gs_card_row(bounds, this));
 
@@ -883,7 +886,7 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
         const QJsonArray weights = d.value("weights").toArray();
         if (!weights.isEmpty()) {
             auto* table = new QTableWidget(weights.size(), 2, this);
-            table->setHorizontalHeaderLabels({"Date / Index", "Weight"});
+            table->setHorizontalHeaderLabels({tr("Date / Index"), tr("Weight")});
             table->verticalHeader()->setVisible(false);
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->setSelectionMode(QAbstractItemView::NoSelection);
@@ -911,7 +914,7 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
             results_layout_->addWidget(table);
         }
 
-        status_label_->setText(QString("Half-life %1 obs  |  ESS %2 (%3%%)  |  last/first %4×")
+        status_label_->setText(tr("Half-life %1 obs  |  ESS %2 (%3%%)  |  last/first %4×")
                                    .arg(hl).arg(ess, 0, 'f', 1).arg(ess_pct, 0, 'f', 1)
                                    .arg(ratio, 0, 'f', 1));
         return;

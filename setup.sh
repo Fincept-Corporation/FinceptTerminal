@@ -91,11 +91,7 @@ elif [ "$PLATFORM" = "macos" ]; then
         info "Homebrew not found. Installing..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
-    # portaudio: C dep for pyaudio; without it pyaudio's source build fails
-    # at `#include "portaudio.h"` and the analytical-library setup loops on
-    # every launch (see PythonSetupManager::install_packages — a partial
-    # install leaves venv-numpy2's marker absent → setup screen reappears).
-    brew install cmake ninja python@3.11 openssl@3 yt-dlp expat portaudio
+    brew install cmake ninja python@3.11 openssl@3 yt-dlp expat
 
     # ── Self-heal brewed Python's pyexpat on macOS 26+ ──────────────────────
     # On macOS Tahoe (Darwin 25+), the Homebrew python@3.11 / python@3.14

@@ -18,6 +18,9 @@ class PortfolioOrderPanel : public QWidget {
     void set_currency(const QString& currency);
     void set_side(const QString& side); // "BUY" or "SELL"
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   signals:
     void buy_submitted();
     void sell_submitted();
@@ -26,6 +29,13 @@ class PortfolioOrderPanel : public QWidget {
   private:
     void build_ui();
     void update_display();
+    void retranslateUi();
+
+    QLabel* title_label_ = nullptr;
+    QLabel* price_prefix_ = nullptr;
+    QLabel* qty_prefix_ = nullptr;
+    QLabel* mv_prefix_ = nullptr;
+    QLabel* note_label_ = nullptr;
 
     QPushButton* buy_tab_ = nullptr;
     QPushButton* sell_tab_ = nullptr;

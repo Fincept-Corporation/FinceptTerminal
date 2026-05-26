@@ -18,7 +18,7 @@ static const QStringList kScreenerSymbols = {
     "MS",   "BRK-B", "V",     "MA",   "WMT",  "COST", "TGT",  "HD",   "AMGN", "PFE",  "JNJ",  "MRK",  "XOM",  "CVX",
     "SLB",  "NEE",   "DUK",   "SO",   "CAT",  "GE",   "HON",  "RTX",  "PLTR", "COIN", "SOFI", "PYPL", "SNAP", "UBER"};
 
-ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget("STOCK SCREENER", parent, ui::colors::INFO()) {
+ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget(tr("STOCK SCREENER"), parent, ui::colors::INFO()) {
     auto* vl = content_layout();
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
@@ -29,15 +29,15 @@ ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget("STOCK SCREENER", p
     fl->setContentsMargins(8, 6, 8, 6);
     fl->setSpacing(8);
 
-    filter_lbl_ = new QLabel("SORT BY");
+    filter_lbl_ = new QLabel(tr("SORT BY"));
     fl->addWidget(filter_lbl_);
 
     filter_combo_ = new QComboBox;
-    filter_combo_->addItems({"% CHANGE ↑", "% CHANGE ↓", "VOLUME ↓", "PRICE ↓", "PRICE ↑"});
+    filter_combo_->addItems({tr("% CHANGE ↑"), tr("% CHANGE ↓"), tr("VOLUME ↓"), tr("PRICE ↓"), tr("PRICE ↑")});
     fl->addWidget(filter_combo_);
     fl->addStretch();
 
-    count_lbl_ = new QLabel(QString("%1 symbols").arg(kScreenerSymbols.size()));
+    count_lbl_ = new QLabel(tr("%1 symbols").arg(kScreenerSymbols.size()));
     fl->addWidget(count_lbl_);
 
     vl->addWidget(filter_bar_);
@@ -53,10 +53,10 @@ ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget("STOCK SCREENER", p
         header_labels_.append(l);
         hl->addWidget(l, s);
     };
-    make_hdr("SYMBOL", 2);
-    make_hdr("PRICE", 2, Qt::AlignRight);
-    make_hdr("CHG%", 1, Qt::AlignRight);
-    make_hdr("VOLUME", 2, Qt::AlignRight);
+    make_hdr(tr("SYMBOL"), 2);
+    make_hdr(tr("PRICE"), 2, Qt::AlignRight);
+    make_hdr(tr("CHG%"), 1, Qt::AlignRight);
+    make_hdr(tr("VOLUME"), 2, Qt::AlignRight);
     vl->addWidget(header_);
 
     // Scrollable list
@@ -265,6 +265,13 @@ void ScreenerWidget::render_rows(const QVector<services::QuoteData>& rows) {
     }
 
     list_layout_->addStretch();
+}
+
+void ScreenerWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("STOCK SCREENER"));
+    if (filter_lbl_) filter_lbl_->setText(tr("FILTER:"));
+    rebuild_all_quotes(); // re-renders headers + count label in the new language
 }
 
 } // namespace fincept::screens::widgets

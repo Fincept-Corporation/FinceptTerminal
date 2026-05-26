@@ -29,6 +29,9 @@ class AnalyticsSectorsView : public QWidget {
 
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   signals:
     /// Fired when the user clicks a sector row / donut slice / performer card.
     /// Empty string = clear filter.
@@ -47,6 +50,7 @@ class AnalyticsSectorsView : public QWidget {
     };
 
     void build_ui();
+    void retranslateUi();
     QWidget* build_overview_tab();
     QWidget* build_correlation_tab();
     void update_overview();
@@ -64,12 +68,23 @@ class AnalyticsSectorsView : public QWidget {
 
     // Layout
     QTabWidget* tabs_ = nullptr;
+    int overview_tab_index_ = -1;
+    int correlation_tab_index_ = -1;
 
     // KPI strip
     QLabel* kpi_sectors_ = nullptr;
     QLabel* kpi_positions_ = nullptr;
     QLabel* kpi_market_value_ = nullptr;
     QLabel* kpi_pnl_ = nullptr;
+    QLabel* kpi_sectors_label_ = nullptr;
+    QLabel* kpi_positions_label_ = nullptr;
+    QLabel* kpi_market_value_label_ = nullptr;
+    QLabel* kpi_pnl_label_ = nullptr;
+
+    // Section titles
+    QLabel* donut_title_ = nullptr;
+    QLabel* table_title_ = nullptr;
+    QLabel* corr_title_ = nullptr;
 
     // Donut + legend
     QChartView* donut_view_ = nullptr;
@@ -93,6 +108,7 @@ class AnalyticsSectorsView : public QWidget {
     // Data
     portfolio::PortfolioSummary summary_;
     QString currency_;
+    bool has_data_ = false;
 };
 
 } // namespace fincept::screens

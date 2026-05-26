@@ -1,4 +1,4 @@
-﻿#include "ai_chat/LlmService.h"
+﻿#include "services/llm/LlmService.h"
 #include "app/MonitorPickerDialog.h"
 #include "app/WindowFrame.h"
 #include "app/TerminalShell.h"
@@ -12,6 +12,7 @@
 #include "core/config/ProfileManager.h"
 #include "core/components/ComponentCatalog.h"
 #include "core/crash/CrashHandler.h"
+#include "core/i18n/LanguageManager.h"
 #include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
@@ -75,6 +76,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QGuiApplication>
 #include <QLibrary>
 #include <QPointer>
 #include <QSqlDatabase>
@@ -84,20 +86,13 @@
 #include <QTimer>
 #include <QUuid>
 
+#include <algorithm>
 #include <memory>
 
 #include "app/InstanceLock.h"
 
 #ifdef Q_OS_WIN
 #    include <Windows.h>
-#endif
-
-// FT_MARK: write a sequence number to a file so we can see how far startup progressed.
-// GUI-subsystem apps don't have a useful stderr, so we go straight to disk.
-#ifdef Q_OS_WIN
-#  define FT_MARK(n) do { char _msg[64]; _snprintf_s(_msg, 64, _TRUNCATE, "FT_MARK %d\n", (n)); OutputDebugStringA(_msg); HANDLE _h = CreateFileA("C:\\Users\\Tilak\\AppData\\Local\\Temp\\ft_marks.txt", FILE_APPEND_DATA, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL); if (_h != INVALID_HANDLE_VALUE) { DWORD _w; SetFilePointer(_h, 0, NULL, FILE_END); WriteFile(_h, _msg, (DWORD)strlen(_msg), &_w, NULL); CloseHandle(_h); } } while(0)
-#else
-#  define FT_MARK(n) do { fprintf(stderr, "FT_MARK %d\n", (n)); fflush(stderr); } while(0)
 #endif
 
 // Wire the two app-level lifecycle handlers that fire after the primary
@@ -136,8 +131,6 @@ static void wire_app_lifecycle(QApplication& app, fincept::InstanceLock& lock) {
 }
 
 int main(int argc, char* argv[]) {
-    FT_MARK(1);
-
     // ── TLS backend selection (must happen before any Qt plugin loading) ────
     // Force QtNetwork to use the OpenSSL TLS backend across platforms.
     //   - macOS: Apple SecureTransport (qtls_st.cpp) double-frees inside
@@ -192,7 +185,6 @@ int main(int argc, char* argv[]) {
         // write the manifest. Create root now (single mkdir, idempotent).
         QDir().mkpath(fincept::AppPaths::root());
     }
-    FT_MARK(2);
 
     // Install the unhandled-exception filter BEFORE any Qt object is
     // constructed. On Windows this writes a minidump to AppPaths::crashdumps()
@@ -272,12 +264,9 @@ int main(int argc, char* argv[]) {
     //
     // Must run BEFORE any service init so future phases that lift services
     // into the shell can rely on it being present.
-    FT_MARK(10);
     fincept::TerminalShell::instance().initialise();
-    FT_MARK(11);
     QObject::connect(&app, &QCoreApplication::aboutToQuit,
                      []() { fincept::TerminalShell::instance().shutdown(); });
-    FT_MARK(12);
 
     // Register DataHub payload meta-types (QuoteData, HistoryPoint, InfoData,
     // NewsArticle, EconomicsResult) so they can flow through QVariant-keyed
@@ -297,9 +286,7 @@ int main(int argc, char* argv[]) {
         QCoreApplication::applicationDirPath() + "/component_catalog.json",
         "resources/component_catalog.json",
     });
-    FT_MARK(20);
     fincept::services::MarketDataService::instance().ensure_registered_with_hub();
-    FT_MARK(21);
 
     // ── Sync services needed by the default dashboard ─────────────────────────
     // Anything a default dashboard widget subscribes to during its first show
@@ -316,9 +303,7 @@ int main(int argc, char* argv[]) {
     fincept::services::maritime::PortsCatalog::instance().ensure_registered_with_hub();
     fincept::services::RelationshipMapService::instance().ensure_registered_with_hub();
     fincept::services::ma::MAAnalyticsService::instance().ensure_registered_with_hub();
-    FT_MARK(30);
     fincept::wallet::TokenMetadataService::instance().load_from_storage();
-    FT_MARK(35);
 
     // ── Pre-warm the dashboard topics ────────────────────────────────────────
     // The user spends real time on the login / setup / recovery flow before
@@ -512,10 +497,8 @@ int main(int argc, char* argv[]) {
         LOG_INFO("App", "Deferred service init complete");
     });
 
-    FT_MARK(40);
     // Create all application directories under %LOCALAPPDATA%/com.fincept.terminal
     fincept::AppPaths::ensure_all();
-    FT_MARK(41);
 
     // ── One-time migration from legacy %APPDATA% location ─────────────────
     // Current locations (under %LOCALAPPDATA%\com.fincept.terminal\):
@@ -559,9 +542,7 @@ int main(int argc, char* argv[]) {
         QFile::remove(legacy2 + "-shm");
     }
 
-    FT_MARK(50);
     fincept::Logger::instance().set_file(fincept::AppPaths::logs() + "/fincept.log");
-    FT_MARK(51);
 
     // P3.18 — route Qt's own qDebug/qWarning/qCritical messages into our log
     // file so framework/3rd-party warnings are visible in Release builds.
@@ -647,6 +628,8 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v027();
     fincept::register_migration_v028();
     fincept::register_migration_v029();
+    fincept::register_migration_v030();
+    fincept::register_migration_v031();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
@@ -685,6 +668,11 @@ int main(int argc, char* argv[]) {
             tm.apply_theme("Obsidian");
             LOG_INFO("App", "Theme: Obsidian, font: " + family + " " + size_s);
         }
+
+        // Load persisted language and install the matching QTranslator before
+        // any windows are shown — eliminates an English-flash on first paint
+        // when the user has previously chosen another language.
+        fincept::i18n::LanguageManager::instance().initialize();
     }
 
     // Open cache database (non-fatal if fails)
@@ -818,29 +806,30 @@ int main(int argc, char* argv[]) {
             }
 
             if (!recovered) {
-                auto* window = new fincept::WindowFrame(0); // primary window
-                window->setAttribute(Qt::WA_DeleteOnClose);
-                window->show();
-            }
-
-            // Restore any secondary windows that were open at last shutdown so
-            // multi-monitor layouts survive across relaunches. Each window
-            // restores its own geometry + dock layout from SessionManager.
-            // Skip when recovered — WorkspaceShell::apply has already built
-            // the right frame set.
-            if (!recovered)
-            {
                 const QList<int> saved_ids =
                     fincept::SessionManager::instance().load_window_ids();
-                for (int id : saved_ids) {
-                    if (id <= 0) continue; // 0 = primary, already created
-                    auto* w = new fincept::WindowFrame(id);
-                    w->setAttribute(Qt::WA_DeleteOnClose);
-                    w->show();
+                const int max_windows = static_cast<int>(QGuiApplication::screens().size());
+
+                if (saved_ids.isEmpty()) {
+                    auto* window = new fincept::WindowFrame(0);
+                    window->setAttribute(Qt::WA_DeleteOnClose);
+                    window->show();
+                } else {
+                    const int count = std::min(static_cast<int>(saved_ids.size()), max_windows);
+                    for (int i = 0; i < count; ++i) {
+                        auto* w = new fincept::WindowFrame(saved_ids[i]);
+                        w->setAttribute(Qt::WA_DeleteOnClose);
+                        w->show();
+                    }
+                    if (count < saved_ids.size()) {
+                        QList<int> trimmed = saved_ids.mid(0, count);
+                        fincept::SessionManager::instance().save_window_ids(trimmed);
+                                                LOG_INFO("App", QString("Clamped %1 saved windows to %2 (available screens)")
+                                            .arg(saved_ids.size()).arg(count));
+                    }
+                    if (count > 1)
+                        LOG_INFO("App", QString("Restored %1 window(s) from last session").arg(count));
                 }
-                if (!saved_ids.isEmpty())
-                    LOG_INFO("App", QString("Restored %1 secondary window(s) from last session")
-                                        .arg(saved_ids.size() > 0 ? saved_ids.size() - 1 : 0));
             }
 
             // Wire new-window handler + Launchpad surface now that the
@@ -880,32 +869,36 @@ int main(int argc, char* argv[]) {
         recovered = dlg.was_restored();
     }
 
-    // Heap-allocate the primary window so we can skip it on a successful
-    // recovery without leaving a dead stack object behind. WA_DeleteOnClose
-    // matches the secondary-window lifecycle below.
-    if (!recovered) {
-        auto* primary = new fincept::WindowFrame(0);
-        primary->setAttribute(Qt::WA_DeleteOnClose);
-        primary->show();
-    }
-
-    // Restore any secondary windows that were open at last shutdown. The
-    // primary window owns its own lifetime via WA_DeleteOnClose; restored
-    // secondaries use WA_DeleteOnClose and self-remove from
-    // QApplication::topLevelWidgets. Skip when recovered — WorkspaceShell
-    // has already built the right frame set.
+    // Restore the set of windows from last session. saved_ids is the complete
+    // set written by closeEvent (including the primary). If empty (first run),
+    // create a single primary window. Clamp to the number of available screens
+    // so a 3-monitor layout doesn't stack 3 windows on 1 screen after the user
+    // disconnects external displays.
     if (!recovered) {
         const QList<int> saved_ids =
             fincept::SessionManager::instance().load_window_ids();
-        for (int id : saved_ids) {
-            if (id <= 0) continue; // 0 = primary, already created
-            auto* w = new fincept::WindowFrame(id);
-            w->setAttribute(Qt::WA_DeleteOnClose);
-            w->show();
+        const int max_windows = static_cast<int>(QGuiApplication::screens().size());
+
+        if (saved_ids.isEmpty()) {
+            auto* primary = new fincept::WindowFrame(0);
+            primary->setAttribute(Qt::WA_DeleteOnClose);
+            primary->show();
+        } else {
+            const int count = std::min(static_cast<int>(saved_ids.size()), max_windows);
+            for (int i = 0; i < count; ++i) {
+                auto* w = new fincept::WindowFrame(saved_ids[i]);
+                w->setAttribute(Qt::WA_DeleteOnClose);
+                w->show();
+            }
+            if (count < saved_ids.size()) {
+                QList<int> trimmed = saved_ids.mid(0, count);
+                fincept::SessionManager::instance().save_window_ids(trimmed);
+                                LOG_INFO("App", QString("Clamped %1 saved windows to %2 (available screens)")
+                                    .arg(saved_ids.size()).arg(count));
+            }
+            if (count > 1)
+                LOG_INFO("App", QString("Restored %1 window(s) from last session").arg(count));
         }
-        if (saved_ids.size() > 1)
-            LOG_INFO("App", QString("Restored %1 secondary window(s) from last session")
-                                .arg(saved_ids.size() - 1));
     }
 
     // Wire new-window handler + Launchpad surface — see wire_app_lifecycle()

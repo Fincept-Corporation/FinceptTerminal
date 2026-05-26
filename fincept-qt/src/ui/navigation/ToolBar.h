@@ -14,6 +14,10 @@ class PushpinBar;
 
 /// Combined toolbar: File/Navigate/View/Help menus + branding + clock + user info + logout.
 /// Replaces both ToolBar and NavigationBar in a single row.
+///
+/// Internationalised: all menus and labels flow through tr(). Menus are
+/// rebuilt on QEvent::LanguageChange so action labels pick up the new
+/// translator; static labels and buttons retranslate via setText().
 class ToolBar : public QWidget {
     Q_OBJECT
   public:
@@ -33,6 +37,7 @@ class ToolBar : public QWidget {
 
   protected:
     void resizeEvent(QResizeEvent* e) override;
+    void changeEvent(QEvent* e) override;
 
   private slots:
     void update_clock();
@@ -57,6 +62,11 @@ class ToolBar : public QWidget {
     PushpinBar* pushpin_bar_ = nullptr;
 
     void refresh_theme();
+    void retranslateUi();
+    /// Tear down and recreate every menu on the menu bar so action labels
+    /// pick up the active QTranslator. Called from retranslateUi() so a
+    /// LanguageChange event rebuilds menus alongside static labels.
+    void rebuild_menus();
     void apply_responsive_layout(int width);
 
     QMenu* build_file_menu();

@@ -133,99 +133,143 @@ class VectorBTProvider(BacktestingProviderBase):
             start_date = request.get('startDate')
             end_date = request.get('endDate')
             initial_capital = request.get('initialCapital', 100000)
-            assets = request.get('assets', [])
-            parameters = strategy.get('parameters', {})
+            parameters = strategy.get('params') or strategy.get('parameters', {})
             strategy_type = strategy.get('type', 'sma_crossover')
+
+            # Accept UI's flat symbols[] OR legacy assets[].symbol
+            symbols = request.get('symbols') or [a.get('symbol') for a in request.get('assets', []) if a.get('symbol')]
+            if not symbols:
+                return self._create_error_result('No symbols provided')
 
             print(f'[PY-BT] Extracted: strategy_type={strategy_type}, params={parameters}', file=sys.stderr)
             print(f'[PY-BT] Date range: {start_date} to {end_date}, capital={initial_capital}', file=sys.stderr)
 
             # --- Download market data via yfinance ---
-            symbols = [asset['symbol'] for asset in assets]
-            print(f'[PY-BT] Symbols: {symbols}', file=sys.stderr)
+            interval = request.get('interval', '1d')
+            multi_asset = len(symbols) > 1
+            print(f'[PY-BT] Symbols: {symbols}, multi_asset={multi_asset}, interval={interval}', file=sys.stderr)
             logs.append(f'{self._current_timestamp()}: Downloading data for {symbols}')
-            logs.append(f'{self._current_timestamp()}: Normalized symbols: {self._normalize_symbols(symbols)}')
 
-            close_series, using_synthetic = self._load_market_data(
-                symbols, start_date, end_date
+            close_data, using_synthetic = self._load_market_data(
+                symbols, start_date, end_date, interval=interval, multi_asset=multi_asset
             )
 
-            print(f'[PY-BT] Data loaded: {len(close_series)} bars, synthetic={using_synthetic}', file=sys.stderr)
-            print(f'[PY-BT] Data range: {close_series.index[0]} to {close_series.index[-1]}', file=sys.stderr)
-            print(f'[PY-BT] Price range: {close_series.min():.2f} - {close_series.max():.2f}', file=sys.stderr)
-            print(f'[PY-BT] First 5 prices: {close_series.head().tolist()}', file=sys.stderr)
-            print(f'[PY-BT] Last 5 prices: {close_series.tail().tolist()}', file=sys.stderr)
-            print(f'[PY-BT] close_series dtype: {close_series.dtype}, index dtype: {close_series.index.dtype}', file=sys.stderr)
+            import pandas as pd
 
-            logs.append(f'{self._current_timestamp()}: Data: {len(close_series)} bars, '
-                        f'range: {close_series.index[0]} to {close_series.index[-1]}, '
-                        f'price range: {close_series.min():.2f} - {close_series.max():.2f}, '
-                        f'synthetic={using_synthetic}')
+            # --- Multi-asset portfolio path ---
+            if multi_asset and isinstance(close_data, pd.DataFrame) and close_data.shape[1] > 1:
+                close_df = close_data
+                col_symbols = list(close_df.columns)
+                n_assets = len(col_symbols)
 
-            # --- Handle custom code strategy ---
-            if strategy_type == 'code':
-                portfolio = self._run_custom_code(
-                    vbt, strategy, close_series, initial_capital
+                # Weighted allocation: use portfolio weights if provided, else equal-weight
+                req_weights = request.get('weights', None)
+                if req_weights and len(req_weights) == n_assets:
+                    capital_alloc = [initial_capital * float(w) for w in req_weights]
+                else:
+                    capital_alloc = [initial_capital / n_assets] * n_assets
+
+                print(f'[PY-BT] Multi-asset: {n_assets} symbols, alloc={[f"${c:.0f}" for c in capital_alloc]}', file=sys.stderr)
+                logs.append(f'{self._current_timestamp()}: Multi-asset portfolio: {col_symbols}, '
+                            f'allocation: {[f"${c:.0f}" for c in capital_alloc]}')
+
+                all_trades = []
+                per_symbol_equity = {}
+                combined_equity_values = None
+
+                for i, sym_col in enumerate(col_symbols):
+                    sym_series = close_df[sym_col].dropna()
+                    if len(sym_series) < 5:
+                        logs.append(f'{self._current_timestamp()}: Skipping {sym_col}: insufficient data')
+                        continue
+
+                    sym_capital = capital_alloc[i]
+                    sym_series = pd.Series(sym_series.values.astype(float), index=sym_series.index, name='Close')
+
+                    if strategy_type == 'code':
+                        sym_portfolio = self._run_custom_code(vbt, strategy, sym_series, sym_capital)
+                    else:
+                        entries, exits = strat.build_strategy_signals(vbt, strategy_type, sym_series, parameters)
+                        sym_portfolio = pf.build_portfolio(vbt, sym_series, entries, exits, sym_capital, request)
+
+                    sym_equity = sym_portfolio.value()
+                    per_symbol_equity[sym_col] = sym_equity
+
+                    if combined_equity_values is None:
+                        combined_equity_values = sym_equity.copy()
+                    else:
+                        common_idx = combined_equity_values.index.intersection(sym_equity.index)
+                        combined_equity_values = combined_equity_values.loc[common_idx] + sym_equity.loc[common_idx]
+
+                    sym_trades = self._parse_trades(sym_portfolio, [sym_col])
+                    all_trades.extend(sym_trades)
+
+                    n_sym_trades = len(sym_trades)
+                    logs.append(f'{self._current_timestamp()}: {sym_col}: {n_sym_trades} trades, '
+                                f'return: {sym_portfolio.total_return() * 100:.2f}%')
+
+                if combined_equity_values is None or len(combined_equity_values) == 0:
+                    return self._create_error_result('No valid data for any symbol in the portfolio')
+
+                # Build combined portfolio from merged equity
+                combined_portfolio = pf.SimplePortfolio.from_equity_series(
+                    combined_equity_values, initial_capital
                 )
+
+                portfolio = combined_portfolio
+                close_series = close_df.iloc[:, 0].dropna()
+                close_series = pd.Series(close_series.values.astype(float), index=close_series.index, name='Close')
+                trades_list = all_trades
+
+                logs.append(f'{self._current_timestamp()}: Portfolio combined: {len(all_trades)} total trades, '
+                            f'final value: {combined_equity_values.iloc[-1]:.2f}')
+
             else:
-                # --- Build strategy signals ---
-                logs.append(f'{self._current_timestamp()}: Building signals for strategy: {strategy_type}, params: {parameters}')
+                # --- Single-asset path ---
+                close_series = close_data if isinstance(close_data, pd.Series) else close_data
+                if isinstance(close_series, pd.DataFrame):
+                    close_series = close_series.iloc[:, 0].dropna()
+                    close_series = pd.Series(close_series.values.astype(float), index=close_series.index, name='Close')
 
-                entries, exits = strat.build_strategy_signals(
-                    vbt, strategy_type, close_series, parameters
-                )
+                print(f'[PY-BT] Data loaded: {len(close_series)} bars, synthetic={using_synthetic}', file=sys.stderr)
+                logs.append(f'{self._current_timestamp()}: Data: {len(close_series)} bars, '
+                            f'synthetic={using_synthetic}')
 
-                n_entries = int(entries.sum()) if hasattr(entries, 'sum') else 0
-                n_exits = int(exits.sum()) if hasattr(exits, 'sum') else 0
+                if strategy_type == 'code':
+                    portfolio = self._run_custom_code(
+                        vbt, strategy, close_series, initial_capital
+                    )
+                else:
+                    logs.append(f'{self._current_timestamp()}: Building signals for strategy: {strategy_type}, params: {parameters}')
 
-                print(f'[PY-BT] Signals: entries={n_entries}, exits={n_exits}', file=sys.stderr)
-                print(f'[PY-BT] entries dtype: {entries.dtype}, exits dtype: {exits.dtype}', file=sys.stderr)
-                print(f'[PY-BT] entries index dtype: {entries.index.dtype}', file=sys.stderr)
-                print(f'[PY-BT] entries index equals close index: {entries.index.equals(close_series.index)}', file=sys.stderr)
-                if n_entries > 0:
-                    entry_bars = entries[entries].index.tolist()
-                    print(f'[PY-BT] Entry signal bars (first 10): {entry_bars[:10]}', file=sys.stderr)
-                if n_exits > 0:
-                    exit_bars = exits[exits].index.tolist()
-                    print(f'[PY-BT] Exit signal bars (first 10): {exit_bars[:10]}', file=sys.stderr)
+                    entries, exits = strat.build_strategy_signals(
+                        vbt, strategy_type, close_series, parameters
+                    )
 
-                logs.append(f'{self._current_timestamp()}: Signals generated: {n_entries} entries, {n_exits} exits')
+                    n_entries = int(entries.sum()) if hasattr(entries, 'sum') else 0
+                    n_exits = int(exits.sum()) if hasattr(exits, 'sum') else 0
+                    logs.append(f'{self._current_timestamp()}: Signals: {n_entries} entries, {n_exits} exits')
 
-                if n_entries == 0:
-                    logs.append(f'{self._current_timestamp()}: WARNING: No entry signals generated! '
-                                f'Check strategy parameters or data length ({len(close_series)} bars)')
+                    portfolio = pf.build_portfolio(
+                        vbt, close_series, entries, exits,
+                        initial_capital, request
+                    )
 
-                # --- Build portfolio with all features ---
-                print(f'[PY-BT] === Calling build_portfolio ===', file=sys.stderr)
-                print(f'[PY-BT] close_series len: {len(close_series)}, entries len: {len(entries)}, exits len: {len(exits)}', file=sys.stderr)
-                print(f'[PY-BT] initial_capital: {initial_capital}', file=sys.stderr)
-                print(f'[PY-BT] request commission: {request.get("commission")}, slippage: {request.get("slippage")}', file=sys.stderr)
+                trades_list = self._parse_trades(portfolio, symbols)
 
-                portfolio = pf.build_portfolio(
-                    vbt, close_series, entries, exits,
-                    initial_capital, request
-                )
-
-            n_trades = len(portfolio.trades.records_readable) if hasattr(portfolio.trades, 'records_readable') else 0
-            print(f'[PY-BT] === Portfolio result ===', file=sys.stderr)
-            print(f'[PY-BT] n_trades: {n_trades}', file=sys.stderr)
-            print(f'[PY-BT] final_value: {portfolio.final_value():.2f}', file=sys.stderr)
-            print(f'[PY-BT] total_return: {portfolio.total_return():.6f}', file=sys.stderr)
-            equity = portfolio.value()
-            print(f'[PY-BT] equity first 5: {equity.head().tolist()}', file=sys.stderr)
-            print(f'[PY-BT] equity last 5: {equity.tail().tolist()}', file=sys.stderr)
-            if n_trades > 0:
-                trades_df = portfolio.trades.records_readable
-                print(f'[PY-BT] trades columns: {list(trades_df.columns)}', file=sys.stderr)
-                print(f'[PY-BT] first trade: {trades_df.iloc[0].to_dict()}', file=sys.stderr)
+            n_trades = len(trades_list) if multi_asset else (
+                len(portfolio.trades.records_readable) if hasattr(portfolio.trades, 'records_readable') else 0
+            )
 
             logs.append(f'{self._current_timestamp()}: Backtest completed: {n_trades} trades, '
                         f'final value: {portfolio.final_value():.2f}, '
                         f'return: {portfolio.total_return() * 100:.2f}%')
 
             # --- Extract comprehensive metrics ---
+            risk_free_rate = request.get('riskFreeRate', 0.0)
             all_metrics = metrics.extract_full_metrics(
-                portfolio, initial_capital, close_series, vbt
+                portfolio, initial_capital, close_series, vbt,
+                risk_free_rate=risk_free_rate
             )
 
             # --- Build result data structures ---
@@ -272,8 +316,9 @@ class VectorBTProvider(BacktestingProviderBase):
                 consecutive_losses=stats['consecutiveLosses'],
             )
 
-            # Parse trades
-            trades = self._parse_trades(portfolio, symbols)
+            # Parse trades (multi-asset already built trades_list above)
+            if not multi_asset:
+                trades_list = self._parse_trades(portfolio, symbols)
 
             # Build equity curve
             equity = self._build_equity_curve(portfolio, initial_capital)
@@ -283,7 +328,7 @@ class VectorBTProvider(BacktestingProviderBase):
                 id=backtest_id,
                 status='completed',
                 performance=performance,
-                trades=trades,
+                trades=trades_list,
                 equity=equity,
                 statistics=statistics,
                 logs=logs,
@@ -332,43 +377,64 @@ class VectorBTProvider(BacktestingProviderBase):
             return error_result
 
     def optimize(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Run parameter optimization."""
+        """Run parameter optimization. Accepts the UI's arg shape:
+        - symbols (flat list)              ← UI sends this
+        - strategy: {type, params}          ← strategy.params holds the seed values
+        - paramRanges: {<name>: {min,max,step}}  ← UI's ranges (also accepts `parameters`)
+        - optimizeObjective / objective
+        - optimizeMethod / method
+        - maxIterations
+        """
         try:
             vbt = self._import_vbt()
         except Exception as e:
             return self._create_error_result(str(e))
 
         try:
-            import pandas as pd
             import vbt_optimization as opt
 
             strategy = request.get('strategy', {})
             strategy_type = strategy.get('type', 'sma_crossover')
-            parameters = request.get('parameters', {})
-            objective = request.get('objective', 'sharpe')
+
+            # Accept both UI's `paramRanges` and legacy `parameters` / strategy.params seeds
+            parameters = (request.get('paramRanges')
+                          or request.get('parameters')
+                          or strategy.get('params', {}))
+            objective = request.get('optimizeObjective') or request.get('objective', 'sharpe')
+            method = request.get('optimizeMethod') or request.get('method', 'grid')
             initial_capital = request.get('initialCapital', 100000)
             start_date = request.get('startDate')
             end_date = request.get('endDate')
-            assets = request.get('assets', [])
-            method = request.get('method', 'grid')
             max_iterations = request.get('maxIterations', 500)
 
-            symbols = [asset['symbol'] for asset in assets]
-            close_series, _ = self._load_market_data(symbols, start_date, end_date)
+            # Accept UI's flat symbols OR legacy assets list
+            symbols = request.get('symbols') or [a.get('symbol') for a in request.get('assets', []) if a.get('symbol')]
+            if not symbols:
+                return {'success': False, 'error': 'No symbols provided'}
+            close_series, using_synthetic = self._load_market_data(self._normalize_symbols(symbols), start_date, end_date)
 
             result = opt.optimize(
                 vbt, close_series, strategy_type, parameters,
                 objective, initial_capital, method, max_iterations, request
             )
 
+            # opt.optimize returns its own success flag — surface failures
+            if not result.get('success', True):
+                return {'success': False, 'error': result.get('error', 'Optimization failed')}
+
+            result['usingSyntheticData'] = using_synthetic
             return {'success': True, 'data': result}
 
         except Exception as e:
             self._error('Optimization failed', e)
-            return self._create_error_result(f'Optimization failed: {str(e)}')
+            return {'success': False, 'error': f'Optimization failed: {str(e)}'}
 
     def walk_forward(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Run walk-forward optimization."""
+        """Walk-forward optimization. Accepts UI's arg shape:
+        - symbols, strategy.{type,params}
+        - paramRanges (or parameters or strategy.params)
+        - wfSplits / nSplits, wfTrainRatio / trainRatio
+        """
         try:
             vbt = self._import_vbt()
         except Exception as e:
@@ -379,28 +445,35 @@ class VectorBTProvider(BacktestingProviderBase):
 
             strategy = request.get('strategy', {})
             strategy_type = strategy.get('type', 'sma_crossover')
-            parameters = request.get('parameters', {})
-            objective = request.get('objective', 'sharpe')
+            parameters = (request.get('paramRanges')
+                          or request.get('parameters')
+                          or strategy.get('params', {}))
+            objective = request.get('optimizeObjective') or request.get('objective', 'sharpe')
             initial_capital = request.get('initialCapital', 100000)
             start_date = request.get('startDate')
             end_date = request.get('endDate')
-            assets = request.get('assets', [])
-            n_splits = request.get('nSplits', 5)
-            train_ratio = request.get('trainRatio', 0.7)
+            n_splits = request.get('wfSplits') or request.get('nSplits', 5)
+            train_ratio = request.get('wfTrainRatio') or request.get('trainRatio', 0.7)
 
-            symbols = [asset['symbol'] for asset in assets]
-            close_series, _ = self._load_market_data(symbols, start_date, end_date)
+            symbols = request.get('symbols') or [a.get('symbol') for a in request.get('assets', []) if a.get('symbol')]
+            if not symbols:
+                return {'success': False, 'error': 'No symbols provided'}
+            close_series, using_synthetic = self._load_market_data(self._normalize_symbols(symbols), start_date, end_date)
 
             result = opt.walk_forward_optimize(
                 vbt, close_series, strategy_type, parameters,
                 objective, initial_capital, n_splits, train_ratio, request
             )
 
+            if not result.get('success', True):
+                return {'success': False, 'error': result.get('error', 'Walk-forward failed')}
+
+            result['usingSyntheticData'] = using_synthetic
             return {'success': True, 'data': result}
 
         except Exception as e:
             self._error('Walk-forward optimization failed', e)
-            return self._create_error_result(f'Walk-forward failed: {str(e)}')
+            return {'success': False, 'error': f'Walk-forward failed: {str(e)}'}
 
     def get_strategies(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """Return available strategy catalog."""
@@ -421,18 +494,22 @@ class VectorBTProvider(BacktestingProviderBase):
         return {'indicators': grouped}
 
     def get_command_options(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Return provider-specific option lists for all command dropdowns."""
+        """Return provider-specific option lists for all command dropdowns.
+        Names here MUST match what the Python dispatchers below actually accept —
+        these strings are sent back unchanged in execute() requests.
+        """
         return {
             'success': True,
             'data': {
                 'position_sizing_methods': ['percent', 'fixed', 'kelly', 'vol_target', 'risk'],
                 'optimize_objectives':     ['sharpe', 'sortino', 'calmar', 'return', 'omega'],
-                'optimize_methods':        ['grid', 'random', 'optuna'],
+                'optimize_methods':        ['grid', 'random'],
                 'label_types':             ['FIXLB', 'MEANLB', 'LEXLB', 'TRENDLB', 'BOLB'],
-                'splitter_types':          ['RollingSplitter', 'ExpandingSplitter', 'PurgedKFold'],
+                'splitter_types':          ['RollingSplitter', 'ExpandingSplitter', 'PurgedKFoldSplitter'],
                 'signal_generators':       ['RAND', 'RANDX', 'RANDNX', 'RPROB', 'RPROBX'],
-                'indicator_signal_modes':  ['crossover', 'threshold', 'breakout', 'mean_reversion', 'filter'],
-                'returns_analysis_types':  ['cumulative', 'rolling', 'drawdown', 'distribution', 'benchmark_comparison'],
+                'indicator_signal_modes':  ['crossover_signals', 'threshold_signals', 'breakout_signals',
+                                            'mean_reversion_signals', 'signal_filter'],
+                'returns_analysis_types':  ['returns_stats', 'drawdowns', 'ranges', 'rolling'],
             },
         }
 
@@ -653,16 +730,21 @@ class VectorBTProvider(BacktestingProviderBase):
             else:
                 index = pd.date_range(start='2020-01-01', end='2024-01-01', freq='B')
 
+            # Accept both snake_case Python names AND the UI's camelCase aliases.
+            # The UI exposes generic WINDOW LENGTH / STEP SIZE inputs — for the
+            # test window we derive a sensible split (1/3 of window) so users get
+            # non-empty splits without having to expose every internal knob.
+            window_len = params.get('window_len') or params.get('windowLength') or 60
+            step = params.get('step') or params.get('stepSize') or max(1, window_len // 4)
+            test_len = params.get('test_len') or params.get('testLength') or max(5, window_len // 3)
+
             splitter_map = {
                 'RollingSplitter': lambda: sp.RollingSplitter(
-                    window_len=params.get('window_len', 252),
-                    test_len=params.get('test_len', 63),
-                    step=params.get('step', 21),
+                    window_len=window_len, test_len=test_len, step=step,
                 ),
                 'ExpandingSplitter': lambda: sp.ExpandingSplitter(
-                    min_len=params.get('min_len', 252),
-                    test_len=params.get('test_len', 63),
-                    step=params.get('step', 21),
+                    min_len=params.get('min_len') or params.get('windowLength') or window_len,
+                    test_len=test_len, step=step,
                 ),
                 'PurgedKFoldSplitter': lambda: sp.PurgedKFoldSplitter(
                     n_splits=params.get('n_splits', 5),
@@ -670,6 +752,9 @@ class VectorBTProvider(BacktestingProviderBase):
                     embargo_len=params.get('embargo_len', 5),
                 ),
             }
+            # Back-compat alias — older UI may send the short form
+            if splitter_type == 'PurgedKFold':
+                splitter_type = 'PurgedKFoldSplitter'
 
             # RangeSplitter: user supplies date ranges directly
             if splitter_type == 'RangeSplitter':
@@ -701,15 +786,20 @@ class VectorBTProvider(BacktestingProviderBase):
 
             splitter = splitter_map[splitter_type]()
             splits = []
-            for i, (train_idx, test_idx) in enumerate(splitter.split(index)):
+            for i, (train_mask, test_mask) in enumerate(splitter.split(index)):
+                # Splitters yield boolean masks — convert to positional indices.
+                train_pos = np.where(np.asarray(train_mask))[0]
+                test_pos = np.where(np.asarray(test_mask))[0]
+                if len(train_pos) == 0 or len(test_pos) == 0:
+                    continue
                 splits.append({
                     'fold': i,
-                    'trainStart': str(index[train_idx[0]]),
-                    'trainEnd': str(index[train_idx[-1]]),
-                    'trainSize': len(train_idx),
-                    'testStart': str(index[test_idx[0]]),
-                    'testEnd': str(index[test_idx[-1]]),
-                    'testSize': len(test_idx),
+                    'trainStart': str(index[train_pos[0]]),
+                    'trainEnd': str(index[train_pos[-1]]),
+                    'trainSize': int(len(train_pos)),
+                    'testStart': str(index[test_pos[0]]),
+                    'testEnd': str(index[test_pos[-1]]),
+                    'testSize': int(len(test_pos)),
                 })
 
             result_data = {
@@ -737,8 +827,12 @@ class VectorBTProvider(BacktestingProviderBase):
             symbols = request.get('symbols', ['SPY'])
             start_date = request.get('startDate')
             end_date = request.get('endDate')
-            benchmark = request.get('benchmark', '')
-            params = request.get('params', {})
+            # UI sends benchmarkSymbol; legacy callers pass benchmark
+            benchmark = request.get('benchmark') or request.get('benchmarkSymbol') or ''
+            params = dict(request.get('params') or {})
+            # UI surfaces a "ROLLING WINDOW" spinbox at the top level — fold it into params.
+            if 'rollingWindow' in request and 'window' not in params:
+                params['window'] = request['rollingWindow']
 
             close_series, using_synthetic = self._load_market_data(
                 self._normalize_symbols(symbols), start_date, end_date
@@ -1152,11 +1246,33 @@ class VectorBTProvider(BacktestingProviderBase):
             import pandas as pd
             import vbt_indicators as ind
 
+            # UI alias: `sma` is the same as `ma` in this provider's indicator catalog
             indicator = request.get('indicator', 'rsi')
+            if indicator == 'sma':
+                indicator = 'ma'
             symbols = request.get('symbols', ['SPY'])
             start_date = request.get('startDate')
             end_date = request.get('endDate')
-            param_ranges = request.get('paramRanges', {})
+
+            # Accept either paramRanges (keyed-by-name dict) OR paramRange (singular
+            # min/max/step from the UI). For the singular form we sweep the
+            # indicator's primary period-style argument.
+            primary_param_by_indicator = {
+                'momentum': 'lookback',
+                'macd': 'fast', 'stoch': 'k_period',
+                'obv': None, 'vwap': None,
+            }
+            param_ranges = request.get('paramRanges')
+            if not param_ranges:
+                pr = request.get('paramRange')
+                if pr:
+                    primary = primary_param_by_indicator.get(indicator, 'period')
+                    if primary:
+                        param_ranges = {primary: pr}
+                    else:
+                        return {'success': False, 'error': f'Indicator {indicator} has no sweep parameter'}
+                else:
+                    param_ranges = {}
 
             print(f"[INDICATOR_SWEEP] Got request: indicator={indicator}, symbols={symbols}", flush=True)
             print(f"[INDICATOR_SWEEP] param_ranges={param_ranges}", flush=True)
@@ -1391,9 +1507,129 @@ class VectorBTProvider(BacktestingProviderBase):
         except Exception as e:
             return {'success': False, 'error': str(e), 'traceback': __import__('traceback').format_exc()}
 
-    def calculate_indicator(self, indicator_type: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Calculate a technical indicator."""
-        raise NotImplementedError('Use VectorBT indicators within backtests')
+    def calculate_indicator(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Compute one indicator over a symbol's close series and return a value series.
+        The UI's Indicators page picks one of the IDs from get_indicators() and a
+        date range; we return enough samples to plot a small preview.
+        """
+        try:
+            import numpy as np
+            import pandas as pd
+            import vbt_indicators as ind
+
+            indicator = request.get('indicator', 'sma')
+            if indicator == 'sma':
+                indicator = 'ma'
+            symbols = request.get('symbols', ['SPY'])
+            start_date = request.get('startDate')
+            end_date = request.get('endDate')
+            params = request.get('params', {}) or {}
+            period = int(params.get('period', 14))
+
+            close_series, using_synthetic = self._load_market_data(
+                self._normalize_symbols(symbols), start_date, end_date
+            )
+
+            # Try to grab full OHLCV for indicators that need high/low/volume.
+            high = low = volume = None
+            try:
+                import yfinance as yf
+                normalized = self._normalize_symbols(symbols)
+                raw = yf.download(normalized if len(normalized) > 1 else normalized[0],
+                                  start=start_date, end=end_date, progress=False)
+                if raw is not None and not raw.empty:
+                    high = raw['High'].values.flatten() if 'High' in raw.columns else None
+                    low = raw['Low'].values.flatten() if 'Low' in raw.columns else None
+                    volume = raw['Volume'].values.flatten() if 'Volume' in raw.columns else None
+            except Exception:
+                pass
+            if high is None:
+                high = close_series.values * 1.02
+                low = close_series.values * 0.98
+                volume = np.random.randint(1_000_000, 10_000_000, len(close_series))
+
+            close_arr = close_series.values
+            calc_map = {
+                'sma': lambda: ind.calculate_ma(None, close_arr, period, ewm=False),
+                'ma':  lambda: ind.calculate_ma(None, close_arr, period, ewm=False),
+                'ema': lambda: ind.calculate_ma(None, close_arr, period, ewm=True),
+                'mstd':lambda: ind.calculate_mstd(None, close_arr, period, ewm=False),
+                'rsi': lambda: ind.calculate_rsi(None, close_arr, period),
+                'momentum': lambda: ind.calculate_momentum(close_arr, period),
+                'zscore':   lambda: ind.calculate_zscore(close_arr, period),
+                'donchian': lambda: ind.calculate_donchian(close_arr, period),
+                'bbands':   lambda: ind.calculate_bbands(None, close_arr, period, alpha=2.0),
+                'macd':     lambda: ind.calculate_macd(None, close_arr, 12, 26, 9),
+                'adx':      lambda: ind.calculate_adx(close_arr, high=high, low=low, period=period),
+                'atr':      lambda: ind.calculate_atr(None, high, low, close_arr, period),
+                'cci':      lambda: ind.calculate_cci(high, low, close_arr, period),
+                'williams_r': lambda: ind.calculate_williams_r(high, low, close_arr, period),
+                'keltner':  lambda: ind.calculate_keltner(high, low, close_arr, ema_period=period, atr_period=10, multiplier=2.0),
+                'stochastic': lambda: ind.calculate_stoch(None, high, low, close_arr, period, 3),
+                'stoch':    lambda: ind.calculate_stoch(None, high, low, close_arr, period, 3),
+                'obv':      lambda: ind.calculate_obv(None, close_arr, volume),
+                'vwap':     lambda: ind.calculate_vwap(high, low, close_arr, volume),
+            }
+            if indicator not in calc_map:
+                return {'success': False, 'error': f'Unknown indicator: {indicator}'}
+
+            out = calc_map[indicator]()
+
+            # Indicators return either an array (single output) or dict (multi-output).
+            def sample_series(arr):
+                arr = np.asarray(arr, dtype=float)
+                idx = close_series.index
+                # Down-sample to ~200 points for the UI
+                stride = max(1, len(arr) // 200)
+                return [
+                    {'date': str(idx[i]), 'value': (None if np.isnan(arr[i]) else float(arr[i]))}
+                    for i in range(0, len(arr), stride)
+                ]
+
+            result_data = {
+                'indicator': indicator,
+                'period': period,
+                'symbol': symbols[0] if symbols else '',
+                'totalBars': len(close_arr),
+                'usingSyntheticData': using_synthetic,
+            }
+
+            if isinstance(out, dict):
+                # Multi-output indicator: emit one series per component
+                series = {}
+                stats = {}
+                for name, comp in out.items():
+                    if comp is None or not hasattr(comp, '__len__'):
+                        continue
+                    series[name] = sample_series(comp)
+                    vals = np.asarray(comp, dtype=float)
+                    vals = vals[~np.isnan(vals)]
+                    if len(vals):
+                        stats[name] = {
+                            'mean': float(np.mean(vals)),
+                            'std':  float(np.std(vals)),
+                            'min':  float(np.min(vals)),
+                            'max':  float(np.max(vals)),
+                            'last': float(vals[-1]),
+                        }
+                result_data['series'] = series
+                result_data['stats'] = stats
+            else:
+                vals = np.asarray(out, dtype=float)
+                clean = vals[~np.isnan(vals)]
+                result_data['series'] = sample_series(vals)
+                if len(clean):
+                    result_data['stats'] = {
+                        'mean': float(np.mean(clean)),
+                        'std':  float(np.std(clean)),
+                        'min':  float(np.min(clean)),
+                        'max':  float(np.max(clean)),
+                        'last': float(clean[-1]),
+                    }
+
+            return {'success': True, 'data': result_data}
+        except Exception as e:
+            return {'success': False, 'error': str(e), 'traceback': __import__('traceback').format_exc()}
 
     # ========================================================================
     # Private Helpers
@@ -1413,7 +1649,8 @@ class VectorBTProvider(BacktestingProviderBase):
             stub = types.SimpleNamespace(__version__='pure-numpy')
             return stub
 
-    def _load_market_data(self, symbols: list, start_date: str, end_date: str):
+    def _load_market_data(self, symbols: list, start_date: str, end_date: str,
+                          interval: str = '1d', multi_asset: bool = False):
         """
         Load market data via yfinance, falling back to synthetic if unavailable.
 
@@ -1421,9 +1658,11 @@ class VectorBTProvider(BacktestingProviderBase):
             symbols: List of ticker symbols
             start_date: Start date string
             end_date: End date string
+            interval: Data interval (1m, 5m, 15m, 1h, 4h, 1d, 1wk)
+            multi_asset: If True and multiple symbols, return DataFrame with all columns
 
         Returns:
-            (close_series, using_synthetic) tuple
+            (close_series_or_df, using_synthetic) tuple
         """
         import pandas as pd
         import numpy as np
@@ -1439,7 +1678,7 @@ class VectorBTProvider(BacktestingProviderBase):
             # Try downloading with normalized symbols
             raw_data = yf.download(
                 normalized_symbols if len(normalized_symbols) > 1 else normalized_symbols[0],
-                start=start_date, end=end_date, progress=False
+                start=start_date, end=end_date, interval=interval, progress=False
             )
 
             if raw_data is None or (hasattr(raw_data, 'empty') and raw_data.empty):
@@ -1451,9 +1690,14 @@ class VectorBTProvider(BacktestingProviderBase):
                 raise ValueError(f'No Close data for {normalized_symbols}')
 
             if isinstance(close_data, pd.DataFrame):
-                # Multi-asset: take first column for strategy signals
-                # (weighted portfolio logic is in the provider)
-                close_data = close_data.iloc[:, 0].dropna()
+                if multi_asset and close_data.shape[1] > 1:
+                    close_data = close_data.dropna()
+                    if len(close_data) < 5:
+                        raise ValueError(f'Insufficient data: only {len(close_data)} bars for {normalized_symbols}')
+                    close_data = close_data.round(4)
+                    return close_data, using_synthetic
+                else:
+                    close_data = close_data.iloc[:, 0].dropna()
 
             if len(close_data) < 5:
                 raise ValueError(f'Insufficient data: only {len(close_data)} bars for {normalized_symbols}')
@@ -1464,9 +1708,6 @@ class VectorBTProvider(BacktestingProviderBase):
                 name='Close'
             )
 
-            # Round to 4 decimal places to eliminate float32 rounding noise
-            # from Yahoo Finance API (which returns slightly different float
-            # representations across requests, shifting SMA signals by 1 bar).
             close_series = close_series.round(4)
 
         except ImportError:
@@ -1889,6 +2130,9 @@ def main():
             result_str = json_response(result)
         elif command == 'indicator_signals':
             result = provider.indicator_signals(args)
+            result_str = json_response(result)
+        elif command == 'calculate_indicator':
+            result = provider.calculate_indicator(args)
             result_str = json_response(result)
         elif command == 'indicator_param_sweep':
             print("[MAIN] About to call indicator_param_sweep")

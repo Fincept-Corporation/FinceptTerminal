@@ -1,7 +1,7 @@
 // src/screens/gov_data/GovDataScreen.h
 #pragma once
 
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 
 #include <QFrame>
 #include <QHideEvent>
@@ -26,6 +26,7 @@ class GovDataScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_provider_selected(int row);
@@ -37,6 +38,7 @@ class GovDataScreen : public QWidget, public IStatefulScreen {
     QWidget* build_toolbar();
     QWidget* build_status_bar();
     void activate_provider(int index);
+    void retranslateUi();
 
     QListWidget* provider_list_ = nullptr;
     QStackedWidget* panel_stack_ = nullptr;
@@ -48,6 +50,11 @@ class GovDataScreen : public QWidget, public IStatefulScreen {
     QLabel* status_datasets_ = nullptr;
     QLabel* provider_badge_ = nullptr;
     QLabel* sidebar_count_ = nullptr;
+    QLabel* sidebar_title_ = nullptr;
+    QLabel* status_govt_lbl_ = nullptr;
+    QLabel* status_portal_lbl_ = nullptr;
+    QLabel* status_country_lbl_ = nullptr;
+    QLabel* status_ready_lbl_ = nullptr;
 
     QString active_provider_color_;
     int active_index_ = -1;

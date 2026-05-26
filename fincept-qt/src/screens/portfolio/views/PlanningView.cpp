@@ -3,6 +3,7 @@
 
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QFormLayout>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -31,9 +32,9 @@ void PlanningView::build_ui() {
                              .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(),
                                   ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
 
-    tabs_->addTab(build_retirement_tab(), "RETIREMENT");
-    tabs_->addTab(build_goals_tab(), "GOALS");
-    tabs_->addTab(build_savings_tab(), "SAVINGS");
+    retirement_tab_index_ = tabs_->addTab(build_retirement_tab(), tr("RETIREMENT"));
+    goals_tab_index_ = tabs_->addTab(build_goals_tab(), tr("GOALS"));
+    savings_tab_index_ = tabs_->addTab(build_savings_tab(), tr("SAVINGS"));
 
     layout->addWidget(tabs_);
 }
@@ -53,10 +54,10 @@ QWidget* PlanningView::build_retirement_tab() {
     input_layout->setContentsMargins(16, 12, 16, 12);
     input_layout->setSpacing(8);
 
-    auto* input_title = new QLabel("RETIREMENT CALCULATOR");
-    input_title->setStyleSheet(
+    input_title_ = new QLabel(tr("RETIREMENT CALCULATOR"));
+    input_title_->setStyleSheet(
         QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-    input_layout->addWidget(input_title);
+    input_layout->addWidget(input_title_);
 
     auto* form = new QFormLayout;
     form->setSpacing(8);
@@ -77,18 +78,18 @@ QWidget* PlanningView::build_retirement_tab() {
     current_age_->setValue(30);
     current_age_->setDecimals(0);
     style_spin(current_age_);
-    auto* l1 = new QLabel("Current Age:");
-    l1->setStyleSheet(label_style);
-    form->addRow(l1, current_age_);
+    l_current_age_ = new QLabel(tr("Current Age:"));
+    l_current_age_->setStyleSheet(label_style);
+    form->addRow(l_current_age_, current_age_);
 
     retire_age_ = new QDoubleSpinBox;
     retire_age_->setRange(30, 100);
     retire_age_->setValue(65);
     retire_age_->setDecimals(0);
     style_spin(retire_age_);
-    auto* l2 = new QLabel("Retire Age:");
-    l2->setStyleSheet(label_style);
-    form->addRow(l2, retire_age_);
+    l_retire_age_ = new QLabel(tr("Retire Age:"));
+    l_retire_age_->setStyleSheet(label_style);
+    form->addRow(l_retire_age_, retire_age_);
 
     annual_expense_ = new QDoubleSpinBox;
     annual_expense_->setRange(0, 10000000);
@@ -96,9 +97,9 @@ QWidget* PlanningView::build_retirement_tab() {
     annual_expense_->setPrefix("$ ");
     annual_expense_->setDecimals(0);
     style_spin(annual_expense_);
-    auto* l3 = new QLabel("Annual Expense:");
-    l3->setStyleSheet(label_style);
-    form->addRow(l3, annual_expense_);
+    l_annual_expense_ = new QLabel(tr("Annual Expense:"));
+    l_annual_expense_->setStyleSheet(label_style);
+    form->addRow(l_annual_expense_, annual_expense_);
 
     monthly_contrib_ = new QDoubleSpinBox;
     monthly_contrib_->setRange(0, 1000000);
@@ -106,9 +107,9 @@ QWidget* PlanningView::build_retirement_tab() {
     monthly_contrib_->setPrefix("$ ");
     monthly_contrib_->setDecimals(0);
     style_spin(monthly_contrib_);
-    auto* l4 = new QLabel("Monthly Savings:");
-    l4->setStyleSheet(label_style);
-    form->addRow(l4, monthly_contrib_);
+    l_monthly_contrib_ = new QLabel(tr("Monthly Savings:"));
+    l_monthly_contrib_->setStyleSheet(label_style);
+    form->addRow(l_monthly_contrib_, monthly_contrib_);
 
     expected_return_ = new QDoubleSpinBox;
     expected_return_->setRange(0, 30);
@@ -116,9 +117,9 @@ QWidget* PlanningView::build_retirement_tab() {
     expected_return_->setSuffix(" %");
     expected_return_->setDecimals(1);
     style_spin(expected_return_);
-    auto* l5 = new QLabel("Exp. Return:");
-    l5->setStyleSheet(label_style);
-    form->addRow(l5, expected_return_);
+    l_expected_return_ = new QLabel(tr("Exp. Return:"));
+    l_expected_return_->setStyleSheet(label_style);
+    form->addRow(l_expected_return_, expected_return_);
 
     inflation_ = new QDoubleSpinBox;
     inflation_->setRange(0, 20);
@@ -126,9 +127,9 @@ QWidget* PlanningView::build_retirement_tab() {
     inflation_->setSuffix(" %");
     inflation_->setDecimals(1);
     style_spin(inflation_);
-    auto* l6 = new QLabel("Inflation:");
-    l6->setStyleSheet(label_style);
-    form->addRow(l6, inflation_);
+    l_inflation_ = new QLabel(tr("Inflation:"));
+    l_inflation_->setStyleSheet(label_style);
+    form->addRow(l_inflation_, inflation_);
 
     withdrawal_rate_ = new QDoubleSpinBox;
     withdrawal_rate_->setRange(2, 8);
@@ -137,21 +138,21 @@ QWidget* PlanningView::build_retirement_tab() {
     withdrawal_rate_->setDecimals(1);
     withdrawal_rate_->setSingleStep(0.5);
     style_spin(withdrawal_rate_);
-    auto* l7 = new QLabel("Withdrawal Rate:");
-    l7->setStyleSheet(label_style);
-    form->addRow(l7, withdrawal_rate_);
+    l_withdrawal_rate_ = new QLabel(tr("Withdrawal Rate:"));
+    l_withdrawal_rate_->setStyleSheet(label_style);
+    form->addRow(l_withdrawal_rate_, withdrawal_rate_);
 
     input_layout->addLayout(form);
 
-    auto* calc_btn = new QPushButton("CALCULATE");
-    calc_btn->setFixedHeight(28);
-    calc_btn->setCursor(Qt::PointingHandCursor);
-    calc_btn->setStyleSheet(
+    calc_btn_ = new QPushButton(tr("CALCULATE"));
+    calc_btn_->setFixedHeight(28);
+    calc_btn_->setCursor(Qt::PointingHandCursor);
+    calc_btn_->setStyleSheet(
         QString("QPushButton { background:%1; color:#000; border:none; font-size:10px; font-weight:700; }"
                 "QPushButton:hover { background:%2; }")
             .arg(ui::colors::AMBER(), ui::colors::WARNING()));
-    connect(calc_btn, &QPushButton::clicked, this, &PlanningView::recalculate);
-    input_layout->addWidget(calc_btn);
+    connect(calc_btn_, &QPushButton::clicked, this, &PlanningView::recalculate);
+    input_layout->addWidget(calc_btn_);
     input_layout->addStretch();
 
     layout->addWidget(input_panel);
@@ -162,15 +163,16 @@ QWidget* PlanningView::build_retirement_tab() {
     res_layout->setContentsMargins(0, 0, 0, 0);
     res_layout->setSpacing(12);
 
-    auto* res_title = new QLabel("PROJECTION RESULTS");
-    res_title->setStyleSheet(
+    res_title_ = new QLabel(tr("PROJECTION RESULTS"));
+    res_title_->setStyleSheet(
         QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-    res_layout->addWidget(res_title);
+    res_layout->addWidget(res_title_);
 
     auto* grid = new QGridLayout;
     grid->setSpacing(8);
 
-    auto add_card = [&](int r, int c, const QString& label, QLabel*& val_label, const char* color) {
+    auto add_card = [&](int r, int c, const QString& label, QLabel*& val_label, QLabel*& title_label,
+                        const char* color) {
         auto* card = new QWidget(this);
         card->setStyleSheet(
             QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
@@ -178,10 +180,10 @@ QWidget* PlanningView::build_retirement_tab() {
         cl->setContentsMargins(12, 8, 12, 8);
         cl->setSpacing(2);
 
-        auto* lbl = new QLabel(label);
-        lbl->setStyleSheet(
+        title_label = new QLabel(label);
+        title_label->setStyleSheet(
             QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY()));
-        cl->addWidget(lbl);
+        cl->addWidget(title_label);
 
         val_label = new QLabel("--");
         val_label->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700;").arg(color));
@@ -190,10 +192,10 @@ QWidget* PlanningView::build_retirement_tab() {
         grid->addWidget(card, r, c);
     };
 
-    add_card(0, 0, "YEARS TO RETIREMENT", years_label_, ui::colors::CYAN);
-    add_card(0, 1, "TARGET NEST EGG", target_label_, ui::colors::WARNING);
-    add_card(1, 0, "PROJECTED VALUE", projected_label_, ui::colors::POSITIVE);
-    add_card(1, 1, "SURPLUS / GAP", gap_label_, ui::colors::TEXT_PRIMARY);
+    add_card(0, 0, tr("YEARS TO RETIREMENT"), years_label_, years_card_label_, ui::colors::CYAN);
+    add_card(0, 1, tr("TARGET NEST EGG"), target_label_, target_card_label_, ui::colors::WARNING);
+    add_card(1, 0, tr("PROJECTED VALUE"), projected_label_, projected_card_label_, ui::colors::POSITIVE);
+    add_card(1, 1, tr("SURPLUS / GAP"), gap_label_, gap_card_label_, ui::colors::TEXT_PRIMARY);
 
     res_layout->addLayout(grid);
 
@@ -214,18 +216,18 @@ QWidget* PlanningView::build_goals_tab() {
     layout->setContentsMargins(16, 12, 16, 12);
     layout->setAlignment(Qt::AlignCenter);
 
-    auto* title = new QLabel("GOAL-BASED PLANNING");
-    title->setAlignment(Qt::AlignCenter);
-    title->setStyleSheet(
+    goals_title_ = new QLabel(tr("GOAL-BASED PLANNING"));
+    goals_title_->setAlignment(Qt::AlignCenter);
+    goals_title_->setStyleSheet(
         QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-    layout->addWidget(title);
+    layout->addWidget(goals_title_);
 
-    auto* desc = new QLabel("Define financial goals (house, education, emergency fund)\n"
-                            "and track your progress toward each target.");
-    desc->setAlignment(Qt::AlignCenter);
-    desc->setWordWrap(true);
-    desc->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
-    layout->addWidget(desc);
+    goals_desc_ = new QLabel(tr("Define financial goals (house, education, emergency fund)\n"
+                                "and track your progress toward each target."));
+    goals_desc_->setAlignment(Qt::AlignCenter);
+    goals_desc_->setWordWrap(true);
+    goals_desc_->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
+    layout->addWidget(goals_desc_);
 
     return w;
 }
@@ -236,18 +238,18 @@ QWidget* PlanningView::build_savings_tab() {
     layout->setContentsMargins(16, 12, 16, 12);
     layout->setAlignment(Qt::AlignCenter);
 
-    auto* title = new QLabel("SAVINGS RATE ANALYSIS");
-    title->setAlignment(Qt::AlignCenter);
-    title->setStyleSheet(
+    savings_title_ = new QLabel(tr("SAVINGS RATE ANALYSIS"));
+    savings_title_->setAlignment(Qt::AlignCenter);
+    savings_title_->setStyleSheet(
         QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-    layout->addWidget(title);
+    layout->addWidget(savings_title_);
 
-    auto* desc = new QLabel("Analyze how different savings rates and contribution schedules\n"
-                            "affect your long-term wealth accumulation.");
-    desc->setAlignment(Qt::AlignCenter);
-    desc->setWordWrap(true);
-    desc->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
-    layout->addWidget(desc);
+    savings_desc_ = new QLabel(tr("Analyze how different savings rates and contribution schedules\n"
+                                  "affect your long-term wealth accumulation."));
+    savings_desc_->setAlignment(Qt::AlignCenter);
+    savings_desc_->setWordWrap(true);
+    savings_desc_->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
+    layout->addWidget(savings_desc_);
 
     return w;
 }
@@ -255,7 +257,46 @@ QWidget* PlanningView::build_savings_tab() {
 void PlanningView::set_data(const portfolio::PortfolioSummary& summary, const QString& currency) {
     summary_ = summary;
     currency_ = currency;
+    has_data_ = true;
     recalculate();
+}
+
+void PlanningView::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PlanningView::retranslateUi() {
+    if (tabs_) {
+        if (retirement_tab_index_ >= 0) tabs_->setTabText(retirement_tab_index_, tr("RETIREMENT"));
+        if (goals_tab_index_ >= 0)      tabs_->setTabText(goals_tab_index_, tr("GOALS"));
+        if (savings_tab_index_ >= 0)    tabs_->setTabText(savings_tab_index_, tr("SAVINGS"));
+    }
+    if (input_title_)        input_title_->setText(tr("RETIREMENT CALCULATOR"));
+    if (l_current_age_)      l_current_age_->setText(tr("Current Age:"));
+    if (l_retire_age_)       l_retire_age_->setText(tr("Retire Age:"));
+    if (l_annual_expense_)   l_annual_expense_->setText(tr("Annual Expense:"));
+    if (l_monthly_contrib_)  l_monthly_contrib_->setText(tr("Monthly Savings:"));
+    if (l_expected_return_)  l_expected_return_->setText(tr("Exp. Return:"));
+    if (l_inflation_)        l_inflation_->setText(tr("Inflation:"));
+    if (l_withdrawal_rate_)  l_withdrawal_rate_->setText(tr("Withdrawal Rate:"));
+    if (calc_btn_)           calc_btn_->setText(tr("CALCULATE"));
+    if (res_title_)          res_title_->setText(tr("PROJECTION RESULTS"));
+    if (years_card_label_)     years_card_label_->setText(tr("YEARS TO RETIREMENT"));
+    if (target_card_label_)    target_card_label_->setText(tr("TARGET NEST EGG"));
+    if (projected_card_label_) projected_card_label_->setText(tr("PROJECTED VALUE"));
+    if (gap_card_label_)       gap_card_label_->setText(tr("SURPLUS / GAP"));
+    if (goals_title_)   goals_title_->setText(tr("GOAL-BASED PLANNING"));
+    if (goals_desc_)    goals_desc_->setText(tr("Define financial goals (house, education, emergency fund)\n"
+                                                "and track your progress toward each target."));
+    if (savings_title_) savings_title_->setText(tr("SAVINGS RATE ANALYSIS"));
+    if (savings_desc_)  savings_desc_->setText(tr("Analyze how different savings rates and contribution schedules\n"
+                                                  "affect your long-term wealth accumulation."));
+
+    // re-run so status_label_ tr() strings pick up new locale
+    if (has_data_)
+        recalculate();
 }
 
 void PlanningView::recalculate() {
@@ -294,8 +335,8 @@ void PlanningView::recalculate() {
     gap_label_->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700;").arg(gap_color));
 
     if (gap >= 0) {
-        status_label_->setText(QString("\u2713 On track! Your projected retirement fund of %1 %2 "
-                                       "exceeds your target of %1 %3 by %1 %4.")
+        status_label_->setText(tr("\u2713 On track! Your projected retirement fund of %1 %2 "
+                                  "exceeds your target of %1 %3 by %1 %4.")
                                    .arg(currency_)
                                    .arg(QString::number(projected, 'f', 0))
                                    .arg(QString::number(target, 'f', 0))
@@ -303,8 +344,8 @@ void PlanningView::recalculate() {
         status_label_->setStyleSheet(QString("color:%1; font-size:12px; padding:12px;").arg(ui::colors::POSITIVE()));
     } else {
         double needed_monthly = (-gap) / ((std::pow(1.0 + monthly_rate, months) - 1.0) / monthly_rate);
-        status_label_->setText(QString("\u26A0 Shortfall of %1 %2. Consider increasing monthly savings "
-                                       "by %1 %3 to close the gap.")
+        status_label_->setText(tr("\u26A0 Shortfall of %1 %2. Consider increasing monthly savings "
+                                  "by %1 %3 to close the gap.")
                                    .arg(currency_)
                                    .arg(QString::number(std::abs(gap), 'f', 0))
                                    .arg(QString::number(needed_monthly, 'f', 0)));

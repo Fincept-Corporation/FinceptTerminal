@@ -309,13 +309,26 @@ void EconomicsScreen::switch_to(const QString& source_id) {
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap EconomicsScreen::save_state() const {
-    return {{"source_id", active_id_}};
+    QVariantMap state{{"source_id", active_id_}};
+    for (const auto& entry : sources_) {
+        if (entry.panel) {
+            auto ps = entry.panel->save_panel_state();
+            if (!ps.isEmpty())
+                state[entry.id + "_panel"] = ps;
+        }
+    }
+    return state;
 }
 
 void EconomicsScreen::restore_state(const QVariantMap& state) {
     const QString id = state.value("source_id").toString();
     if (!id.isEmpty())
         switch_to(id);
+    for (auto& entry : sources_) {
+        const QString key = entry.id + "_panel";
+        if (entry.panel && state.contains(key))
+            entry.panel->restore_panel_state(state.value(key).toMap());
+    }
 }
 
 } // namespace fincept::screens

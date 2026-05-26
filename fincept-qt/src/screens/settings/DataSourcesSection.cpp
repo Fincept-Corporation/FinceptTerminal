@@ -98,12 +98,12 @@ QWidget* DataSourcesSection::build_content() {
     title_row->setStyleSheet("background:transparent;");
     auto* trl = new QHBoxLayout(title_row);
     trl->setContentsMargins(0, 0, 0, 0);
-    auto* t = new QLabel("DATA SOURCES");
+    auto* t = new QLabel(tr("DATA SOURCES"));
     t->setStyleSheet(section_title_ss());
     trl->addWidget(t);
     trl->addStretch();
 
-    auto* open_full = new QPushButton("OPEN FULL SCREEN");
+    auto* open_full = new QPushButton(tr("OPEN FULL SCREEN"));
     open_full->setFixedHeight(24);
     open_full->setCursor(Qt::PointingHandCursor);
     open_full->setStyleSheet(
@@ -111,12 +111,12 @@ QWidget* DataSourcesSection::build_content() {
                 "QPushButton:hover{background:%1;color:%3;}")
             .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
     connect(open_full, &QPushButton::clicked, this,
-            []() { EventBus::instance().publish("nav.switch_screen", {{"screen", "data_sources"}}); });
+            []() { EventBus::instance().publish("nav.switch_screen", {{"screen_id", "data_sources"}}); });
     trl->addWidget(open_full);
     vl->addWidget(title_row);
 
-    auto* info = new QLabel("Quick management of configured connections. "
-                            "For full browsing, adding, testing, and import/export use the full screen.");
+    auto* info = new QLabel(tr("Quick management of configured connections. "
+                               "For full browsing, adding, testing, and import/export use the full screen."));
     info->setWordWrap(true);
     info->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(info);
@@ -167,10 +167,10 @@ QWidget* DataSourcesSection::build_content() {
             shl->addWidget(box, 1);
         };
 
-        make_stat("TOTAL",     total,             ui::colors::CYAN());
-        make_stat("ACTIVE",    active,            ui::colors::POSITIVE());
-        make_stat("INACTIVE",  total - active,    ui::colors::TEXT_DIM());
-        make_stat("PROVIDERS", providers.size(),  ui::colors::AMBER());
+        make_stat(tr("TOTAL"),     total,             ui::colors::CYAN());
+        make_stat(tr("ACTIVE"),    active,            ui::colors::POSITIVE());
+        make_stat(tr("INACTIVE"),  total - active,    ui::colors::TEXT_DIM());
+        make_stat(tr("PROVIDERS"), providers.size(),  ui::colors::AMBER());
         vl->addWidget(stat_row);
     }
 
@@ -178,13 +178,13 @@ QWidget* DataSourcesSection::build_content() {
 
     // Connections table
     if (connections.isEmpty()) {
-        auto* empty_panel = make_panel("CONNECTIONS");
+        auto* empty_panel = make_panel(tr("CONNECTIONS"));
         auto* empty_body = new QWidget(this);
         empty_body->setStyleSheet("background:transparent;");
         auto* evl = new QVBoxLayout(empty_body);
         evl->setContentsMargins(12, 16, 12, 16);
         auto* elbl = new QLabel(
-            "No data sources configured. Open the full Data Sources screen to browse and add connectors.");
+            tr("No data sources configured. Open the full Data Sources screen to browse and add connectors."));
         elbl->setWordWrap(true);
         elbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
         evl->addWidget(elbl);
@@ -197,7 +197,7 @@ QWidget* DataSourcesSection::build_content() {
             grouped[cat].append(ds);
         }
 
-        auto* panel = make_panel("CONNECTIONS");
+        auto* panel = make_panel(tr("CONNECTIONS"));
         auto* body = new QWidget(this);
         body->setStyleSheet("background:transparent;");
         auto* bvl = new QVBoxLayout(body);
@@ -223,11 +223,11 @@ QWidget* DataSourcesSection::build_content() {
             }
             thl->addWidget(lbl, width > 0 ? 0 : 1);
         };
-        add_th("SOURCE");
-        add_th("TYPE",     44);
-        add_th("CATEGORY", 80);
-        add_th("ON",       30);
-        add_th("DEL",      30);
+        add_th(tr("SOURCE"));
+        add_th(tr("TYPE"),     44);
+        add_th(tr("CATEGORY"), 80);
+        add_th(tr("ON"),       30);
+        add_th(tr("DEL"),      30);
         bvl->addWidget(th);
 
         int row_idx = 0;
@@ -299,8 +299,8 @@ QWidget* DataSourcesSection::build_content() {
                             "QPushButton:hover{color:%2;}")
                         .arg(ui::colors::TEXT_DIM(), ui::colors::NEGATIVE()));
                 connect(del_btn, &QPushButton::clicked, this, [this, source_id, name, row]() {
-                    auto answer = QMessageBox::warning(this, "Delete Connection",
-                                                       "Delete connection \"" + name + "\"?\n\nThis cannot be undone.",
+                    auto answer = QMessageBox::warning(this, tr("Delete Connection"),
+                                                       tr("Delete connection \"%1\"?\n\nThis cannot be undone.").arg(name),
                                                        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
                     if (answer != QMessageBox::Yes) return;
 
@@ -323,7 +323,7 @@ QWidget* DataSourcesSection::build_content() {
 
     // Bulk actions
     {
-        auto* panel = make_panel("BULK ACTIONS");
+        auto* panel = make_panel(tr("BULK ACTIONS"));
         auto* body = new QWidget(this);
         body->setStyleSheet("background:transparent;");
         auto* bvl = new QVBoxLayout(body);
@@ -336,7 +336,7 @@ QWidget* DataSourcesSection::build_content() {
         brhl->setContentsMargins(0, 0, 0, 0);
         brhl->setSpacing(8);
 
-        auto* enable_all = new QPushButton("ENABLE ALL");
+        auto* enable_all = new QPushButton(tr("ENABLE ALL"));
         enable_all->setFixedHeight(24);
         enable_all->setStyleSheet(QString("QPushButton{background:rgba(22,163,74,0.1);color:%1;border:1px solid "
                                           "%1;font-weight:700;padding:0 10px;}"
@@ -352,7 +352,7 @@ QWidget* DataSourcesSection::build_content() {
         });
         brhl->addWidget(enable_all);
 
-        auto* disable_all = new QPushButton("DISABLE ALL");
+        auto* disable_all = new QPushButton(tr("DISABLE ALL"));
         disable_all->setFixedHeight(24);
         disable_all->setStyleSheet(
             QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid %3;font-weight:700;padding:0 "
@@ -360,7 +360,7 @@ QWidget* DataSourcesSection::build_content() {
                     "QPushButton:hover{background:%1;color:%2;}")
                 .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE_DIM()));
         connect(disable_all, &QPushButton::clicked, this, [this]() {
-            auto answer = QMessageBox::warning(this, "Disable All", "Disable all data source connections?",
+            auto answer = QMessageBox::warning(this, tr("Disable All"), tr("Disable all data source connections?"),
                                                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
             if (answer != QMessageBox::Yes) return;
             auto r = DataSourceRepository::instance().list_all();
@@ -372,7 +372,7 @@ QWidget* DataSourcesSection::build_content() {
         });
         brhl->addWidget(disable_all);
 
-        auto* delete_all = new QPushButton("DELETE ALL");
+        auto* delete_all = new QPushButton(tr("DELETE ALL"));
         delete_all->setFixedHeight(24);
         delete_all->setStyleSheet(
             QString("QPushButton{background:%1;color:%2;border:2px solid %2;font-weight:700;padding:0 10px;}"
@@ -380,9 +380,9 @@ QWidget* DataSourcesSection::build_content() {
                 .arg(ui::colors::BG_RAISED(), ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
         connect(delete_all, &QPushButton::clicked, this, [this]() {
             auto answer = QMessageBox::critical(
-                this, "Delete All Connections",
-                "Permanently delete ALL data source connections?\n\n"
-                "This cannot be undone. You can re-add them from the full Data Sources screen.",
+                this, tr("Delete All Connections"),
+                tr("Permanently delete ALL data source connections?\n\n"
+                   "This cannot be undone. You can re-add them from the full Data Sources screen."),
                 QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
             if (answer != QMessageBox::Yes) return;
 
@@ -398,8 +398,8 @@ QWidget* DataSourcesSection::build_content() {
         brhl->addStretch();
         bvl->addWidget(btn_row);
 
-        auto* note = new QLabel("For adding new connections, testing connectivity, and import/export, "
-                                "use the full Data Sources screen.");
+        auto* note = new QLabel(tr("For adding new connections, testing connectivity, and import/export, "
+                                   "use the full Data Sources screen."));
         note->setWordWrap(true);
         note->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
         bvl->addWidget(note);

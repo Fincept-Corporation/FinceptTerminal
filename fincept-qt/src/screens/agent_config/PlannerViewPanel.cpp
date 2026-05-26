@@ -69,7 +69,7 @@ QWidget* PlannerViewPanel::build_templates_panel() {
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
 
-    auto* t = new QLabel("PLAN TEMPLATES");
+    auto* t = new QLabel(tr("PLAN TEMPLATES"));
     t->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
     vl->addWidget(t);
 
@@ -127,18 +127,18 @@ QWidget* PlannerViewPanel::build_templates_panel() {
                                            ui::colors::AMBER_DIM(), ui::colors::BG_HOVER()));
     vl->addWidget(template_list_);
 
-    auto* cl = new QLabel("CUSTOM PLAN QUERY");
+    auto* cl = new QLabel(tr("CUSTOM PLAN QUERY"));
     cl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:8px;")
                           .arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(cl);
 
     custom_query_ = new QPlainTextEdit;
-    custom_query_->setPlaceholderText("Describe what you want to plan...");
+    custom_query_->setPlaceholderText(tr("Describe what you want to plan..."));
     custom_query_->setMaximumHeight(100);
     custom_query_->setStyleSheet(QString("QPlainTextEdit{%1}").arg(kIn));
     vl->addWidget(custom_query_);
 
-    generate_btn_ = new QPushButton("GENERATE PLAN");
+    generate_btn_ = new QPushButton(tr("GENERATE PLAN"));
     generate_btn_->setCursor(Qt::PointingHandCursor);
     generate_btn_->setStyleSheet(
         QString("QPushButton{background:%1;color:%2;border:none;padding:8px;"
@@ -149,7 +149,7 @@ QWidget* PlannerViewPanel::build_templates_panel() {
     vl->addWidget(generate_btn_);
 
     // History section
-    history_header_ = new QLabel("PLAN HISTORY");
+    history_header_ = new QLabel(tr("PLAN HISTORY"));
     history_header_->setStyleSheet(
         QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:12px;")
             .arg(ui::colors::TEXT_SECONDARY()));
@@ -184,7 +184,7 @@ QWidget* PlannerViewPanel::build_plan_editor() {
 
     // Header
     auto* hdr = new QHBoxLayout;
-    auto* t = new QLabel("EXECUTION PLAN");
+    auto* t = new QLabel(tr("EXECUTION PLAN"));
     t->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
     hdr->addWidget(t);
     plan_status_ = new QLabel;
@@ -277,7 +277,7 @@ QWidget* PlannerViewPanel::build_results_panel() {
     vl->setSpacing(6);
 
     auto* hdr = new QHBoxLayout;
-    result_header_ = new QLabel("STEP RESULT");
+    result_header_ = new QLabel(tr("STEP RESULT"));
     result_header_->setStyleSheet(
         QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     hdr->addWidget(result_header_);
@@ -321,12 +321,12 @@ void PlannerViewPanel::setup_connections() {
         pending_request_id_.clear();
         loading_overlay_->hide_loading();
         generate_btn_->setEnabled(true);
-        generate_btn_->setText("GENERATE PLAN");
+        generate_btn_->setText(tr("GENERATE PLAN"));
         current_plan_ = plan;
         populate_plan(plan);
         execute_btn_->setEnabled(true);
         save_plan_to_history();
-        plan_status_->setText("READY");
+        plan_status_->setText(tr("READY"));
         plan_status_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
                                         .arg(ui::colors::POSITIVE(), ui::colors::BG_RAISED()));
     });
@@ -338,9 +338,9 @@ void PlannerViewPanel::setup_connections() {
         pending_request_id_.clear();
         loading_overlay_->hide_loading();
         execute_btn_->setEnabled(true);
-        execute_btn_->setText("EXECUTE PLAN");
+        execute_btn_->setText(tr("EXECUTE PLAN"));
         current_plan_ = plan;
-        plan_status_->setText(plan.has_failed ? "FAILED" : "COMPLETED");
+        plan_status_->setText(plan.has_failed ? tr("FAILED") : tr("COMPLETED"));
         plan_status_->setStyleSheet(
             QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
                 .arg(plan.has_failed ? ui::colors::NEGATIVE() : ui::colors::POSITIVE(), ui::colors::BG_RAISED()));
@@ -367,11 +367,11 @@ void PlannerViewPanel::setup_connections() {
             pending_request_id_.clear();
             loading_overlay_->hide_loading();
             generate_btn_->setEnabled(true);
-            generate_btn_->setText("GENERATE PLAN");
+            generate_btn_->setText(tr("GENERATE PLAN"));
             execute_btn_->setEnabled(!current_plan_.steps.isEmpty());
-            execute_btn_->setText("EXECUTE PLAN");
+            execute_btn_->setText(tr("EXECUTE PLAN"));
             progress_bar_->setValue(0);
-            plan_status_->setText("ERROR");
+            plan_status_->setText(tr("ERROR"));
             plan_status_->setStyleSheet(
                 QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
                     .arg(ui::colors::NEGATIVE(), ui::colors::BG_RAISED()));
@@ -427,12 +427,12 @@ void PlannerViewPanel::generate_plan() {
 
     generating_ = true;
     generate_btn_->setEnabled(false);
-    generate_btn_->setText("GENERATING...");
+    generate_btn_->setText(tr("GENERATING..."));
     steps_table_->setRowCount(0);
     execute_btn_->setEnabled(false);
     result_display_->clear();
     progress_bar_->setValue(0);
-    plan_status_->setText("GENERATING");
+    plan_status_->setText(tr("GENERATING"));
     loading_overlay_->show_loading("GENERATING PLAN…");
     plan_status_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
                                     .arg(ui::colors::AMBER(), ui::colors::BG_RAISED()));
@@ -455,10 +455,10 @@ void PlannerViewPanel::execute_plan() {
         return;
     executing_ = true;
     execute_btn_->setEnabled(false);
-    execute_btn_->setText("EXECUTING...");
+    execute_btn_->setText(tr("EXECUTING..."));
     result_display_->clear();
     progress_bar_->setValue(0);
-    plan_status_->setText("EXECUTING");
+    plan_status_->setText(tr("EXECUTING"));
     loading_overlay_->show_loading("EXECUTING PLAN…");
     plan_status_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
                                     .arg(ui::colors::AMBER(), ui::colors::BG_RAISED()));
@@ -594,8 +594,8 @@ void PlannerViewPanel::copy_result() {
     QString text = result_display_->toPlainText();
     if (!text.isEmpty()) {
         QApplication::clipboard()->setText(text);
-        copy_btn_->setText("COPIED!");
-        QTimer::singleShot(1500, this, [this]() { copy_btn_->setText("COPY"); });
+        copy_btn_->setText(tr("COPIED!"));
+        QTimer::singleShot(1500, this, [this]() { copy_btn_->setText(tr("COPY")); });
     }
 }
 

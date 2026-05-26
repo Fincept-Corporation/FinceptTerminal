@@ -26,14 +26,24 @@ class PricingScreen : public QWidget {
 
   protected:
     void showEvent(QShowEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     QVBoxLayout* cards_layout_ = nullptr;
+    QLabel* title_label_ = nullptr;
+    QLabel* subtitle_label_ = nullptr;
     QLabel* error_label_ = nullptr;
     QLabel* loading_label_ = nullptr;
     QLabel* user_info_label_ = nullptr;
     QWidget* cards_container_ = nullptr;
     QWidget* footer_widget_ = nullptr;
+
+    /// Tracks whether the last loading state was the "refresh" variant
+    /// (showEvent's "Updating plan status...") vs the generic "Loading plans...".
+    /// Used by retranslateUi() to pick the correct localised string for the
+    /// currently-displayed loading message.
+    bool loading_is_refresh_ = false;
+    void retranslateUi();
 
     std::vector<auth::SubscriptionPlan> plans_;
     bool fetched_ = false;

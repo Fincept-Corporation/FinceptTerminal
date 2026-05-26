@@ -6,6 +6,8 @@
 #include <QTimer>
 #include <QWidget>
 
+#include <optional>
+
 namespace fincept::screens {
 
 class PortfolioStatusBar : public QWidget {
@@ -19,10 +21,15 @@ class PortfolioStatusBar : public QWidget {
     void start_clock();
     void stop_clock();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void update_clock();
+    void retranslateUi();
 
     QLabel* brand_label_ = nullptr;
+    QLabel* version_label_ = nullptr;
     QLabel* portfolio_label_ = nullptr;
     QLabel* live_label_ = nullptr;
     QLabel* positions_label_ = nullptr;
@@ -32,6 +39,8 @@ class PortfolioStatusBar : public QWidget {
     QLabel* tz_label_ = nullptr;
 
     QTimer* clock_timer_ = nullptr;
+
+    std::optional<portfolio::PortfolioSummary> last_summary_;
 };
 
 } // namespace fincept::screens

@@ -10,6 +10,7 @@
 #    include "datahub/DataHubMetaTypes.h"
 
 #include <QAction>
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
@@ -24,8 +25,22 @@
 
 namespace fincept::screens {
 
-static const QStringList kColumns = {"SYMBOL", "QTY",  "LAST", "AVG COST", "MKT VAL", "COST BASIS",
-                                     "P&L",    "P&L%", "CHG%", "TREND",    "WT%"};
+// Column source keys (English). Translated at runtime in build_ui() so
+// lupdate can scan the literals here.
+static const char* const kColumnKeys[] = {
+    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "SYMBOL"),
+    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "QTY"),
+    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "LAST"),
+    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "AVG COST"),
+    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "MKT VAL"),
+    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "COST BASIS"),
+    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "P&L"),
+    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "P&L%"),
+    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "CHG%"),
+    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "TREND"),
+    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "WT%"),
+};
+static constexpr int kColumnCount = sizeof(kColumnKeys) / sizeof(kColumnKeys[0]);
 
 PortfolioBlotter::PortfolioBlotter(QWidget* parent) : QWidget(parent) {
     // Restore persisted page size before building the UI so the combo and
@@ -50,8 +65,12 @@ void PortfolioBlotter::build_ui() {
     layout->setSpacing(0);
 
     table_ = new QTableWidget(this);
-    table_->setColumnCount(kColumns.size());
-    table_->setHorizontalHeaderLabels(kColumns);
+    table_->setColumnCount(kColumnCount);
+    QStringList headers;
+    headers.reserve(kColumnCount);
+    for (int i = 0; i < kColumnCount; ++i)
+        headers << tr(kColumnKeys[i]);
+    table_->setHorizontalHeaderLabels(headers);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -120,7 +139,7 @@ void PortfolioBlotter::build_pagination_footer() {
     h->setSpacing(8);
 
     // ── Left: "Showing X-Y of Z" ─────────────────────────────────────────────
-    footer_status_ = new QLabel("Showing 0 of 0");
+    footer_status_ = new QLabel(tr("Showing 0 of 0"));
     footer_status_->setStyleSheet(
         QString("color:%1; font-size:10px; font-weight:600; background:transparent;")
             .arg(ui::colors::TEXT_TERTIARY()));
@@ -146,12 +165,12 @@ void PortfolioBlotter::build_pagination_footer() {
         return b;
     };
 
-    btn_first_ = make_nav_btn(QStringLiteral("«"), "First page");  // «
-    btn_prev_  = make_nav_btn(QStringLiteral("‹"), "Previous page"); // ‹
+    btn_first_ = make_nav_btn(QStringLiteral("«"), tr("First page"));
+    btn_prev_  = make_nav_btn(QStringLiteral("‹"), tr("Previous page"));
     h->addWidget(btn_first_);
     h->addWidget(btn_prev_);
 
-    footer_page_label_ = new QLabel("Page 1 of 1");
+    footer_page_label_ = new QLabel(tr("Page 1 of 1"));
     footer_page_label_->setMinimumWidth(80);
     footer_page_label_->setAlignment(Qt::AlignCenter);
     footer_page_label_->setStyleSheet(
@@ -159,19 +178,19 @@ void PortfolioBlotter::build_pagination_footer() {
             .arg(ui::colors::TEXT_PRIMARY()));
     h->addWidget(footer_page_label_);
 
-    btn_next_ = make_nav_btn(QStringLiteral("›"), "Next page");  // ›
-    btn_last_ = make_nav_btn(QStringLiteral("»"), "Last page");  // »
+    btn_next_ = make_nav_btn(QStringLiteral("›"), tr("Next page"));
+    btn_last_ = make_nav_btn(QStringLiteral("»"), tr("Last page"));
     h->addWidget(btn_next_);
     h->addWidget(btn_last_);
 
     h->addStretch(1);
 
     // ── Right: "Rows: [10 ▾]" ───────────────────────────────────────────────
-    auto* rows_label = new QLabel("Rows:");
-    rows_label->setStyleSheet(
+    footer_rows_label_ = new QLabel(tr("Rows:"));
+    footer_rows_label_->setStyleSheet(
         QString("color:%1; font-size:10px; font-weight:600; background:transparent;")
             .arg(ui::colors::TEXT_TERTIARY()));
-    h->addWidget(rows_label);
+    h->addWidget(footer_rows_label_);
 
     page_size_combo_ = new QComboBox(footer_);
     page_size_combo_->setFixedHeight(22);
@@ -435,12 +454,12 @@ void PortfolioBlotter::update_pagination_controls() {
     const int end_idx = std::min<int>(current_page_ * page_size_, total);
 
     if (total == 0) {
-        footer_status_->setText("No positions");
+        footer_status_->setText(tr("No positions"));
     } else {
-        footer_status_->setText(QString("Showing %1-%2 of %3").arg(start_idx).arg(end_idx).arg(total));
+        footer_status_->setText(tr("Showing %1-%2 of %3").arg(start_idx).arg(end_idx).arg(total));
     }
 
-    footer_page_label_->setText(QString("Page %1 of %2").arg(current_page_).arg(last_page));
+    footer_page_label_->setText(tr("Page %1 of %2").arg(current_page_).arg(last_page));
 
     btn_first_->setEnabled(current_page_ > 1);
     btn_prev_->setEnabled(current_page_ > 1);
@@ -636,8 +655,8 @@ void PortfolioBlotter::on_context_menu(const QPoint& pos) {
     }());
     menu.addSeparator();
 
-    auto* edit_act = menu.addAction("Edit Transaction");
-    auto* delete_act = menu.addAction("Close / Delete Position");
+    auto* edit_act = menu.addAction(tr("Edit Transaction"));
+    auto* delete_act = menu.addAction(tr("Close / Delete Position"));
 
     edit_act->setIcon(QIcon());
     delete_act->setIcon(QIcon());
@@ -678,6 +697,33 @@ void PortfolioBlotter::refresh_theme() {
             .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(),
                  ui::colors::BORDER_MED(), ui::colors::BORDER_DIM()));
     populate_table();
+}
+
+void PortfolioBlotter::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PortfolioBlotter::retranslateUi() {
+    // Column headers — same source-key array used in build_ui().
+    if (table_) {
+        QStringList headers;
+        headers.reserve(kColumnCount);
+        for (int i = 0; i < kColumnCount; ++i)
+            headers << tr(kColumnKeys[i]);
+        table_->setHorizontalHeaderLabels(headers);
+    }
+
+    if (btn_first_) btn_first_->setToolTip(tr("First page"));
+    if (btn_prev_)  btn_prev_->setToolTip(tr("Previous page"));
+    if (btn_next_)  btn_next_->setToolTip(tr("Next page"));
+    if (btn_last_)  btn_last_->setToolTip(tr("Last page"));
+    if (footer_rows_label_) footer_rows_label_->setText(tr("Rows:"));
+
+    // Footer status + page label hold dynamic strings — re-run the computation
+    // so "Showing %1-%2 of %3" and "Page %1 of %2" pick up the new locale.
+    update_pagination_controls();
 }
 
 } // namespace fincept::screens

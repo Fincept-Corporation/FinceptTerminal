@@ -1,7 +1,7 @@
 // src/screens/portfolio/PortfolioInsightsPanel.cpp
 #include "screens/portfolio/PortfolioInsightsPanel.h"
 
-#include "ai_chat/LlmService.h"
+#include "services/llm/LlmService.h"
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
 #include "ui/markdown/MarkdownRenderer.h"
@@ -9,6 +9,7 @@
 
 #include <QComboBox>
 #include <QDateTime>
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -61,15 +62,15 @@ PortfolioInsightsPanel::PortfolioInsightsPanel(QWidget* parent) : QWidget(parent
         header_status_->clear();
         if (r.success && !r.response.isEmpty()) {
             ai_cache_.insert(type, r.response);
-            ai_meta_->setText(QString("Last run %1  •  %2ms").arg(fmt_now()).arg(r.execution_time_ms));
+            ai_meta_->setText(tr("Last run %1  •  %2ms").arg(fmt_now()).arg(r.execution_time_ms));
             render_result(ai_content_, r.response);
             QString upper = type.toUpper();
             if (upper == "OPPORTUNITIES")
                 upper = "OPPS";
-            ai_run_->setText(QString("RE-RUN %1 ANALYSIS").arg(upper));
+            ai_run_->setText(tr("RE-RUN %1 ANALYSIS").arg(upper));
         } else {
-            const QString msg = r.error.isEmpty() ? QStringLiteral("No response received.") : r.error;
-            render_error(ai_content_, "Analysis failed.\n\n" + msg);
+            const QString msg = r.error.isEmpty() ? tr("No response received.") : r.error;
+            render_error(ai_content_, tr("Analysis failed.\n\n") + msg);
         }
     });
 
@@ -117,19 +118,19 @@ PortfolioInsightsPanel::PortfolioInsightsPanel(QWidget* parent) : QWidget(parent
 
                 if (r.success && !final_text.isEmpty()) {
                     agent_cache_.insert(agent_id, final_text);
-                    agent_meta_->setText(QString("Last run %1  •  %2ms").arg(fmt_now()).arg(r.execution_time_ms));
+                    agent_meta_->setText(tr("Last run %1  •  %2ms").arg(fmt_now()).arg(r.execution_time_ms));
                     render_result(agent_content_, final_text);
-                    agent_run_->setText("RE-RUN AGENT");
+                    agent_run_->setText(tr("RE-RUN AGENT"));
                 } else if (r.success) {
                     // Agent reported success but produced no text — likely a
                     // config issue (no LLM key in the agent's profile, etc.).
                     render_error(agent_content_,
-                                 "Agent completed but returned no content.\n\n"
-                                 "Check the agent's LLM profile in Agent Config → Agents, "
-                                 "and make sure an API key is set in Settings → LLM Configuration.");
+                                 tr("Agent completed but returned no content.\n\n"
+                                    "Check the agent's LLM profile in Agent Config → Agents, "
+                                    "and make sure an API key is set in Settings → LLM Configuration."));
                 } else {
-                    const QString msg = r.error.isEmpty() ? QStringLiteral("No response received.") : r.error;
-                    render_error(agent_content_, "Agent run failed.\n\n" + msg);
+                    const QString msg = r.error.isEmpty() ? tr("No response received.") : r.error;
+                    render_error(agent_content_, tr("Agent run failed.\n\n") + msg);
                 }
             });
 
@@ -150,7 +151,7 @@ PortfolioInsightsPanel::PortfolioInsightsPanel(QWidget* parent) : QWidget(parent
                 agent_run_->setEnabled(true);
                 header_status_->clear();
                 QTextBrowser* target = current_tab_ == Tab::AI ? ai_content_ : agent_content_;
-                render_error(target, QString("Error (%1).\n\n%2").arg(context, message));
+                render_error(target, tr("Error (%1).\n\n%2").arg(context, message));
             });
 
     // If the user edits LLM config while the panel is open, refresh the
@@ -187,25 +188,25 @@ void PortfolioInsightsPanel::build_ui() {
     hl->setContentsMargins(16, 0, 8, 0);
     hl->setSpacing(8);
 
-    auto* title = new QLabel("PORTFOLIO INSIGHTS");
-    title->setStyleSheet(QString("color:%1; font-size:11px; font-weight:800; letter-spacing:2px;").arg(amber));
-    hl->addWidget(title);
+    header_title_ = new QLabel(tr("PORTFOLIO INSIGHTS"));
+    header_title_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:800; letter-spacing:2px;").arg(amber));
+    hl->addWidget(header_title_);
 
     header_status_ = new QLabel;
     header_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(text2));
     hl->addWidget(header_status_);
     hl->addStretch();
 
-    auto* close_btn = new QPushButton("×");
-    close_btn->setFixedSize(28, 28);
-    close_btn->setCursor(Qt::PointingHandCursor);
-    close_btn->setToolTip("Close  (Esc)");
-    close_btn->setStyleSheet(QString("QPushButton { background:transparent; border:none; color:%1;"
-                                     "  font-size:20px; font-weight:300; }"
-                                     "QPushButton:hover { color:%2; background:%3; }")
-                                 .arg(text2, text1, hover));
-    connect(close_btn, &QPushButton::clicked, this, [this]() { hide(); emit close_requested(); });
-    hl->addWidget(close_btn);
+    header_close_btn_ = new QPushButton("×");
+    header_close_btn_->setFixedSize(28, 28);
+    header_close_btn_->setCursor(Qt::PointingHandCursor);
+    header_close_btn_->setToolTip(tr("Close  (Esc)"));
+    header_close_btn_->setStyleSheet(QString("QPushButton { background:transparent; border:none; color:%1;"
+                                             "  font-size:20px; font-weight:300; }"
+                                             "QPushButton:hover { color:%2; background:%3; }")
+                                         .arg(text2, text1, hover));
+    connect(header_close_btn_, &QPushButton::clicked, this, [this]() { hide(); emit close_requested(); });
+    hl->addWidget(header_close_btn_);
     root->addWidget(header);
 
     // ── Tab bar ───────────────────────────────────────────────────────────────
@@ -229,8 +230,8 @@ void PortfolioInsightsPanel::build_ui() {
                              .arg(text2, amber, text1));
         return b;
     };
-    tab_ai_btn_ = make_tab("AI ANALYSIS");
-    tab_agent_btn_ = make_tab("AGENT RUNNER");
+    tab_ai_btn_ = make_tab(tr("AI ANALYSIS"));
+    tab_agent_btn_ = make_tab(tr("AGENT RUNNER"));
     tab_ai_btn_->setChecked(true);
     connect(tab_ai_btn_, &QPushButton::clicked, this, [this]() { switch_tab(Tab::AI); });
     connect(tab_agent_btn_, &QPushButton::clicked, this, [this]() { switch_tab(Tab::Agent); });
@@ -267,9 +268,9 @@ QWidget* PortfolioInsightsPanel::build_ai_page() {
     cl->setContentsMargins(16, 12, 16, 12);
     cl->setSpacing(10);
 
-    auto* label = new QLabel("ANALYSIS TYPE");
-    label->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1.5px;").arg(text3));
-    cl->addWidget(label);
+    ai_type_label_ = new QLabel(tr("ANALYSIS TYPE"));
+    ai_type_label_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1.5px;").arg(text3));
+    cl->addWidget(ai_type_label_);
 
     auto* pill_row = new QHBoxLayout;
     pill_row->setSpacing(6);
@@ -288,15 +289,15 @@ QWidget* PortfolioInsightsPanel::build_ai_page() {
         pill_row->addWidget(p);
         return p;
     };
-    ai_full_ = make_pill("FULL", "full");
-    ai_risk_ = make_pill("RISK", "risk");
-    ai_rebal_ = make_pill("REBALANCE", "rebalance");
-    ai_opport_ = make_pill("OPPS", "opportunities");
+    ai_full_ = make_pill(tr("FULL"), "full");
+    ai_risk_ = make_pill(tr("RISK"), "risk");
+    ai_rebal_ = make_pill(tr("REBALANCE"), "rebalance");
+    ai_opport_ = make_pill(tr("OPPS"), "opportunities");
     ai_full_->setChecked(true);
     pill_row->addStretch();
     cl->addLayout(pill_row);
 
-    ai_run_ = new QPushButton("RUN FULL ANALYSIS");
+    ai_run_ = new QPushButton(tr("RUN FULL ANALYSIS"));
     ai_run_->setCursor(Qt::PointingHandCursor);
     ai_run_->setFixedHeight(36);
     ai_run_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
@@ -320,11 +321,11 @@ QWidget* PortfolioInsightsPanel::build_ai_page() {
                                        "  font-size:12px; }")
                                    .arg(bg, text1));
     lay->addWidget(ai_content_, 1);
-    render_empty(ai_content_, "Select an analysis type and press RUN.\n\n"
-                             "FULL — broad review of holdings and allocation.\n"
-                             "RISK — concentration, correlation, downside scenarios.\n"
-                             "REBALANCE — target weights with rationale.\n"
-                             "OPPS — undervalued positions and gaps.");
+    render_empty(ai_content_, tr("Select an analysis type and press RUN.\n\n"
+                                 "FULL — broad review of holdings and allocation.\n"
+                                 "RISK — concentration, correlation, downside scenarios.\n"
+                                 "REBALANCE — target weights with rationale.\n"
+                                 "OPPS — undervalued positions and gaps."));
     return page;
 }
 
@@ -349,9 +350,9 @@ QWidget* PortfolioInsightsPanel::build_agent_page() {
     cl->setContentsMargins(16, 12, 16, 12);
     cl->setSpacing(8);
 
-    auto* label = new QLabel("SELECT AGENT");
-    label->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1.5px;").arg(text3));
-    cl->addWidget(label);
+    agent_select_label_ = new QLabel(tr("SELECT AGENT"));
+    agent_select_label_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1.5px;").arg(text3));
+    cl->addWidget(agent_select_label_);
 
     agent_cb_ = new QComboBox;
     agent_cb_->setFixedHeight(30);
@@ -369,7 +370,7 @@ QWidget* PortfolioInsightsPanel::build_agent_page() {
         if (agent_cache_.contains(id))
             render_result(agent_content_, agent_cache_.value(id));
         else
-            render_empty(agent_content_, "Press RUN to analyze your portfolio with this agent.");
+            render_empty(agent_content_, tr("Press RUN to analyze your portfolio with this agent."));
     });
     cl->addWidget(agent_cb_);
 
@@ -378,7 +379,7 @@ QWidget* PortfolioInsightsPanel::build_agent_page() {
     agent_desc_->setStyleSheet(QString("color:%1; font-size:10px; line-height:1.5;").arg(text2));
     cl->addWidget(agent_desc_);
 
-    agent_run_ = new QPushButton("RUN AGENT");
+    agent_run_ = new QPushButton(tr("RUN AGENT"));
     agent_run_->setCursor(Qt::PointingHandCursor);
     agent_run_->setFixedHeight(36);
     agent_run_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
@@ -401,7 +402,7 @@ QWidget* PortfolioInsightsPanel::build_agent_page() {
                                           "  font-size:12px; }")
                                       .arg(bg, text1));
     lay->addWidget(agent_content_, 1);
-    render_empty(agent_content_, "Load a saved agent above and press RUN.");
+    render_empty(agent_content_, tr("Load a saved agent above and press RUN."));
     return page;
 }
 
@@ -410,9 +411,9 @@ void PortfolioInsightsPanel::set_summary(const portfolio::PortfolioSummary& summ
         ai_cache_.clear();
         agent_cache_.clear();
         if (ai_content_)
-            render_empty(ai_content_, "Select an analysis type and press RUN.");
+            render_empty(ai_content_, tr("Select an analysis type and press RUN."));
         if (agent_content_)
-            render_empty(agent_content_, "Load a saved agent above and press RUN.");
+            render_empty(agent_content_, tr("Load a saved agent above and press RUN."));
         last_portfolio_id_ = summary.portfolio.id;
     }
     summary_ = summary;
@@ -459,13 +460,13 @@ void PortfolioInsightsPanel::set_ai_type(const QString& type) {
     QString upper = type.toUpper();
     if (upper == "OPPORTUNITIES")
         upper = "OPPS";
-    ai_run_->setText(ai_cache_.contains(type) ? QString("RE-RUN %1 ANALYSIS").arg(upper)
-                                              : QString("RUN %1 ANALYSIS").arg(upper));
+    ai_run_->setText(ai_cache_.contains(type) ? tr("RE-RUN %1 ANALYSIS").arg(upper)
+                                              : tr("RUN %1 ANALYSIS").arg(upper));
 
     if (ai_cache_.contains(type))
         render_result(ai_content_, ai_cache_.value(type));
     else
-        render_empty(ai_content_, "Press RUN to start this analysis.");
+        render_empty(ai_content_, tr("Press RUN to start this analysis."));
 }
 
 void PortfolioInsightsPanel::reload_agents() {
@@ -491,9 +492,9 @@ void PortfolioInsightsPanel::reload_agents() {
     } else {
         // Cache cold — show a disabled "discovering" placeholder and kick
         // off discovery. agents_discovered will repopulate us when it lands.
-        agent_cb_->addItem("Discovering agents…", "");
-        agent_cb_->setItemData(0, "Loading agents from finagent_core. If this persists, make sure "
-                                  "Python is installed and open Agent Config for more details.",
+        agent_cb_->addItem(tr("Discovering agents…"), "");
+        agent_cb_->setItemData(0, tr("Loading agents from finagent_core. If this persists, make sure "
+                                     "Python is installed and open Agent Config for more details."),
                                Qt::UserRole + 1);
         services::AgentService::instance().discover_agents();
     }
@@ -537,8 +538,8 @@ void PortfolioInsightsPanel::run_ai(bool force) {
     auto& llm = ai_chat::LlmService::instance();
     if (!llm.is_configured()) {
         render_error(ai_content_,
-                     "No LLM configured.\n\nOpen Settings → LLM Configuration, add a provider with an API key, "
-                     "then try again. The Agent Config tab shares the same LLM setup.");
+                     tr("No LLM configured.\n\nOpen Settings → LLM Configuration, add a provider with an API key, "
+                        "then try again. The Agent Config tab shares the same LLM setup."));
         return;
     }
 
@@ -576,8 +577,8 @@ void PortfolioInsightsPanel::run_ai(bool force) {
     ai_busy_ = true;
     ai_pending_type_ = ai_type_;
     ai_run_->setEnabled(false);
-    header_status_->setText(QString("● running %1…").arg(ai_type_));
-    render_empty(ai_content_, QString("Running %1 analysis through the agent stack…").arg(ai_type_));
+    header_status_->setText(tr("● running %1…").arg(ai_type_));
+    render_empty(ai_content_, tr("Running %1 analysis through the agent stack…").arg(ai_type_));
 
     services::AgentService::instance().run_portfolio_analysis(ai_type_, summary_json);
 }
@@ -587,7 +588,7 @@ void PortfolioInsightsPanel::run_agent(bool force) {
         return;
     const QString agent_id = agent_cb_->currentData().toString();
     if (agent_id.isEmpty()) {
-        render_error(agent_content_, "No agent selected.\n\nCreate one in the Agent Config screen, then return here.");
+        render_error(agent_content_, tr("No agent selected.\n\nCreate one in the Agent Config screen, then return here."));
         return;
     }
     if (!force && agent_cache_.contains(agent_id)) {
@@ -597,8 +598,8 @@ void PortfolioInsightsPanel::run_agent(bool force) {
     auto& llm = ai_chat::LlmService::instance();
     if (!llm.is_configured()) {
         render_error(agent_content_,
-                     "No LLM configured.\n\nOpen Settings → LLM Configuration, add a provider with an API key, "
-                     "then try again.");
+                     tr("No LLM configured.\n\nOpen Settings → LLM Configuration, add a provider with an API key, "
+                        "then try again."));
         return;
     }
 
@@ -629,8 +630,8 @@ void PortfolioInsightsPanel::run_agent(bool force) {
     agent_busy_ = true;
     agent_streaming_text_.clear();
     agent_run_->setEnabled(false);
-    header_status_->setText(QString("● running %1…").arg(agent_name));
-    render_empty(agent_content_, QString("Running %1 on this portfolio…").arg(agent_name));
+    header_status_->setText(tr("● running %1…").arg(agent_name));
+    render_empty(agent_content_, tr("Running %1 on this portfolio…").arg(agent_name));
 
     agent_pending_id_ = agent_id;
     agent_pending_req_id_ = services::AgentService::instance().run_agent_streaming(query, config);
@@ -640,7 +641,7 @@ void PortfolioInsightsPanel::render_result(QTextBrowser* target, const QString& 
     if (!target)
         return;
     if (markdown.trimmed().isEmpty()) {
-        render_empty(target, "(empty response)");
+        render_empty(target, tr("(empty response)"));
         return;
     }
     target->setHtml(ui::MarkdownRenderer::render(markdown));
@@ -654,8 +655,61 @@ void PortfolioInsightsPanel::render_error(QTextBrowser* target, const QString& m
     safe.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>");
     target->setHtml(QString("<div style='color:%1; font-size:12px; line-height:1.55;'>"
                             "<div style='color:%2; font-weight:700; letter-spacing:1px; margin-bottom:8px;'>"
-                            "⚠ ERROR</div>%3</div>")
-                        .arg(ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE(), safe));
+                            "⚠ %4</div>%3</div>")
+                        .arg(ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE(), safe, tr("ERROR")));
+}
+
+void PortfolioInsightsPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PortfolioInsightsPanel::retranslate_ai_run_label() {
+    if (!ai_run_)
+        return;
+    QString upper = ai_type_.toUpper();
+    if (upper == "OPPORTUNITIES")
+        upper = "OPPS";
+    ai_run_->setText(ai_cache_.contains(ai_type_) ? tr("RE-RUN %1 ANALYSIS").arg(upper)
+                                                  : tr("RUN %1 ANALYSIS").arg(upper));
+}
+
+void PortfolioInsightsPanel::retranslateUi() {
+    if (header_title_)         header_title_->setText(tr("PORTFOLIO INSIGHTS"));
+    if (header_close_btn_)     header_close_btn_->setToolTip(tr("Close  (Esc)"));
+    if (tab_ai_btn_)           tab_ai_btn_->setText(tr("AI ANALYSIS"));
+    if (tab_agent_btn_)        tab_agent_btn_->setText(tr("AGENT RUNNER"));
+    if (ai_type_label_)        ai_type_label_->setText(tr("ANALYSIS TYPE"));
+    if (agent_select_label_)   agent_select_label_->setText(tr("SELECT AGENT"));
+    if (ai_full_)              ai_full_->setText(tr("FULL"));
+    if (ai_risk_)              ai_risk_->setText(tr("RISK"));
+    if (ai_rebal_)             ai_rebal_->setText(tr("REBALANCE"));
+    if (ai_opport_)            ai_opport_->setText(tr("OPPS"));
+
+    retranslate_ai_run_label();
+
+    // Agent run button: dynamic by cache state; mirror what run_agent does.
+    if (agent_run_) {
+        const QString agent_id = agent_cb_ ? agent_cb_->currentData().toString() : QString();
+        agent_run_->setText(agent_id.isEmpty() || !agent_cache_.contains(agent_id) ? tr("RUN AGENT")
+                                                                                    : tr("RE-RUN AGENT"));
+    }
+
+    // Empty hints inside content browsers — only re-render when there's no
+    // cached result; if a run produced markdown, leave the LLM output intact.
+    if (ai_content_ && !ai_cache_.contains(ai_type_)) {
+        render_empty(ai_content_, tr("Select an analysis type and press RUN.\n\n"
+                                     "FULL — broad review of holdings and allocation.\n"
+                                     "RISK — concentration, correlation, downside scenarios.\n"
+                                     "REBALANCE — target weights with rationale.\n"
+                                     "OPPS — undervalued positions and gaps."));
+    }
+    if (agent_content_) {
+        const QString agent_id = agent_cb_ ? agent_cb_->currentData().toString() : QString();
+        if (agent_id.isEmpty() || !agent_cache_.contains(agent_id))
+            render_empty(agent_content_, tr("Load a saved agent above and press RUN."));
+    }
 }
 
 void PortfolioInsightsPanel::render_empty(QTextBrowser* target, const QString& hint) {

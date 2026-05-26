@@ -4,6 +4,7 @@
 #include "services/equity/EquityResearchService.h"
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -12,11 +13,13 @@
 
 namespace fincept::screens {
 
-// ── Panel card helpers (file-local) ───────────────────────────────────────────
-namespace {
+// ── Panel helpers ─────────────────────────────────────────────────────────────
+// Class methods (not anonymous-ns free functions) so they can register the
+// title and card labels with the per-instance i18n map. Every call site
+// passes a stable English source string declared via QT_TR_NOOP so lupdate
+// sees it; retranslateUi() iterates the map and re-applies tr().
 
-// Creates a titled panel with a colored left-bar accent and bottom border on header
-QFrame* make_panel(const QString& title, const QString& accent_color) {
+QFrame* EquityAnalysisTab::make_panel_(const char* title_key, const QString& accent_color) {
     auto* f = new QFrame;
     f->setStyleSheet(QString("QFrame { background:%1; border:1px solid %2; border-radius:4px; }")
                          .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
@@ -36,40 +39,39 @@ QFrame* make_panel(const QString& title, const QString& accent_color) {
     bar->setStyleSheet(QString("background:%1; border:0; border-radius:0;").arg(accent_color));
     hl->addWidget(bar);
 
-    auto* lbl = new QLabel(title);
+    auto* lbl = new QLabel(tr(title_key));
     lbl->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px; "
                                "background:transparent; border:0;")
                            .arg(accent_color));
     hl->addWidget(lbl);
     hl->addStretch();
+    i18n_labels_.insert(lbl, title_key);
 
     vl->addWidget(hdr);
     return f;
 }
 
-// Creates a 2-column metric card: small gray label on top, big colored value below
-QWidget* make_card(const QString& label, QLabel*& val_out, const QString& val_color) {
+QWidget* EquityAnalysisTab::make_card_(const char* label_key, QLabel*& val_out, const QString& val_color) {
     auto* w = new QWidget(nullptr);
     w->setStyleSheet("background:transparent;");
     auto* vl = new QVBoxLayout(w);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(3);
 
-    auto* lbl = new QLabel(label);
+    auto* lbl = new QLabel(tr(label_key));
     lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1px; "
                                "background:transparent; border:0;")
                            .arg(ui::colors::TEXT_TERTIARY()));
     vl->addWidget(lbl);
+    i18n_labels_.insert(lbl, label_key);
 
-    val_out = new QLabel("—");
+    val_out = new QLabel(QStringLiteral("—"));
     val_out->setStyleSheet(QString("color:%1; font-size:16px; font-weight:700; font-family:monospace; "
                                    "background:transparent; border:0;")
                                .arg(val_color));
     vl->addWidget(val_out);
     return w;
 }
-
-} // namespace
 
 // ── EquityAnalysisTab ─────────────────────────────────────────────────────────
 
@@ -83,7 +85,8 @@ void EquityAnalysisTab::set_symbol(const QString& symbol) {
     if (symbol == current_symbol_)
         return;
     current_symbol_ = symbol;
-    loading_overlay_->show_loading("LOADING ANALYSIS…");
+    info_loaded_ = false;
+    loading_overlay_->show_loading(tr("LOADING ANALYSIS…"));
 }
 
 void EquityAnalysisTab::build_ui() {
@@ -101,52 +104,52 @@ void EquityAnalysisTab::build_ui() {
     grid->setSpacing(10);
 
     // ── Panel 1: FINANCIAL HEALTH (top-left, orange) ──────────────────────────
-    auto* health_panel = make_panel("FINANCIAL HEALTH", ui::colors::AMBER);
+    auto* health_panel = make_panel_(QT_TR_NOOP("FINANCIAL HEALTH"), ui::colors::AMBER);
     auto* hl_vl = static_cast<QVBoxLayout*>(health_panel->layout());
     auto* health_grid = new QGridLayout;
     health_grid->setSpacing(16);
-    health_grid->addWidget(make_card("TOTAL CASH", cash_val_, ui::colors::POSITIVE), 0, 0);
-    health_grid->addWidget(make_card("TOTAL DEBT", debt_val_, ui::colors::NEGATIVE), 0, 1);
-    health_grid->addWidget(make_card("FREE CASHFLOW", fcf_val_, "#22d3ee"), 1, 0);
-    health_grid->addWidget(make_card("OPERATING CF", ocf_val_, "#60a5fa"), 1, 1);
+    health_grid->addWidget(make_card_(QT_TR_NOOP("TOTAL CASH"),    cash_val_, ui::colors::POSITIVE), 0, 0);
+    health_grid->addWidget(make_card_(QT_TR_NOOP("TOTAL DEBT"),    debt_val_, ui::colors::NEGATIVE), 0, 1);
+    health_grid->addWidget(make_card_(QT_TR_NOOP("FREE CASHFLOW"), fcf_val_,  "#22d3ee"),            1, 0);
+    health_grid->addWidget(make_card_(QT_TR_NOOP("OPERATING CF"),  ocf_val_,  "#60a5fa"),            1, 1);
     hl_vl->addLayout(health_grid);
     hl_vl->addStretch();
 
     // ── Panel 2: ENTERPRISE VALUE (top-right, cyan) ───────────────────────────
-    auto* ev_panel = make_panel("ENTERPRISE VALUE", "#22d3ee");
+    auto* ev_panel = make_panel_(QT_TR_NOOP("ENTERPRISE VALUE"), "#22d3ee");
     auto* ev_vl = static_cast<QVBoxLayout*>(ev_panel->layout());
     auto* ev_grid = new QGridLayout;
     ev_grid->setSpacing(16);
-    ev_grid->addWidget(make_card("ENTERPRISE VALUE", ev_val_, "#eab308"), 0, 0);
-    ev_grid->addWidget(make_card("EV/REVENUE", ev_rev_val_, "#22d3ee"), 0, 1);
-    ev_grid->addWidget(make_card("EV/EBITDA", ev_ebitda_val_, "#22d3ee"), 1, 0);
-    ev_grid->addWidget(make_card("BOOK VALUE", book_val_, ui::colors::TEXT_PRIMARY), 1, 1);
+    ev_grid->addWidget(make_card_(QT_TR_NOOP("ENTERPRISE VALUE"), ev_val_,        "#eab308"),                 0, 0);
+    ev_grid->addWidget(make_card_(QT_TR_NOOP("EV/REVENUE"),       ev_rev_val_,    "#22d3ee"),                 0, 1);
+    ev_grid->addWidget(make_card_(QT_TR_NOOP("EV/EBITDA"),        ev_ebitda_val_, "#22d3ee"),                 1, 0);
+    ev_grid->addWidget(make_card_(QT_TR_NOOP("BOOK VALUE"),       book_val_,      ui::colors::TEXT_PRIMARY),  1, 1);
     ev_vl->addLayout(ev_grid);
     ev_vl->addStretch();
 
     // ── Panel 3: REVENUE & PROFITS (bottom-left, green) ───────────────────────
-    auto* rev_panel = make_panel("REVENUE & PROFITS", ui::colors::POSITIVE);
+    auto* rev_panel = make_panel_(QT_TR_NOOP("REVENUE & PROFITS"), ui::colors::POSITIVE);
     auto* rev_vl = static_cast<QVBoxLayout*>(rev_panel->layout());
     auto* rev_grid = new QGridLayout;
     rev_grid->setSpacing(16);
-    rev_grid->addWidget(make_card("TOTAL REVENUE", rev_val_, ui::colors::POSITIVE), 0, 0);
-    rev_grid->addWidget(make_card("REVENUE/SHARE", rev_share_val_, "#22d3ee"), 0, 1);
-    rev_grid->addWidget(make_card("GROSS PROFITS", gp_val_, ui::colors::POSITIVE), 1, 0);
-    rev_grid->addWidget(make_card("EBITDA MARGINS", ebitda_m_val_, "#eab308"), 1, 1);
+    rev_grid->addWidget(make_card_(QT_TR_NOOP("TOTAL REVENUE"),  rev_val_,       ui::colors::POSITIVE), 0, 0);
+    rev_grid->addWidget(make_card_(QT_TR_NOOP("REVENUE/SHARE"),  rev_share_val_, "#22d3ee"),            0, 1);
+    rev_grid->addWidget(make_card_(QT_TR_NOOP("GROSS PROFITS"),  gp_val_,        ui::colors::POSITIVE), 1, 0);
+    rev_grid->addWidget(make_card_(QT_TR_NOOP("EBITDA MARGINS"), ebitda_m_val_,  "#eab308"),            1, 1);
     rev_vl->addLayout(rev_grid);
     rev_vl->addStretch();
 
     // ── Panel 4: KEY RATIOS (bottom-right, purple) ────────────────────────────
-    auto* ratios_panel = make_panel("KEY RATIOS", "#a855f7");
+    auto* ratios_panel = make_panel_(QT_TR_NOOP("KEY RATIOS"), "#a855f7");
     auto* rat_vl = static_cast<QVBoxLayout*>(ratios_panel->layout());
     auto* rat_grid = new QGridLayout;
     rat_grid->setSpacing(16);
-    rat_grid->addWidget(make_card("P/E RATIO", pe_val_, ui::colors::TEXT_PRIMARY), 0, 0);
-    rat_grid->addWidget(make_card("PEG RATIO", peg_val_, ui::colors::TEXT_PRIMARY), 0, 1);
-    rat_grid->addWidget(make_card("ROE", roe_val_, ui::colors::POSITIVE), 1, 0);
-    rat_grid->addWidget(make_card("ROA", roa_val_, ui::colors::POSITIVE), 1, 1);
-    rat_grid->addWidget(make_card("BETA", beta_val_, "#22d3ee"), 2, 0);
-    rat_grid->addWidget(make_card("SHORT RATIO", short_rat_val_, ui::colors::NEGATIVE), 2, 1);
+    rat_grid->addWidget(make_card_(QT_TR_NOOP("P/E RATIO"),   pe_val_,        ui::colors::TEXT_PRIMARY), 0, 0);
+    rat_grid->addWidget(make_card_(QT_TR_NOOP("PEG RATIO"),   peg_val_,       ui::colors::TEXT_PRIMARY), 0, 1);
+    rat_grid->addWidget(make_card_(QT_TR_NOOP("ROE"),         roe_val_,       ui::colors::POSITIVE),     1, 0);
+    rat_grid->addWidget(make_card_(QT_TR_NOOP("ROA"),         roa_val_,       ui::colors::POSITIVE),     1, 1);
+    rat_grid->addWidget(make_card_(QT_TR_NOOP("BETA"),        beta_val_,      "#22d3ee"),                2, 0);
+    rat_grid->addWidget(make_card_(QT_TR_NOOP("SHORT RATIO"), short_rat_val_, ui::colors::NEGATIVE),     2, 1);
     rat_vl->addLayout(rat_grid);
     rat_vl->addStretch();
 
@@ -168,7 +171,11 @@ void EquityAnalysisTab::build_ui() {
 void EquityAnalysisTab::on_info_loaded(services::equity::StockInfo info) {
     if (info.symbol != current_symbol_)
         return;
+    cached_info_ = info;
+    info_loaded_ = true;
     loading_overlay_->hide_loading();
+
+    const QString dash = QStringLiteral("—");
 
     // Financial Health
     cash_val_->setText(fmt_large(info.total_cash));
@@ -180,30 +187,30 @@ void EquityAnalysisTab::on_info_loaded(services::equity::StockInfo info) {
     ev_val_->setText(fmt_large(info.enterprise_value));
     ev_rev_val_->setText(fmt(info.ev_to_revenue));
     ev_ebitda_val_->setText(fmt(info.ev_to_ebitda, 1));
-    book_val_->setText(info.book_value > 0 ? QString("$%1").arg(info.book_value, 0, 'f', 2) : "—");
+    book_val_->setText(info.book_value > 0 ? QString("$%1").arg(info.book_value, 0, 'f', 2) : dash);
 
     // Revenue & Profits
     rev_val_->setText(fmt_large(info.total_revenue));
-    rev_share_val_->setText(info.revenue_per_share > 0 ? QString("$%1").arg(info.revenue_per_share, 0, 'f', 2) : "—");
+    rev_share_val_->setText(info.revenue_per_share > 0 ? QString("$%1").arg(info.revenue_per_share, 0, 'f', 2) : dash);
     gp_val_->setText(fmt_large(info.gross_profits));
     ebitda_m_val_->setText(fmt_pct(info.ebitda_margins));
 
     // Key Ratios
-    pe_val_->setText(info.pe_ratio > 0 ? fmt(info.pe_ratio, 1) : "—");
-    peg_val_->setText(info.peg_ratio > 0 ? fmt(info.peg_ratio) : "—");
+    pe_val_->setText(info.pe_ratio > 0 ? fmt(info.pe_ratio, 1) : dash);
+    peg_val_->setText(info.peg_ratio > 0 ? fmt(info.peg_ratio) : dash);
     roe_val_->setText(fmt_pct(info.roe));
     roa_val_->setText(fmt_pct(info.roa));
     beta_val_->setText(fmt(info.beta));
-    short_rat_val_->setText(info.short_ratio > 0 ? fmt(info.short_ratio) : "—");
+    short_rat_val_->setText(info.short_ratio > 0 ? fmt(info.short_ratio) : dash);
 }
 
-QString EquityAnalysisTab::fmt(double v, int decimals) {
-    return v != 0.0 ? QString::number(v, 'f', decimals) : "—";
+QString EquityAnalysisTab::fmt(double v, int decimals) const {
+    return v != 0.0 ? QString::number(v, 'f', decimals) : QStringLiteral("—");
 }
 
 QString EquityAnalysisTab::fmt_large(double v) {
     if (v == 0.0)
-        return "—";
+        return QStringLiteral("—");
     bool neg = v < 0;
     double a = std::abs(v);
     QString s;
@@ -218,8 +225,28 @@ QString EquityAnalysisTab::fmt_large(double v) {
     return neg ? "-" + s : s;
 }
 
-QString EquityAnalysisTab::fmt_pct(double v) {
-    return v != 0.0 ? QString("%1%").arg(v * 100.0, 0, 'f', 2) : "—";
+QString EquityAnalysisTab::fmt_pct(double v) const {
+    return v != 0.0 ? QString("%1%").arg(v * 100.0, 0, 'f', 2) : QStringLiteral("—");
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+// Walk the i18n_labels_ map (populated by make_panel_/make_card_) and re-apply
+// tr() to every registered label. Then replay cached info so value labels
+// pick up the localized em-dash / N/A placeholders too.
+
+void EquityAnalysisTab::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
+}
+
+void EquityAnalysisTab::retranslateUi() {
+    for (auto it = i18n_labels_.constBegin(); it != i18n_labels_.constEnd(); ++it) {
+        it.key()->setText(tr(it.value()));
+    }
+    if (info_loaded_)
+        on_info_loaded(cached_info_);
 }
 
 } // namespace fincept::screens

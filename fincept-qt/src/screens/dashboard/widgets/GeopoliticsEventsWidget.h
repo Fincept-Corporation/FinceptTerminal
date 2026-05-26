@@ -24,6 +24,7 @@ class GeopoliticsEventsWidget : public BaseWidget {
     void on_theme_changed() override;
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void retranslateUi() override;
     QDialog* make_config_dialog(QWidget* parent) override;
 
   private:

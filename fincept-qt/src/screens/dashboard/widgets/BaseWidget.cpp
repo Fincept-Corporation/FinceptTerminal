@@ -65,7 +65,7 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     config_btn_->setText("");
     config_btn_->setIcon(style()->standardIcon(QStyle::SP_FileDialogDetailedView));
     config_btn_->setIconSize(QSize(12, 12));
-    config_btn_->setToolTip("Configure widget");
+    config_btn_->setToolTip(tr("Configure widget"));
     config_btn_->setCursor(Qt::PointingHandCursor);
     config_btn_->setVisible(false);
     config_btn_->setStyleSheet(
@@ -83,7 +83,7 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     refresh_btn_->setText("");
     refresh_btn_->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
     refresh_btn_->setIconSize(QSize(12, 12));
-    refresh_btn_->setToolTip("Refresh widget data");
+    refresh_btn_->setToolTip(tr("Refresh widget data"));
     refresh_btn_->setCursor(Qt::PointingHandCursor);
     refresh_btn_->setStyleSheet(
         QString("QPushButton { color: %1; background: %2; border: 1px solid %3; border-radius: 2px; "
@@ -100,7 +100,7 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     close_btn->setText("");
     close_btn->setIcon(style()->standardIcon(QStyle::SP_TitleBarCloseButton));
     close_btn->setIconSize(QSize(11, 11));
-    close_btn->setToolTip("Close widget");
+    close_btn->setToolTip(tr("Close widget"));
     close_btn->setCursor(Qt::PointingHandCursor);
     close_btn->setStyleSheet(
         QString("QPushButton { color: %1; background: %2; border: 1px solid %3; border-radius: 2px; "
@@ -136,12 +136,17 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
 
     // ── Loading watchdog ──
     // Single-shot guard against producers that never publish. If the
-    // overlay is still active 12 s after loading started with zero items
+    // overlay is still active 20 s after loading started with zero items
     // delivered, swap to a terminal "no data" overlay so the spinner can't
     // spin forever. Per-widget refresh still works to re-arm.
+    //
+    // 20 s (not 12 s) because dashboard restore fans out 20+ subscribe()
+    // calls in one tick; producer-side rate limits then serialise the
+    // cold-start fetches and tail widgets routinely take >12 s to see
+    // their first payload even on healthy networks.
     loading_watchdog_ = new QTimer(this);
     loading_watchdog_->setSingleShot(true);
-    loading_watchdog_->setInterval(12000);
+    loading_watchdog_->setInterval(20000);
     connect(loading_watchdog_, &QTimer::timeout, this, &BaseWidget::on_watchdog_fired);
 }
 
@@ -174,7 +179,7 @@ void BaseWidget::refresh_base_theme() {
 
 void BaseWidget::set_loading(bool loading) {
     loading_label_->setVisible(loading);
-    loading_label_->setText(loading ? "LOADING..." : "");
+    loading_label_->setText(loading ? tr("LOADING...") : QString());
     if (!loading_overlay_)
         return;
     if (loading) {
@@ -192,7 +197,7 @@ void BaseWidget::set_loading_progress(int loaded, int expected) {
         return;
     const bool active = (expected > 0) && (loaded < expected);
     loading_label_->setVisible(active);
-    loading_label_->setText(active ? QStringLiteral("LOADING...") : QString());
+    loading_label_->setText(active ? tr("LOADING...") : QString());
     loading_overlay_->set_progress(loaded, expected);
     last_progress_loaded_ = loaded;
     if (active)
@@ -249,6 +254,19 @@ void BaseWidget::on_config_clicked() {
     dlg->exec();
 }
 
+void BaseWidget::showEvent(QShowEvent* event) {
+    QFrame::showEvent(event);
+    // Subclasses commonly call set_loading(true) from their constructor,
+    // which arms the watchdog before the widget is mounted. During
+    // dashboard layout restore that gap is small but non-zero, and any
+    // widget that's constructed but not immediately shown (collapsed
+    // workspace, off-screen tile) would otherwise burn its 20 s budget
+    // before the subscription is even dispatched. Restart the timer so
+    // the budget begins when the user can actually see the spinner.
+    if (loading_overlay_ && loading_overlay_->is_active() && last_progress_loaded_ == 0)
+        arm_watchdog();
+}
+
 void BaseWidget::arm_watchdog() {
     if (!loading_watchdog_)
         return;
@@ -275,8 +293,24 @@ void BaseWidget::on_watchdog_fired() {
         loading_overlay_->finish();
     } else {
         loading_overlay_->set_error(
-            QStringLiteral("No data yet — click refresh to retry"));
+            tr("No data yet — click refresh to retry"));
     }
+}
+
+void BaseWidget::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QFrame::changeEvent(event);
+}
+
+void BaseWidget::retranslateUi() {
+    if (config_btn_)  config_btn_->setToolTip(tr("Configure widget"));
+    if (refresh_btn_) refresh_btn_->setToolTip(tr("Refresh widget data"));
+    // Close button is a local in the ctor — its tooltip won't be retranslated
+    // dynamically. Acceptable tradeoff: it's an icon, the tooltip is short,
+    // and a runtime language switch is rare.
+    if (loading_label_ && loading_label_->isVisible())
+        loading_label_->setText(tr("LOADING..."));
 }
 
 } // namespace fincept::screens::widgets

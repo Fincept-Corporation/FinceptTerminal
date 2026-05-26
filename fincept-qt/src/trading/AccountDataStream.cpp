@@ -5,6 +5,7 @@
 #include "trading/BrokerRegistry.h"
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
+#include "trading/websocket/FyersWebSocket.h"
 
 #include <QDate>
 #include <QDateTime>
@@ -20,9 +21,9 @@ namespace fincept::trading {
 
 namespace {
 constexpr const char* ADS_TAG = "AccountDataStream";
-constexpr int ADS_QUOTE_POLL_MS = 5000;
-constexpr int ADS_PORTFOLIO_POLL_MS = 3000;
-constexpr int ADS_WATCHLIST_POLL_MS = 10000;
+constexpr int ADS_QUOTE_POLL_MS = 300000;
+constexpr int ADS_PORTFOLIO_POLL_MS = 300000;
+constexpr int ADS_WATCHLIST_POLL_MS = 300000;
 } // namespace
 
 // ── Construction / Destruction ──────────────────────────────────────────────
@@ -138,8 +139,8 @@ BrokerQuote AccountDataStream::cached_quote(const QString& symbol) const {
 // ── Timer callbacks ─────────────────────────────────────────────────────────
 
 void AccountDataStream::on_quote_timer() {
-    if (ws_active())
-        return; // WS provides real-time quotes
+    // Always poll — WS supplements with faster ticks but polling ensures
+    // data is available for newly-selected symbols and after market close.
     async_fetch_quote();
 }
 
@@ -154,8 +155,8 @@ void AccountDataStream::on_portfolio_timer() {
 }
 
 void AccountDataStream::on_watchlist_timer() {
-    if (ws_active())
-        return;
+    // Always run watchlist polling — the watchlist UI needs the batch
+    // watchlist_updated signal which WS tick_received doesn't provide.
     async_fetch_watchlist_quotes();
 }
 
@@ -400,20 +401,26 @@ void AccountDataStream::fetch_orderbook(const QString& symbol) {
     QPointer<AccountDataStream> self = this;
 
     auto creds = AccountManager::instance().load_credentials(acct_id);
-    if (creds.api_key.isEmpty()) return;
+    if (creds.api_key.isEmpty()) {
+        LOG_WARN(ADS_TAG, QString("fetch_orderbook: no credentials for %1").arg(acct_id));
+        return;
+    }
 
     (void)QtConcurrent::run([self, acct_id, bid, symbol, creds]() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) return;
 
-        // Try L2 depth from historical quotes
         const QString today = QDate::currentDate().toString("yyyy-MM-dd");
         auto result = broker->get_historical_quotes_single(creds, symbol, today + "T00:00:00Z", "", 1000);
 
         if (!result.success || !result.data || result.data->isEmpty()) {
-            // Fallback to snapshot bid/ask
+            LOG_WARN(ADS_TAG, QString("fetch_orderbook: L2 depth failed for %1 (%2), trying snapshot")
+                                  .arg(symbol, result.error));
             auto snap = broker->get_quotes(creds, {symbol});
-            if (!snap.success || !snap.data || snap.data->isEmpty()) return;
+            if (!snap.success || !snap.data || snap.data->isEmpty()) {
+                LOG_WARN(ADS_TAG, QString("fetch_orderbook: snapshot fallback also failed for %1").arg(symbol));
+                return;
+            }
             const auto& q = snap.data->first();
             const double b = q.bid > 0 ? q.bid : (q.ltp > 0 ? q.ltp * 0.9995 : 0);
             const double a = q.ask > 0 ? q.ask : (q.ltp > 0 ? q.ltp * 1.0005 : 0);
@@ -424,35 +431,52 @@ void AccountDataStream::fetch_orderbook(const QString& symbol) {
             const double spread_pct = b > 0 ? (spread / b) * 100.0 : 0.0;
             QMetaObject::invokeMethod(self, [self, acct_id, bids, asks, spread, spread_pct]() {
                 if (!self) return;
-                emit self->orderbook_fetched(acct_id, bids, asks, spread, spread_pct);
+                emit self->orderbook_fetched(acct_id, bids, asks, spread, spread_pct, {}, {});
             }, Qt::QueuedConnection);
             return;
         }
 
-        // Aggregate L2
+        // Aggregate L2 — track orders count per level
         QMap<double, double> bid_map, ask_map;
+        QMap<double, int> bid_ord_map, ask_ord_map;
         for (const auto& q : *result.data) {
-            if (q.bid > 0) bid_map[q.bid] += q.bid_size > 0 ? q.bid_size : 1.0;
-            if (q.ask > 0) ask_map[q.ask] += q.ask_size > 0 ? q.ask_size : 1.0;
+            if (q.bid > 0) {
+                bid_map[q.bid] += q.bid_size > 0 ? q.bid_size : 1.0;
+                if (q.oi > 0) bid_ord_map[q.bid] += static_cast<int>(q.oi);
+            }
+            if (q.ask > 0) {
+                ask_map[q.ask] += q.ask_size > 0 ? q.ask_size : 1.0;
+                if (q.oi > 0) ask_ord_map[q.ask] += static_cast<int>(q.oi);
+            }
         }
         QVector<QPair<double, double>> bids, asks;
+        QVector<int> bid_orders, ask_orders;
         auto bid_keys = bid_map.keys();
         std::sort(bid_keys.begin(), bid_keys.end(), std::greater<double>());
-        for (const double p : bid_keys.mid(0, 10))
+        for (const double p : bid_keys.mid(0, 10)) {
             bids.append({p, bid_map[p]});
+            bid_orders.append(bid_ord_map.value(p, 0));
+        }
         auto ask_keys = ask_map.keys();
         std::sort(ask_keys.begin(), ask_keys.end());
-        for (const double p : ask_keys.mid(0, 10))
+        for (const double p : ask_keys.mid(0, 10)) {
             asks.append({p, ask_map[p]});
+            ask_orders.append(ask_ord_map.value(p, 0));
+        }
         if (bids.isEmpty() || asks.isEmpty()) return;
+
+        LOG_INFO(ADS_TAG, QString("fetch_orderbook: %1 bids, %2 asks for %3")
+                              .arg(bids.size()).arg(asks.size()).arg(symbol));
 
         const double best_bid = bids.first().first;
         const double best_ask = asks.first().first;
         const double spread = best_ask - best_bid;
         const double spread_pct = best_bid > 0 ? (spread / best_bid) * 100.0 : 0.0;
-        QMetaObject::invokeMethod(self, [self, acct_id, bids, asks, spread, spread_pct]() {
+        QMetaObject::invokeMethod(self, [self, acct_id, bids, asks, spread, spread_pct,
+                                         bid_orders, ask_orders]() {
             if (!self) return;
-            emit self->orderbook_fetched(acct_id, bids, asks, spread, spread_pct);
+            emit self->orderbook_fetched(acct_id, bids, asks, spread, spread_pct,
+                                         bid_orders, ask_orders);
         }, Qt::QueuedConnection);
     });
 }
@@ -541,8 +565,75 @@ void AccountDataStream::fetch_clock() {
 // ── WebSocket ───────────────────────────────────────────────────────────────
 
 void AccountDataStream::ws_init() {
-    // Currently only AngelOne has WebSocket support wired up
-    // Zerodha WS exists but isn't integrated into equity trading yet
+    if (broker_id_ == "fyers") {
+        auto creds = AccountManager::instance().load_credentials(account_id_);
+        if (creds.api_key.isEmpty() || creds.access_token.isEmpty())
+            return;
+
+        auto* fws = new FyersWebSocket(creds.api_key, creds.access_token, this);
+        ws_ = fws;
+
+        connect(fws, &FyersWebSocket::tick_received, this, [this](const FyersTick& tick) {
+            ++ws_tick_count_;
+            BrokerQuote q;
+            q.symbol = tick.symbol;
+            q.ltp = tick.ltp;
+            q.open = tick.open;
+            q.high = tick.high;
+            q.low = tick.low;
+            q.close = tick.prev_close;
+            q.volume = tick.volume;
+            q.bid = tick.bid;
+            q.ask = tick.ask;
+            q.change = tick.ltp - tick.prev_close;
+            q.change_pct = tick.prev_close > 0 ? ((tick.ltp - tick.prev_close) / tick.prev_close) * 100.0 : 0;
+            q.timestamp = tick.timestamp;
+            quote_cache_[tick.symbol] = q;
+            emit quote_updated(account_id_, tick.symbol, q);
+        });
+
+        connect(fws, &FyersWebSocket::depth_received, this,
+                [this](const QString& symbol, const QVector<QPair<double, double>>& bids,
+                       const QVector<QPair<double, double>>& asks) {
+            Q_UNUSED(symbol);
+            if (bids.isEmpty() && asks.isEmpty()) return;
+            const double best_bid = bids.isEmpty() ? 0 : bids.first().first;
+            const double best_ask = asks.isEmpty() ? 0 : asks.first().first;
+            double spread = 0, spread_pct = 0;
+            if (best_bid > 0 && best_ask > 0) {
+                spread = best_ask - best_bid;
+                spread_pct = (spread / best_bid) * 100.0;
+            }
+            emit orderbook_fetched(account_id_, bids, asks, spread, spread_pct, {}, {});
+        });
+
+        connect(fws, &FyersWebSocket::connected, this, [this]() {
+            LOG_INFO(ADS_TAG, QString("Fyers HSM connected for %1").arg(account_id_));
+            auto to_fyers = [](const QString& sym) {
+                return sym.contains(':') ? sym : QStringLiteral("NSE:") + sym + QStringLiteral("-EQ");
+            };
+            QStringList fyers_symbols;
+            if (!selected_symbol_.isEmpty())
+                fyers_symbols.append(to_fyers(selected_symbol_));
+            for (const auto& s : watchlist_symbols_)
+                fyers_symbols.append(to_fyers(s));
+            fyers_symbols.removeDuplicates();
+            if (auto* fws = qobject_cast<FyersWebSocket*>(ws_))
+                fws->subscribe(fyers_symbols);
+        });
+
+        connect(fws, &FyersWebSocket::disconnected, this, [this]() {
+            LOG_WARN(ADS_TAG, QString("Fyers HSM disconnected for %1").arg(account_id_));
+        });
+
+        connect(fws, &FyersWebSocket::error_occurred, this, [this](const QString& err) {
+            LOG_ERROR(ADS_TAG, QString("Fyers WS error: %1").arg(err));
+        });
+
+        fws->open();
+        return;
+    }
+
     if (broker_id_ != "angelone")
         return;
 
@@ -550,7 +641,6 @@ void AccountDataStream::ws_init() {
     if (creds.api_key.isEmpty() || creds.additional_data.isEmpty())
         return;
 
-    // Parse feed_token and client_code from additional_data JSON
     auto doc = QJsonDocument::fromJson(creds.additional_data.toUtf8());
     if (!doc.isObject())
         return;
@@ -560,12 +650,6 @@ void AccountDataStream::ws_init() {
     if (feed_token.isEmpty() || client_code.isEmpty())
         return;
 
-    // Dynamically create AngelOneWebSocket (avoids hard header dependency)
-    // The AngelOneWebSocket class is in trading/websocket/AngelOneWebSocket.h
-    // For now, we include it directly — this can be abstracted later
-    // NOTE: This is deferred to Phase 5 when we wire the screen to DataStreamManager.
-    // At this point, ws_ stays null and polling is used.
-    // The ws_init implementation will be completed when EquityTradingScreen is refactored.
     LOG_INFO(ADS_TAG, QString("WebSocket available for account %1 (AngelOne) — deferred to screen wiring").arg(account_id_));
 }
 
@@ -579,12 +663,26 @@ void AccountDataStream::ws_teardown() {
 }
 
 bool AccountDataStream::ws_active() const {
-    // Will be implemented when WS is wired in Phase 5
+    if (!ws_)
+        return false;
+    if (auto* fws = qobject_cast<FyersWebSocket*>(ws_))
+        return fws->is_connected() && ws_tick_count_ > 0;
     return false;
 }
 
 void AccountDataStream::ws_resubscribe() {
-    // Will be implemented when WS is wired in Phase 5
+    if (auto* fws = qobject_cast<FyersWebSocket*>(ws_)) {
+        auto to_fyers = [](const QString& sym) {
+            return sym.contains(':') ? sym : QStringLiteral("NSE:") + sym + QStringLiteral("-EQ");
+        };
+        QStringList fyers_symbols;
+        if (!selected_symbol_.isEmpty())
+            fyers_symbols.append(to_fyers(selected_symbol_));
+        for (const auto& s : watchlist_symbols_)
+            fyers_symbols.append(to_fyers(s));
+        fyers_symbols.removeDuplicates();
+        fws->set_subscriptions(fyers_symbols);
+    }
 }
 
 } // namespace fincept::trading

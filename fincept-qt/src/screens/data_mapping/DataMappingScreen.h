@@ -1,6 +1,6 @@
 #pragma once
 
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "storage/repositories/DataMappingRepository.h"
 
 #include <QComboBox>

@@ -168,17 +168,16 @@ std::vector<ToolDef> get_meta_tools() {
             const QString name = args["name"].toString();
             telemetry::g_tool_describe_calls.fetch_add(1);
 
-            const auto all = McpProvider::instance().list_tools();
-            for (const auto& tool : all) {
-                if (tool.name == name) {
-                    return ToolResult::ok_data(QJsonObject{
-                        {"name", tool.name},
-                        {"category", tool.category},
-                        {"description", tool.description},
-                        {"input_schema", tool.input_schema},
-                        {"server_id", tool.server_id},
-                    });
-                }
+            // O(1) snapshot lookup — previously linear-scanned the full
+            // catalog while re-serialising every input_schema (~3 ms p95).
+            if (auto tool = McpProvider::instance().find_tool(name)) {
+                return ToolResult::ok_data(QJsonObject{
+                    {"name", tool->name},
+                    {"category", tool->category},
+                    {"description", tool->description},
+                    {"input_schema", tool->input_schema},
+                    {"server_id", tool->server_id},
+                });
             }
             telemetry::g_tool_describe_misses.fetch_add(1);
             return ToolResult::fail("Tool not found: " + name);

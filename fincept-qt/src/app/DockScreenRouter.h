@@ -178,6 +178,15 @@ class DockScreenRouter : public QObject {
     /// the same path navigate() uses.
     void materialize_now(const QString& id);
 
+    /// Suppress/resume the visibilityChanged→materialize_screen autowire.
+    /// Used by WindowFrame to prevent synchronous screen construction
+    /// during CDockManager::restoreState() — the restore toggles
+    /// dozens of widgets visible, and constructing each screen factory
+    /// inline blocks the first paint for seconds. The caller sets true
+    /// before restoreState, false after, then triggers deferred
+    /// materialization via PanelMaterialiser.
+    void set_suppress_materialize(bool suppress) { suppress_visibility_materialize_ = suppress; }
+
   signals:
     void screen_changed(const QString& id);
 

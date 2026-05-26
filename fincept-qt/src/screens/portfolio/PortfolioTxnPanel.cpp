@@ -4,6 +4,7 @@
 #include "screens/portfolio/PortfolioPanelHeader.h"
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QTableWidgetItem>
@@ -25,7 +26,8 @@ void PortfolioTxnPanel::build_ui() {
     // Unified panel header — TRANSACTION HISTORY title + count badge + collapse
     // chevron in slot. The chevron toggles a collapse_toggled signal that the
     // owner (PortfolioScreen) uses to shrink the panel to header height.
-    auto header = make_panel_header("TRANSACTION HISTORY", this);
+    auto header = make_panel_header(tr("TRANSACTION HISTORY"), this);
+    title_label_ = header.title_label;
 
     count_label_ = new QLabel;
     count_label_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;"
@@ -38,7 +40,7 @@ void PortfolioTxnPanel::build_ui() {
     collapse_btn_ = new QPushButton("▾");
     collapse_btn_->setFixedSize(22, 22);
     collapse_btn_->setCursor(Qt::PointingHandCursor);
-    collapse_btn_->setToolTip("Collapse / expand transaction history");
+    collapse_btn_->setToolTip(tr("Collapse / expand transaction history"));
     collapse_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
                                          "  font-size:11px; font-weight:700; }"
                                          "QPushButton:hover { color:%3; border-color:%3; }")
@@ -53,9 +55,10 @@ void PortfolioTxnPanel::build_ui() {
     layout->addWidget(header.header);
 
     // Table
-    static const QStringList kHeaders = {"Date", "Symbol", "Type", "Qty", "Price", "Total", "Notes"};
-    table_ = new QTableWidget(0, kHeaders.size(), this);
-    table_->setHorizontalHeaderLabels(kHeaders);
+    const QStringList headers = {tr("Date"), tr("Symbol"), tr("Type"), tr("Qty"),
+                                  tr("Price"), tr("Total"), tr("Notes")};
+    table_ = new QTableWidget(0, headers.size(), this);
+    table_->setHorizontalHeaderLabels(headers);
     table_->verticalHeader()->setVisible(false);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -173,7 +176,7 @@ void PortfolioTxnPanel::populate() {
     }
 
     table_->setSortingEnabled(true);
-    count_label_->setText(QString("%1 transactions").arg(txns_.size()));
+    count_label_->setText(tr("%1 transactions").arg(txns_.size()));
 }
 
 void PortfolioTxnPanel::refresh_theme() {
@@ -204,6 +207,25 @@ void PortfolioTxnPanel::refresh_theme() {
                                    ui::colors::TEXT_TERTIARY()));
 
     populate();
+}
+
+void PortfolioTxnPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PortfolioTxnPanel::retranslateUi() {
+    if (title_label_)   title_label_->setText(tr("TRANSACTION HISTORY"));
+    if (collapse_btn_)  collapse_btn_->setToolTip(tr("Collapse / expand transaction history"));
+
+    if (table_) {
+        const QStringList headers = {tr("Date"), tr("Symbol"), tr("Type"), tr("Qty"),
+                                     tr("Price"), tr("Total"), tr("Notes")};
+        table_->setHorizontalHeaderLabels(headers);
+    }
+    if (count_label_ && !txns_.isEmpty())
+        count_label_->setText(tr("%1 transactions").arg(txns_.size()));
 }
 
 } // namespace fincept::screens

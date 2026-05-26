@@ -3,6 +3,7 @@
 
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QVBoxLayout>
@@ -27,19 +28,19 @@ void EconomicsView::build_ui() {
     ind_layout->setContentsMargins(12, 8, 12, 8);
     ind_layout->setSpacing(4);
 
-    auto* ind_title = new QLabel("PORTFOLIO ECONOMICS OVERVIEW");
-    ind_title->setStyleSheet(
+    ind_title_ = new QLabel(tr("PORTFOLIO ECONOMICS OVERVIEW"));
+    ind_title_->setStyleSheet(
         QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-    ind_layout->addWidget(ind_title);
+    ind_layout->addWidget(ind_title_);
 
-    auto* ind_note = new QLabel("Per-holding contribution to portfolio value, P&L, and risk");
-    ind_note->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
-    ind_layout->addWidget(ind_note);
+    ind_note_ = new QLabel(tr("Per-holding contribution to portfolio value, P&L, and risk"));
+    ind_note_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
+    ind_layout->addWidget(ind_note_);
 
     indicators_table_ = new QTableWidget;
     indicators_table_->setColumnCount(7);
     indicators_table_->setHorizontalHeaderLabels(
-        {"SYMBOL", "SECTOR", "WEIGHT", "COST BASIS", "MARKET VALUE", "P&L", "P&L %"});
+        {tr("SYMBOL"), tr("SECTOR"), tr("WEIGHT"), tr("COST BASIS"), tr("MARKET VALUE"), tr("P&L"), tr("P&L %")});
     indicators_table_->setSelectionMode(QAbstractItemView::NoSelection);
     indicators_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     indicators_table_->setShowGrid(false);
@@ -73,18 +74,18 @@ void EconomicsView::build_ui() {
     sens_layout->setContentsMargins(12, 8, 12, 8);
     sens_layout->setSpacing(4);
 
-    auto* sens_title = new QLabel("PORTFOLIO FACTOR SENSITIVITY");
-    sens_title->setStyleSheet(
+    sens_title_ = new QLabel(tr("PORTFOLIO FACTOR SENSITIVITY"));
+    sens_title_->setStyleSheet(
         QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-    sens_layout->addWidget(sens_title);
+    sens_layout->addWidget(sens_title_);
 
-    auto* sens_note = new QLabel("Estimated portfolio impact from macro factor shocks, weighted by holdings");
-    sens_note->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
-    sens_layout->addWidget(sens_note);
+    sens_note_ = new QLabel(tr("Estimated portfolio impact from macro factor shocks, weighted by holdings"));
+    sens_note_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
+    sens_layout->addWidget(sens_note_);
 
     sensitivity_table_ = new QTableWidget;
     sensitivity_table_->setColumnCount(4);
-    sensitivity_table_->setHorizontalHeaderLabels({"FACTOR SHOCK", "SENSITIVITY", "DIRECTION", "ESTIMATED IMPACT"});
+    sensitivity_table_->setHorizontalHeaderLabels({tr("FACTOR SHOCK"), tr("SENSITIVITY"), tr("DIRECTION"), tr("ESTIMATED IMPACT")});
     sensitivity_table_->setSelectionMode(QAbstractItemView::NoSelection);
     sensitivity_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     sensitivity_table_->setShowGrid(false);
@@ -98,8 +99,35 @@ void EconomicsView::build_ui() {
 void EconomicsView::set_data(const portfolio::PortfolioSummary& summary, const QString& currency) {
     summary_ = summary;
     currency_ = currency;
+    has_data_ = true;
     update_indicators();
     update_sensitivity();
+}
+
+void EconomicsView::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void EconomicsView::retranslateUi() {
+    if (ind_title_)  ind_title_->setText(tr("PORTFOLIO ECONOMICS OVERVIEW"));
+    if (ind_note_)   ind_note_->setText(tr("Per-holding contribution to portfolio value, P&L, and risk"));
+    if (sens_title_) sens_title_->setText(tr("PORTFOLIO FACTOR SENSITIVITY"));
+    if (sens_note_)  sens_note_->setText(tr("Estimated portfolio impact from macro factor shocks, weighted by holdings"));
+
+    if (indicators_table_)
+        indicators_table_->setHorizontalHeaderLabels(
+            {tr("SYMBOL"), tr("SECTOR"), tr("WEIGHT"), tr("COST BASIS"), tr("MARKET VALUE"), tr("P&L"), tr("P&L %")});
+    if (sensitivity_table_)
+        sensitivity_table_->setHorizontalHeaderLabels(
+            {tr("FACTOR SHOCK"), tr("SENSITIVITY"), tr("DIRECTION"), tr("ESTIMATED IMPACT")});
+
+    // re-run so tr() factor names + Positive/Negative direction labels pick up new locale
+    if (has_data_) {
+        update_indicators();
+        update_sensitivity();
+    }
 }
 
 // ── Sector inference (mirrors PortfolioSectorPanel, kept local) ───────────────
@@ -341,15 +369,17 @@ void EconomicsView::update_sensitivity() {
         double sensitivity;
         QString direction;
     };
+    const QString positive = tr("Positive");
+    const QString negative = tr("Negative");
     QVector<Row> rows = {
-        {"Interest Rates (+1%)", w_rate, w_rate >= 0 ? "Positive" : "Negative"},
-        {"GDP Growth (+1%)", w_growth, w_growth >= 0 ? "Positive" : "Negative"},
-        {"Inflation / CPI (+1%)", w_infl, w_infl >= 0 ? "Positive" : "Negative"},
-        {"USD Strength (+1%)", w_usd, w_usd >= 0 ? "Positive" : "Negative"},
-        {"Oil Price (+10%)", w_oil, w_oil >= 0 ? "Positive" : "Negative"},
-        {"Consumer Spending (+1%)", w_growth * 0.5, w_growth >= 0 ? "Positive" : "Negative"},
-        {"Credit Spreads (+50bps)", w_rate * 0.6, w_rate >= 0 ? "Positive" : "Negative"},
-        {"Unemployment (+1%)", w_growth * -0.4, w_growth <= 0 ? "Positive" : "Negative"},
+        {tr("Interest Rates (+1%)"), w_rate, w_rate >= 0 ? positive : negative},
+        {tr("GDP Growth (+1%)"), w_growth, w_growth >= 0 ? positive : negative},
+        {tr("Inflation / CPI (+1%)"), w_infl, w_infl >= 0 ? positive : negative},
+        {tr("USD Strength (+1%)"), w_usd, w_usd >= 0 ? positive : negative},
+        {tr("Oil Price (+10%)"), w_oil, w_oil >= 0 ? positive : negative},
+        {tr("Consumer Spending (+1%)"), w_growth * 0.5, w_growth >= 0 ? positive : negative},
+        {tr("Credit Spreads (+50bps)"), w_rate * 0.6, w_rate >= 0 ? positive : negative},
+        {tr("Unemployment (+1%)"), w_growth * -0.4, w_growth <= 0 ? positive : negative},
     };
 
     sensitivity_table_->setRowCount(rows.size());

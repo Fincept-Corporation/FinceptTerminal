@@ -23,6 +23,9 @@ class StrategyBuilderPanel : public QWidget {
   public:
     explicit StrategyBuilderPanel(QWidget* parent = nullptr);
 
+    QVariantMap save_draft() const;
+    void restore_draft(const QVariantMap& draft);
+
   private slots:
     void on_save();
     void on_backtest();

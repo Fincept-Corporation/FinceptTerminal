@@ -14,7 +14,7 @@ inline const QStringList kSentimentSymbols = {
     "CVX",  "COIN", "PLTR", "SOFI",  "NKE",  "PFE",  "PYPL"};
 }
 
-MarketSentimentWidget::MarketSentimentWidget(QWidget* parent) : BaseWidget("MARKET SENTIMENT", parent) {
+MarketSentimentWidget::MarketSentimentWidget(QWidget* parent) : BaseWidget(tr("MARKET SENTIMENT"), parent) {
     auto* vl = content_layout();
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(8);
@@ -40,7 +40,7 @@ MarketSentimentWidget::MarketSentimentWidget(QWidget* parent) : BaseWidget("MARK
 
     bl->addWidget(score_row);
 
-    verdict_label_ = new QLabel("LOADING...");
+    verdict_label_ = new QLabel(tr("LOADING..."));
     verdict_label_->setAlignment(Qt::AlignCenter);
     bl->addWidget(verdict_label_);
 
@@ -69,15 +69,15 @@ MarketSentimentWidget::MarketSentimentWidget(QWidget* parent) : BaseWidget("MARK
     auto* bll = new QHBoxLayout(bar_labels);
     bll->setContentsMargins(0, 0, 0, 0);
 
-    bull_label_ = new QLabel("-- BULL");
+    bull_label_ = new QLabel(tr("-- BULL"));
     bll->addWidget(bull_label_);
     bll->addStretch();
 
-    neutral_label_ = new QLabel("-- NEUTRAL");
+    neutral_label_ = new QLabel(tr("-- NEUTRAL"));
     bll->addWidget(neutral_label_);
     bll->addStretch();
 
-    bear_label_ = new QLabel("-- BEAR");
+    bear_label_ = new QLabel(tr("-- BEAR"));
     bll->addWidget(bear_label_);
 
     vl->addWidget(bar_labels);
@@ -107,8 +107,8 @@ MarketSentimentWidget::MarketSentimentWidget(QWidget* parent) : BaseWidget("MARK
         stl->addWidget(row);
     };
 
-    make_stat_row("VIX (Fear Gauge)", vix_title_label_, vix_label_);
-    make_stat_row("Advance/Decline", breadth_title_label_, breadth_label_);
+    make_stat_row(tr("VIX (Fear Gauge)"), vix_title_label_, vix_label_);
+    make_stat_row(tr("Advance/Decline"), breadth_title_label_, breadth_label_);
 
     vl->addWidget(stats);
     vl->addStretch();
@@ -253,11 +253,11 @@ void MarketSentimentWidget::populate(const QVector<services::QuoteData>& quotes)
     QString score_color = score > 20    ? ui::colors::POSITIVE()
                           : score < -20 ? ui::colors::NEGATIVE()
                                         : ui::colors::WARNING();
-    QString verdict = score > 40    ? "STRONGLY BULLISH"
-                      : score > 20  ? "BULLISH"
-                      : score > -20 ? "NEUTRAL"
-                      : score > -40 ? "BEARISH"
-                                    : "STRONGLY BEARISH";
+    QString verdict = score > 40    ? tr("STRONGLY BULLISH")
+                      : score > 20  ? tr("BULLISH")
+                      : score > -20 ? tr("NEUTRAL")
+                      : score > -40 ? tr("BEARISH")
+                                    : tr("STRONGLY BEARISH");
 
     score_label_->setText(QString("%1%2").arg(score > 0 ? "+" : "").arg(score));
     score_label_->setStyleSheet(
@@ -275,9 +275,9 @@ void MarketSentimentWidget::populate(const QVector<services::QuoteData>& quotes)
         bar_layout->setStretch(2, bearish);
     }
 
-    bull_label_->setText(QString("%1 %2 BULL").arg(QChar(0x25B2)).arg(bullish));
-    neutral_label_->setText(QString("%1 NEUTRAL").arg(neutral));
-    bear_label_->setText(QString("%1 %2 BEAR").arg(QChar(0x25BC)).arg(bearish));
+    bull_label_->setText(QString("%1 %2 ").arg(QChar(0x25B2)).arg(bullish) + tr("BULL"));
+    neutral_label_->setText(QString::number(neutral) + " " + tr("NEUTRAL"));
+    bear_label_->setText(QString("%1 %2 ").arg(QChar(0x25BC)).arg(bearish) + tr("BEAR"));
 
     // VIX
     if (vix_price > 0) {
@@ -293,6 +293,12 @@ void MarketSentimentWidget::populate(const QVector<services::QuoteData>& quotes)
     breadth_label_->setText(QString("%1A / %2D").arg(bullish).arg(bearish));
     breadth_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
                                       .arg(bullish > bearish ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+}
+
+void MarketSentimentWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("MARKET SENTIMENT"));
+    rebuild_from_cache(); // re-derives all derived text labels from cached quotes
 }
 
 } // namespace fincept::screens::widgets

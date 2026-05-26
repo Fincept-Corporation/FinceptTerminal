@@ -28,14 +28,25 @@ struct Provider {
 };
 
 inline QVector<Provider> all_providers() {
+    // Per-provider command list is the set of commands whose Python implementation
+    // (1) accepts the args BacktestingScreen sends, AND (2) returns a payload that
+    // display_result() can render. Commands that fail either test are deliberately
+    // omitted — the UI's command sidebar is filtered against this list, so dropped
+    // commands don't appear as broken buttons.
     return {
         {"vectorbt",
          "VectorBT",
          QColor("#00E5FF"),
          {"backtest", "optimize", "walk_forward", "indicator", "indicator_signals", "labels", "splits", "returns",
           "signals", "labels_to_signals", "indicator_sweep"}},
-        {"backtestingpy", "Backtesting.py", QColor("#00D66F"), {"backtest", "optimize", "walk_forward", "indicator"}},
-        {"fasttrade", "FastTrade", QColor("#FFC400"), {"backtest", "indicator"}},
+        {"backtestingpy", "Backtesting.py", QColor("#00D66F"),
+         // Requires `pip install backtesting`. All commands surface a clean install
+         // error when the dep is missing; kept in the provider list so users see
+         // the option and can install it.
+         {"backtest", "optimize", "walk_forward", "indicator"}},
+        {"fasttrade", "FastTrade", QColor("#FFC400"),
+         // Requires `pip install fast_trade`. Same rationale as backtestingpy.
+         {"backtest"}},
         {"zipline",
          "Zipline",
          QColor("#FF3B8E"),
@@ -44,8 +55,10 @@ inline QVector<Provider> all_providers() {
         {"bt",
          "BT",
          QColor("#FF6B35"),
-         {"backtest", "optimize", "walk_forward", "indicator", "indicator_signals", "labels", "splits", "returns",
-          "signals", "labels_to_signals"}},
+         // BT's extended commands (indicator/labels/splits/signals/returns/...) return
+         // per-symbol-nested shapes that don't match the frontend renderer; only the
+         // backtest-shaped commands are exposed.
+         {"backtest", "optimize", "walk_forward"}},
         {"fincept", "Fincept", QColor("#d97706"), {"backtest", "optimize", "walk_forward"}},
     };
 }

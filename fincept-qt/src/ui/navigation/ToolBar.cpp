@@ -1,4 +1,4 @@
-﻿#include "ui/navigation/ToolBar.h"
+#include "ui/navigation/ToolBar.h"
 
 #include "auth/AuthManager.h"
 #include "ui/pushpins/PushpinBar.h"
@@ -7,6 +7,7 @@
 
 #include <QAction>
 #include <QDateTime>
+#include <QEvent>
 #include <QFontMetrics>
 #include <QGuiApplication>
 #include <QHBoxLayout>
@@ -50,10 +51,7 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     // File/Navigate/View/Help missing from the toolbar row on Mac builds.
     menu_bar_->setNativeMenuBar(false);
     menu_bar_->setStyleSheet(menu_ss());
-    menu_bar_->addMenu(build_file_menu());
-    menu_bar_->addMenu(build_navigate_menu());
-    menu_bar_->addMenu(build_view_menu());
-    menu_bar_->addMenu(build_help_menu());
+    rebuild_menus();
     hl->addWidget(menu_bar_);
 
     command_bar_ = new CommandBar(this);
@@ -79,16 +77,17 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     };
 
     sep();
-    fincept_label_ = mk("FINCEPT ");
+    // FINCEPT / TERMINAL are brand marks — set raw, never translated.
+    fincept_label_ = mk(QStringLiteral("FINCEPT "));
     hl->addWidget(fincept_label_);
-    branding_label_ = mk("TERMINAL");
+    branding_label_ = mk(QStringLiteral("TERMINAL"));
     hl->addWidget(branding_label_);
-    subtitle_label_ = mk("  |  PROFESSIONAL RESEARCH DESK");
+    subtitle_label_ = mk({});
     hl->addWidget(subtitle_label_);
     hl->addWidget(mk("  "));
-    live_dot_ = mk("\xe2\x97\x8f");
+    live_dot_ = mk(QString::fromUtf8("\xe2\x97\x8f")); // U+25CF — pure icon, no translation
     hl->addWidget(live_dot_);
-    live_label_ = mk(" LIVE");
+    live_label_ = mk({});
     hl->addWidget(live_label_);
 
     sep();
@@ -117,27 +116,27 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     sep();
     plan_btn_ = new QPushButton("---");
     plan_btn_->setCursor(Qt::PointingHandCursor);
-    plan_btn_->setToolTip("View Plans & Pricing");
     plan_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(plan_btn_, &QPushButton::clicked, this, &ToolBar::plan_clicked);
     hl->addWidget(plan_btn_);
     sep();
 
-    chat_mode_btn_ = new QPushButton(QString::fromUtf8("⬡ CHAT"));
+    chat_mode_btn_ = new QPushButton;
     chat_mode_btn_->setFixedHeight(20);
     chat_mode_btn_->setCursor(Qt::PointingHandCursor);
-    chat_mode_btn_->setToolTip("Switch to Chat Mode (F9)");
     chat_mode_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(chat_mode_btn_, &QPushButton::clicked, this, &ToolBar::chat_mode_toggled);
     hl->addWidget(chat_mode_btn_);
     sep();
 
-    logout_btn_ = new QPushButton("LOGOUT");
+    logout_btn_ = new QPushButton;
     logout_btn_->setFixedHeight(20);
     logout_btn_->setCursor(Qt::PointingHandCursor);
     logout_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(logout_btn_, &QPushButton::clicked, this, &ToolBar::logout_clicked);
     hl->addWidget(logout_btn_);
+
+    retranslateUi();
 
     clock_timer_ = new QTimer(this);
     clock_timer_->setInterval(1000);
@@ -153,6 +152,44 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
 
     refresh_user_display();
     refresh_theme();
+}
+
+void ToolBar::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(e);
+}
+
+void ToolBar::retranslateUi() {
+    if (subtitle_label_) subtitle_label_->setText(tr("  |  PROFESSIONAL RESEARCH DESK"));
+    if (live_label_)     live_label_->setText(tr(" LIVE"));
+    if (plan_btn_)       plan_btn_->setToolTip(tr("View Plans & Pricing"));
+    if (chat_mode_btn_) {
+        // Keep the ⬡ glyph as a visual icon; only the label after it translates.
+        chat_mode_btn_->setText(QStringLiteral("\xe2\xac\xa1 ") + tr("CHAT"));
+        chat_mode_btn_->setToolTip(tr("Switch to Chat Mode (F9)"));
+    }
+    if (logout_btn_) logout_btn_->setText(tr("LOGOUT"));
+    // Rebuild menus so the new translator applies to every QAction label.
+    rebuild_menus();
+    // Refresh user display so "FREE" / "---" placeholders pick up new locale.
+    refresh_user_display();
+}
+
+void ToolBar::rebuild_menus() {
+    if (!menu_bar_) return;
+    menu_bar_->clear();
+    menu_bar_->addMenu(build_file_menu());
+    menu_bar_->addMenu(build_navigate_menu());
+    menu_bar_->addMenu(build_view_menu());
+    menu_bar_->addMenu(build_help_menu());
+    // Reapply popup stylesheet after rebuild — refresh_theme normally does
+    // this on theme change, but a pure language switch should also style
+    // the freshly created submenus.
+    for (auto* action : menu_bar_->actions())
+        if (action->menu())
+            action->menu()->setStyleSheet(popup_ss());
 }
 
 void ToolBar::refresh_theme() {
@@ -251,28 +288,28 @@ void ToolBar::refresh_user_display() {
     user_label_->setToolTip(name);
 
     int credits = static_cast<int>(s.user_info.credit_balance);
-    credits_label_->setText(QString("%1 CR").arg(credits));
+    credits_label_->setText(tr("%1 CR").arg(credits));
     credits_label_->setStyleSheet(
         QString("color:%1;background:transparent;")
             .arg(s.user_info.credit_balance > 0 ? colors::POSITIVE.get() : colors::NEGATIVE.get()));
 
     QString plan_text = s.account_type().toUpper();
-    plan_btn_->setText(plan_text.isEmpty() ? "FREE" : plan_text);
+    plan_btn_->setText(plan_text.isEmpty() ? tr("FREE") : plan_text);
 }
 
 QMenu* ToolBar::build_file_menu() {
-    auto* m = new QMenu("File", this);
+    auto* m = new QMenu(tr("File"), this);
     m->setStyleSheet(popup_ss());
-    m->addAction("New Window", this, [this]() { emit action_triggered("new_window"); });
+    m->addAction(tr("New Window"), this, [this]() { emit action_triggered("new_window"); });
 
     // Rebuilt on popup so plug/unplug is reflected. Emits "move_to_monitor:<name>" — names are stable, indices aren't.
-    auto* monitors = m->addMenu("Move to Monitor");
+    auto* monitors = m->addMenu(tr("Move to Monitor"));
     monitors->setStyleSheet(popup_ss());
     connect(monitors, &QMenu::aboutToShow, this, [this, monitors]() {
         monitors->clear();
         const auto screens = QGuiApplication::screens();
         if (screens.size() <= 1) {
-            auto* only = monitors->addAction("(single monitor)");
+            auto* only = monitors->addAction(tr("(single monitor)"));
             only->setEnabled(false);
             return;
         }
@@ -280,6 +317,7 @@ QMenu* ToolBar::build_file_menu() {
         for (QScreen* s : screens) {
             const QString name = s->name();
             const QSize size = s->size();
+            // Resolution format (W×H) is locale-neutral.
             const QString label =
                 QString("%1. %2  (%3×%4)").arg(idx++).arg(name).arg(size.width()).arg(size.height());
             monitors->addAction(label, this, [this, name]() {
@@ -289,22 +327,22 @@ QMenu* ToolBar::build_file_menu() {
     });
 
     m->addSeparator();
-    m->addAction("New Layout",       this, [this]() { emit action_triggered("layout_new"); });
-    m->addAction("Open Layout…",     this, [this]() { emit action_triggered("layout_open"); });
-    m->addAction("Save Layout",      this, [this]() { emit action_triggered("layout_save"); });
-    m->addAction("Save Layout As…",  this, [this]() { emit action_triggered("layout_save_as"); });
+    m->addAction(tr("New Layout"),       this, [this]() { emit action_triggered("layout_new"); });
+    m->addAction(tr("Open Layout…"),     this, [this]() { emit action_triggered("layout_open"); });
+    m->addAction(tr("Save Layout"),      this, [this]() { emit action_triggered("layout_save"); });
+    m->addAction(tr("Save Layout As…"),  this, [this]() { emit action_triggered("layout_save_as"); });
     m->addSeparator();
-    m->addAction("Import Layout", this, [this]() { emit action_triggered("import_data"); });
-    m->addAction("Export Layout", this, [this]() { emit action_triggered("export_data"); });
+    m->addAction(tr("Import Layout"), this, [this]() { emit action_triggered("import_data"); });
+    m->addAction(tr("Export Layout"), this, [this]() { emit action_triggered("export_data"); });
     m->addSeparator();
-    m->addAction("File Manager", this, [this]() { emit navigate_to("file_manager"); });
+    m->addAction(tr("File Manager"), this, [this]() { emit navigate_to("file_manager"); });
     m->addSeparator();
-    m->addAction("Refresh All", this, [this]() { emit action_triggered("refresh"); });
+    m->addAction(tr("Refresh All"), this, [this]() { emit action_triggered("refresh"); });
     return m;
 }
 
 QMenu* ToolBar::build_navigate_menu() {
-    auto* m = new QMenu("Navigate", this);
+    auto* m = new QMenu(tr("Navigate"), this);
     m->setStyleSheet(QString("QMenu{background:%1;color:%2;border:1px solid %3;padding:2px 0;}"
                              "QMenu::item{padding:3px 20px 3px 10px;}"
                              "QMenu::item:selected{background:%4;}"
@@ -328,142 +366,142 @@ QMenu* ToolBar::build_navigate_menu() {
         menu->addAction(label, this, [this, id]() { emit navigate_to(id); });
     };
 
-    auto* mkt = add_sub("Markets & Data");
-    nav(mkt, "Economics", "economics");
-    nav(mkt, "GOVT Data", "gov_data");
-    nav(mkt, "DBnomics", "dbnomics");
-    nav(mkt, "AKShare Data", "akshare");
-    nav(mkt, "Asia Markets", "asia_markets");
-    nav(mkt, "Relationship Map", "relationship_map");
+    auto* mkt = add_sub(tr("Markets & Data"));
+    nav(mkt, tr("Economics"), "economics");
+    nav(mkt, tr("GOVT Data"), "gov_data");
+    nav(mkt, tr("DBnomics"), "dbnomics");
+    nav(mkt, tr("AKShare Data"), "akshare");
+    nav(mkt, tr("Asia Markets"), "asia_markets");
+    nav(mkt, tr("Relationship Map"), "relationship_map");
 
-    auto* trd = add_sub("Trading & Portfolio");
-    nav(trd, "Equity Trading", "equity_trading");
-    nav(trd, "Alpha Arena", "alpha_arena");
-    nav(trd, "Prediction Markets", "polymarket");
-    nav(trd, "Derivatives", "derivatives");
-    nav(trd, "F&&O", "fno");
-    nav(trd, "Watchlist", "watchlist");
+    auto* trd = add_sub(tr("Trading & Portfolio"));
+    nav(trd, tr("Equity Trading"), "equity_trading");
+    nav(trd, tr("Alpha Arena"), "alpha_arena");
+    nav(trd, tr("Prediction Markets"), "polymarket");
+    nav(trd, tr("Derivatives"), "derivatives");
+    nav(trd, tr("F&&O"), "fno");
+    nav(trd, tr("Watchlist"), "watchlist");
 
-    auto* crypto = add_sub("Crypto");
-    nav(crypto, "Crypto Center", "crypto_center");
+    auto* crypto = add_sub(tr("Crypto"));
+    nav(crypto, tr("Crypto Center"), "crypto_center");
 
-    auto* res = add_sub("Research & Intelligence");
-    nav(res, "Equity Research", "equity_research");
-    nav(res, "M&A Analytics", "ma_analytics");
-    nav(res, "Alt. Investments", "alt_investments");
-    nav(res, "Geopolitics", "geopolitics");
-    nav(res, "Maritime", "maritime");
-    nav(res, "Surface Analytics", "surface_analytics");
+    auto* res = add_sub(tr("Research & Intelligence"));
+    nav(res, tr("Equity Research"), "equity_research");
+    nav(res, tr("M&A Analytics"), "ma_analytics");
+    nav(res, tr("Alt. Investments"), "alt_investments");
+    nav(res, tr("Geopolitics"), "geopolitics");
+    nav(res, tr("Maritime"), "maritime");
+    nav(res, tr("Surface Analytics"), "surface_analytics");
 
-    auto* tools = add_sub("Tools");
-    nav(tools, "Agent Config", "agent_config");
-    nav(tools, "MCP Servers", "mcp_servers");
-    nav(tools, "Data Mapping", "data_mapping");
-    nav(tools, "Data Sources", "data_sources");
-    nav(tools, "Report Builder", "report_builder");
-    nav(tools, "Excel", "excel");
-    nav(tools, "Trade Viz", "trade_viz");
-    nav(tools, "File Manager", "file_manager");
-    nav(tools, "Notes", "notes");
+    auto* tools = add_sub(tr("Tools"));
+    nav(tools, tr("Agent Config"), "agent_config");
+    nav(tools, tr("MCP Servers"), "mcp_servers");
+    nav(tools, tr("Data Mapping"), "data_mapping");
+    nav(tools, tr("Data Sources"), "data_sources");
+    nav(tools, tr("Report Builder"), "report_builder");
+    nav(tools, tr("Excel"), "excel");
+    nav(tools, tr("Trade Viz"), "trade_viz");
+    nav(tools, tr("File Manager"), "file_manager");
+    nav(tools, tr("Notes"), "notes");
 
     m->addSeparator();
 
-    nav(m, "Forum", "forum");
-    nav(m, "Docs", "docs");
-    nav(m, "Support", "support");
-    nav(m, "About", "about");
+    nav(m, tr("Forum"), "forum");
+    nav(m, tr("Docs"), "docs");
+    nav(m, tr("Support"), "support");
+    nav(m, tr("About"), "about");
 
     return m;
 }
 
 QMenu* ToolBar::build_view_menu() {
-    auto* m = new QMenu("View", this);
+    auto* m = new QMenu(tr("View"), this);
     m->setStyleSheet(popup_ss());
-    m->addAction("Component Browser\tCtrl+K", this,
+    m->addAction(tr("Component Browser\tCtrl+K"), this,
                  [this]() { emit action_triggered("browse_components"); });
     m->addSeparator();
-    m->addAction("Fullscreen\tF11", this, [this]() { emit action_triggered("fullscreen"); });
+    m->addAction(tr("Fullscreen\tF11"), this, [this]() { emit action_triggered("fullscreen"); });
     m->addSeparator();
-    m->addAction("Focus Mode\tF10", this, [this]() { emit action_triggered("focus_mode"); });
+    m->addAction(tr("Focus Mode\tF10"), this, [this]() { emit action_triggered("focus_mode"); });
     // Not checkable — state lives on WindowFrame::always_on_top_; a checkable QAction would drift on focus changes.
-    m->addAction("Always on Top\tCtrl+Shift+T", this,
+    m->addAction(tr("Always on Top\tCtrl+Shift+T"), this,
                  [this]() { emit action_triggered("always_on_top"); });
     m->addSeparator();
 
-    auto* panels = m->addMenu("Float Panel");
+    auto* panels = m->addMenu(tr("Float Panel"));
     panels->setStyleSheet(popup_ss());
-    panels->addAction("Dashboard", this, [this]() { emit action_triggered("panel_dashboard"); });
-    panels->addAction("Watchlist", this, [this]() { emit action_triggered("panel_watchlist"); });
-    panels->addAction("News Feed", this, [this]() { emit action_triggered("panel_news"); });
-    panels->addAction("Portfolio", this, [this]() { emit action_triggered("panel_portfolio"); });
-    panels->addAction("Markets", this, [this]() { emit action_triggered("panel_markets"); });
+    panels->addAction(tr("Dashboard"), this, [this]() { emit action_triggered("panel_dashboard"); });
+    panels->addAction(tr("Watchlist"), this, [this]() { emit action_triggered("panel_watchlist"); });
+    panels->addAction(tr("News Feed"), this, [this]() { emit action_triggered("panel_news"); });
+    panels->addAction(tr("Portfolio"), this, [this]() { emit action_triggered("panel_portfolio"); });
+    panels->addAction(tr("Markets"), this, [this]() { emit action_triggered("panel_markets"); });
     panels->addSeparator();
-    panels->addAction("Crypto Trading", this, [this]() { emit action_triggered("panel_crypto"); });
-    panels->addAction("Equity Trading", this, [this]() { emit action_triggered("panel_equity"); });
-    panels->addAction("Algo Trading", this, [this]() { emit action_triggered("panel_algo"); });
+    panels->addAction(tr("Crypto Trading"), this, [this]() { emit action_triggered("panel_crypto"); });
+    panels->addAction(tr("Equity Trading"), this, [this]() { emit action_triggered("panel_equity"); });
+    panels->addAction(tr("Algo Trading"), this, [this]() { emit action_triggered("panel_algo"); });
     panels->addSeparator();
-    panels->addAction("Equity Research", this, [this]() { emit action_triggered("panel_research"); });
-    panels->addAction("Economics", this, [this]() { emit action_triggered("panel_economics"); });
-    panels->addAction("Geopolitics", this, [this]() { emit action_triggered("panel_geopolitics"); });
-    panels->addAction("AI Chat", this, [this]() { emit action_triggered("panel_ai_chat"); });
+    panels->addAction(tr("Equity Research"), this, [this]() { emit action_triggered("panel_research"); });
+    panels->addAction(tr("Economics"), this, [this]() { emit action_triggered("panel_economics"); });
+    panels->addAction(tr("Geopolitics"), this, [this]() { emit action_triggered("panel_geopolitics"); });
+    panels->addAction(tr("AI Chat"), this, [this]() { emit action_triggered("panel_ai_chat"); });
     m->addSeparator();
 
-    auto* persp = m->addMenu("Quick Switch");
+    auto* persp = m->addMenu(tr("Quick Switch"));
     persp->setStyleSheet(popup_ss());
-    persp->addAction("Save Workspace", this, [this]() { emit action_triggered("perspective_save"); });
+    persp->addAction(tr("Save Workspace"), this, [this]() { emit action_triggered("perspective_save"); });
     persp->addSeparator();
 
-    auto* qs_trading = persp->addMenu("Trading");
+    auto* qs_trading = persp->addMenu(tr("Trading"));
     qs_trading->setStyleSheet(popup_ss());
-    qs_trading->addAction("Crypto Trading", this, [this]() { emit action_triggered("perspective_trading"); });
-    qs_trading->addAction("Equity Trading", this, [this]() { emit action_triggered("perspective_equity"); });
-    qs_trading->addAction("Algo Trading", this, [this]() { emit action_triggered("perspective_algo"); });
+    qs_trading->addAction(tr("Crypto Trading"), this, [this]() { emit action_triggered("perspective_trading"); });
+    qs_trading->addAction(tr("Equity Trading"), this, [this]() { emit action_triggered("perspective_equity"); });
+    qs_trading->addAction(tr("Algo Trading"), this, [this]() { emit action_triggered("perspective_algo"); });
 
-    auto* qs_research = persp->addMenu("Research");
+    auto* qs_research = persp->addMenu(tr("Research"));
     qs_research->setStyleSheet(popup_ss());
-    qs_research->addAction("Equity Research", this, [this]() { emit action_triggered("perspective_research"); });
-    qs_research->addAction("Derivatives", this, [this]() { emit action_triggered("perspective_derivatives"); });
-    qs_research->addAction("F&&O", this, [this]() { emit action_triggered("perspective_fno"); });
-    qs_research->addAction("M&&A Analytics", this, [this]() { emit action_triggered("perspective_ma"); });
+    qs_research->addAction(tr("Equity Research"), this, [this]() { emit action_triggered("perspective_research"); });
+    qs_research->addAction(tr("Derivatives"), this, [this]() { emit action_triggered("perspective_derivatives"); });
+    qs_research->addAction(tr("F&&O"), this, [this]() { emit action_triggered("perspective_fno"); });
+    qs_research->addAction(tr("M&&A Analytics"), this, [this]() { emit action_triggered("perspective_ma"); });
 
-    persp->addAction("Portfolio View", this, [this]() { emit action_triggered("perspective_portfolio"); });
-    persp->addAction("Markets View", this, [this]() { emit action_triggered("perspective_markets"); });
-    persp->addAction("News View", this, [this]() { emit action_triggered("perspective_news"); });
+    persp->addAction(tr("Portfolio View"), this, [this]() { emit action_triggered("perspective_portfolio"); });
+    persp->addAction(tr("Markets View"), this, [this]() { emit action_triggered("perspective_markets"); });
+    persp->addAction(tr("News View"), this, [this]() { emit action_triggered("perspective_news"); });
 
-    auto* qs_econ = persp->addMenu("Economics && Data");
+    auto* qs_econ = persp->addMenu(tr("Economics && Data"));
     qs_econ->setStyleSheet(popup_ss());
-    qs_econ->addAction("Economics", this, [this]() { emit action_triggered("perspective_economics"); });
-    qs_econ->addAction("Data Sources", this, [this]() { emit action_triggered("perspective_data"); });
+    qs_econ->addAction(tr("Economics"), this, [this]() { emit action_triggered("perspective_economics"); });
+    qs_econ->addAction(tr("Data Sources"), this, [this]() { emit action_triggered("perspective_data"); });
 
-    persp->addAction("Geopolitics View", this, [this]() { emit action_triggered("perspective_geopolitics"); });
+    persp->addAction(tr("Geopolitics View"), this, [this]() { emit action_triggered("perspective_geopolitics"); });
 
-    auto* qs_ai = persp->addMenu("AI && Quant");
+    auto* qs_ai = persp->addMenu(tr("AI && Quant"));
     qs_ai->setStyleSheet(popup_ss());
-    qs_ai->addAction("Quant Lab", this, [this]() { emit action_triggered("perspective_quant"); });
-    qs_ai->addAction("AI Chat", this, [this]() { emit action_triggered("perspective_ai"); });
+    qs_ai->addAction(tr("Quant Lab"), this, [this]() { emit action_triggered("perspective_quant"); });
+    qs_ai->addAction(tr("AI Chat"), this, [this]() { emit action_triggered("perspective_ai"); });
 
-    persp->addAction("Tools View", this, [this]() { emit action_triggered("perspective_tools"); });
+    persp->addAction(tr("Tools View"), this, [this]() { emit action_triggered("perspective_tools"); });
     m->addSeparator();
 
-    m->addAction("Refresh Screen\tF5", this, [this]() { emit action_triggered("refresh"); });
-    m->addAction("Take Screenshot\tCtrl+P", this, [this]() { emit action_triggered("screenshot"); });
+    m->addAction(tr("Refresh Screen\tF5"), this, [this]() { emit action_triggered("refresh"); });
+    m->addAction(tr("Take Screenshot\tCtrl+P"), this, [this]() { emit action_triggered("screenshot"); });
     return m;
 }
 
 QMenu* ToolBar::build_help_menu() {
-    auto* m = new QMenu("Help", this);
+    auto* m = new QMenu(tr("Help"), this);
     m->setStyleSheet(popup_ss());
-    m->addAction("About Fincept", this, [this]() { emit navigate_to("about"); });
-    m->addAction("Help Center", this, [this]() { emit navigate_to("help"); });
+    m->addAction(tr("About Fincept"), this, [this]() { emit navigate_to("about"); });
+    m->addAction(tr("Help Center"), this, [this]() { emit navigate_to("help"); });
     m->addSeparator();
-    m->addAction("Contact Us", this, [this]() { emit navigate_to("contact"); });
-    m->addAction("Terms of Service", this, [this]() { emit navigate_to("terms"); });
-    m->addAction("Privacy Policy", this, [this]() { emit navigate_to("privacy"); });
-    m->addAction("Trademarks", this, [this]() { emit navigate_to("trademarks"); });
+    m->addAction(tr("Contact Us"), this, [this]() { emit navigate_to("contact"); });
+    m->addAction(tr("Terms of Service"), this, [this]() { emit navigate_to("terms"); });
+    m->addAction(tr("Privacy Policy"), this, [this]() { emit navigate_to("privacy"); });
+    m->addAction(tr("Trademarks"), this, [this]() { emit navigate_to("trademarks"); });
     m->addSeparator();
-    m->addAction("Check for Updates", this, [this]() { emit action_triggered("check_updates"); });
+    m->addAction(tr("Check for Updates"), this, [this]() { emit action_triggered("check_updates"); });
     m->addSeparator();
-    m->addAction("Logout", this, [this]() { emit action_triggered("logout"); });
+    m->addAction(tr("Logout"), this, [this]() { emit action_triggered("logout"); });
     return m;
 }
 

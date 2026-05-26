@@ -4,6 +4,7 @@
 #include "services/equity/EquityResearchService.h"
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -23,19 +24,14 @@ static constexpr const char* GRAY = "#6b7280";
 
 // ── Signal helpers ───────────────────────────────────────────────────────────
 
-QString EquityTechnicalsTab::signal_text(services::equity::TechSignal s) {
+QString EquityTechnicalsTab::signal_text(services::equity::TechSignal s) const {
     using S = services::equity::TechSignal;
     switch (s) {
-        case S::StrongBuy:
-            return "STRONG BUY";
-        case S::Buy:
-            return "BUY";
-        case S::Sell:
-            return "SELL";
-        case S::StrongSell:
-            return "STRONG SELL";
-        default:
-            return "NEUTRAL";
+        case S::StrongBuy:  return tr("STRONG BUY");
+        case S::Buy:        return tr("BUY");
+        case S::Sell:       return tr("SELL");
+        case S::StrongSell: return tr("STRONG SELL");
+        default:            return tr("NEUTRAL");
     }
 }
 
@@ -56,151 +52,109 @@ const char* EquityTechnicalsTab::signal_color(services::equity::TechSignal s) {
 }
 
 /// Context-aware interpretation for each indicator
-QString EquityTechnicalsTab::interpretation(const QString& col_key, double value) {
+QString EquityTechnicalsTab::interpretation(const QString& col_key, double value) const {
     if (col_key == "rsi") {
-        if (value <= 25)
-            return "Deeply oversold — potential reversal zone";
-        if (value <= 30)
-            return "Oversold — watch for bullish divergence";
-        if (value <= 40)
-            return "Below midpoint — bearish bias weakening";
-        if (value <= 60)
-            return "Neutral zone — no strong momentum";
-        if (value <= 70)
-            return "Above midpoint — bullish bias building";
-        if (value <= 80)
-            return "Overbought — watch for bearish divergence";
-        return "Deeply overbought — potential reversal zone";
+        if (value <= 25) return tr("Deeply oversold — potential reversal zone");
+        if (value <= 30) return tr("Oversold — watch for bullish divergence");
+        if (value <= 40) return tr("Below midpoint — bearish bias weakening");
+        if (value <= 60) return tr("Neutral zone — no strong momentum");
+        if (value <= 70) return tr("Above midpoint — bullish bias building");
+        if (value <= 80) return tr("Overbought — watch for bearish divergence");
+        return tr("Deeply overbought — potential reversal zone");
     }
     if (col_key == "macd") {
-        if (value > 2)
-            return "Strong bullish momentum — histogram expanding";
-        if (value > 0)
-            return "Bullish — MACD above signal line";
-        if (value > -2)
-            return "Bearish — MACD below signal line";
-        return "Strong bearish momentum — histogram expanding";
+        if (value > 2)  return tr("Strong bullish momentum — histogram expanding");
+        if (value > 0)  return tr("Bullish — MACD above signal line");
+        if (value > -2) return tr("Bearish — MACD below signal line");
+        return tr("Strong bearish momentum — histogram expanding");
     }
     if (col_key == "stoch_k" || col_key == "stoch_d") {
-        if (value <= 20)
-            return "Oversold zone — potential bounce";
-        if (value <= 40)
-            return "Below midpoint — watch for crossover";
-        if (value <= 60)
-            return "Neutral — consolidation phase";
-        if (value <= 80)
-            return "Above midpoint — bullish momentum";
-        return "Overbought zone — potential pullback";
+        if (value <= 20) return tr("Oversold zone — potential bounce");
+        if (value <= 40) return tr("Below midpoint — watch for crossover");
+        if (value <= 60) return tr("Neutral — consolidation phase");
+        if (value <= 80) return tr("Above midpoint — bullish momentum");
+        return tr("Overbought zone — potential pullback");
     }
     if (col_key == "williams_r") {
-        if (value <= -80)
-            return "Oversold — potential reversal up";
-        if (value <= -50)
-            return "Bearish territory — selling pressure";
-        if (value >= -20)
-            return "Overbought — potential reversal down";
-        return "Neutral zone";
+        if (value <= -80) return tr("Oversold — potential reversal up");
+        if (value <= -50) return tr("Bearish territory — selling pressure");
+        if (value >= -20) return tr("Overbought — potential reversal down");
+        return tr("Neutral zone");
     }
     if (col_key == "cci") {
-        if (value <= -200)
-            return "Extreme oversold — deep value territory";
-        if (value <= -100)
-            return "Oversold — watch for trend reversal";
-        if (value >= 200)
-            return "Extreme overbought — euphoria zone";
-        if (value >= 100)
-            return "Overbought — watch for profit taking";
-        return "Neutral — no extreme conditions";
+        if (value <= -200) return tr("Extreme oversold — deep value territory");
+        if (value <= -100) return tr("Oversold — watch for trend reversal");
+        if (value >= 200)  return tr("Extreme overbought — euphoria zone");
+        if (value >= 100)  return tr("Overbought — watch for profit taking");
+        return tr("Neutral — no extreme conditions");
     }
     if (col_key == "mfi") {
-        if (value <= 20)
-            return "Oversold — money flowing out aggressively";
-        if (value <= 40)
-            return "Weak inflow — cautious sentiment";
-        if (value >= 80)
-            return "Overbought — heavy money inflow";
-        if (value >= 60)
-            return "Strong inflow — buying pressure";
-        return "Balanced money flow";
+        if (value <= 20) return tr("Oversold — money flowing out aggressively");
+        if (value <= 40) return tr("Weak inflow — cautious sentiment");
+        if (value >= 80) return tr("Overbought — heavy money inflow");
+        if (value >= 60) return tr("Strong inflow — buying pressure");
+        return tr("Balanced money flow");
     }
     if (col_key == "adx") {
-        if (value >= 50)
-            return "Very strong trend — trade with the trend";
-        if (value >= 25)
-            return "Trending — directional move in play";
-        if (value >= 20)
-            return "Weak trend — possible consolidation";
-        return "No trend — range-bound market";
+        if (value >= 50) return tr("Very strong trend — trade with the trend");
+        if (value >= 25) return tr("Trending — directional move in play");
+        if (value >= 20) return tr("Weak trend — possible consolidation");
+        return tr("No trend — range-bound market");
     }
     if (col_key == "bb_pband") {
-        if (value < 0)
-            return "Below lower band — extreme oversold";
-        if (value < 0.2)
-            return "Near lower band — oversold zone";
-        if (value > 1.0)
-            return "Above upper band — extreme overbought";
-        if (value > 0.8)
-            return "Near upper band — overbought zone";
-        return "Within bands — normal range";
+        if (value < 0)    return tr("Below lower band — extreme oversold");
+        if (value < 0.2)  return tr("Near lower band — oversold zone");
+        if (value > 1.0)  return tr("Above upper band — extreme overbought");
+        if (value > 0.8)  return tr("Near upper band — overbought zone");
+        return tr("Within bands — normal range");
     }
     if (col_key == "bb_wband") {
-        if (value < 0.05)
-            return "Tight squeeze — breakout imminent";
-        if (value < 0.1)
-            return "Narrowing bands — volatility contracting";
-        if (value > 0.3)
-            return "Wide bands — high volatility";
-        return "Normal bandwidth";
+        if (value < 0.05) return tr("Tight squeeze — breakout imminent");
+        if (value < 0.1)  return tr("Narrowing bands — volatility contracting");
+        if (value > 0.3)  return tr("Wide bands — high volatility");
+        return tr("Normal bandwidth");
     }
     if (col_key == "atr")
-        return "Average true range — use for stop-loss sizing";
+        return tr("Average true range — use for stop-loss sizing");
     if (col_key == "roc") {
-        if (value > 5)
-            return "Strong upward momentum";
-        if (value < -5)
-            return "Strong downward momentum";
-        return "Flat momentum — sideways movement";
+        if (value > 5)  return tr("Strong upward momentum");
+        if (value < -5) return tr("Strong downward momentum");
+        return tr("Flat momentum — sideways movement");
     }
     if (col_key == "cmf") {
-        if (value > 0.1)
-            return "Buying pressure — accumulation";
-        if (value < -0.1)
-            return "Selling pressure — distribution";
-        return "Balanced — no clear accumulation or distribution";
+        if (value > 0.1)  return tr("Buying pressure — accumulation");
+        if (value < -0.1) return tr("Selling pressure — distribution");
+        return tr("Balanced — no clear accumulation or distribution");
     }
     if (col_key == "aroon_up") {
-        if (value >= 70)
-            return "Strong uptrend — recent new highs";
-        if (value <= 30)
-            return "Weak upside — no recent highs";
-        return "Moderate — watching for trend development";
+        if (value >= 70) return tr("Strong uptrend — recent new highs");
+        if (value <= 30) return tr("Weak upside — no recent highs");
+        return tr("Moderate — watching for trend development");
     }
     if (col_key == "aroon_down") {
-        if (value >= 70)
-            return "Strong downtrend — recent new lows";
-        if (value <= 30)
-            return "Weak downside — no recent lows";
-        return "Moderate — watching for trend development";
+        if (value >= 70) return tr("Strong downtrend — recent new lows");
+        if (value <= 30) return tr("Weak downside — no recent lows");
+        return tr("Moderate — watching for trend development");
     }
     if (col_key == "obv")
-        return "On-balance volume — confirms price trend with volume";
+        return tr("On-balance volume — confirms price trend with volume");
     if (col_key == "vwap")
-        return "Volume-weighted avg price — institutional reference";
+        return tr("Volume-weighted avg price — institutional reference");
     if (col_key == "adi")
-        return "Accumulation/distribution — confirms money flow";
+        return tr("Accumulation/distribution — confirms money flow");
     if (col_key.startsWith("sma_") || col_key.startsWith("ema_") || col_key.startsWith("wma_") || col_key == "kama")
-        return "Moving average — price above = bullish, below = bearish";
+        return tr("Moving average — price above = bullish, below = bearish");
     if (col_key == "macd_signal")
-        return "Signal line — crossover with MACD triggers trade";
+        return tr("Signal line — crossover with MACD triggers trade");
     if (col_key == "bb_mavg")
-        return "Bollinger midline (20-SMA) — dynamic support/resistance";
+        return tr("Bollinger midline (20-SMA) — dynamic support/resistance");
     if (col_key == "bb_hband")
-        return "Upper band — resistance level, overbought above";
+        return tr("Upper band — resistance level, overbought above");
     if (col_key == "bb_lband")
-        return "Lower band — support level, oversold below";
+        return tr("Lower band — support level, oversold below");
     if (col_key == "ao")
-        return value > 0 ? "Bullish — momentum above zero line" : "Bearish — momentum below zero line";
-    return "";
+        return value > 0 ? tr("Bullish — momentum above zero line") : tr("Bearish — momentum below zero line");
+    return QString();
 }
 
 // ── Constructor ──────────────────────────────────────────────────────────────
@@ -216,7 +170,7 @@ void EquityTechnicalsTab::set_symbol(const QString& symbol) {
     if (symbol == current_symbol_)
         return;
     current_symbol_ = symbol;
-    loading_overlay_->show_loading("COMPUTING INDICATORS\xe2\x80\xa6");
+    loading_overlay_->show_loading(tr("COMPUTING INDICATORS…"));
     services::equity::EquityResearchService::instance().fetch_technicals(symbol, "1y");
 }
 
@@ -252,11 +206,11 @@ void EquityTechnicalsTab::build_ui() {
     rp_vl->setContentsMargins(14, 10, 14, 10);
     rp_vl->setSpacing(10);
 
-    auto* rp_title = new QLabel("TECHNICAL RATING");
-    rp_title->setStyleSheet(
+    rating_title_ = new QLabel(tr("TECHNICAL RATING"));
+    rating_title_->setStyleSheet(
         QString("color:%1;font-size:12px;font-weight:700;letter-spacing:1px;background:transparent;border:0;")
             .arg(ui::colors::AMBER()));
-    rp_vl->addWidget(rp_title);
+    rp_vl->addWidget(rating_title_);
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
@@ -286,7 +240,7 @@ void EquityTechnicalsTab::build_ui() {
     auto* counts = new QHBoxLayout;
     counts->setSpacing(4);
 
-    auto make_count = [&](const char* color, const QString& label, QLabel*& out) {
+    auto make_count = [&](const char* color, const QString& label, QLabel*& out, QLabel*& caption_out) {
         auto* w = new QWidget(this);
         w->setStyleSheet(QString("background:%1;border:0;").arg(ui::colors::BG_RAISED()));
         auto* cvl = new QVBoxLayout(w);
@@ -297,24 +251,24 @@ void EquityTechnicalsTab::build_ui() {
         out->setAlignment(Qt::AlignCenter);
         out->setStyleSheet(
             QString("color:%1;font-size:16px;font-weight:700;background:transparent;border:0;").arg(color));
-        auto* lbl = new QLabel(label);
-        lbl->setAlignment(Qt::AlignCenter);
-        lbl->setStyleSheet(
+        caption_out = new QLabel(label);
+        caption_out->setAlignment(Qt::AlignCenter);
+        caption_out->setStyleSheet(
             QString("color:%1;font-size:8px;font-weight:600;letter-spacing:0.5px;background:transparent;border:0;")
                 .arg(ui::colors::TEXT_TERTIARY()));
         cvl->addWidget(out);
-        cvl->addWidget(lbl);
+        cvl->addWidget(caption_out);
         counts->addWidget(w, 1);
     };
 
-    make_count(ui::colors::POSITIVE, "STR.BUY", strong_buy_count_);
-    make_count(LTGREEN, "BUY", buy_count_);
-    make_count(GRAY, "NEUTRAL", neutral_count_);
-    make_count(LTRED, "SELL", sell_count_);
-    make_count(ui::colors::NEGATIVE, "STR.SELL", strong_sell_count_);
+    make_count(ui::colors::POSITIVE, tr("STR.BUY"),  strong_buy_count_,  str_buy_caption_);
+    make_count(LTGREEN,               tr("BUY"),      buy_count_,         buy_caption_);
+    make_count(GRAY,                  tr("NEUTRAL"),  neutral_count_,     neutral_caption_);
+    make_count(LTRED,                 tr("SELL"),     sell_count_,        sell_caption_);
+    make_count(ui::colors::NEGATIVE,  tr("STR.SELL"), strong_sell_count_, str_sell_caption_);
     rp_vl->addLayout(counts);
 
-    total_label_ = new QLabel("0 INDICATORS");
+    total_label_ = new QLabel(tr("0 INDICATORS"));
     total_label_->setAlignment(Qt::AlignCenter);
     total_label_->setStyleSheet(QString("color:%1;font-size:10px;letter-spacing:1px;background:transparent;border:0;")
                                     .arg(ui::colors::TEXT_TERTIARY()));
@@ -331,11 +285,11 @@ void EquityTechnicalsTab::build_ui() {
     kp_vl->setContentsMargins(10, 10, 10, 10);
     kp_vl->setSpacing(6);
 
-    auto* kp_title = new QLabel("KEY INDICATORS");
-    kp_title->setStyleSheet(
+    key_title_ = new QLabel(tr("KEY INDICATORS"));
+    key_title_->setStyleSheet(
         QString("color:%1;font-size:12px;font-weight:700;letter-spacing:1px;background:transparent;border:0;")
             .arg(CYAN));
-    kp_vl->addWidget(kp_title);
+    kp_vl->addWidget(key_title_);
 
     auto* ksep = new QFrame;
     ksep->setFrameShape(QFrame::HLine);
@@ -419,7 +373,7 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& paylo
     neutral_count_->setText(QString::number(n));
     sell_count_->setText(QString::number(s));
     strong_sell_count_->setText(QString::number(ss));
-    total_label_->setText(QString("%1 INDICATORS ANALYZED").arg(total));
+    total_label_->setText(tr("%1 INDICATORS ANALYZED").arg(total));
 
     // ── Key indicators — pick the most decision-relevant ones ────────────────
     // These are column keys we look for in the flattened indicators
@@ -501,10 +455,10 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& paylo
         const char* color;
     };
     QList<CatDef> cats = {
-        {"TREND INDICATORS", &payload.trend, CYAN},
-        {"MOMENTUM INDICATORS", &payload.momentum, ui::colors::POSITIVE},
-        {"VOLATILITY INDICATORS", &payload.volatility, YELLOW},
-        {"VOLUME INDICATORS", &payload.volume, BLUE},
+        {tr("TREND INDICATORS"),      &payload.trend,      CYAN},
+        {tr("MOMENTUM INDICATORS"),   &payload.momentum,   ui::colors::POSITIVE},
+        {tr("VOLATILITY INDICATORS"), &payload.volatility, YELLOW},
+        {tr("VOLUME INDICATORS"),     &payload.volume,     BLUE},
     };
 
     for (const auto& cat : cats) {
@@ -544,7 +498,7 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& paylo
                 .arg(cat.color));
         hl->addWidget(htitle);
 
-        auto* cnt = new QLabel(QString("%1 indicators").arg(cat.inds->size()));
+        auto* cnt = new QLabel(tr("%1 indicators").arg(cat.inds->size()));
         cnt->setStyleSheet(
             QString("color:%1;font-size:10px;background:transparent;border:0;").arg(ui::colors::TEXT_TERTIARY()));
         hl->addWidget(cnt);
@@ -559,9 +513,9 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& paylo
                     .arg(color));
             hl->addWidget(badge);
         };
-        add_badge(cb, "BUY", ui::colors::POSITIVE);
-        add_badge(cn, "HOLD", GRAY);
-        add_badge(cs, "SELL", ui::colors::NEGATIVE);
+        add_badge(cb, tr("BUY"),  ui::colors::POSITIVE);
+        add_badge(cn, tr("HOLD"), GRAY);
+        add_badge(cs, tr("SELL"), ui::colors::NEGATIVE);
 
         svl->addWidget(hdr);
 
@@ -581,10 +535,10 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& paylo
                     .arg(ui::colors::TEXT_TERTIARY()));
             thl->addWidget(l, stretch);
         };
-        hdr_lbl("INDICATOR", 2);
-        hdr_lbl("VALUE", 1, Qt::AlignRight);
-        hdr_lbl("SIGNAL", 1, Qt::AlignCenter);
-        hdr_lbl("INTERPRETATION", 3);
+        hdr_lbl(tr("INDICATOR"),      2);
+        hdr_lbl(tr("VALUE"),          1, Qt::AlignRight);
+        hdr_lbl(tr("SIGNAL"),         1, Qt::AlignCenter);
+        hdr_lbl(tr("INTERPRETATION"), 3);
         svl->addWidget(tbl_hdr);
 
         // Rows
@@ -674,7 +628,39 @@ void EquityTechnicalsTab::on_technicals_loaded(services::equity::TechnicalsData 
     if (payload.symbol != current_symbol_)
         return;
     loading_overlay_->hide_loading();
+    cached_data_ = payload;
+    data_loaded_ = true;
     populate(payload);
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+// populate() rebuilds every dynamic section (key indicator cards, category
+// sections, table rows). Calling it with the cached payload on language
+// change re-renders every signal label and interpretation string in the new
+// locale. Static chrome (panel titles, signal-count captions) is re-set
+// explicitly here.
+
+void EquityTechnicalsTab::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
+}
+
+void EquityTechnicalsTab::retranslateUi() {
+    if (rating_title_)     rating_title_->setText(tr("TECHNICAL RATING"));
+    if (key_title_)        key_title_->setText(tr("KEY INDICATORS"));
+    if (str_buy_caption_)  str_buy_caption_->setText(tr("STR.BUY"));
+    if (buy_caption_)      buy_caption_->setText(tr("BUY"));
+    if (neutral_caption_)  neutral_caption_->setText(tr("NEUTRAL"));
+    if (sell_caption_)     sell_caption_->setText(tr("SELL"));
+    if (str_sell_caption_) str_sell_caption_->setText(tr("STR.SELL"));
+
+    if (data_loaded_) {
+        populate(cached_data_);
+    } else if (total_label_) {
+        total_label_->setText(tr("0 INDICATORS"));
+    }
 }
 
 } // namespace fincept::screens

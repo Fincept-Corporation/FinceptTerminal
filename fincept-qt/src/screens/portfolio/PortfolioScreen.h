@@ -1,7 +1,7 @@
 // src/screens/portfolio/PortfolioScreen.h
 #pragma once
 #include "core/symbol/IGroupLinked.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "screens/portfolio/PortfolioTypes.h"
 
 #include <QHideEvent>
@@ -13,6 +13,9 @@
 #include <QWidget>
 
 #include <optional>
+
+class QLabel;
+class QLineEdit;
 
 namespace fincept::screens {
 
@@ -52,6 +55,7 @@ class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLin
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_portfolios_loaded(QVector<portfolio::Portfolio> portfolios);
@@ -75,6 +79,7 @@ class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLin
   private:
     void build_ui();
     void refresh_theme();
+    void retranslateUi();
     QWidget* build_empty_state();
     QWidget* build_loading_state();
     QWidget* build_main_view();
@@ -129,6 +134,17 @@ class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLin
 
     // Positions section header — count badge updates with holdings
     QLabel* positions_count_label_ = nullptr;
+    QLabel* positions_title_label_ = nullptr;
+    QLineEdit* positions_filter_edit_ = nullptr;
+
+    // Empty / loading state labels — kept for retranslateUi.
+    QLabel* empty_title_label_ = nullptr;
+    QLabel* empty_sub_label_ = nullptr;
+    struct CtaCardLabels { QLabel* title = nullptr; QLabel* subtitle = nullptr; };
+    CtaCardLabels empty_create_card_;
+    CtaCardLabels empty_import_card_;
+    CtaCardLabels empty_demo_card_;
+    QLabel* loading_label_ = nullptr;
 
     // Symbol-group link (None when unlinked).
     SymbolGroup link_group_ = SymbolGroup::None;

@@ -8,8 +8,10 @@
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
 
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "services/ai_quant_lab/AIQuantLabService.h"
+#include "services/backtesting/BacktestingService.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
@@ -71,48 +73,48 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
     strat->addItems({"topk_dropout", "weight_based", "enhanced_indexing"});
     strat->setStyleSheet(combo_ss());
     combo_inputs_["bt_strategy"] = strat;
-    vl->addWidget(build_input_row("Strategy", strat, w));
+    vl->addWidget(build_input_row(tr("Strategy"), strat, w));
 
     auto* instruments = new QLineEdit(w);
-    instruments->setPlaceholderText("AAPL,MSFT,GOOG,AMZN");
+    instruments->setPlaceholderText(tr("AAPL,MSFT,GOOG,AMZN"));
     instruments->setStyleSheet(input_ss());
     text_inputs_["bt_instruments"] = instruments;
-    vl->addWidget(build_input_row("Instruments", instruments, w));
+    vl->addWidget(build_input_row(tr("Instruments"), instruments, w));
 
     auto* start_date = new QDateEdit(QDate(2020, 1, 1), w);
     start_date->setDisplayFormat("yyyy-MM-dd");
     start_date->setCalendarPopup(true);
     start_date->setStyleSheet(input_ss());
     date_inputs_["bt_start"] = start_date;
-    vl->addWidget(build_input_row("Start Date", start_date, w));
+    vl->addWidget(build_input_row(tr("Start Date"), start_date, w));
 
     auto* end_date = new QDateEdit(QDate(2024, 1, 1), w);
     end_date->setDisplayFormat("yyyy-MM-dd");
     end_date->setCalendarPopup(true);
     end_date->setStyleSheet(input_ss());
     date_inputs_["bt_end"] = end_date;
-    vl->addWidget(build_input_row("End Date", end_date, w));
+    vl->addWidget(build_input_row(tr("End Date"), end_date, w));
 
     auto* capital = make_double_spin(1000, 1e12, 1e6, 0, "", w);
     double_inputs_["bt_capital"] = capital;
-    vl->addWidget(build_input_row("Initial Capital ($)", capital, w));
+    vl->addWidget(build_input_row(tr("Initial Capital ($)"), capital, w));
 
     auto* topk = new QSpinBox(w);
     topk->setRange(1, 100);
     topk->setValue(10);
     topk->setStyleSheet(spinbox_ss());
     int_inputs_["bt_topk"] = topk;
-    vl->addWidget(build_input_row("Top K Positions", topk, w));
+    vl->addWidget(build_input_row(tr("Top K Positions"), topk, w));
 
     auto* benchmark = new QLineEdit(w);
-    benchmark->setPlaceholderText("SH000300 (CSI300)");
+    benchmark->setPlaceholderText(tr("SH000300 (CSI300)"));
     benchmark->setStyleSheet(input_ss());
     text_inputs_["bt_benchmark"] = benchmark;
-    vl->addWidget(build_input_row("Benchmark", benchmark, w));
+    vl->addWidget(build_input_row(tr("Benchmark"), benchmark, w));
 
-    auto* run = make_run_button("RUN BACKTEST", w);
+    auto* run = make_run_button(tr("RUN BACKTEST"), w);
     connect(run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Backtesting...");
+        status_label_->setText(tr("Backtesting..."));
         QJsonObject params;
         QJsonObject strategy_config;
         strategy_config["type"] = combo_inputs_["bt_strategy"]->currentText();
@@ -131,6 +133,27 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
     });
     vl->addWidget(run);
 
+    auto* open_terminal = make_run_button(tr("OPEN IN BACKTESTING TERMINAL"), w);
+    open_terminal->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                "padding:8px 16px; font-size:11px; font-weight:700; }"
+                "QPushButton:hover { background:%1; color:%3; }")
+            .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
+    connect(open_terminal, &QPushButton::clicked, this, [this]() {
+        auto* instruments_edit = text_inputs_.value("bt_instruments");
+        if (!instruments_edit || instruments_edit->text().trimmed().isEmpty()) return;
+        QJsonArray symbols;
+        for (const auto& s : instruments_edit->text().split(',', Qt::SkipEmptyParts))
+            symbols.append(s.trimmed());
+        QJsonObject config;
+        config["symbols"] = symbols;
+        auto* capital_spin = double_inputs_.value("bt_capital");
+        if (capital_spin) config["initialCapital"] = capital_spin->value();
+        fincept::services::backtest::BacktestingService::instance().set_pending_portfolio_config(config);
+        fincept::EventBus::instance().publish("nav.switch_screen", {{"screen_id", QString("backtesting")}});
+    });
+    vl->addWidget(open_terminal);
+
     auto* rc = new QWidget(w);
     results_layout_ = new QVBoxLayout(rc);
     results_layout_->setContentsMargins(0, 8, 0, 0);
@@ -147,7 +170,7 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
     clear_results();
 
     if (!payload["success"].toBool()) {
-        display_error(payload["error"].toString("Unknown error"));
+        display_error(payload["error"].toString(tr("Unknown error")));
         return;
     }
 
@@ -186,7 +209,7 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
     header_h->setContentsMargins(0, 0, 0, 8);
     header_h->setSpacing(8);
 
-    auto* title_lbl = new QLabel("BACKTEST RESULTS");
+    auto* title_lbl = new QLabel(tr("BACKTEST RESULTS"));
     title_lbl->setStyleSheet(
         QString("color:%1; font-size:%2px; font-family:%3; font-weight:800; letter-spacing:2px;")
             .arg(accent_hex).arg(fs_lg).arg(font_data));
@@ -245,13 +268,13 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
     };
 
     QList<KpiCard> kpis = {
-        {"TOTAL RETURN",   fmt_pct(total_ret),  fmt_usd(final_val) + " final",  total_ret >= 0, false},
-        {"ANN. RETURN",    fmt_pct(ann_ret),     QString("Vol: %1%").arg(ann_vol, 0, 'f', 1), ann_ret >= 0, false},
-        {"SHARPE RATIO",   QString::number(sharpe, 'f', 3),
-                           sharpe >= 1 ? "Excellent" : sharpe >= 0.5 ? "Good" : "Weak", sharpe >= 0.5, false},
-        {"MAX DRAWDOWN",   fmt_pct(max_dd),      QString("Calmar: %1").arg(calmar, 0, 'f', 3), false, false},
-        {"WIN RATE",       QString("%1%").arg(win_rate, 0, 'f', 1), QString("%1 days").arg(t_days), win_rate >= 50, false},
-        {"CAPITAL",        fmt_usd(init_cap),    "Initial capital",  true, true},
+        {tr("TOTAL RETURN"),   fmt_pct(total_ret),  tr("%1 final").arg(fmt_usd(final_val)),  total_ret >= 0, false},
+        {tr("ANN. RETURN"),    fmt_pct(ann_ret),     tr("Vol: %1%").arg(ann_vol, 0, 'f', 1), ann_ret >= 0, false},
+        {tr("SHARPE RATIO"),   QString::number(sharpe, 'f', 3),
+                           sharpe >= 1 ? tr("Excellent") : sharpe >= 0.5 ? tr("Good") : tr("Weak"), sharpe >= 0.5, false},
+        {tr("MAX DRAWDOWN"),   fmt_pct(max_dd),      tr("Calmar: %1").arg(calmar, 0, 'f', 3), false, false},
+        {tr("WIN RATE"),       QString("%1%").arg(win_rate, 0, 'f', 1), tr("%1 days").arg(t_days), win_rate >= 50, false},
+        {tr("CAPITAL"),        fmt_usd(init_cap),    tr("Initial capital"),  true, true},
     };
 
     auto* cards_w  = new QWidget;
@@ -302,8 +325,8 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
         auto* port_upper   = new QLineSeries;  // for area fill
         auto* port_base    = new QLineSeries;  // baseline for area
 
-        port_series->setName("Portfolio");
-        bm_series->setName("Benchmark");
+        port_series->setName(tr("Portfolio"));
+        bm_series->setName(tr("Benchmark"));
 
         // Style lines
         QPen port_pen(accent);
@@ -384,7 +407,7 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
                 .arg(bg_surface, border_dim));
 
         // Chart title label above
-        auto* chart_title = new QLabel("EQUITY CURVE");
+        auto* chart_title = new QLabel(tr("EQUITY CURVE"));
         chart_title->setStyleSheet(
             QString("color:%1; font-size:%2px; font-family:%3; font-weight:700;"
                     "letter-spacing:1px; padding:8px 0 2px 0;")
@@ -418,7 +441,7 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
         cost_h->addWidget(w);
     };
 
-    auto* cost_hdr = new QLabel("EXECUTION COSTS");
+    auto* cost_hdr = new QLabel(tr("EXECUTION COSTS"));
     cost_hdr->setStyleSheet(
         QString("color:%1; font-size:%2px; font-family:%3; font-weight:700; letter-spacing:1px;")
             .arg(text_t).arg(fs_sm - 1).arg(font_data));
@@ -430,15 +453,15 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
         return sep;
     }());
 
-    add_cost_item("Commission",
-                  QString("%1 bps").arg(costs["commission_bps"].toDouble(), 0, 'f', 2));
-    add_cost_item("Expected Slippage",
-                  QString("%1 bps").arg(costs["expected_slippage_bps"].toDouble(), 0, 'f', 2));
+    add_cost_item(tr("Commission"),
+                  tr("%1 bps").arg(costs["commission_bps"].toDouble(), 0, 'f', 2));
+    add_cost_item(tr("Expected Slippage"),
+                  tr("%1 bps").arg(costs["expected_slippage_bps"].toDouble(), 0, 'f', 2));
     cost_h->addStretch();
     results_layout_->addWidget(cost_w);
 
     // ── 5. Export button ───────────────────────────────────────────────────
-    auto* export_btn = new QPushButton("EXPORT JSON");
+    auto* export_btn = new QPushButton(tr("EXPORT JSON"));
     export_btn->setCursor(Qt::PointingHandCursor);
     export_btn->setFixedHeight(28);
     export_btn->setStyleSheet(
@@ -471,7 +494,7 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
     export_hl->addWidget(export_btn);
     results_layout_->addWidget(export_row);
 
-    status_label_->setText(QString("Done — %1% return  |  Sharpe %2")
+    status_label_->setText(tr("Done — %1% return  |  Sharpe %2")
                                .arg(total_ret, 0, 'f', 2)
                                .arg(sharpe, 0, 'f', 3));
 }

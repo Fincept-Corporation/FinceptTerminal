@@ -8,20 +8,34 @@
 #include "services/workflow/ConfirmationService.h"
 #include "services/workflow/NodeRegistry.h"
 #include "services/workflow/RiskManager.h"
+#include "trading/AccountManager.h"
+#include "trading/BrokerRegistry.h"
 #include "trading/ExchangeService.h"
+#include "trading/PaperTrading.h"
+#include "trading/TradingTypes.h"
+#include "trading/UnifiedTrading.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QPageSize>
+#include <QPainter>
+#include <QPrinter>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QPointer>
 #include <QRegularExpression>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QSqlRecord>
+#include <QThread>
+#include <QTimer>
+#include <QXmlStreamReader>
 #include <QtConcurrent/QtConcurrent>
 
 using fincept::python::extract_json;
@@ -81,55 +95,817 @@ void wire_market_data_bridges(NodeRegistry& registry) {
 
 // ── Trading Bridge ─────────────────────────────────────────────────────
 
+// Helper: find the first active account for a given broker_id, return its account_id
+static QString find_account_for_broker(const QString& broker_id) {
+    using namespace fincept::trading;
+    auto accounts = AccountManager::instance().list_accounts(broker_id);
+    for (const auto& acct : accounts)
+        if (acct.is_active)
+            return acct.account_id;
+    return accounts.isEmpty() ? QString{} : accounts[0].account_id;
+}
+
+static QString ensure_paper_portfolio() {
+    using namespace fincept::trading;
+    auto existing = pt_find_portfolio("workflow_default", "");
+    if (existing.has_value())
+        return existing->id;
+    auto p = pt_create_portfolio("workflow_default", 1000000.0, "USD");
+    return p.id;
+}
+
 void wire_trading_bridges(NodeRegistry& registry) {
-    // Place Order — with confirmation and audit
+    using namespace fincept::trading;
+
+    // ── Place Order ───────────────────────────────────────────────
     auto* place_def = const_cast<NodeTypeDef*>(registry.find("trading.place_order"));
     if (place_def) {
         place_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
                                 std::function<void(bool, QJsonValue, QString)> cb) {
+            QString mode = params.value("mode").toString("paper");
+            QString broker = params.value("broker").toString("fyers");
             QString symbol = params.value("symbol").toString();
+            QString exchange = params.value("exchange").toString("NSE");
             QString side = params.value("side").toString("buy");
+            QString product_str = params.value("product_type").toString("delivery");
+            QString order_type_str = params.value("order_type").toString("market");
             double qty = params.value("quantity").toDouble(1);
-            QString broker = params.value("broker").toString("paper");
-            bool paper = (broker == "paper");
+            double price = params.value("price").toDouble(0);
+            QString validity = params.value("validity").toString("DAY");
+            bool paper = (mode == "paper");
 
-            ConfirmationRequest req;
-            req.type = ConfirmationType::Trade;
-            req.risk = paper ? RiskLevel::Low : RiskLevel::High;
-            req.title = QString("%1 %2 x%3").arg(side.toUpper(), symbol).arg(qty);
-            req.message =
-                QString("Place %1 order for %2 shares of %3 via %4").arg(side, QString::number(qty), symbol, broker);
-            req.details = params;
-            req.paper_trading = paper;
+            AuditLogger::instance().log(AuditAction::OrderPlaced, {}, {}, symbol,
+                                        QString("[%1] %2 %3 %4 x%5 via %6").arg(mode.toUpper(), product_str, side, symbol).arg(qty).arg(broker),
+                                        params, paper);
 
-            ConfirmationService::instance().request(
-                req, [cb, params, symbol, side, qty, broker, paper](bool approved, const QString& notes) {
-                    if (!approved) {
-                        cb(false, {}, "Order rejected by user: " + notes);
-                        return;
+            if (paper) {
+                try {
+                    QString portfolio_id = ensure_paper_portfolio();
+                    std::optional<double> opt_price = price > 0 ? std::optional(price) : std::nullopt;
+                    auto pt_order = pt_place_order(portfolio_id, symbol, side, order_type_str, qty, opt_price);
+
+                    if (order_type_str == "market") {
+                        double fill_price = price > 0 ? price : 100.0;
+                        pt_fill_order(pt_order.id, fill_price);
                     }
 
-                    // Log the order
-                    AuditLogger::instance().log(AuditAction::OrderPlaced, {}, {}, symbol,
-                                                QString("%1 %2 x%3 via %4").arg(side, symbol).arg(qty).arg(broker),
-                                                params, paper);
-
                     QJsonObject out;
-                    out["order_id"] = "ORD-" + QString::number(QDateTime::currentMSecsSinceEpoch());
+                    out["order_id"] = pt_order.id;
                     out["symbol"] = symbol;
                     out["side"] = side;
                     out["quantity"] = qty;
-                    out["broker"] = broker;
-                    out["status"] = "submitted";
+                    out["status"] = pt_order.status;
+                    out["mode"] = "paper";
                     cb(true, out, {});
-                });
+                } catch (const std::exception& ex) {
+                    cb(false, {}, QString("Paper trading error: %1").arg(ex.what()));
+                }
+                return;
+            }
+
+            (void)QtConcurrent::run([cb, symbol, exchange, side, product_str, order_type_str, qty, price, validity, broker]() {
+                QString account_id = find_account_for_broker(broker);
+                if (account_id.isEmpty()) {
+                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                    return;
+                }
+
+                UnifiedOrder order;
+                order.symbol = symbol;
+                order.exchange = exchange;
+                order.side = (side == "sell") ? OrderSide::Sell : OrderSide::Buy;
+                if (order_type_str == "limit") order.order_type = OrderType::Limit;
+                else if (order_type_str == "stop") order.order_type = OrderType::StopLoss;
+                else if (order_type_str == "stop_limit") order.order_type = OrderType::StopLossLimit;
+                else order.order_type = OrderType::Market;
+                order.quantity = qty;
+                order.price = price;
+                order.validity = validity;
+                if (product_str == "intraday") order.product_type = ProductType::Intraday;
+                else if (product_str == "margin") order.product_type = ProductType::Margin;
+                else if (product_str == "mtf") order.product_type = ProductType::MTF;
+                else order.product_type = ProductType::Delivery;
+
+                auto response = UnifiedTrading::instance().place_order(account_id, order);
+
+                if (!response.success) {
+                    QString friendly = response.message;
+                    if (friendly.contains("Margin Shortfall", Qt::CaseInsensitive))
+                        friendly += "\n→ Insufficient margin. Add funds or reduce order size.";
+                    else if (friendly.contains("No Holdings uploaded", Qt::CaseInsensitive))
+                        friendly += "\n→ Authorize TPIN via your broker app, then retry.";
+                    cb(false, {}, friendly);
+                    return;
+                }
+
+                // Poll order status to catch async rejections (TPIN, risk checks)
+                QThread::msleep(2000);
+
+                auto creds = AccountManager::instance().load_credentials(account_id);
+                auto* ibk = AccountManager::instance().broker_for(account_id);
+                QString final_status = "submitted";
+                QString reject_reason;
+
+                if (ibk) {
+                    auto orders_result = ibk->get_orders(creds);
+                    if (orders_result.success) {
+                        for (const auto& o : orders_result.data.value()) {
+                            if (o.order_id == response.order_id) {
+                                final_status = o.status.toLower();
+                                if (final_status == "rejected" || final_status == "cancelled") {
+                                    reject_reason = o.message;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                QJsonObject out;
+                out["order_id"] = response.order_id;
+                out["symbol"] = symbol;
+                out["exchange"] = exchange;
+                out["side"] = side;
+                out["product_type"] = product_str;
+                out["quantity"] = qty;
+                out["broker"] = broker;
+                out["status"] = final_status;
+                out["mode"] = "live";
+
+                if (final_status == "rejected" || final_status == "cancelled") {
+                    QString friendly = reject_reason;
+                    if (reject_reason.contains("Margin Shortfall", Qt::CaseInsensitive))
+                        friendly += "\n→ Insufficient margin. Add funds or reduce order size.";
+                    else if (reject_reason.contains("No Holdings uploaded", Qt::CaseInsensitive) ||
+                             reject_reason.contains("TPIN", Qt::CaseInsensitive))
+                        friendly += "\n→ Authorize TPIN in your broker app to sell from holdings.";
+                    else if (reject_reason.contains("market", Qt::CaseInsensitive) &&
+                             reject_reason.contains("close", Qt::CaseInsensitive))
+                        friendly += "\n→ Market is closed. Retry during trading hours or enable AMO.";
+                    else if (reject_reason.contains("RMS", Qt::CaseInsensitive) ||
+                             reject_reason.contains("RISK", Qt::CaseInsensitive))
+                        friendly += "\n→ Broker risk check failed. Verify your account limits.";
+                    out["error"] = friendly;
+                    cb(false, out, friendly);
+                } else {
+                    cb(true, out, {});
+                }
+            });
         };
     }
 
-    // Remaining trading nodes are wired elsewhere or via the fallback pass-through
-    // in wire_all_bridges — no "pending_integration" stubs here.
+    // ── Cancel Order ──────────────────────────────────────────────
+    auto* cancel_def = const_cast<NodeTypeDef*>(registry.find("trading.cancel_order"));
+    if (cancel_def) {
+        cancel_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
+                                 std::function<void(bool, QJsonValue, QString)> cb) {
+            QString order_id = params.value("order_id").toString();
+            QString mode = params.value("mode").toString("paper");
+            QString broker = params.value("broker").toString("fyers");
 
-    LOG_INFO("ServiceBridges", "Trading bridges wired");
+            if (order_id.isEmpty() && !inputs.isEmpty() && inputs[0].isObject())
+                order_id = inputs[0].toObject().value("order_id").toString();
+            if (order_id.isEmpty()) {
+                cb(false, {}, "Order ID is required");
+                return;
+            }
+
+            if (mode == "paper") {
+                pt_cancel_order(order_id);
+                QJsonObject out;
+                out["order_id"] = order_id;
+                out["status"] = "cancelled";
+                out["mode"] = "paper";
+                cb(true, out, {});
+                return;
+            }
+
+            (void)QtConcurrent::run([cb, order_id, broker]() {
+                QString account_id = find_account_for_broker(broker);
+                if (account_id.isEmpty()) {
+                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                    return;
+                }
+
+                auto response = UnifiedTrading::instance().cancel_order(account_id, order_id);
+                QJsonObject out;
+                out["order_id"] = order_id;
+                out["broker"] = broker;
+                out["status"] = response.success ? "cancelled" : "failed";
+                if (!response.success)
+                    out["error"] = response.message;
+                cb(response.success, out, response.success ? QString{} : response.message);
+            });
+        };
+    }
+
+    // ── Modify Order ──────────────────────────────────────────────
+    auto* modify_def = const_cast<NodeTypeDef*>(registry.find("trading.modify_order"));
+    if (modify_def) {
+        modify_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
+                                 std::function<void(bool, QJsonValue, QString)> cb) {
+            QString order_id = params.value("order_id").toString();
+            QString mode = params.value("mode").toString("paper");
+            QString broker = params.value("broker").toString("fyers");
+            double new_qty = params.value("quantity").toDouble(0);
+            double new_price = params.value("price").toDouble(0);
+
+            if (order_id.isEmpty() && !inputs.isEmpty() && inputs[0].isObject())
+                order_id = inputs[0].toObject().value("order_id").toString();
+            if (order_id.isEmpty()) {
+                cb(false, {}, "Order ID is required");
+                return;
+            }
+
+            if (mode == "paper") {
+                QJsonObject out;
+                out["order_id"] = order_id;
+                out["status"] = "modified";
+                out["mode"] = "paper";
+                if (new_qty > 0) out["new_quantity"] = new_qty;
+                if (new_price > 0) out["new_price"] = new_price;
+                cb(true, out, {});
+                return;
+            }
+
+            (void)QtConcurrent::run([cb, order_id, broker, new_qty, new_price]() {
+                QString account_id = find_account_for_broker(broker);
+                if (account_id.isEmpty()) {
+                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                    return;
+                }
+
+                QJsonObject mods;
+                if (new_qty > 0) mods["quantity"] = new_qty;
+                if (new_price > 0) mods["price"] = new_price;
+
+                auto response = UnifiedTrading::instance().modify_order(account_id, order_id, mods);
+                QJsonObject out;
+                out["order_id"] = order_id;
+                out["broker"] = broker;
+                out["status"] = response.success ? "modified" : "failed";
+                if (!response.success)
+                    out["error"] = response.message;
+                cb(response.success, out, response.success ? QString{} : response.message);
+            });
+        };
+    }
+
+    // ── Get Orders ────────────────────────────────────────────────
+    auto* orders_def = const_cast<NodeTypeDef*>(registry.find("trading.get_orders"));
+    if (orders_def) {
+        orders_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+                                 std::function<void(bool, QJsonValue, QString)> cb) {
+            QString mode = params.value("mode").toString("paper");
+            QString broker = params.value("broker").toString("fyers");
+            QString status_filter = params.value("status").toString("all");
+
+            if (mode == "paper") {
+                QString portfolio_id = ensure_paper_portfolio();
+                auto orders = pt_get_orders(portfolio_id, status_filter == "all" ? "" : status_filter);
+                QJsonArray arr;
+                for (const auto& o : orders) {
+                    QJsonObject obj;
+                    obj["order_id"] = o.id;
+                    obj["symbol"] = o.symbol;
+                    obj["side"] = o.side;
+                    obj["order_type"] = o.order_type;
+                    obj["quantity"] = o.quantity;
+                    obj["filled_qty"] = o.filled_qty;
+                    obj["status"] = o.status;
+                    obj["mode"] = "paper";
+                    if (o.price) obj["price"] = *o.price;
+                    if (o.avg_price) obj["avg_price"] = *o.avg_price;
+                    arr.append(obj);
+                }
+                cb(true, arr, {});
+                return;
+            }
+
+            (void)QtConcurrent::run([cb, broker, status_filter]() {
+                QString account_id = find_account_for_broker(broker);
+                if (account_id.isEmpty()) {
+                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                    return;
+                }
+
+                auto creds = AccountManager::instance().load_credentials(account_id);
+                auto* ibk = AccountManager::instance().broker_for(account_id);
+                if (!ibk) {
+                    cb(false, {}, "Broker not found in registry");
+                    return;
+                }
+
+                auto result = ibk->get_orders(creds);
+                if (!result.success) {
+                    cb(false, {}, result.error);
+                    return;
+                }
+
+                QJsonArray arr;
+                for (const auto& o : result.data.value()) {
+                    if (status_filter != "all") {
+                        QString s = o.status.toLower();
+                        if (status_filter == "open" && s != "pending" && s != "open" && s != "trigger_pending")
+                            continue;
+                        if (status_filter == "filled" && s != "complete" && s != "filled" && s != "traded")
+                            continue;
+                        if (status_filter == "cancelled" && s != "cancelled" && s != "rejected")
+                            continue;
+                    }
+                    QJsonObject obj;
+                    obj["order_id"] = o.order_id;
+                    obj["symbol"] = o.symbol;
+                    obj["exchange"] = o.exchange;
+                    obj["side"] = o.side;
+                    obj["order_type"] = o.order_type;
+                    obj["quantity"] = o.quantity;
+                    obj["price"] = o.price;
+                    obj["filled_qty"] = o.filled_qty;
+                    obj["avg_price"] = o.avg_price;
+                    obj["status"] = o.status;
+                    obj["timestamp"] = o.timestamp;
+                    arr.append(obj);
+                }
+                cb(true, arr, {});
+            });
+        };
+    }
+
+    // ── Get Positions ─────────────────────────────────────────────
+    auto* pos_def = const_cast<NodeTypeDef*>(registry.find("trading.get_positions"));
+    if (pos_def) {
+        pos_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+                              std::function<void(bool, QJsonValue, QString)> cb) {
+            QString mode = params.value("mode").toString("paper");
+            QString broker = params.value("broker").toString("fyers");
+
+            if (mode == "paper") {
+                QString portfolio_id = ensure_paper_portfolio();
+                auto positions = pt_get_positions(portfolio_id);
+                QJsonArray arr;
+                for (const auto& p : positions) {
+                    QJsonObject obj;
+                    obj["symbol"] = p.symbol;
+                    obj["side"] = p.side;
+                    obj["quantity"] = p.quantity;
+                    obj["entry_price"] = p.entry_price;
+                    obj["current_price"] = p.current_price;
+                    obj["unrealized_pnl"] = p.unrealized_pnl;
+                    obj["realized_pnl"] = p.realized_pnl;
+                    obj["mode"] = "paper";
+                    arr.append(obj);
+                }
+                cb(true, arr, {});
+                return;
+            }
+
+            (void)QtConcurrent::run([cb, broker]() {
+                QString account_id = find_account_for_broker(broker);
+                if (account_id.isEmpty()) {
+                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                    return;
+                }
+
+                auto creds = AccountManager::instance().load_credentials(account_id);
+                auto* ibk = AccountManager::instance().broker_for(account_id);
+                if (!ibk) {
+                    cb(false, {}, "Broker not found in registry");
+                    return;
+                }
+
+                auto result = ibk->get_positions(creds);
+                if (!result.success) {
+                    cb(false, {}, result.error);
+                    return;
+                }
+
+                QJsonArray arr;
+                for (const auto& p : result.data.value()) {
+                    QJsonObject obj;
+                    obj["symbol"] = p.symbol;
+                    obj["exchange"] = p.exchange;
+                    obj["side"] = p.side;
+                    obj["quantity"] = p.quantity;
+                    obj["avg_price"] = p.avg_price;
+                    obj["ltp"] = p.ltp;
+                    obj["pnl"] = p.pnl;
+                    obj["pnl_pct"] = p.pnl_pct;
+                    obj["product_type"] = p.product_type;
+                    obj["mode"] = "live";
+                    arr.append(obj);
+                }
+                cb(true, arr, {});
+            });
+        };
+    }
+
+    // ── Get Holdings ──────────────────────────────────────────────
+    auto* hold_def = const_cast<NodeTypeDef*>(registry.find("trading.get_holdings"));
+    if (hold_def) {
+        hold_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+                               std::function<void(bool, QJsonValue, QString)> cb) {
+            QString mode = params.value("mode").toString("paper");
+            QString broker = params.value("broker").toString("fyers");
+
+            if (mode == "paper") {
+                cb(true, QJsonArray{}, {});
+                return;
+            }
+
+            (void)QtConcurrent::run([cb, broker]() {
+                QString account_id = find_account_for_broker(broker);
+                if (account_id.isEmpty()) {
+                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                    return;
+                }
+
+                auto creds = AccountManager::instance().load_credentials(account_id);
+                auto* ibk = AccountManager::instance().broker_for(account_id);
+                if (!ibk) {
+                    cb(false, {}, "Broker not found in registry");
+                    return;
+                }
+
+                auto result = ibk->get_holdings(creds);
+                if (!result.success) {
+                    cb(false, {}, result.error);
+                    return;
+                }
+
+                QJsonArray arr;
+                for (const auto& h : result.data.value()) {
+                    QJsonObject obj;
+                    obj["symbol"] = h.symbol;
+                    obj["exchange"] = h.exchange;
+                    obj["quantity"] = h.quantity;
+                    obj["avg_price"] = h.avg_price;
+                    obj["ltp"] = h.ltp;
+                    obj["pnl"] = h.pnl;
+                    obj["pnl_pct"] = h.pnl_pct;
+                    obj["invested_value"] = h.invested_value;
+                    obj["current_value"] = h.current_value;
+                    arr.append(obj);
+                }
+                cb(true, arr, {});
+            });
+        };
+    }
+
+    // ── Get Balance ───────────────────────────────────────────────
+    auto* balance_def = const_cast<NodeTypeDef*>(registry.find("trading.get_balance"));
+    if (balance_def) {
+        balance_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+                                  std::function<void(bool, QJsonValue, QString)> cb) {
+            QString mode = params.value("mode").toString("paper");
+            QString broker = params.value("broker").toString("fyers");
+
+            if (mode == "paper") {
+                QJsonObject out;
+                out["available_balance"] = 1000000.0;
+                out["used_margin"] = 0.0;
+                out["total_balance"] = 1000000.0;
+                out["broker"] = "paper";
+                cb(true, out, {});
+                return;
+            }
+
+            (void)QtConcurrent::run([cb, broker]() {
+                QString account_id = find_account_for_broker(broker);
+                if (account_id.isEmpty()) {
+                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                    return;
+                }
+
+                auto creds = AccountManager::instance().load_credentials(account_id);
+                auto* ibk = AccountManager::instance().broker_for(account_id);
+                if (!ibk) {
+                    cb(false, {}, "Broker not found in registry");
+                    return;
+                }
+
+                auto result = ibk->get_funds(creds);
+                if (!result.success) {
+                    cb(false, {}, result.error);
+                    return;
+                }
+
+                auto& f = result.data.value();
+                QJsonObject out;
+                out["available_balance"] = f.available_balance;
+                out["used_margin"] = f.used_margin;
+                out["total_balance"] = f.total_balance;
+                out["collateral"] = f.collateral;
+                out["broker"] = broker;
+                cb(true, out, {});
+            });
+        };
+    }
+
+    // ── Close Position ────────────────────────────────────────────
+    auto* close_def = const_cast<NodeTypeDef*>(registry.find("trading.close_position"));
+    if (close_def) {
+        close_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+                                std::function<void(bool, QJsonValue, QString)> cb) {
+            QString mode = params.value("mode").toString("paper");
+            QString broker = params.value("broker").toString("fyers");
+            QString symbol = params.value("symbol").toString();
+            QString exchange = params.value("exchange").toString("NSE");
+            QString product_str = params.value("product_type").toString("delivery");
+            double qty = params.value("quantity").toDouble(0);
+
+            if (symbol.isEmpty()) {
+                cb(false, {}, "Symbol is required");
+                return;
+            }
+
+            if (mode == "paper") {
+                QJsonObject out;
+                out["symbol"] = symbol;
+                out["status"] = "closed";
+                out["mode"] = "paper";
+                cb(true, out, {});
+                return;
+            }
+
+            (void)QtConcurrent::run([cb, symbol, exchange, product_str, qty, broker]() {
+                        QString account_id = find_account_for_broker(broker);
+                        if (account_id.isEmpty()) {
+                            cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                            return;
+                        }
+
+                        auto creds = AccountManager::instance().load_credentials(account_id);
+                        auto* ibk = AccountManager::instance().broker_for(account_id);
+                        if (!ibk) {
+                            cb(false, {}, "Broker not found in registry");
+                            return;
+                        }
+
+                        // Get positions to find current quantity if qty==0
+                        double close_qty = qty;
+                        if (close_qty <= 0) {
+                            auto pos_result = ibk->get_positions(creds);
+                            if (pos_result.success) {
+                                for (const auto& p : pos_result.data.value()) {
+                                    if (p.symbol.contains(symbol, Qt::CaseInsensitive) && p.quantity > 0) {
+                                        close_qty = p.quantity;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if (close_qty <= 0) {
+                            cb(false, {}, QString("No open position found for %1").arg(symbol));
+                            return;
+                        }
+
+                        UnifiedOrder order;
+                        order.symbol = symbol;
+                        order.exchange = exchange;
+                        order.side = OrderSide::Sell;
+                        order.order_type = OrderType::Market;
+                        order.quantity = close_qty;
+                        order.validity = "DAY";
+                        if (product_str == "intraday") order.product_type = ProductType::Intraday;
+                        else if (product_str == "margin") order.product_type = ProductType::Margin;
+                        else order.product_type = ProductType::Delivery;
+
+                        auto response = UnifiedTrading::instance().place_order(account_id, order);
+                        QJsonObject out;
+                        out["symbol"] = symbol;
+                        out["quantity_closed"] = close_qty;
+                        out["order_id"] = response.order_id;
+                        out["broker"] = broker;
+                        out["status"] = response.success ? "closed" : "failed";
+                        if (!response.success) out["error"] = response.message;
+                        cb(response.success, out, response.success ? QString{} : response.message);
+                    });
+        };
+    }
+
+    // ── Bracket Order ─────────────────────────────────────────────
+    auto* bracket_def = const_cast<NodeTypeDef*>(registry.find("trading.bracket_order"));
+    if (bracket_def) {
+        bracket_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+                                  std::function<void(bool, QJsonValue, QString)> cb) {
+            QString mode = params.value("mode").toString("paper");
+            QString broker = params.value("broker").toString("fyers");
+            QString symbol = params.value("symbol").toString();
+            QString side = params.value("side").toString("buy");
+            double qty = params.value("quantity").toDouble(1);
+            double entry = params.value("entry_price").toDouble(0);
+            double sl = params.value("stop_loss").toDouble(0);
+            double tp = params.value("take_profit").toDouble(0);
+
+            if (symbol.isEmpty()) { cb(false, {}, "Symbol is required"); return; }
+            if (sl <= 0) { cb(false, {}, "Stop loss is required for bracket orders"); return; }
+            if (tp <= 0) { cb(false, {}, "Take profit is required for bracket orders"); return; }
+
+            if (mode == "paper") {
+                QJsonObject out;
+                out["order_id"] = "PAPER-BKT-" + QString::number(QDateTime::currentMSecsSinceEpoch());
+                out["symbol"] = symbol;
+                out["side"] = side;
+                out["quantity"] = qty;
+                out["entry_price"] = entry;
+                out["stop_loss"] = sl;
+                out["take_profit"] = tp;
+                out["status"] = "submitted";
+                out["broker"] = "paper";
+                cb(true, out, {});
+                return;
+            }
+
+            (void)QtConcurrent::run([cb, symbol, side, qty, entry, sl, tp, broker]() {
+                QString account_id = find_account_for_broker(broker);
+                if (account_id.isEmpty()) {
+                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                    return;
+                }
+
+                UnifiedOrder order;
+                order.symbol = symbol;
+                order.side = (side == "sell") ? OrderSide::Sell : OrderSide::Buy;
+                order.order_type = entry > 0 ? OrderType::Limit : OrderType::Market;
+                order.quantity = qty;
+                order.price = entry;
+                order.stop_loss = sl;
+                order.take_profit = tp;
+                order.product_type = ProductType::BracketOrder;
+                order.validity = "DAY";
+
+                auto response = UnifiedTrading::instance().place_order(account_id, order);
+                QJsonObject out;
+                out["order_id"] = response.order_id;
+                out["symbol"] = symbol;
+                out["side"] = side;
+                out["quantity"] = qty;
+                out["entry_price"] = entry;
+                out["stop_loss"] = sl;
+                out["take_profit"] = tp;
+                out["broker"] = broker;
+                out["status"] = response.success ? "submitted" : "failed";
+                if (!response.success) out["error"] = response.message;
+                cb(response.success, out, response.success ? QString{} : response.message);
+            });
+        };
+    }
+
+    // ── Trailing Stop ─────────────────────────────────────────────
+    auto* trail_def = const_cast<NodeTypeDef*>(registry.find("trading.trailing_stop"));
+    if (trail_def) {
+        trail_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+                                std::function<void(bool, QJsonValue, QString)> cb) {
+            QString mode = params.value("mode").toString("paper");
+            QString broker = params.value("broker").toString("fyers");
+            QString symbol = params.value("symbol").toString();
+            QString exchange = params.value("exchange").toString("NSE");
+            QString product_str = params.value("product_type").toString("intraday");
+            QString trail_type = params.value("trail_type").toString("percent");
+            double trail_value = params.value("trail_value").toDouble(5.0);
+            double qty = params.value("quantity").toDouble(0);
+
+            if (symbol.isEmpty()) { cb(false, {}, "Symbol is required"); return; }
+
+            if (mode == "paper") {
+                QJsonObject out;
+                out["order_id"] = "PAPER-TSL-" + QString::number(QDateTime::currentMSecsSinceEpoch());
+                out["symbol"] = symbol;
+                out["trail_type"] = trail_type;
+                out["trail_value"] = trail_value;
+                out["status"] = "active";
+                out["mode"] = "paper";
+                cb(true, out, {});
+                return;
+            }
+
+            (void)QtConcurrent::run([cb, symbol, exchange, product_str, trail_type, trail_value, qty, broker]() {
+                QString account_id = find_account_for_broker(broker);
+                if (account_id.isEmpty()) {
+                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                    return;
+                }
+
+                UnifiedOrder order;
+                order.symbol = symbol;
+                order.exchange = exchange;
+                order.side = OrderSide::Sell;
+                order.order_type = OrderType::StopLoss;
+                order.quantity = qty;
+                order.stop_price = trail_value;
+                order.validity = "DAY";
+                if (product_str == "intraday") order.product_type = ProductType::Intraday;
+                else if (product_str == "margin") order.product_type = ProductType::Margin;
+                else order.product_type = ProductType::Delivery;
+
+                auto response = UnifiedTrading::instance().place_order(account_id, order);
+                QJsonObject out;
+                out["order_id"] = response.order_id;
+                out["symbol"] = symbol;
+                out["trail_type"] = trail_type;
+                out["trail_value"] = trail_value;
+                out["broker"] = broker;
+                out["status"] = response.success ? "active" : "failed";
+                if (!response.success) out["error"] = response.message;
+                cb(response.success, out, response.success ? QString{} : response.message);
+            });
+        };
+    }
+
+    // ── Scale In ──────────────────────────────────────────────────
+    auto* scale_def = const_cast<NodeTypeDef*>(registry.find("trading.scale_in"));
+    if (scale_def) {
+        scale_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+                                std::function<void(bool, QJsonValue, QString)> cb) {
+            QString mode = params.value("mode").toString("paper");
+            QString broker = params.value("broker").toString("fyers");
+            QString symbol = params.value("symbol").toString();
+            QString exchange = params.value("exchange").toString("NSE");
+            QString product_str = params.value("product_type").toString("delivery");
+            QString side = params.value("side").toString("buy");
+            double total_qty = params.value("total_quantity").toDouble(100);
+            int tranches = static_cast<int>(params.value("tranches").toDouble(4));
+            int interval_sec = static_cast<int>(params.value("interval_sec").toDouble(60));
+
+            if (symbol.isEmpty()) { cb(false, {}, "Symbol is required"); return; }
+            if (tranches < 1) tranches = 1;
+
+            double per_tranche = std::floor(total_qty / tranches);
+            double remainder = total_qty - (per_tranche * tranches);
+
+            if (mode == "paper") {
+                QJsonArray orders;
+                for (int i = 0; i < tranches; ++i) {
+                    double q = per_tranche + (i == tranches - 1 ? remainder : 0);
+                    QJsonObject o;
+                    o["order_id"] = QString("PAPER-SCALE-%1-%2").arg(QDateTime::currentMSecsSinceEpoch()).arg(i);
+                    o["tranche"] = i + 1;
+                    o["quantity"] = q;
+                    o["scheduled_sec"] = i * interval_sec;
+                    o["status"] = "scheduled";
+                    orders.append(o);
+                }
+                QJsonObject out;
+                out["symbol"] = symbol;
+                out["side"] = side;
+                out["total_quantity"] = total_qty;
+                out["tranches"] = tranches;
+                out["orders"] = orders;
+                out["broker"] = "paper";
+                cb(true, out, {});
+                return;
+            }
+
+            (void)QtConcurrent::run([cb, symbol, exchange, product_str, side, per_tranche, remainder, tranches, interval_sec, broker]() {
+                QString account_id = find_account_for_broker(broker);
+                if (account_id.isEmpty()) {
+                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                    return;
+                }
+
+                QJsonArray results;
+                for (int i = 0; i < tranches; ++i) {
+                    if (i > 0)
+                        QThread::sleep(interval_sec);
+
+                    double q = per_tranche + (i == tranches - 1 ? remainder : 0);
+                    UnifiedOrder order;
+                    order.symbol = symbol;
+                    order.exchange = exchange;
+                    order.side = (side == "sell") ? OrderSide::Sell : OrderSide::Buy;
+                    order.order_type = OrderType::Market;
+                    order.quantity = q;
+                    order.validity = "DAY";
+                    if (product_str == "intraday") order.product_type = ProductType::Intraday;
+                    else if (product_str == "margin") order.product_type = ProductType::Margin;
+                    else order.product_type = ProductType::Delivery;
+
+                    auto response = UnifiedTrading::instance().place_order(account_id, order);
+                    QJsonObject r;
+                    r["tranche"] = i + 1;
+                    r["quantity"] = q;
+                    r["order_id"] = response.order_id;
+                    r["status"] = response.success ? "filled" : "failed";
+                    if (!response.success) r["error"] = response.message;
+                    results.append(r);
+
+                    if (!response.success) break;
+                }
+
+                QJsonObject out;
+                out["symbol"] = symbol;
+                out["side"] = side;
+                out["total_quantity"] = per_tranche * tranches + remainder;
+                out["tranches_executed"] = results.size();
+                out["orders"] = results;
+                out["broker"] = broker;
+                cb(true, out, {});
+            });
+        };
+    }
+
+    LOG_INFO("ServiceBridges", "Trading bridges wired (11 nodes)");
 }
 
 // ── Agent Bridge ───────────────────────────────────────────────────────
@@ -372,7 +1148,7 @@ static void wire_utility_bridges(NodeRegistry& registry) {
     // ── File binary — read/write raw bytes ────────────────────────
     auto* binary_def = const_cast<NodeTypeDef*>(registry.find("file.binary"));
     if (binary_def && !binary_def->execute) {
-        binary_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+        binary_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                                  std::function<void(bool, QJsonValue, QString)> cb) {
             QString op = params.value("operation").toString("read");
             QString path = params.value("path").toString();
@@ -394,47 +1170,103 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 out["base64"] = QString::fromLatin1(data.toBase64());
                 cb(true, out, {});
             } else {
+                // write: decode base64 from input and write to path
+                QByteArray bytes;
+                if (!inputs.isEmpty()) {
+                    if (inputs[0].isObject()) {
+                        QString b64 = inputs[0].toObject().value("base64").toString();
+                        if (!b64.isEmpty())
+                            bytes = QByteArray::fromBase64(b64.toLatin1());
+                        else
+                            bytes = QJsonDocument(inputs[0].toObject()).toJson(QJsonDocument::Compact);
+                    } else if (inputs[0].isString()) {
+                        bytes = QByteArray::fromBase64(inputs[0].toString().toLatin1());
+                    }
+                }
+                if (bytes.isEmpty()) {
+                    cb(false, {}, "No binary data to write (pass {\"base64\": \"...\"} or base64 string as input)");
+                    return;
+                }
+
+                QFileInfo fi(path);
+                QDir().mkpath(fi.absolutePath());
+                QFile file(path);
+                if (!file.open(QIODevice::WriteOnly)) {
+                    cb(false, {}, "Cannot open file for writing: " + file.errorString());
+                    return;
+                }
+                file.write(bytes);
+                file.close();
+
                 QJsonObject out;
                 out["path"] = path;
-                out["operation"] = op;
+                out["operation"] = "write";
+                out["bytes_written"] = bytes.size();
                 cb(true, out, {});
             }
         };
     }
 
-    // ── File compress — zip/gzip ──────────────────────────────────
+    // ── File compress — compress/decompress ─────────────────────────
     auto* compress_def = const_cast<NodeTypeDef*>(registry.find("file.compress"));
     if (compress_def && !compress_def->execute) {
         compress_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
                                    std::function<void(bool, QJsonValue, QString)> cb) {
+            QString op = params.value("operation").toString("compress");
             QString path = params.value("path").toString();
             if (path.isEmpty()) {
                 cb(false, {}, "File path is required");
                 return;
             }
 
-            // Use qCompress for basic gzip-style compression
             QFile file(path);
             if (!file.open(QIODevice::ReadOnly)) {
                 cb(false, {}, "Cannot open file: " + file.errorString());
                 return;
             }
             QByteArray data = file.readAll();
-            QByteArray compressed = qCompress(data);
-            QString out_path = path + ".qz";
-            QFile out_file(out_path);
-            if (!out_file.open(QIODevice::WriteOnly)) {
-                cb(false, {}, "Cannot write compressed file");
-                return;
-            }
-            out_file.write(compressed);
+            file.close();
 
-            QJsonObject out;
-            out["input_path"] = path;
-            out["output_path"] = out_path;
-            out["original_size"] = data.size();
-            out["compressed_size"] = compressed.size();
-            cb(true, out, {});
+            if (op == "decompress") {
+                QByteArray decompressed = qUncompress(data);
+                if (decompressed.isEmpty()) {
+                    cb(false, {}, "Decompression failed — file may not be qCompress format");
+                    return;
+                }
+                QString out_path = path.endsWith(".qz") ? path.chopped(3) : path + ".decompressed";
+                QFile out_file(out_path);
+                if (!out_file.open(QIODevice::WriteOnly)) {
+                    cb(false, {}, "Cannot write decompressed file: " + out_file.errorString());
+                    return;
+                }
+                out_file.write(decompressed);
+
+                QJsonObject out;
+                out["input_path"] = path;
+                out["output_path"] = out_path;
+                out["compressed_size"] = data.size();
+                out["original_size"] = decompressed.size();
+                out["operation"] = "decompress";
+                cb(true, out, {});
+            } else {
+                QByteArray compressed = qCompress(data);
+                QString out_path = path + ".qz";
+                QFile out_file(out_path);
+                if (!out_file.open(QIODevice::WriteOnly)) {
+                    cb(false, {}, "Cannot write compressed file: " + out_file.errorString());
+                    return;
+                }
+                out_file.write(compressed);
+
+                QJsonObject out;
+                out["input_path"] = path;
+                out["output_path"] = out_path;
+                out["original_size"] = data.size();
+                out["compressed_size"] = compressed.size();
+                out["ratio"] = data.size() > 0 ? static_cast<double>(compressed.size()) / data.size() : 0.0;
+                out["operation"] = "compress";
+                cb(true, out, {});
+            }
         };
     }
 
@@ -489,23 +1321,93 @@ static void wire_utility_bridges(NodeRegistry& registry) {
         rss_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
                               std::function<void(bool, QJsonValue, QString)> cb) {
             QString url = params.value("url").toString();
+            int limit = static_cast<int>(params.value("limit").toDouble(20));
             if (url.isEmpty()) {
                 cb(false, {}, "RSS URL is required");
                 return;
             }
 
-            HttpClient::instance().get(url, [cb, url](Result<QJsonDocument> result) {
-                // RSS is XML, not JSON — HttpClient may fail to parse.
-                // Pass through what we get as a text result for downstream XML parsing.
+            static QNetworkAccessManager* rss_nam = nullptr;
+            if (!rss_nam)
+                rss_nam = new QNetworkAccessManager;
+
+            QNetworkRequest request{QUrl{url}};
+            request.setRawHeader("Accept", "application/rss+xml, application/atom+xml, application/xml, text/xml");
+            request.setTransferTimeout(15000);
+            QNetworkReply* reply = rss_nam->get(request);
+
+            QObject::connect(reply, &QNetworkReply::finished, [reply, cb, url, limit]() {
+                reply->deleteLater();
+                if (reply->error() != QNetworkReply::NoError) {
+                    cb(false, {}, QString("RSS fetch failed: %1").arg(reply->errorString()));
+                    return;
+                }
+
+                QByteArray xml_data = reply->readAll();
+                QXmlStreamReader xml(xml_data);
+                QJsonArray items;
+                bool is_atom = false;
+
+                while (!xml.atEnd() && !xml.hasError()) {
+                    xml.readNext();
+                    if (xml.isStartElement()) {
+                        if (xml.name() == u"feed")
+                            is_atom = true;
+
+                        bool is_item = is_atom ? (xml.name() == u"entry") : (xml.name() == u"item");
+                        if (is_item) {
+                            QJsonObject item;
+                            while (!(xml.isEndElement() && (xml.name() == u"item" || xml.name() == u"entry"))) {
+                                xml.readNext();
+                                if (xml.isStartElement()) {
+                                    QString tag = xml.name().toString();
+                                    if (tag == "title") {
+                                        item["title"] = xml.readElementText();
+                                    } else if (tag == "link") {
+                                        if (is_atom) {
+                                            item["link"] = xml.attributes().value("href").toString();
+                                            xml.skipCurrentElement();
+                                        } else {
+                                            item["link"] = xml.readElementText();
+                                        }
+                                    } else if (tag == "description" || tag == "summary" || tag == "content") {
+                                        item["description"] = xml.readElementText();
+                                    } else if (tag == "pubDate" || tag == "published" || tag == "updated") {
+                                        item["pubDate"] = xml.readElementText();
+                                    } else if (tag == "author" || tag == "creator") {
+                                        item["author"] = xml.readElementText();
+                                    } else if (tag == "category") {
+                                        QString cat = xml.attributes().value("term").toString();
+                                        if (cat.isEmpty())
+                                            cat = xml.readElementText();
+                                        else
+                                            xml.skipCurrentElement();
+                                        if (!cat.isEmpty())
+                                            item["category"] = cat;
+                                    } else {
+                                        xml.skipCurrentElement();
+                                    }
+                                }
+                            }
+                            if (!item.isEmpty()) {
+                                items.append(item);
+                                if (items.size() >= limit)
+                                    break;
+                            }
+                        }
+                    }
+                }
+
+                if (xml.hasError() && items.isEmpty()) {
+                    cb(false, {}, QString("XML parse error: %1").arg(xml.errorString()));
+                    return;
+                }
+
                 QJsonObject out;
                 out["url"] = url;
-                if (result.is_ok()) {
-                    out["data"] = result.value().isObject() ? QJsonValue(result.value().object())
-                                                            : QJsonValue(result.value().array());
-                } else {
-                    out["error"] = QString::fromStdString(result.error());
-                    out["note"] = "RSS feeds are XML; connect to an XML parse node for structured data";
-                }
+                out["format"] = is_atom ? "atom" : "rss";
+                out["count"] = items.size();
+                out["items"] = items;
                 cb(true, out, {});
             });
         };
@@ -549,22 +1451,77 @@ static void wire_utility_bridges(NodeRegistry& registry) {
     // ── Database — SQLite via Qt SQL ──────────────────────────────
     auto* db_def = const_cast<NodeTypeDef*>(registry.find("utility.database"));
     if (db_def && !db_def->execute) {
-        db_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+        db_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                              std::function<void(bool, QJsonValue, QString)> cb) {
-            QString op = params.value("operation").toString("query");
+            QString op = params.value("operation").toString("select");
             QString query = params.value("query").toString();
+            QString db_source = params.value("database").toString("local");
             if (query.isEmpty()) {
                 cb(false, {}, "SQL query is required");
                 return;
             }
 
-            QSqlDatabase db = QSqlDatabase::database();
-            if (!db.isOpen()) {
-                cb(false, {}, "No database connection available");
-                return;
+            QSqlDatabase db;
+            QString conn_name;
+            if (db_source == "custom") {
+                QString db_path;
+                if (!inputs.isEmpty() && inputs[0].isObject())
+                    db_path = inputs[0].toObject().value("database_path").toString();
+                if (db_path.isEmpty())
+                    db_path = params.value("query").toString(); // fallback: maybe path in query for raw ops
+                if (db_path.isEmpty() || !QFile::exists(db_path)) {
+                    cb(false, {}, "Custom database path is required (pass {\"database_path\": \"...\"} as input)");
+                    return;
+                }
+                conn_name = "workflow_custom_" + QString::number(qHash(db_path));
+                if (QSqlDatabase::contains(conn_name)) {
+                    db = QSqlDatabase::database(conn_name);
+                } else {
+                    db = QSqlDatabase::addDatabase("QSQLITE", conn_name);
+                    db.setDatabaseName(db_path);
+                }
+                if (!db.isOpen() && !db.open()) {
+                    cb(false, {}, "Cannot open database: " + db.lastError().text());
+                    return;
+                }
+            } else {
+                db = QSqlDatabase::database();
+                if (!db.isOpen()) {
+                    cb(false, {}, "No database connection available");
+                    return;
+                }
             }
 
             QSqlQuery q(db);
+
+            if (op == "insert" || op == "update" || op == "delete") {
+                if (!q.exec(query)) {
+                    cb(false, {}, "SQL error: " + q.lastError().text());
+                    return;
+                }
+                QJsonObject out;
+                out["query"] = query;
+                out["operation"] = op;
+                out["rows_affected"] = q.numRowsAffected();
+                cb(true, out, {});
+                return;
+            }
+
+            if (op == "raw") {
+                if (!q.exec(query)) {
+                    cb(false, {}, "SQL error: " + q.lastError().text());
+                    return;
+                }
+                QJsonObject out;
+                out["query"] = query;
+                out["operation"] = "raw";
+                out["success"] = true;
+                out["rows_affected"] = q.numRowsAffected();
+                cb(true, out, {});
+                return;
+            }
+
+            // select (default)
             if (!q.exec(query)) {
                 cb(false, {}, "SQL error: " + q.lastError().text());
                 return;
@@ -579,6 +1536,10 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                     if (val.typeId() == QMetaType::Double || val.typeId() == QMetaType::Int ||
                         val.typeId() == QMetaType::LongLong)
                         row[rec.fieldName(i)] = val.toDouble();
+                    else if (val.typeId() == QMetaType::Bool)
+                        row[rec.fieldName(i)] = val.toBool();
+                    else if (val.isNull())
+                        row[rec.fieldName(i)] = QJsonValue::Null;
                     else
                         row[rec.fieldName(i)] = val.toString();
                 }
@@ -587,15 +1548,82 @@ static void wire_utility_bridges(NodeRegistry& registry) {
 
             QJsonObject out;
             out["query"] = query;
+            out["operation"] = op;
             out["row_count"] = rows.size();
             out["rows"] = rows;
             cb(true, out, {});
         };
     }
 
-    // ── API Call — via HttpClient with auth ───────────────────────
+    // ── API Call — via QNetworkAccessManager with auth, headers, timeout, retry
     auto* api_def = const_cast<NodeTypeDef*>(registry.find("utility.api_call"));
     if (api_def && !api_def->execute) {
+        struct ApiCallState {
+            QNetworkRequest request;
+            QByteArray body_bytes;
+            QString method;
+            QString url;
+            int retries_left;
+            std::function<void(bool, QJsonValue, QString)> cb;
+        };
+
+        static std::function<void(std::shared_ptr<ApiCallState>)> execute_request;
+        execute_request = [](std::shared_ptr<ApiCallState> state) {
+            static QNetworkAccessManager* api_nam = nullptr;
+            if (!api_nam)
+                api_nam = new QNetworkAccessManager;
+
+            QNetworkReply* reply = nullptr;
+            if (state->method == "POST")
+                reply = api_nam->post(state->request, state->body_bytes);
+            else if (state->method == "PUT")
+                reply = api_nam->put(state->request, state->body_bytes);
+            else if (state->method == "PATCH")
+                reply = api_nam->sendCustomRequest(state->request, "PATCH", state->body_bytes);
+            else if (state->method == "DELETE")
+                reply = api_nam->deleteResource(state->request);
+            else
+                reply = api_nam->get(state->request);
+
+            QObject::connect(reply, &QNetworkReply::finished, [reply, state]() {
+                reply->deleteLater();
+                int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+
+                if (reply->error() != QNetworkReply::NoError) {
+                    if (state->retries_left > 0) {
+                        state->retries_left--;
+                        QTimer::singleShot(1000 * (3 - state->retries_left), [state]() {
+                            execute_request(state);
+                        });
+                        return;
+                    }
+                    state->cb(false, {},
+                              QString("HTTP %1 failed (%2): %3").arg(state->method).arg(status).arg(reply->errorString()));
+                    return;
+                }
+
+                QByteArray data = reply->readAll();
+                QJsonDocument doc = QJsonDocument::fromJson(data);
+
+                QJsonObject out;
+                out["url"] = state->url;
+                out["method"] = state->method;
+                out["status_code"] = status;
+                if (!doc.isNull())
+                    out["data"] = doc.isObject() ? QJsonValue(doc.object()) : QJsonValue(doc.array());
+                else
+                    out["data"] = QString::fromUtf8(data);
+
+                // Include response headers
+                QJsonObject resp_headers;
+                for (const auto& pair : reply->rawHeaderPairs())
+                    resp_headers[QString::fromUtf8(pair.first)] = QString::fromUtf8(pair.second);
+                out["headers"] = resp_headers;
+
+                state->cb(true, out, {});
+            });
+        };
+
         api_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                               std::function<void(bool, QJsonValue, QString)> cb) {
             QString url = params.value("url").toString();
@@ -605,35 +1633,333 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 return;
             }
 
-            auto& http = HttpClient::instance();
-            auto handler = [cb, url, method](Result<QJsonDocument> result) {
-                if (result.is_err()) {
-                    cb(false, {}, QString::fromStdString(result.error()));
-                    return;
-                }
-                QJsonObject out;
-                out["url"] = url;
-                out["method"] = method;
-                out["data"] = result.value().isObject() ? QJsonValue(result.value().object())
-                                                        : QJsonValue(result.value().array());
-                cb(true, out, {});
+            QString auth_type = params.value("auth_type").toString("none");
+            QString auth_value = params.value("auth_value").toString();
+            QJsonObject custom_headers = params.value("headers").toObject();
+            QJsonObject body = params.value("body").toObject();
+            int timeout_sec = static_cast<int>(params.value("timeout_sec").toDouble(30));
+            int retry_count = static_cast<int>(params.value("retry_count").toDouble(0));
+
+            if (body.isEmpty() && !inputs.isEmpty() && inputs[0].isObject())
+                body = inputs[0].toObject();
+
+            QNetworkRequest request{QUrl{url}};
+            request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+            request.setTransferTimeout(timeout_sec * 1000);
+
+            if (auth_type == "bearer" && !auth_value.isEmpty()) {
+                request.setRawHeader("Authorization", QByteArray("Bearer ") + auth_value.toUtf8());
+            } else if (auth_type == "api_key" && !auth_value.isEmpty()) {
+                request.setRawHeader("X-API-Key", auth_value.toUtf8());
+            } else if (auth_type == "basic" && !auth_value.isEmpty()) {
+                request.setRawHeader("Authorization", QByteArray("Basic ") + auth_value.toUtf8().toBase64());
+            } else if (auth_type == "oauth2" && !auth_value.isEmpty()) {
+                request.setRawHeader("Authorization", QByteArray("Bearer ") + auth_value.toUtf8());
+            }
+
+            for (auto it = custom_headers.begin(); it != custom_headers.end(); ++it)
+                request.setRawHeader(it.key().toUtf8(), it.value().toString().toUtf8());
+
+            auto state = std::make_shared<ApiCallState>();
+            state->request = request;
+            state->body_bytes = QJsonDocument(body).toJson(QJsonDocument::Compact);
+            state->method = method;
+            state->url = url;
+            state->retries_left = retry_count;
+            state->cb = cb;
+
+            execute_request(state);
+        };
+    }
+
+    // ── PDF Generate — via QPrinter/QPainter ─────────────────────
+    auto* pdf_def = const_cast<NodeTypeDef*>(registry.find("file.pdf_generate"));
+    if (pdf_def && !pdf_def->execute) {
+        pdf_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
+                              std::function<void(bool, QJsonValue, QString)> cb) {
+            QString title = params.value("title").toString("Report");
+            QString tmpl = params.value("template").toString("default");
+            QString path = params.value("path").toString("output/report.pdf");
+            if (path.isEmpty()) {
+                cb(false, {}, "Output path is required");
+                return;
+            }
+
+            QFileInfo fi(path);
+            QDir().mkpath(fi.absolutePath());
+
+            QPrinter printer(QPrinter::HighResolution);
+            printer.setOutputFormat(QPrinter::PdfFormat);
+            printer.setOutputFileName(path);
+            printer.setPageSize(QPageSize(QPageSize::A4));
+
+            QPainter painter;
+            if (!painter.begin(&printer)) {
+                cb(false, {}, "Cannot open PDF file for writing");
+                return;
+            }
+
+            int dpi = printer.resolution();
+            int page_w = printer.pageLayout().paintRectPixels(dpi).width();
+            int margin = dpi / 2; // 0.5 inch margin
+            int y = margin;
+
+            // Title
+            QFont title_font("Segoe UI", 18, QFont::Bold);
+            if (tmpl == "financial")
+                title_font = QFont("Georgia", 20, QFont::Bold);
+            else if (tmpl == "research")
+                title_font = QFont("Palatino", 18, QFont::Bold);
+            painter.setFont(title_font);
+            painter.drawText(margin, y + painter.fontMetrics().ascent(), title);
+            y += painter.fontMetrics().height() + dpi / 4;
+
+            // Subtitle line
+            QFont sub_font("Segoe UI", 9);
+            painter.setFont(sub_font);
+            painter.setPen(QColor(100, 100, 100));
+            painter.drawText(margin, y + painter.fontMetrics().ascent(),
+                             QString("Generated: %1").arg(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm")));
+            y += painter.fontMetrics().height() + dpi / 6;
+            painter.setPen(Qt::black);
+
+            // Separator line
+            painter.drawLine(margin, y, page_w - margin, y);
+            y += dpi / 4;
+
+            // Body: render input data as a table
+            QFont body_font("Consolas", 9);
+            painter.setFont(body_font);
+            int line_h = painter.fontMetrics().height();
+            int page_h = printer.pageLayout().paintRectPixels(dpi).height();
+
+            auto new_page = [&]() {
+                printer.newPage();
+                y = margin;
             };
 
-            if (method == "POST") {
-                QJsonObject body = params.value("body").toObject();
-                if (body.isEmpty() && !inputs.isEmpty() && inputs[0].isObject())
-                    body = inputs[0].toObject();
-                http.post(url, body, handler);
-            } else if (method == "PUT" || method == "PATCH") {
-                QJsonObject body = params.value("body").toObject();
-                if (body.isEmpty() && !inputs.isEmpty() && inputs[0].isObject())
-                    body = inputs[0].toObject();
-                http.put(url, body, handler);
-            } else if (method == "DELETE") {
-                http.del(url, handler);
-            } else {
-                http.get(url, handler);
+            if (!inputs.isEmpty() && inputs[0].isArray()) {
+                QJsonArray arr = inputs[0].toArray();
+                // Table header from first object's keys
+                if (!arr.isEmpty() && arr[0].isObject()) {
+                    QStringList headers = arr[0].toObject().keys();
+                    int col_w = (page_w - 2 * margin) / qMax(1, headers.size());
+
+                    // Header row
+                    QFont hdr_font("Segoe UI", 9, QFont::Bold);
+                    painter.setFont(hdr_font);
+                    for (int c = 0; c < headers.size(); ++c)
+                        painter.drawText(margin + c * col_w, y, col_w, line_h, Qt::AlignLeft, headers[c]);
+                    y += line_h;
+                    painter.drawLine(margin, y, page_w - margin, y);
+                    y += 4;
+
+                    // Data rows
+                    painter.setFont(body_font);
+                    for (const QJsonValue& row_val : arr) {
+                        if (y + line_h > page_h - margin)
+                            new_page();
+                        QJsonObject row = row_val.toObject();
+                        for (int c = 0; c < headers.size(); ++c) {
+                            QJsonValue v = row.value(headers[c]);
+                            QString text = v.isString() ? v.toString() : QString::number(v.toDouble(), 'f', 4);
+                            painter.drawText(margin + c * col_w, y, col_w - 8, line_h, Qt::AlignLeft, text);
+                        }
+                        y += line_h;
+                    }
+                }
+            } else if (!inputs.isEmpty() && inputs[0].isObject()) {
+                // Key-value pairs
+                QJsonObject obj = inputs[0].toObject();
+                for (auto it = obj.begin(); it != obj.end(); ++it) {
+                    if (y + line_h > page_h - margin)
+                        new_page();
+                    QString val = it.value().isString() ? it.value().toString()
+                                                        : QString::number(it.value().toDouble(), 'f', 4);
+                    painter.drawText(margin, y, it.key() + ": " + val);
+                    y += line_h;
+                }
+            } else if (!inputs.isEmpty() && inputs[0].isString()) {
+                // Plain text
+                QStringList lines = inputs[0].toString().split('\n');
+                for (const QString& line : lines) {
+                    if (y + line_h > page_h - margin)
+                        new_page();
+                    painter.drawText(margin, y + painter.fontMetrics().ascent(), line);
+                    y += line_h;
+                }
             }
+
+            painter.end();
+
+            QJsonObject out;
+            out["path"] = path;
+            out["title"] = title;
+            out["template"] = tmpl;
+            out["size"] = QFileInfo(path).size();
+            cb(true, out, {});
+        };
+    }
+
+    // ── Image Chart — via PythonRunner + matplotlib ──────────────
+    auto* chart_def = const_cast<NodeTypeDef*>(registry.find("file.image_chart"));
+    if (chart_def && !chart_def->execute) {
+        chart_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
+                                std::function<void(bool, QJsonValue, QString)> cb) {
+            QString chart_type = params.value("chart_type").toString("line");
+            QString title = params.value("title").toString("");
+            int width = static_cast<int>(params.value("width").toDouble(800));
+            int height = static_cast<int>(params.value("height").toDouble(600));
+            QString path = params.value("path").toString("output/chart.png");
+            if (path.isEmpty()) {
+                cb(false, {}, "Output path is required");
+                return;
+            }
+
+            QJsonValue data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
+            QString data_json = QString::fromUtf8(
+                data.isObject() ? QJsonDocument(data.toObject()).toJson(QJsonDocument::Compact)
+                                : QJsonDocument(data.toArray()).toJson(QJsonDocument::Compact));
+
+            QString code = QString(R"PY(
+import json, os, sys
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+except ImportError:
+    print(json.dumps({"error": "matplotlib not installed"}))
+    sys.exit(0)
+
+data = json.loads(r'''%1''')
+chart_type = '%2'
+title = '%3'
+width = %4
+height = %5
+path = r'%6'
+
+os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+
+fig, ax = plt.subplots(figsize=(width/100, height/100), dpi=100)
+fig.patch.set_facecolor('#1a1a2e')
+ax.set_facecolor('#16213e')
+ax.tick_params(colors='#a0a0a0')
+ax.spines['bottom'].set_color('#404060')
+ax.spines['left'].set_color('#404060')
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+
+if isinstance(data, list) and len(data) > 0:
+    if isinstance(data[0], dict):
+        keys = list(data[0].keys())
+        x_key = keys[0]
+        y_keys = [k for k in keys[1:] if isinstance(data[0].get(k), (int, float))]
+        x_vals = [row.get(x_key, i) for i, row in enumerate(data)]
+        if not y_keys:
+            y_keys = [x_key]
+            x_vals = list(range(len(data)))
+
+        if chart_type == 'bar':
+            import numpy as np
+            x_pos = np.arange(len(x_vals))
+            bar_w = 0.8 / max(1, len(y_keys))
+            for i, yk in enumerate(y_keys):
+                vals = [row.get(yk, 0) for row in data]
+                ax.bar(x_pos + i * bar_w, vals, bar_w, label=yk, alpha=0.85)
+            ax.set_xticks(x_pos + bar_w * (len(y_keys)-1) / 2)
+            ax.set_xticklabels([str(v)[:12] for v in x_vals], rotation=45, ha='right', fontsize=7)
+        elif chart_type == 'scatter':
+            if len(y_keys) >= 2:
+                xs = [row.get(y_keys[0], 0) for row in data]
+                ys = [row.get(y_keys[1], 0) for row in data]
+                ax.scatter(xs, ys, alpha=0.7, c='#00d4aa', s=30)
+                ax.set_xlabel(y_keys[0], color='#a0a0a0')
+                ax.set_ylabel(y_keys[1], color='#a0a0a0')
+            else:
+                vals = [row.get(y_keys[0], 0) for row in data]
+                ax.scatter(range(len(vals)), vals, alpha=0.7, c='#00d4aa', s=30)
+        elif chart_type == 'pie':
+            vals = [row.get(y_keys[0], 0) for row in data]
+            labels = [str(v)[:15] for v in x_vals]
+            ax.set_facecolor('#1a1a2e')
+            ax.pie(vals, labels=labels, autopct='%%1.1f%%%%', textprops={'color': '#d0d0d0', 'fontsize': 8})
+        elif chart_type == 'heatmap':
+            import numpy as np
+            matrix = [[row.get(k, 0) for k in y_keys] for row in data]
+            im = ax.imshow(matrix, aspect='auto', cmap='viridis')
+            ax.set_xticks(range(len(y_keys)))
+            ax.set_xticklabels(y_keys, rotation=45, ha='right', fontsize=7)
+            ax.set_yticks(range(len(x_vals)))
+            ax.set_yticklabels([str(v)[:12] for v in x_vals], fontsize=7)
+            fig.colorbar(im, ax=ax)
+        elif chart_type == 'candlestick':
+            ohlc_keys = {'open': None, 'high': None, 'low': None, 'close': None}
+            for k in keys:
+                kl = k.lower()
+                for ok in ohlc_keys:
+                    if ok in kl:
+                        ohlc_keys[ok] = k
+            if all(ohlc_keys.values()):
+                for i, row in enumerate(data):
+                    o = row.get(ohlc_keys['open'], 0)
+                    h = row.get(ohlc_keys['high'], 0)
+                    l = row.get(ohlc_keys['low'], 0)
+                    c = row.get(ohlc_keys['close'], 0)
+                    color = '#00d4aa' if c >= o else '#ff6b6b'
+                    ax.plot([i, i], [l, h], color=color, linewidth=0.8)
+                    ax.plot([i, i], [o, c], color=color, linewidth=3.5)
+            else:
+                vals = [row.get(y_keys[0], 0) for row in data]
+                ax.plot(vals, color='#00d4aa', linewidth=1.2)
+        else:  # line
+            for yk in y_keys:
+                vals = [row.get(yk, 0) for row in data]
+                ax.plot(vals, label=yk, linewidth=1.2)
+            if len(y_keys) > 1:
+                ax.legend(fontsize=8, facecolor='#1a1a2e', edgecolor='#404060', labelcolor='#d0d0d0')
+    else:
+        ax.plot(data, color='#00d4aa', linewidth=1.2)
+
+if title:
+    ax.set_title(title, color='#e0e0e0', fontsize=12, pad=10)
+
+plt.tight_layout()
+plt.savefig(path, dpi=100, facecolor=fig.get_facecolor(), bbox_inches='tight')
+plt.close()
+
+print(json.dumps({"path": path, "chart_type": chart_type, "size": os.path.getsize(path)}))
+)PY")
+                                        .arg(data_json.replace("\\", "\\\\").replace("'", "\\'"))
+                                        .arg(chart_type)
+                                        .arg(title.replace("'", "\\'"))
+                                        .arg(width)
+                                        .arg(height)
+                                        .arg(path.replace("\\", "/").replace("'", "\\'"));
+
+            PythonRunner::instance().run_code(code, [cb, path, chart_type](const PythonResult& res) {
+                if (!res.success) {
+                    cb(false, {}, res.error.isEmpty() ? "Chart generation failed" : res.error);
+                    return;
+                }
+                QString json_str = extract_json(res.output).trimmed();
+                if (!json_str.isEmpty()) {
+                    auto doc = QJsonDocument::fromJson(json_str.toUtf8());
+                    if (!doc.isNull() && doc.isObject()) {
+                        QJsonObject out = doc.object();
+                        if (out.contains("error")) {
+                            cb(false, {}, out.value("error").toString());
+                            return;
+                        }
+                        cb(true, out, {});
+                        return;
+                    }
+                }
+                QJsonObject out;
+                out["path"] = path;
+                out["chart_type"] = chart_type;
+                cb(true, out, {});
+            });
         };
     }
 

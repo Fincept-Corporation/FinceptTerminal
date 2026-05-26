@@ -5,6 +5,7 @@
 #include "datahub/DataHubMetaTypes.h"
 #include "screens/fno/MultiStraddleChart.h"
 #include "services/options/OISnapshotter.h"
+#include "services/options/OptionChainService.h"
 #include "ui/theme/Theme.h"
 
 #include <QComboBox>
@@ -146,6 +147,17 @@ void MultiStraddleSubTab::setup_ui() {
     split->setStretchFactor(0, 1);
     split->setStretchFactor(1, 4);
     root->addWidget(split, 1);
+
+    connect(&fincept::services::options::OptionChainService::instance(),
+            &fincept::services::options::OptionChainService::chain_published,
+            this, [this](const fincept::services::options::OptionChain& chain) {
+                on_chain_published(QVariant::fromValue(chain));
+            });
+    chain_subscribed_ = true;
+
+    const auto& cached = fincept::services::options::OptionChainService::instance().last_chain();
+    if (!cached.rows.isEmpty())
+        on_chain_published(QVariant::fromValue(cached));
 }
 
 QVariantMap MultiStraddleSubTab::save_state() const { return {}; }
@@ -167,14 +179,6 @@ void MultiStraddleSubTab::showEvent(QShowEvent* e) {
 
 void MultiStraddleSubTab::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
-    if (!chain_subscribed_)
-        return;
-    auto& hub = fincept::datahub::DataHub::instance();
-    hub.unsubscribe_pattern(this, QStringLiteral("option:chain:*"));
-    // Also drop any per-token oi:history subscriptions — they re-subscribe
-    // when the user re-shows the tab and adds selections again.
-    hub.unsubscribe(this);
-    chain_subscribed_ = false;
 }
 
 void MultiStraddleSubTab::on_chain_published(const QVariant& v) {

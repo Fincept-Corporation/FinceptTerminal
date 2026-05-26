@@ -59,7 +59,8 @@ void PortfolioSectorPanel::build_ui() {
     // beneath this single header, separated by a hairline. The old design
     // gave each a 9-11px inline title; consolidating them here keeps the
     // panel header treatment consistent with HOLDINGS / PERFORMANCE / etc.
-    auto panel_hdr = make_panel_header("SECTORS", this);
+    auto panel_hdr = make_panel_header(tr("SECTORS"), this);
+    title_label_ = panel_hdr.title_label;
     layout->addWidget(panel_hdr.header);
 
     // ── Top: Sector Allocation (60%) ──────────────────────────────────────────
@@ -104,14 +105,14 @@ void PortfolioSectorPanel::build_ui() {
     // Inline sub-section title (smaller weight than the unified panel header
     // above — this is a sub-block within ▌SECTORS, not a peer panel).
     auto* corr_header = new QHBoxLayout;
-    auto* corr_title = new QLabel("CORRELATION");
-    corr_title->setStyleSheet(
+    corr_title_ = new QLabel(tr("CORRELATION"));
+    corr_title_->setStyleSheet(
         QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY()));
-    corr_header->addWidget(corr_title);
+    corr_header->addWidget(corr_title_);
 
-    auto* corr_note = new QLabel("(P&L return proxy, top 6 by weight)");
-    corr_note->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_DIM()));
-    corr_header->addWidget(corr_note);
+    corr_note_ = new QLabel(tr("(P&L return proxy, top 6 by weight)"));
+    corr_note_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_DIM()));
+    corr_header->addWidget(corr_note_);
     corr_header->addStretch();
     corr_layout->addLayout(corr_header);
 
@@ -161,7 +162,7 @@ void PortfolioSectorPanel::update_donut() {
     QHash<QString, int> sector_counts;
 
     for (const auto& h : holdings_) {
-        QString sector = h.sector.isEmpty() ? QStringLiteral("Unclassified") : h.sector;
+        QString sector = h.sector.isEmpty() ? tr("Unclassified") : h.sector;
         sector_weights[sector] += h.weight;
         sector_pnl[sector] += h.unrealized_pnl;
         sector_counts[sector]++;
@@ -265,7 +266,7 @@ void PortfolioSectorPanel::update_correlation() {
 
     if (holdings_.size() < 2) {
         auto* layout = new QVBoxLayout(corr_widget_);
-        auto* msg = new QLabel("Need 2+ holdings for correlation");
+        auto* msg = new QLabel(tr("Need 2+ holdings for correlation"));
         msg->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
         msg->setAlignment(Qt::AlignCenter);
         layout->addWidget(msg);
@@ -348,6 +349,24 @@ void PortfolioSectorPanel::update_correlation() {
             grid->addWidget(cell, r + 1, c + 1);
         }
     }
+}
+
+void PortfolioSectorPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PortfolioSectorPanel::retranslateUi() {
+    if (title_label_) title_label_->setText(tr("SECTORS"));
+    if (corr_title_)  corr_title_->setText(tr("CORRELATION"));
+    if (corr_note_)   corr_note_->setText(tr("(P&L return proxy, top 6 by weight)"));
+
+    // Donut legend uses translated "Unclassified" + sector data; matrix shows
+    // "Need 2+ holdings for correlation" or a grid. Re-run both so the strings
+    // pick up the new locale.
+    update_donut();
+    update_correlation();
 }
 
 bool PortfolioSectorPanel::eventFilter(QObject* obj, QEvent* event) {

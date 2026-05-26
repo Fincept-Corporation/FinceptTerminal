@@ -10,7 +10,7 @@
 namespace fincept::screens::widgets {
 
 StockQuoteWidget::StockQuoteWidget(const QString& symbol, QWidget* parent)
-    : BaseWidget(QString("QUOTE: %1").arg(symbol.toUpper()), parent), symbol_(symbol.toUpper()) {
+    : BaseWidget(tr("QUOTE: %1").arg(symbol.toUpper()), parent), symbol_(symbol.toUpper()) {
     auto* vl = content_layout();
     vl->setContentsMargins(12, 8, 12, 8);
     vl->setSpacing(8);
@@ -72,11 +72,11 @@ StockQuoteWidget::StockQuoteWidget(const QString& symbol, QWidget* parent)
         gl->addWidget(cell, row, col);
     };
 
-    make_stat(0, 0, "OPEN", open_val_);
-    make_stat(0, 1, "PREV CLOSE", prev_val_);
-    make_stat(1, 0, "HIGH", high_val_);
-    make_stat(1, 1, "LOW", low_val_);
-    make_stat(2, 0, "VOLUME", volume_val_);
+    make_stat(0, 0, tr("OPEN"), open_val_);
+    make_stat(0, 1, tr("PREV CLOSE"), prev_val_);
+    make_stat(1, 0, tr("HIGH"), high_val_);
+    make_stat(1, 1, tr("LOW"), low_val_);
+    make_stat(2, 0, tr("VOLUME"), volume_val_);
 
     vl->addWidget(stats);
     vl->addStretch();
@@ -126,7 +126,7 @@ void StockQuoteWidget::hideEvent(QHideEvent* e) {
 
 void StockQuoteWidget::set_symbol(const QString& symbol) {
     symbol_ = symbol.toUpper();
-    set_title(QString("QUOTE: %1").arg(symbol_));
+    set_title(tr("QUOTE: %1").arg(symbol_));
     // Re-subscribe to the new topic; old sub for previous symbol is
     // dropped wholesale by `unsubscribe(this)` inside hub_resubscribe().
     if (isVisible())
@@ -192,6 +192,12 @@ void StockQuoteWidget::populate(const services::QuoteData& q) {
         volume_val_->setText(QString("%1K").arg(q.volume / 1e3, 0, 'f', 1));
     else
         volume_val_->setText(QString::number(static_cast<int>(q.volume)));
+}
+
+void StockQuoteWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("QUOTE: %1").arg(symbol_));
+    refresh_data(); // re-renders stat cell labels in the new language
 }
 
 } // namespace fincept::screens::widgets

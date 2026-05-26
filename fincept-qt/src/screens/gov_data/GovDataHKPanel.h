@@ -25,6 +25,9 @@ class GovDataHKPanel : public QWidget {
   public slots:
     void load_initial_data();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_result(const QString& request_id, const services::GovDataResult& result);
     void on_category_clicked(int row);
@@ -39,6 +42,7 @@ class GovDataHKPanel : public QWidget {
 
     void build_ui();
     QWidget* build_toolbar();
+    void retranslateUi();
 
     void populate_categories(const QJsonArray& data);
     void populate_datasets(const QJsonArray& data);

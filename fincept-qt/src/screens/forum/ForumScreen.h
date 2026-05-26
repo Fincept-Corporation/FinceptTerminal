@@ -1,6 +1,6 @@
 // src/screens/forum/ForumScreen.h
 #pragma once
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/forum/ForumModels.h"
 
 #include <QHBoxLayout>

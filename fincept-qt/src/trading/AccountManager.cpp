@@ -44,6 +44,16 @@ void AccountManager::load_from_db() {
     for (auto& a : r.value())
         accounts_.insert(a.account_id, std::move(a));
     LOG_INFO("AccountManager", QString("Loaded %1 broker accounts from DB").arg(accounts_.size()));
+
+    // Restore connection state from persisted credentials.
+    // If an account has a saved access_token, mark it as Connected (optimistic).
+    // The first API call will detect token expiry and update the state.
+    auto& secure = SecureStorage::instance();
+    for (auto it = accounts_.begin(); it != accounts_.end(); ++it) {
+        auto token_r = secure.retrieve(acct_key(it->account_id, "access_token"));
+        if (token_r.is_ok() && !token_r.value().isEmpty())
+            it->state = ConnectionState::Connected;
+    }
 }
 
 // ── Legacy credential migration ─────────────────────────────────────────────
@@ -328,6 +338,7 @@ void AccountManager::save_credentials(const QString& account_id, const BrokerCre
     secure.store(acct_key(account_id, "api_key"), creds.api_key);
     secure.store(acct_key(account_id, "api_secret"), creds.api_secret);
     secure.store(acct_key(account_id, "access_token"), creds.access_token);
+    secure.store(acct_key(account_id, "refresh_token"), creds.refresh_token);
     secure.store(acct_key(account_id, "user_id"), creds.user_id);
     secure.store(acct_key(account_id, "additional_data"), creds.additional_data);
 }
@@ -350,6 +361,8 @@ BrokerCredentials AccountManager::load_credentials(const QString& account_id) co
     if (r.is_ok()) creds.api_secret = r.value();
     r = secure.retrieve(acct_key(account_id, "access_token"));
     if (r.is_ok()) creds.access_token = r.value();
+    r = secure.retrieve(acct_key(account_id, "refresh_token"));
+    if (r.is_ok()) creds.refresh_token = r.value();
     r = secure.retrieve(acct_key(account_id, "user_id"));
     if (r.is_ok()) creds.user_id = r.value();
     r = secure.retrieve(acct_key(account_id, "additional_data"));
@@ -363,6 +376,7 @@ void AccountManager::clear_credentials(const QString& account_id) {
     secure.remove(acct_key(account_id, "api_key"));
     secure.remove(acct_key(account_id, "api_secret"));
     secure.remove(acct_key(account_id, "access_token"));
+    secure.remove(acct_key(account_id, "refresh_token"));
     secure.remove(acct_key(account_id, "user_id"));
     secure.remove(acct_key(account_id, "additional_data"));
 }

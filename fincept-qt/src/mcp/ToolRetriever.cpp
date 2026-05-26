@@ -28,11 +28,13 @@ void ToolRetriever::invalidate() {
 
 // ── Stop words ──────────────────────────────────────────────────────────
 //
-// Conservative list — common English function words plus a few generic
-// command verbs that appear in nearly every tool description ("get", "set",
-// "list") and so carry no discriminative signal under BM25's IDF term.
-// Domain words ("price", "report", "trade", "news") are intentionally KEPT
-// — those are the ones that matter for tool-pick.
+// Conservative list — only common English function words. Generic command
+// verbs ("get", "set", "list", "show", "run") WERE in this list, but the
+// quality battery revealed that stripping them collapses verb-cued queries:
+// "show me the watchlist" became indistinguishable from "watchlist", so all
+// four watchlist tools tied and `delete_watchlist` won on alphabetical order.
+// We now keep verb tokens; BM25's IDF naturally down-weights them since
+// they appear across many tools.
 static const QSet<QString>& stop_word_set() {
     static const QSet<QString> kStop = {
         "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
@@ -45,11 +47,101 @@ static const QSet<QString>& stop_word_set() {
         "all", "any", "both", "each", "few", "more", "most", "other", "some",
         "such", "no", "not", "only", "own", "same", "than", "too", "very",
         "just", "also", "now", "then", "here", "there",
-        // Generic verbs that carry no discriminative weight in tool descs
-        "get", "set", "list", "show", "give", "make", "use", "run",
     };
     return kStop;
 }
+
+// ── Query-side synonyms ─────────────────────────────────────────────────
+//
+// Applied ONLY when tokenising the query, never the indexed docs. Expands
+// natural-language phrasings into the vocabulary actually used in tool
+// names ("price" → "quote", "buy/sell" → "order/trade", "tab/screen" →
+// "navigate"). Each entry adds tokens; the original token stays in the
+// stream so a literal match still scores.
+//
+// Keep this map small and audit-friendly — anything broader belongs in a
+// proper embedding model. Domain words first; UI/navigation verbs second.
+static const QHash<QString, QStringList>& query_synonyms() {
+    static const QHash<QString, QStringList> kSyn = {
+        // Markets / equity
+        {"price",    {"quote"}},
+        {"prices",   {"quote", "historical"}},
+        {"ticker",   {"symbol"}},
+        {"company",  {"symbol", "equity"}},
+        {"chart",    {"ohlc"}},
+        // Trading
+        {"buy",      {"order", "trade", "place"}},
+        {"sell",     {"order", "trade", "place"}},
+        {"order",    {"trade"}},
+        {"trade",    {"order"}},
+        // Navigation / UI
+        {"tab",      {"navigate", "screen"}},
+        {"screen",   {"navigate", "tab"}},
+        {"page",     {"navigate", "tab"}},
+        {"open",     {"navigate"}},
+        {"switch",   {"navigate"}},
+        {"window",   {"panel"}},
+        // Portfolio
+        {"pnl",      {"profit", "portfolio"}},
+        {"profit",   {"portfolio", "pnl"}},
+        {"holdings", {"portfolio", "holding"}},
+        // Filings
+        {"filings",  {"edgar"}},
+        {"filing",   {"edgar"}},
+        {"sec",      {"edgar"}},
+        {"earnings", {"financials"}},
+        // Strategy / analytics
+        {"strategy", {"backtest"}},
+        {"sharpe",   {"risk", "metrics"}},
+        {"var",      {"risk"}},
+    };
+    return kSyn;
+}
+
+// Read-style verbs vs mutate-style verbs. Used by the destructive-tool
+// penalty: if the query reads like an inspection ("show me X", "list X")
+// and contains no mutate verb, score destructive tools at half weight so
+// `delete_watchlist` stops outranking `add_to_watchlist` for "show me the
+// watchlist".
+static const QSet<QString>& read_verbs() {
+    static const QSet<QString> kRead = {
+        "show", "list", "view", "find", "get", "fetch", "lookup",
+        "describe", "search", "display", "see", "read", "inspect",
+        "explore", "what", "which", "tell",
+    };
+    return kRead;
+}
+static const QSet<QString>& mutate_verbs() {
+    static const QSet<QString> kMutate = {
+        "delete", "remove", "drop", "clear",
+        "add", "create", "insert", "append", "import",
+        "place", "submit", "send", "post",
+        "set", "update", "modify", "edit", "rename",
+        "cancel", "stop", "kill",
+        "save", "store", "export", "write",
+    };
+    return kMutate;
+}
+
+// Specialist categories — these have many tools that keyword-match generic
+// queries (e.g. quant-lab's 100 tools mention "factor/risk/model") and
+// drown out simpler tools. Each entry maps category → cue tokens that
+// signal genuine intent for that specialist. If a query contains NO cue
+// for a specialist, every tool in it is demoted at scoring time.
+static const QHash<QString, QSet<QString>>& specialist_categories() {
+    static const QHash<QString, QSet<QString>> kSpec = {
+        {"quant-lab",         {"quant", "factor", "backtest", "alpha", "ic",
+                               "rl", "ml", "ml-ops", "alphalens", "qlib"}},
+        {"surface-analytics", {"surface", "vol", "volatility", "skew",
+                               "databento", "iv"}},
+        {"alt-investments",   {"alt", "junk", "convertible", "preferred",
+                               "private", "venture", "hedge", "yield"}},
+    };
+    return kSpec;
+}
+static constexpr double kSpecialistPenalty = 0.7;
+static constexpr double kDestructivePenalty = 0.5;
+static constexpr double kNameMatchBonus = 2.0;
 
 bool ToolRetriever::is_stop_word(const QString& token) {
     return stop_word_set().contains(token);
@@ -108,6 +200,8 @@ void ToolRetriever::rebuild_index_locked() {
         const auto name_tok = tokenise(t.name);
         for (int i = 0; i < 3; ++i)
             tokens.append(name_tok);
+        for (const auto& nt : name_tok)
+            d.name_token_set.insert(nt);
 
         const QJsonObject props = t.input_schema["properties"].toObject();
         for (auto it = props.constBegin(); it != props.constEnd(); ++it) {
@@ -171,9 +265,63 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
     if (docs_.empty())
         return {};
 
-    const QStringList q_tokens = tokenise(q);
+    QStringList q_tokens = tokenise(q);
     if (q_tokens.isEmpty())
         return {};
+
+    // ── Query intent detection (before synonym expansion) ──────────────
+    // Look for read-style verbs vs mutate-style verbs in the *raw* query
+    // tokens. If the user clearly wants a read action ("show me X", "list
+    // X", "find X") and never says delete/place/cancel/etc, we'll halve
+    // the score of every destructive tool below — this stops things like
+    // `delete_watchlist` outranking `add_to_watchlist` on "show watchlist".
+    bool has_read_verb = false;
+    bool has_mutate_verb = false;
+    for (const auto& tok : q_tokens) {
+        if (read_verbs().contains(tok))   has_read_verb = true;
+        if (mutate_verbs().contains(tok)) has_mutate_verb = true;
+    }
+    const bool penalize_destructive = has_read_verb && !has_mutate_verb;
+
+    // ── Specialist-category gating ─────────────────────────────────────
+    // For each specialist category, decide whether ANY query token is a
+    // genuine cue (e.g. "quant"/"backtest" for quant-lab). Categories with
+    // no cue get demoted at scoring time. This stops the 100 quant_* tools
+    // from drowning out a plain "compute Sharpe ratio" query.
+    QSet<QString> demoted_categories;
+    {
+        const QSet<QString> q_set(q_tokens.begin(), q_tokens.end());
+        for (auto it = specialist_categories().constBegin();
+             it != specialist_categories().constEnd(); ++it) {
+            bool has_cue = false;
+            for (const auto& cue : it.value()) {
+                if (q_set.contains(cue)) { has_cue = true; break; }
+            }
+            if (!has_cue)
+                demoted_categories.insert(it.key());
+        }
+    }
+
+    // ── Query expansion via synonyms ───────────────────────────────────
+    // Append synonym tokens AFTER the BM25 vocabulary has been used to
+    // measure IDF, so synonym hits contribute to scoring without inflating
+    // term frequencies in the index. The original token stays in q_tokens.
+    {
+        QStringList expanded;
+        expanded.reserve(q_tokens.size() * 2);
+        const auto& syn = query_synonyms();
+        for (const auto& tok : q_tokens) {
+            expanded.append(tok);
+            auto it = syn.constFind(tok);
+            if (it != syn.constEnd()) {
+                for (const auto& s : it.value()) {
+                    if (!expanded.contains(s))
+                        expanded.append(s);
+                }
+            }
+        }
+        q_tokens = std::move(expanded);
+    }
 
     const double N = static_cast<double>(docs_.size());
 
@@ -203,6 +351,7 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
             continue;
 
         double s = 0.0;
+        int name_hits = 0;
         for (const auto& q_term : q_tokens) {
             const int df = df_.value(q_term, 0);
             if (df == 0)
@@ -223,10 +372,26 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
             const double norm = 1.0 - kB + kB * (static_cast<double>(d.length) / avg_doc_length_);
             const double tf_part = (tf * (kK1 + 1.0)) / (tf + kK1 * norm);
             s += idf * tf_part;
+
+            // Exact-name bonus: query token literally appears in the tool's
+            // name (after tokenisation). Counted once per query token, not
+            // per TF — we already weight name tokens 3× during indexing.
+            if (d.name_token_set.contains(q_term))
+                ++name_hits;
         }
 
-        if (s > 0.0)
-            scored.push_back({static_cast<int>(i), s});
+        if (s <= 0.0)
+            continue;
+
+        // ── Adjustments (applied after the BM25 sum) ──────────────────
+        if (name_hits > 0)
+            s += kNameMatchBonus * name_hits;
+        if (penalize_destructive && d.is_destructive)
+            s *= kDestructivePenalty;
+        if (demoted_categories.contains(d.category))
+            s *= kSpecialistPenalty;
+
+        scored.push_back({static_cast<int>(i), s});
     }
 
     // Top-K via partial sort — O(N log K) instead of O(N log N).

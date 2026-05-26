@@ -8,7 +8,9 @@
 #include "screens/fno/FnoHeaderBar.h"
 #include "screens/fno/OptionChainModel.h"
 #include "screens/fno/OptionChainTable.h"
+#include "services/databento/DatabentoService.h"
 #include "services/options/OptionChainService.h"
+#include "trading/AccountManager.h"
 #include "trading/AccountManager.h"
 #include "trading/instruments/InstrumentService.h"
 #include "ui/theme/Theme.h"
@@ -29,6 +31,14 @@ using fincept::services::options::OptionChainService;
 using fincept::trading::AccountManager;
 using fincept::trading::BrokerAccount;
 using fincept::trading::InstrumentService;
+
+static QString find_account_for_broker(const QString& broker_id) {
+    auto accounts = AccountManager::instance().list_accounts(broker_id);
+    for (const auto& acct : accounts)
+        if (acct.is_active)
+            return acct.account_id;
+    return accounts.isEmpty() ? QString{} : accounts[0].account_id;
+}
 
 ChainSubTab::ChainSubTab(QWidget* parent) : QWidget(parent) {
     setObjectName("fnoChainTab");
@@ -67,16 +77,27 @@ ChainSubTab::ChainSubTab(QWidget* parent) : QWidget(parent) {
     connect(header_, &FnoHeaderBar::expiry_changed, this, &ChainSubTab::on_expiry_changed);
     connect(header_, &FnoHeaderBar::refresh_requested, this, &ChainSubTab::on_refresh_clicked);
 
-    // Populate broker picker from connected accounts. Defer one tick so the
-    // AccountManager is fully wired even if we're constructed during startup.
+    connect(&InstrumentService::instance(), &InstrumentService::refresh_done,
+            this, [this](const QString& broker_id) {
+                if (broker_id == header_->broker_id())
+                    rebuild_picker_for_broker(broker_id, true);
+            });
+    connect(&InstrumentService::instance(), &InstrumentService::refresh_failed,
+            this, [this](const QString& broker_id, const QString& error) {
+                if (broker_id == header_->broker_id())
+                    show_empty_state(QString("Failed to load %1 instruments: %2").arg(broker_id, error));
+            });
+
+    // Populate broker picker from connected accounts + Databento (always visible).
     QTimer::singleShot(0, this, [this]() {
         QStringList broker_ids;
+        broker_ids.append(QStringLiteral("databento"));
         for (const auto& acc : AccountManager::instance().active_accounts()) {
             if (!broker_ids.contains(acc.broker_id))
                 broker_ids.append(acc.broker_id);
         }
         if (broker_ids.isEmpty()) {
-            show_empty_state("No broker accounts. Connect one in Equity Trading first.");
+            show_empty_state("No broker accounts or data sources configured.");
             return;
         }
         const QString prefer = !last_broker_.isEmpty() && broker_ids.contains(last_broker_)
@@ -137,6 +158,7 @@ void ChainSubTab::hideEvent(QHideEvent* e) {
 }
 
 void ChainSubTab::on_broker_changed(const QString& broker_id) {
+    LOG_INFO("FnoChain", QString("on_broker_changed: '%1'").arg(broker_id));
     last_broker_ = broker_id;
     rebuild_picker_for_broker(broker_id, /*keep_selection*/ true);
 }
@@ -166,9 +188,14 @@ void ChainSubTab::on_underlying_changed(const QString& underlying) {
     };
     fincept::SymbolRef ref;
     ref.symbol = underlying;
-    ref.asset_class = kIndexNames.contains(underlying) ? QStringLiteral("index")
-                                                       : QStringLiteral("equity");
-    ref.exchange = QStringLiteral("NSE");
+    if (header_->broker_id() == QStringLiteral("databento")) {
+        ref.asset_class = QStringLiteral("equity");
+        ref.exchange = QStringLiteral("US");
+    } else {
+        ref.asset_class = kIndexNames.contains(underlying) ? QStringLiteral("index")
+                                                           : QStringLiteral("equity");
+        ref.exchange = QStringLiteral("NSE");
+    }
     fincept::SymbolContext::instance().set_group_symbol(link_group, ref, this);
 }
 
@@ -186,19 +213,65 @@ void ChainSubTab::on_refresh_clicked() {
 }
 
 void ChainSubTab::rebuild_picker_for_broker(const QString& broker_id, bool keep_selection) {
+    LOG_INFO("FnoChain", QString("rebuild_picker_for_broker: broker='%1' keep=%2").arg(broker_id).arg(keep_selection));
     if (broker_id.isEmpty()) {
+        LOG_WARN("FnoChain", "rebuild_picker_for_broker: empty broker_id — showing 'Select a broker'");
         show_empty_state("Select a broker.");
         return;
     }
-    if (!InstrumentService::instance().is_loaded(broker_id)) {
-        show_empty_state(QString("Instruments not yet loaded for %1. Switch to Equity Trading "
-                                 "to trigger a refresh, or wait for the cache to populate.")
-                             .arg(broker_id));
+    if (broker_id == QStringLiteral("databento")) {
+        if (!fincept::DatabentoService::instance().has_api_key()) {
+            show_empty_state("Databento selected — enter your API key in Settings > Credentials to load US options data.");
+            header_->set_underlyings({});
+            header_->set_expiries({});
+            return;
+        }
+        auto unders = OptionChainService::instance().list_underlyings(QStringLiteral("databento"));
+        if (unders.isEmpty()) {
+            show_empty_state("Databento configuration error.");
+            return;
+        }
+        QString prefer;
+        if (keep_selection && unders.contains(last_underlying_))
+            prefer = last_underlying_;
+        else
+            prefer = unders.contains(QStringLiteral("SPY")) ? QStringLiteral("SPY") : unders.first();
+        header_->set_underlyings(unders, prefer);
+        rebuild_expiries_for_underlying(QStringLiteral("databento"), prefer, keep_selection);
+        return;
+    }
+    const bool loaded = InstrumentService::instance().is_loaded(broker_id);
+    LOG_INFO("FnoChain", QString("rebuild_picker_for_broker: is_loaded('%1')=%2").arg(broker_id).arg(loaded));
+    if (!loaded) {
+        show_empty_state(QString("Loading %1 instruments...").arg(broker_id));
         header_->set_underlyings({});
         header_->set_expiries({});
+
+        QPointer<ChainSubTab> self = this;
+        InstrumentService::instance().load_from_db_async(broker_id, [self, broker_id](int count) {
+            if (!self) {
+                LOG_WARN("FnoChain", QString("load_from_db_async callback: widget destroyed, broker='%1'").arg(broker_id));
+                return;
+            }
+            LOG_INFO("FnoChain", QString("load_from_db_async callback: broker='%1' count=%2").arg(broker_id).arg(count));
+            if (count > 0) {
+                self->rebuild_picker_for_broker(broker_id, true);
+                return;
+            }
+            QString account_id = find_account_for_broker(broker_id);
+            LOG_INFO("FnoChain", QString("find_account_for_broker('%1') → '%2'").arg(broker_id, account_id));
+            if (account_id.isEmpty()) {
+                self->show_empty_state(QString("No account configured for %1. Connect one in Equity Trading.").arg(broker_id));
+                return;
+            }
+            self->show_empty_state(QString("Downloading %1 instruments from broker...").arg(broker_id));
+            auto creds = trading::AccountManager::instance().load_credentials(account_id);
+            InstrumentService::instance().refresh(broker_id, creds);
+        });
         return;
     }
     auto unders = OptionChainService::instance().list_underlyings(broker_id);
+    LOG_INFO("FnoChain", QString("list_underlyings('%1') → %2 items").arg(broker_id).arg(unders.size()));
     if (unders.isEmpty()) {
         show_empty_state("No NFO instruments cached for " + broker_id + ".");
         header_->set_underlyings({});
@@ -210,13 +283,57 @@ void ChainSubTab::rebuild_picker_for_broker(const QString& broker_id, bool keep_
         prefer = last_underlying_;
     else
         prefer = unders.contains("NIFTY") ? "NIFTY" : unders.first();
+    LOG_INFO("FnoChain", QString("Setting underlyings for '%1', prefer='%2' (%3 items)")
+                             .arg(broker_id, prefer).arg(unders.size()));
     header_->set_underlyings(unders, prefer);
+    LOG_INFO("FnoChain", "set_underlyings done, calling rebuild_expiries_for_underlying");
     rebuild_expiries_for_underlying(broker_id, prefer, keep_selection);
+    LOG_INFO("FnoChain", "rebuild_expiries_for_underlying done");
 }
 
 void ChainSubTab::rebuild_expiries_for_underlying(const QString& broker_id, const QString& underlying,
                                                   bool keep_selection) {
+    if (broker_id == QStringLiteral("databento")) {
+        auto cached = OptionChainService::instance().list_expiries(QStringLiteral("databento"), underlying);
+        if (!cached.isEmpty()) {
+            QString prefer;
+            if (keep_selection && cached.contains(last_expiry_))
+                prefer = last_expiry_;
+            else
+                prefer = cached.first();
+            header_->set_expiries(cached, prefer);
+            if (is_visible_)
+                resubscribe();
+            return;
+        }
+        header_->set_expiries({});
+        show_empty_state(QString("Loading expiries for %1 from Databento...").arg(underlying));
+        QPointer<ChainSubTab> self = this;
+        OptionChainService::instance().list_databento_expiries(
+            underlying,
+            [self, underlying, keep_selection](const QStringList& exps) {
+                if (!self) return;
+                if (exps.isEmpty()) {
+                    self->show_empty_state(
+                        QString("No expiries found for %1. Check Databento API key and OPRA access.").arg(underlying));
+                    return;
+                }
+                QString prefer;
+                if (keep_selection && exps.contains(self->last_expiry_))
+                    prefer = self->last_expiry_;
+                else
+                    prefer = exps.first();
+                self->header_->set_expiries(exps, prefer);
+                self->hide_empty_state();
+                if (self->is_visible_)
+                    self->resubscribe();
+            });
+        return;
+    }
+
+    LOG_INFO("FnoChain", QString("rebuild_expiries: calling list_expiries('%1','%2')").arg(broker_id, underlying));
     auto exps = OptionChainService::instance().list_expiries(broker_id, underlying);
+    LOG_INFO("FnoChain", QString("list_expiries('%1','%2') → %3 items").arg(broker_id, underlying).arg(exps.size()));
     if (exps.isEmpty()) {
         show_empty_state(QString("No expiries cached for %1.").arg(underlying));
         header_->set_expiries({});
@@ -227,6 +344,8 @@ void ChainSubTab::rebuild_expiries_for_underlying(const QString& broker_id, cons
         prefer = last_expiry_;
     else
         prefer = exps.first();  // nearest expiry
+    LOG_INFO("FnoChain", QString("Setting expiries for '%1/%2', prefer='%3', visible=%4")
+                             .arg(broker_id, underlying, prefer).arg(is_visible_));
     header_->set_expiries(exps, prefer);
     if (is_visible_)
         resubscribe();

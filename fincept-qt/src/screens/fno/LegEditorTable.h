@@ -34,6 +34,9 @@ class LegEditorModel : public QAbstractTableModel {
         ColLots,
         ColEntry,
         ColIv,
+        ColLtp,
+        ColDelta,
+        ColPnl,
         ColDelete,
         ColCount,
     };
@@ -54,12 +57,19 @@ class LegEditorModel : public QAbstractTableModel {
     /// Append a single leg (used by the chain "leg_clicked" hookup).
     void append_leg(const fincept::services::options::StrategyLeg& leg);
     void remove_row(int row);
+    /// Push latest chain so LTP/Delta/PnL columns can resolve live values.
+    void set_chain(const fincept::services::options::OptionChain& chain);
 
   signals:
     void legs_changed();
 
   private:
+    double resolve_ltp(const fincept::services::options::StrategyLeg& leg) const;
+    double resolve_delta(const fincept::services::options::StrategyLeg& leg) const;
+    double resolve_pnl(const fincept::services::options::StrategyLeg& leg) const;
+
     QVector<fincept::services::options::StrategyLeg> legs_;
+    fincept::services::options::OptionChain chain_;
 };
 
 class LegEditorTable : public QTableView {

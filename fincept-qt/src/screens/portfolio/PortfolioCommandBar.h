@@ -29,6 +29,9 @@ class PortfolioCommandBar : public QWidget {
     void set_refresh_interval(int ms);
     void refresh_theme();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   signals:
     void portfolio_selected(QString id);
     void create_requested();
@@ -45,6 +48,7 @@ class PortfolioCommandBar : public QWidget {
     void detail_view_selected(portfolio::DetailView view);
     void ai_analyze_requested();
     void agent_run_requested();
+    void backtest_requested();
 
   private:
     void build_ui();
@@ -59,12 +63,15 @@ class PortfolioCommandBar : public QWidget {
     void update_selector_label();
     void apply_row1_styles();
     void apply_row2_styles();
+    void retranslateUi();
 
     // Portfolio selector
     QPushButton* selector_btn_ = nullptr;
     QWidget* dropdown_ = nullptr;
     QLineEdit* search_edit_ = nullptr;
     QListWidget* portfolio_list_ = nullptr;
+    QPushButton* create_btn_ = nullptr;
+    QPushButton* delete_btn_ = nullptr;
 
     // Action buttons
     QPushButton* buy_btn_ = nullptr;
@@ -74,7 +81,11 @@ class PortfolioCommandBar : public QWidget {
     QComboBox* interval_cb_ = nullptr;
     QToolButton* overflow_btn_ = nullptr;
     QMenu* overflow_menu_ = nullptr;
+    QAction* export_csv_action_ = nullptr;
+    QAction* export_json_action_ = nullptr;
+    QAction* import_action_ = nullptr;
     QAction* ffn_action_ = nullptr;
+    QAction* backtest_action_ = nullptr;
     QPushButton* ai_btn_ = nullptr;
     QPushButton* agent_btn_ = nullptr;
 
@@ -93,6 +104,7 @@ class PortfolioCommandBar : public QWidget {
     QString selected_id_;
     std::optional<portfolio::DetailView> active_detail_;
     bool dropdown_visible_ = false;
+    bool has_portfolios_ = false; // tracked for retranslateUi() to pick the right selector text
 };
 
 } // namespace fincept::screens

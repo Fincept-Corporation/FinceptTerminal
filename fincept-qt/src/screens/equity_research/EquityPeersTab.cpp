@@ -4,6 +4,7 @@
 #include "services/equity/EquityResearchService.h"
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -24,7 +25,7 @@ void EquityPeersTab::set_symbol(const QString& symbol) {
     current_symbol_ = symbol;
     auto peers = default_peers(symbol);
     peers_edit_->setText(peers.join(", "));
-    loading_overlay_->show_loading("LOADING PEERS…");
+    loading_overlay_->show_loading(tr("LOADING PEERS…"));
     on_load_clicked();
 }
 
@@ -43,11 +44,11 @@ void EquityPeersTab::build_ui() {
     hl->setContentsMargins(12, 8, 12, 8);
     hl->setSpacing(10);
 
-    auto* lbl = new QLabel("PEERS (comma-separated):");
-    lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px; "
-                               "background:transparent; border:0;")
-                           .arg(ui::colors::TEXT_SECONDARY()));
-    hl->addWidget(lbl);
+    peers_caption_ = new QLabel(tr("PEERS (comma-separated):"));
+    peers_caption_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px; "
+                                          "background:transparent; border:0;")
+                                      .arg(ui::colors::TEXT_SECONDARY()));
+    hl->addWidget(peers_caption_);
 
     peers_edit_ = new QLineEdit;
     peers_edit_->setStyleSheet(
@@ -57,17 +58,17 @@ void EquityPeersTab::build_ui() {
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     hl->addWidget(peers_edit_, 1);
 
-    auto* load_btn = new QPushButton("LOAD");
-    load_btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:0; border-radius:3px; "
-                                    "padding:5px 18px; font-size:10px; font-weight:700; }"
-                                    "QPushButton:hover { background:#b45309; }")
+    load_btn_ = new QPushButton(tr("LOAD"));
+    load_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:0; border-radius:3px; "
+                                     "padding:5px 18px; font-size:10px; font-weight:700; }"
+                                     "QPushButton:hover { background:#b45309; }")
                                 .arg(ui::colors::AMBER(), ui::colors::BG_BASE()));
-    hl->addWidget(load_btn);
-    connect(load_btn, &QPushButton::clicked, this, &EquityPeersTab::on_load_clicked);
+    hl->addWidget(load_btn_);
+    connect(load_btn_, &QPushButton::clicked, this, &EquityPeersTab::on_load_clicked);
     vl->addWidget(ctrl);
 
     // ── Status ────────────────────────────────────────────────────────────────
-    status_label_ = new QLabel("Loading peer data…");
+    status_label_ = new QLabel(tr("Loading peer data…"));
     status_label_->setStyleSheet(
         QString("color:%1; font-size:11px; padding:4px; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     status_label_->hide();
@@ -111,11 +112,12 @@ void EquityPeersTab::build_ui() {
             QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
         leg_hl->addWidget(dot);
         leg_hl->addWidget(t);
+        legend_text_lbls_.append(t);
     };
-    make_leg(ui::colors::POSITIVE, "Positive / Good");
-    make_leg(ui::colors::NEGATIVE, "Negative / High Risk");
-    make_leg("#eab308", "Neutral");
-    make_leg("#22d3ee", "Symbol / Info");
+    make_leg(ui::colors::POSITIVE, tr("Positive / Good"));
+    make_leg(ui::colors::NEGATIVE, tr("Negative / High Risk"));
+    make_leg("#eab308",            tr("Neutral"));
+    make_leg("#22d3ee",            tr("Symbol / Info"));
     leg_hl->addStretch();
     vl->addWidget(legend);
 }
@@ -130,7 +132,7 @@ void EquityPeersTab::on_load_clicked() {
             peers.append(p.trimmed().toUpper());
     if (peers.isEmpty())
         return;
-    status_label_->setText("Loading peer data…");
+    status_label_->setText(tr("Loading peer data…"));
     status_label_->show();
     services::equity::EquityResearchService::instance().fetch_peers(current_symbol_, peers);
 }
@@ -138,13 +140,16 @@ void EquityPeersTab::on_load_clicked() {
 void EquityPeersTab::on_peers_loaded(QVector<services::equity::PeerData> peers) {
     status_label_->hide();
     loading_overlay_->hide_loading();
+    cached_peers_ = peers;
+    peers_loaded_ = true;
     populate_table(peers);
 }
 
 void EquityPeersTab::populate_table(const QVector<services::equity::PeerData>& peers) {
-    static const QStringList headers = {"SYMBOL",    "PRICE", "P/E",       "FWD P/E",   "P/B",     "P/S",
-                                        "PEG",       "ROE",   "ROA",       "GROSS MGN", "NET MGN", "OP MGN",
-                                        "REV GRWTH", "D/E",   "DIV YIELD", "BETA"};
+    const QStringList headers = {tr("SYMBOL"),    tr("PRICE"),     tr("P/E"),       tr("FWD P/E"),
+                                 tr("P/B"),       tr("P/S"),       tr("PEG"),       tr("ROE"),
+                                 tr("ROA"),       tr("GROSS MGN"), tr("NET MGN"),   tr("OP MGN"),
+                                 tr("REV GRWTH"), tr("D/E"),       tr("DIV YIELD"), tr("BETA")};
 
     peer_table_->setSortingEnabled(false);
     peer_table_->setColumnCount(headers.size());
@@ -234,6 +239,40 @@ QStringList EquityPeersTab::default_peers(const QString& symbol) const {
         {"TCS.NS", {"INFY.NS", "WIPRO.NS", "HCLTECH.NS", "TECHM.NS", "RELIANCE.NS"}},
     };
     return kPeers.value(symbol.toUpper(), {"SPY", "QQQ", "DIA"});
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void EquityPeersTab::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
+}
+
+void EquityPeersTab::retranslateUi() {
+    if (peers_caption_) peers_caption_->setText(tr("PEERS (comma-separated):"));
+    if (load_btn_)      load_btn_->setText(tr("LOAD"));
+    if (status_label_)  status_label_->setText(tr("Loading peer data…"));
+
+    // Legend captions — order matches make_leg() call sequence in build_ui().
+    const QStringList legend = {tr("Positive / Good"), tr("Negative / High Risk"),
+                                tr("Neutral"),         tr("Symbol / Info")};
+    for (int i = 0; i < legend_text_lbls_.size() && i < legend.size(); ++i)
+        legend_text_lbls_[i]->setText(legend[i]);
+
+    // Repopulate the table so the header row and em-dash placeholders pick up
+    // the new locale. We re-render from cached data — no service refetch.
+    if (peers_loaded_)
+        populate_table(cached_peers_);
+}
+
+QString EquityPeersTab::peers_text() const {
+    return peers_edit_ ? peers_edit_->text() : QString();
+}
+
+void EquityPeersTab::set_peers_text(const QString& text) {
+    if (peers_edit_) peers_edit_->setText(text);
 }
 
 } // namespace fincept::screens

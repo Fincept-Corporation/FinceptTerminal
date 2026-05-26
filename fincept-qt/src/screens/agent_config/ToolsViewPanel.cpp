@@ -263,7 +263,7 @@ QWidget* ToolsViewPanel::build_center_panel() {
 
     // ── Header ────────────────────────────────────────────────────────────────
     auto* header = new QHBoxLayout;
-    auto* title = new QLabel("AVAILABLE TOOLS");
+    auto* title = new QLabel(tr("AVAILABLE TOOLS"));
     title->setStyleSheet(section_title_style());
     header->addWidget(title);
 
@@ -789,8 +789,8 @@ QStringList ToolsViewPanel::tools_of_target() const {
 
 void ToolsViewPanel::copy_tool_name(const QString& name) {
     QApplication::clipboard()->setText(name);
-    copy_btn_->setText("COPIED!");
-    QTimer::singleShot(1500, this, [this]() { copy_btn_->setText("COPY NAME"); });
+    copy_btn_->setText(tr("COPIED!"));
+    QTimer::singleShot(1500, this, [this]() { copy_btn_->setText(tr("COPY NAME")); });
 }
 
 } // namespace fincept::screens

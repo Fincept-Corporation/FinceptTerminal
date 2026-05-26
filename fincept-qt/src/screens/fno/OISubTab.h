@@ -14,7 +14,7 @@
 // the three chain-derived widgets and re-seeds the IntradayOIChart's strike
 // combo if the underlying changed. Visibility-driven sub/unsub per D3/D4.
 
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/options/OptionChainTypes.h"
 
 #include <QPointer>

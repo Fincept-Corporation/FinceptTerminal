@@ -18,13 +18,13 @@
 namespace fincept::screens::widgets {
 
 TradeTapeWidget::TradeTapeWidget(const QJsonObject& cfg, QWidget* parent)
-    : BaseWidget("TRADES", parent) {
+    : BaseWidget(tr("TRADES"), parent) {
     auto* vl = content_layout();
     vl->setContentsMargins(8, 6, 8, 6);
     vl->setSpacing(4);
 
     table_ = new QTableWidget(0, 3, this);
-    table_->setHorizontalHeaderLabels({"Time", "Price", "Size"});
+    table_->setHorizontalHeaderLabels({tr("Time"), tr("Price"), tr("Size")});
     table_->verticalHeader()->setVisible(false);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionMode(QAbstractItemView::NoSelection);
@@ -128,23 +128,23 @@ void TradeTapeWidget::render() {
 
 QDialog* TradeTapeWidget::make_config_dialog(QWidget* parent) {
     auto* dlg = new QDialog(parent);
-    dlg->setWindowTitle("Configure — Trades");
+    dlg->setWindowTitle(tr("Configure — Trades"));
     auto* form = new QFormLayout(dlg);
 
     auto* ex = new QComboBox(dlg);
     ex->addItems({"kraken", "hyperliquid"});
     ex->setCurrentText(exchange_);
-    form->addRow("Exchange", ex);
+    form->addRow(tr("Exchange"), ex);
 
     auto* pair = new QLineEdit(dlg);
     pair->setText(pair_);
-    pair->setPlaceholderText("e.g. BTC/USD");
-    form->addRow("Pair", pair);
+    pair->setPlaceholderText(tr("e.g. BTC/USD"));
+    form->addRow(tr("Pair"), pair);
 
     auto* spin = new QSpinBox(dlg);
     spin->setRange(5, 200);
     spin->setValue(max_rows_);
-    form->addRow("Max rows", spin);
+    form->addRow(tr("Max rows"), spin);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg);
     form->addRow(buttons);
@@ -174,6 +174,12 @@ void TradeTapeWidget::apply_styles() {
                 "QTableWidget::item{padding:2px 4px;}")
             .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
                  ui::colors::TEXT_TERTIARY()));
+}
+
+void TradeTapeWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("TRADES"));
+    render(); // re-renders header + side labels in the new language
 }
 
 } // namespace fincept::screens::widgets

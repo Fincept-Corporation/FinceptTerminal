@@ -111,20 +111,20 @@ void VoiceConfigSection::build_ui() {
     vl->setSpacing(14);
 
     // ── Title + blurb ────────────────────────────────────────────────────────
-    auto* title = new QLabel("VOICE — SPEECH-TO-TEXT & TEXT-TO-SPEECH");
+    auto* title = new QLabel(tr("VOICE — SPEECH-TO-TEXT & TEXT-TO-SPEECH"));
     title->setStyleSheet(title_ss());
     vl->addWidget(title);
 
     auto* blurb = new QLabel(
-        "Pick a provider for each direction independently. Free options work "
-        "out of the box; Deepgram requires an API key but offers higher accuracy "
-        "(STT) and natural-sounding voices (TTS).");
+        tr("Pick a provider for each direction independently. Free options work "
+           "out of the box; Deepgram requires an API key but offers higher accuracy "
+           "(STT) and natural-sounding voices (TTS)."));
     blurb->setStyleSheet(label_ss());
     blurb->setWordWrap(true);
     vl->addWidget(blurb);
 
     // ── STT provider ─────────────────────────────────────────────────────────
-    auto* stt_section = new QLabel("SPEECH-TO-TEXT (microphone -> text)");
+    auto* stt_section = new QLabel(tr("SPEECH-TO-TEXT (microphone -> text)"));
     stt_section->setStyleSheet(subtitle_ss());
     vl->addWidget(stt_section);
 
@@ -433,7 +433,7 @@ void VoiceConfigSection::on_test() {
     }
 
     // Step 1 — verify the Python SDK is installed in venv-numpy2 (only
-    // matters for STT; TTS uses requests + pyaudio, which are already
+    // matters for STT; TTS uses requests + sounddevice, which are already
     // present). Done via a filesystem probe of the venv site-packages.
     const QString stt = stt_provider_combo_->currentData().toString();
     if (stt == "deepgram") {

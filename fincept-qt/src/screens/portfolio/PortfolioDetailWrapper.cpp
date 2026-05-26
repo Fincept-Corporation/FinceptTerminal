@@ -12,6 +12,7 @@
 #include "screens/portfolio/views/RiskManagementView.h"
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 
@@ -38,7 +39,7 @@ void PortfolioDetailWrapper::build_ui() {
     h_layout->setSpacing(8);
 
     // Back button
-    back_btn_ = new QPushButton("\u2190 BACK");
+    back_btn_ = new QPushButton(tr("\u2190 BACK"));
     back_btn_->setFixedHeight(24);
     back_btn_->setCursor(Qt::PointingHandCursor);
     back_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
@@ -196,28 +197,41 @@ QWidget* PortfolioDetailWrapper::get_or_create_view(portfolio::DetailView view) 
     return widget;
 }
 
+void PortfolioDetailWrapper::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PortfolioDetailWrapper::retranslateUi() {
+    if (back_btn_)    back_btn_->setText(tr("← BACK"));
+    if (title_label_) title_label_->setText(view_title(current_view_));
+    // portfolio_label_ holds "💼 NAME | CURRENCY" — pure portfolio data, no
+    // translation needed.
+}
+
 QString PortfolioDetailWrapper::view_title(portfolio::DetailView view) const {
     switch (view) {
         case portfolio::DetailView::AnalyticsSectors:
-            return "ANALYTICS & SECTORS";
+            return tr("ANALYTICS & SECTORS");
         case portfolio::DetailView::PerfRisk:
-            return "PERFORMANCE & RISK";
+            return tr("PERFORMANCE & RISK");
         case portfolio::DetailView::Optimization:
-            return "PORTFOLIO OPTIMIZATION";
+            return tr("PORTFOLIO OPTIMIZATION");
         case portfolio::DetailView::QuantStats:
-            return "QUANTSTATS REPORT";
+            return tr("QUANTSTATS REPORT");
         case portfolio::DetailView::ReportsPme:
-            return "REPORTS & PME";
+            return tr("REPORTS & PME");
         case portfolio::DetailView::Indices:
-            return "CUSTOM INDICES";
+            return tr("CUSTOM INDICES");
         case portfolio::DetailView::RiskMgmt:
-            return "RISK MANAGEMENT";
+            return tr("RISK MANAGEMENT");
         case portfolio::DetailView::Planning:
-            return "FINANCIAL PLANNING";
+            return tr("FINANCIAL PLANNING");
         case portfolio::DetailView::Economics:
-            return "ECONOMICS";
+            return tr("ECONOMICS");
     }
-    return "DETAIL VIEW";
+    return tr("DETAIL VIEW");
 }
 
 } // namespace fincept::screens

@@ -8,6 +8,7 @@
 #include <QChart>
 #include <QChartView>
 #include <QDateTimeAxis>
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLineSeries>
@@ -19,23 +20,28 @@
 
 namespace fincept::screens {
 
+// Method keys (English) — used as canonical identifiers in storage and the
+// compute_index_value switch. Display strings are looked up via tr() so the
+// combo box label is localised while the persisted method name stays stable.
 static const QStringList kMethods = {
     "Price Weighted",      "Market Cap Weighted", "Equal Weighted", "Float Adjusted", "Fundamental Weighted",
     "Modified Market Cap", "Factor Weighted",     "Risk Parity",    "Geometric Mean", "Capped Weighted",
 };
 
-static const QStringList kMethodDescriptions = {
-    "Dow Jones style — sum of prices / divisor",
-    "S&P 500 style — total market cap / divisor",
-    "Equal weight per constituent (1/N)",
-    "Market cap variant adjusted for float",
-    "Weighted by fundamental score",
-    "Modified market cap with smoothing",
-    "Custom factor weights",
-    "Inverse volatility weighted",
-    "Geometric average of price relatives",
-    "Market cap with weight cap limit",
-};
+static QStringList method_descriptions() {
+    return {
+        QObject::tr("Dow Jones style — sum of prices / divisor"),
+        QObject::tr("S&P 500 style — total market cap / divisor"),
+        QObject::tr("Equal weight per constituent (1/N)"),
+        QObject::tr("Market cap variant adjusted for float"),
+        QObject::tr("Weighted by fundamental score"),
+        QObject::tr("Modified market cap with smoothing"),
+        QObject::tr("Custom factor weights"),
+        QObject::tr("Inverse volatility weighted"),
+        QObject::tr("Geometric average of price relatives"),
+        QObject::tr("Market cap with weight cap limit"),
+    };
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -79,9 +85,9 @@ void CustomIndexView::build_ui() {
                              .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(),
                                   ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
 
-    tabs_->addTab(build_create_panel(), "CREATE INDEX");
-    tabs_->addTab(build_index_list_panel(), "MY INDICES");
-    tabs_->addTab(build_performance_panel(), "PERFORMANCE");
+    create_tab_index_ = tabs_->addTab(build_create_panel(), tr("CREATE INDEX"));
+    my_indices_tab_index_ = tabs_->addTab(build_index_list_panel(), tr("MY INDICES"));
+    performance_tab_index_ = tabs_->addTab(build_performance_panel(), tr("PERFORMANCE"));
 
     layout->addWidget(tabs_);
 }
@@ -92,46 +98,48 @@ QWidget* CustomIndexView::build_create_panel() {
     layout->setContentsMargins(16, 12, 16, 12);
     layout->setSpacing(10);
 
-    auto* title = new QLabel("CREATE CUSTOM INDEX");
-    title->setStyleSheet(
+    create_title_ = new QLabel(tr("CREATE CUSTOM INDEX"));
+    create_title_->setStyleSheet(
         QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-    layout->addWidget(title);
+    layout->addWidget(create_title_);
 
     // Config row
     auto* config = new QHBoxLayout;
     config->setSpacing(8);
 
-    auto add_field = [&](const QString& label, QWidget* widget) {
-        auto* lbl = new QLabel(label);
-        lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700;").arg(ui::colors::TEXT_TERTIARY()));
-        config->addWidget(lbl);
+    auto add_field = [&](const QString& label, QLabel*& slot, QWidget* widget) {
+        slot = new QLabel(label);
+        slot->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700;").arg(ui::colors::TEXT_TERTIARY()));
+        config->addWidget(slot);
         config->addWidget(widget);
     };
 
     name_edit_ = new QLineEdit;
-    name_edit_->setPlaceholderText("My Custom Index");
+    name_edit_->setPlaceholderText(tr("My Custom Index"));
     name_edit_->setFixedSize(160, 24);
     name_edit_->setStyleSheet(input_style());
-    add_field("NAME:", name_edit_);
+    add_field(tr("NAME:"), name_field_label_, name_edit_);
 
     method_cb_ = new QComboBox;
-    method_cb_->addItems(kMethods);
+    // Add localized method names; itemData() holds the English key for storage.
+    for (const QString& m : kMethods)
+        method_cb_->addItem(tr(m.toUtf8().constData()), m);
     method_cb_->setFixedHeight(24);
     method_cb_->setStyleSheet(
         QString("QComboBox { background:%1; color:%2; border:1px solid %3; padding:0 8px; font-size:10px; }"
                 "QComboBox::drop-down { border:none; }"
                 "QComboBox QAbstractItemView { background:%1; color:%2; }")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM()));
-    add_field("METHOD:", method_cb_);
+    add_field(tr("METHOD:"), method_field_label_, method_cb_);
 
     base_edit_ = new QLineEdit("1000");
     base_edit_->setFixedSize(80, 24);
     base_edit_->setStyleSheet(input_style());
-    add_field("BASE:", base_edit_);
+    add_field(tr("BASE:"), base_field_label_, base_edit_);
 
     config->addStretch();
 
-    create_btn_ = new QPushButton("CREATE INDEX");
+    create_btn_ = new QPushButton(tr("CREATE INDEX"));
     create_btn_->setFixedHeight(26);
     create_btn_->setCursor(Qt::PointingHandCursor);
     create_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
@@ -144,13 +152,15 @@ QWidget* CustomIndexView::build_create_panel() {
     layout->addLayout(config);
 
     // Method description
-    auto* method_desc = new QLabel(kMethodDescriptions[0]);
-    method_desc->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
-    connect(method_cb_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [method_desc](int idx) {
-        if (idx >= 0 && idx < kMethodDescriptions.size())
-            method_desc->setText(kMethodDescriptions[idx]);
+    const auto descs = method_descriptions();
+    method_desc_ = new QLabel(descs.value(0));
+    method_desc_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
+    connect(method_cb_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        const auto d = method_descriptions();
+        if (idx >= 0 && idx < d.size())
+            method_desc_->setText(d[idx]);
     });
-    layout->addWidget(method_desc);
+    layout->addWidget(method_desc_);
 
     // Status label
     create_status_ = new QLabel;
@@ -159,14 +169,14 @@ QWidget* CustomIndexView::build_create_panel() {
     layout->addWidget(create_status_);
 
     // Constituents table header
-    auto* const_title = new QLabel("CONSTITUENTS (from portfolio holdings)");
-    const_title->setStyleSheet(
+    const_title_ = new QLabel(tr("CONSTITUENTS (from portfolio holdings)"));
+    const_title_->setStyleSheet(
         QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_SECONDARY()));
-    layout->addWidget(const_title);
+    layout->addWidget(const_title_);
 
     const_table_ = new QTableWidget;
     const_table_->setColumnCount(5);
-    const_table_->setHorizontalHeaderLabels({"INCLUDE", "SYMBOL", "PRICE", "WEIGHT", "MKT VALUE"});
+    const_table_->setHorizontalHeaderLabels({tr("INCLUDE"), tr("SYMBOL"), tr("PRICE"), tr("WEIGHT"), tr("MKT VALUE")});
     const_table_->setSelectionMode(QAbstractItemView::NoSelection);
     const_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     const_table_->setShowGrid(false);
@@ -186,13 +196,13 @@ QWidget* CustomIndexView::build_index_list_panel() {
 
     // Header row
     auto* header_row = new QHBoxLayout;
-    auto* title = new QLabel("MY CUSTOM INDICES");
-    title->setStyleSheet(
+    indices_title_ = new QLabel(tr("MY CUSTOM INDICES"));
+    indices_title_->setStyleSheet(
         QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-    header_row->addWidget(title);
+    header_row->addWidget(indices_title_);
     header_row->addStretch();
 
-    delete_btn_ = new QPushButton("DELETE SELECTED");
+    delete_btn_ = new QPushButton(tr("DELETE SELECTED"));
     delete_btn_->setFixedHeight(26);
     delete_btn_->setCursor(Qt::PointingHandCursor);
     delete_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
@@ -205,7 +215,7 @@ QWidget* CustomIndexView::build_index_list_panel() {
 
     index_list_table_ = new QTableWidget;
     index_list_table_->setColumnCount(6);
-    index_list_table_->setHorizontalHeaderLabels({"NAME", "METHOD", "BASE", "CURRENT VALUE", "CHANGE", "CREATED"});
+    index_list_table_->setHorizontalHeaderLabels({tr("NAME"), tr("METHOD"), tr("BASE"), tr("CURRENT VALUE"), tr("CHANGE"), tr("CREATED")});
     index_list_table_->setSelectionMode(QAbstractItemView::SingleSelection);
     index_list_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     index_list_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -226,7 +236,7 @@ QWidget* CustomIndexView::build_index_list_panel() {
     layout->addWidget(index_list_table_, 1);
 
     list_empty_msg_ =
-        new QLabel("No custom indices created yet.\nGo to CREATE INDEX tab to build one from your portfolio.");
+        new QLabel(tr("No custom indices created yet.\nGo to CREATE INDEX tab to build one from your portfolio."));
     list_empty_msg_->setAlignment(Qt::AlignCenter);
     list_empty_msg_->setStyleSheet(QString("color:%1; font-size:11px; padding:40px;").arg(ui::colors::TEXT_TERTIARY()));
     layout->addWidget(list_empty_msg_);
@@ -240,7 +250,7 @@ QWidget* CustomIndexView::build_performance_panel() {
     layout->setContentsMargins(16, 12, 16, 12);
     layout->setSpacing(8);
 
-    perf_title_ = new QLabel("INDEX PERFORMANCE");
+    perf_title_ = new QLabel(tr("INDEX PERFORMANCE"));
     perf_title_->setStyleSheet(
         QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     layout->addWidget(perf_title_);
@@ -248,10 +258,10 @@ QWidget* CustomIndexView::build_performance_panel() {
     perf_stack_ = new QStackedWidget;
 
     // Page 0 — placeholder
-    auto* placeholder = new QLabel("Select an index from MY INDICES to see its performance.");
-    placeholder->setAlignment(Qt::AlignCenter);
-    placeholder->setStyleSheet(QString("color:%1; font-size:11px; padding:40px;").arg(ui::colors::TEXT_TERTIARY()));
-    perf_stack_->addWidget(placeholder);
+    perf_placeholder_ = new QLabel(tr("Select an index from MY INDICES to see its performance."));
+    perf_placeholder_->setAlignment(Qt::AlignCenter);
+    perf_placeholder_->setStyleSheet(QString("color:%1; font-size:11px; padding:40px;").arg(ui::colors::TEXT_TERTIARY()));
+    perf_stack_->addWidget(perf_placeholder_);
 
     // Page 1 — chart
     auto* chart_widget = new QWidget(this);
@@ -324,7 +334,7 @@ void CustomIndexView::create_index() {
 
     const double base = base_edit_->text().toDouble();
     if (base <= 0.0) {
-        create_status_->setText("Base value must be positive.");
+        create_status_->setText(tr("Base value must be positive."));
         create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
         create_status_->show();
         return;
@@ -355,7 +365,7 @@ void CustomIndexView::create_index() {
     }
 
     if (constituents.isEmpty()) {
-        create_status_->setText("Select at least one constituent.");
+        create_status_->setText(tr("Select at least one constituent."));
         create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
         create_status_->show();
         return;
@@ -363,7 +373,8 @@ void CustomIndexView::create_index() {
 
     CustomIndex idx;
     idx.name = name;
-    idx.method = method_cb_->currentText();
+    // Persist the English method key (currentData), not the localized display label.
+    idx.method = method_cb_->currentData().toString();
     idx.base_value = base;
     idx.portfolio_id = summary_.portfolio.id;
     idx.constituents = constituents;
@@ -372,7 +383,7 @@ void CustomIndexView::create_index() {
     if (result.is_err()) {
         const QString msg = QString::fromStdString(result.error());
         LOG_ERROR("CustomIndex", "Failed to create index: " + msg);
-        create_status_->setText("Error: " + msg);
+        create_status_->setText(tr("Error: %1").arg(msg));
         create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
         create_status_->show();
         return;
@@ -387,7 +398,7 @@ void CustomIndexView::create_index() {
     const QString today = QDateTime::currentDateTime().toString("yyyy-MM-dd");
     CustomIndexRepository::instance().save_value(index_id, today, current_val);
 
-    create_status_->setText(QString("Index '%1' created successfully.").arg(name));
+    create_status_->setText(tr("Index '%1' created successfully.").arg(name));
     create_status_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE()));
     create_status_->show();
     name_edit_->clear();
@@ -463,8 +474,11 @@ void CustomIndexView::delete_selected_index() {
 void CustomIndexView::show_index_performance(const QString& index_id, const QString& name) {
     auto result = CustomIndexRepository::instance().get_values(index_id, 365);
 
+    last_perf_index_name_ = name;
+    last_perf_has_data_ = !(result.is_err() || result.value().isEmpty());
+
     if (result.is_err() || result.value().isEmpty()) {
-        perf_title_->setText(QString("PERFORMANCE — %1  (no data)").arg(name));
+        perf_title_->setText(tr("PERFORMANCE — %1  (no data)").arg(name));
         perf_stack_->setCurrentIndex(0);
         return;
     }
@@ -509,8 +523,69 @@ void CustomIndexView::show_index_performance(const QString& index_id, const QStr
     chart->addAxis(y_axis, Qt::AlignLeft);
     series->attachAxis(y_axis);
 
-    perf_title_->setText(QString("PERFORMANCE — %1").arg(name));
+    perf_title_->setText(tr("PERFORMANCE — %1").arg(name));
     perf_stack_->setCurrentIndex(1);
+}
+
+void CustomIndexView::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void CustomIndexView::retranslateUi() {
+    if (tabs_) {
+        if (create_tab_index_ >= 0)     tabs_->setTabText(create_tab_index_, tr("CREATE INDEX"));
+        if (my_indices_tab_index_ >= 0) tabs_->setTabText(my_indices_tab_index_, tr("MY INDICES"));
+        if (performance_tab_index_ >= 0) tabs_->setTabText(performance_tab_index_, tr("PERFORMANCE"));
+    }
+    if (create_title_)       create_title_->setText(tr("CREATE CUSTOM INDEX"));
+    if (name_field_label_)   name_field_label_->setText(tr("NAME:"));
+    if (method_field_label_) method_field_label_->setText(tr("METHOD:"));
+    if (base_field_label_)   base_field_label_->setText(tr("BASE:"));
+    if (name_edit_)          name_edit_->setPlaceholderText(tr("My Custom Index"));
+    if (create_btn_)         create_btn_->setText(tr("CREATE INDEX"));
+    if (const_title_)        const_title_->setText(tr("CONSTITUENTS (from portfolio holdings)"));
+    if (indices_title_)      indices_title_->setText(tr("MY CUSTOM INDICES"));
+    if (delete_btn_)         delete_btn_->setText(tr("DELETE SELECTED"));
+    if (list_empty_msg_)
+        list_empty_msg_->setText(
+            tr("No custom indices created yet.\nGo to CREATE INDEX tab to build one from your portfolio."));
+    if (perf_placeholder_)
+        perf_placeholder_->setText(tr("Select an index from MY INDICES to see its performance."));
+
+    if (const_table_)
+        const_table_->setHorizontalHeaderLabels(
+            {tr("INCLUDE"), tr("SYMBOL"), tr("PRICE"), tr("WEIGHT"), tr("MKT VALUE")});
+    if (index_list_table_)
+        index_list_table_->setHorizontalHeaderLabels(
+            {tr("NAME"), tr("METHOD"), tr("BASE"), tr("CURRENT VALUE"), tr("CHANGE"), tr("CREATED")});
+
+    // Repopulate method combo items: itemData() preserves the English key, label gets new tr().
+    if (method_cb_) {
+        const int saved = method_cb_->currentIndex();
+        QSignalBlocker block(method_cb_);
+        method_cb_->clear();
+        for (const QString& m : kMethods)
+            method_cb_->addItem(tr(m.toUtf8().constData()), m);
+        if (saved >= 0 && saved < method_cb_->count())
+            method_cb_->setCurrentIndex(saved);
+    }
+    // Re-render method description from the (now-localized) list
+    if (method_desc_ && method_cb_) {
+        const auto d = method_descriptions();
+        const int idx = method_cb_->currentIndex();
+        if (idx >= 0 && idx < d.size())
+            method_desc_->setText(d[idx]);
+    }
+
+    // Re-render perf title if data is currently shown
+    if (perf_title_ && !last_perf_index_name_.isEmpty()) {
+        perf_title_->setText(last_perf_has_data_ ? tr("PERFORMANCE — %1").arg(last_perf_index_name_)
+                                                 : tr("PERFORMANCE — %1  (no data)").arg(last_perf_index_name_));
+    } else if (perf_title_) {
+        perf_title_->setText(tr("INDEX PERFORMANCE"));
+    }
 }
 
 // ── Index value computation ───────────────────────────────────────────────────

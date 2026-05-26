@@ -1,7 +1,7 @@
 #pragma once
 #include "core/events/EventBus.h"
 #include "core/symbol/IGroupLinked.h"
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/news/NewsClusterService.h"
 #include "services/news/NewsMonitorService.h"
 #include "services/news/NewsService.h"
@@ -77,6 +77,7 @@ class NewsScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
 
     void on_drawer_toggle();
     void on_detail_closed();
+    void on_manage_sources();
 
   private:
     void build_ui();
@@ -90,6 +91,14 @@ class NewsScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
     void update_monitors();
     void compute_deviations();
     void sort_articles(QVector<services::NewsArticle>& articles) const;
+
+    /// Kick off the four enrichment Python calls (NER, geolocation,
+    /// correlation signals, prediction-market odds) and route results
+    /// into the side-panel intel sections + feed model. Debounced via
+    /// `enrichment_timer_` so rapid filter changes don't spawn dozens of
+    /// duplicate Python processes.
+    void request_enrichment();
+    void run_enrichment_now();
 
     int64_t time_window_seconds() const;
 
@@ -144,8 +153,19 @@ class NewsScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
     QTimer* seen_flush_timer_ = nullptr;
     QSet<QString> pending_seen_ids_;
 
+    // Debounce timer for NER + geo + correlation enrichment calls.
+    // Single-shot, fired by request_enrichment(); the timeout slot runs
+    // run_enrichment_now() with the current filtered_articles_ snapshot.
+    QTimer* enrichment_timer_ = nullptr;
+    // Monotonic counter so late async results from earlier filter
+    // generations don't clobber the intel sections.
+    std::atomic<int> enrichment_generation_{0};
+
     // Active variant for feed filtering
     QString active_variant_ = "FULL";
+
+    // Active language filter (ISO code, lowercased) or "ALL".
+    QString active_lang_ = "ALL";
 
     // Symbol group link — SymbolGroup::None when unlinked.
     SymbolGroup link_group_ = SymbolGroup::None;

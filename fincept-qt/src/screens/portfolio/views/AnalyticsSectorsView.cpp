@@ -5,6 +5,7 @@
 
 #include <QChart>
 #include <QChartView>
+#include <QEvent>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -61,6 +62,13 @@ class SectorCardClickForwarder : public QObject {
     class AnalyticsSectorsView* owner_;
     QString sector_;
 };
+
+// English source keys returned by verdict_for_*. Translated to display strings
+// in the rendering code below (kept English here so verdict_color can pattern-
+// match without depending on the active locale).
+constexpr const char* kVerdictDiversified  = "Diversified";
+constexpr const char* kVerdictBalanced     = "Balanced";
+constexpr const char* kVerdictConcentrated = "Concentrated";
 
 QString verdict_for_hhi(double hhi) {
     // HHI convention uses fractions of 10,000; we use percent-squared so
@@ -130,8 +138,8 @@ void AnalyticsSectorsView::build_ui() {
                  ui::colors::AMBER(), ui::colors::TEXT_PRIMARY())
             .arg(ui::fonts::font_px(-3)));
 
-    tabs_->addTab(build_overview_tab(), "OVERVIEW");
-    tabs_->addTab(build_correlation_tab(), "CORRELATION");
+    overview_tab_index_ = tabs_->addTab(build_overview_tab(), tr("OVERVIEW"));
+    correlation_tab_index_ = tabs_->addTab(build_correlation_tab(), tr("CORRELATION"));
     root->addWidget(tabs_);
 }
 
@@ -164,23 +172,23 @@ QWidget* AnalyticsSectorsView::build_overview_tab() {
     kpi_lay->setContentsMargins(18, 10, 18, 10);
     kpi_lay->setSpacing(28);
 
-    auto make_kpi = [&](const QString& label, QLabel*& out_value) {
+    auto make_kpi = [&](const QString& label, QLabel*& out_value, QLabel*& out_label) {
         auto* box = new QVBoxLayout;
         box->setSpacing(2);
-        auto* l = new QLabel(label);
-        l->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; letter-spacing:1.5px;")
-                             .arg(text3).arg(ui::fonts::font_px(-4)));
-        box->addWidget(l);
+        out_label = new QLabel(label);
+        out_label->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; letter-spacing:1.5px;")
+                                     .arg(text3).arg(ui::fonts::font_px(-4)));
+        box->addWidget(out_label);
         out_value = new QLabel("—");
         out_value->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700;")
                                      .arg(text1).arg(ui::fonts::font_px(2)));
         box->addWidget(out_value);
         kpi_lay->addLayout(box);
     };
-    make_kpi("SECTORS", kpi_sectors_);
-    make_kpi("POSITIONS", kpi_positions_);
-    make_kpi("MARKET VALUE", kpi_market_value_);
-    make_kpi("P&L", kpi_pnl_);
+    make_kpi(tr("SECTORS"), kpi_sectors_, kpi_sectors_label_);
+    make_kpi(tr("POSITIONS"), kpi_positions_, kpi_positions_label_);
+    make_kpi(tr("MARKET VALUE"), kpi_market_value_, kpi_market_value_label_);
+    make_kpi(tr("P&L"), kpi_pnl_, kpi_pnl_label_);
     kpi_lay->addStretch();
     col->addWidget(kpi);
 
@@ -196,10 +204,10 @@ QWidget* AnalyticsSectorsView::build_overview_tab() {
     donut_lay->setContentsMargins(14, 14, 14, 14);
     donut_lay->setSpacing(8);
 
-    auto* donut_title = new QLabel("SECTOR ALLOCATION");
-    donut_title->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; letter-spacing:1.5px;")
-                                   .arg(text3).arg(ui::fonts::font_px(-4)));
-    donut_lay->addWidget(donut_title);
+    donut_title_ = new QLabel(tr("SECTOR ALLOCATION"));
+    donut_title_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; letter-spacing:1.5px;")
+                                    .arg(text3).arg(ui::fonts::font_px(-4)));
+    donut_lay->addWidget(donut_title_);
 
     // Chart itself
     auto* chart = new QChart;
@@ -241,15 +249,15 @@ QWidget* AnalyticsSectorsView::build_overview_tab() {
     table_lay->setContentsMargins(14, 14, 14, 14);
     table_lay->setSpacing(8);
 
-    auto* table_title = new QLabel("SECTOR BREAKDOWN");
-    table_title->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; letter-spacing:1.5px;")
-                                   .arg(text3).arg(ui::fonts::font_px(-4)));
-    table_lay->addWidget(table_title);
+    table_title_ = new QLabel(tr("SECTOR BREAKDOWN"));
+    table_title_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; letter-spacing:1.5px;")
+                                    .arg(text3).arg(ui::fonts::font_px(-4)));
+    table_lay->addWidget(table_title_);
 
     sector_table_ = new QTableWidget;
     sector_table_->setColumnCount(7);
     sector_table_->setHorizontalHeaderLabels(
-        {"", "SECTOR", "POS", "MKT VAL", "WT", "P&L", "P&L%"});
+        {"", tr("SECTOR"), tr("POS"), tr("MKT VAL"), tr("WT"), tr("P&L"), tr("P&L%")});
     sector_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     sector_table_->setSelectionMode(QAbstractItemView::SingleSelection);
     sector_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -318,15 +326,15 @@ QWidget* AnalyticsSectorsView::build_correlation_tab() {
     lay->setContentsMargins(16, 14, 16, 14);
     lay->setSpacing(10);
 
-    auto* title = new QLabel("HOLDINGS CORRELATION MATRIX");
-    title->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; letter-spacing:1.5px;")
-                             .arg(ui::colors::TEXT_TERTIARY())
-                             .arg(ui::fonts::font_px(-4)));
-    lay->addWidget(title);
+    corr_title_ = new QLabel(tr("HOLDINGS CORRELATION MATRIX"));
+    corr_title_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; letter-spacing:1.5px;")
+                                   .arg(ui::colors::TEXT_TERTIARY())
+                                   .arg(ui::fonts::font_px(-4)));
+    lay->addWidget(corr_title_);
 
     corr_note_ = new QLabel(
-        "Top-10 holdings by weight. Values use a day-change sign proxy until "
-        "OHLC history is wired in — treat the magnitudes as directional, not precise.");
+        tr("Top-10 holdings by weight. Values use a day-change sign proxy until "
+           "OHLC history is wired in — treat the magnitudes as directional, not precise."));
     corr_note_->setWordWrap(true);
     corr_note_->setStyleSheet(QString("color:%1; font-size:%2px;")
                                    .arg(ui::colors::TEXT_TERTIARY())
@@ -351,8 +359,44 @@ QWidget* AnalyticsSectorsView::build_correlation_tab() {
 void AnalyticsSectorsView::set_data(const portfolio::PortfolioSummary& summary, const QString& currency) {
     summary_ = summary;
     currency_ = currency;
+    has_data_ = true;
     update_overview();
     update_correlation();
+}
+
+void AnalyticsSectorsView::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void AnalyticsSectorsView::retranslateUi() {
+    if (tabs_) {
+        if (overview_tab_index_ >= 0)    tabs_->setTabText(overview_tab_index_, tr("OVERVIEW"));
+        if (correlation_tab_index_ >= 0) tabs_->setTabText(correlation_tab_index_, tr("CORRELATION"));
+    }
+    if (kpi_sectors_label_)      kpi_sectors_label_->setText(tr("SECTORS"));
+    if (kpi_positions_label_)    kpi_positions_label_->setText(tr("POSITIONS"));
+    if (kpi_market_value_label_) kpi_market_value_label_->setText(tr("MARKET VALUE"));
+    if (kpi_pnl_label_)          kpi_pnl_label_->setText(tr("P&L"));
+    if (donut_title_) donut_title_->setText(tr("SECTOR ALLOCATION"));
+    if (table_title_) table_title_->setText(tr("SECTOR BREAKDOWN"));
+    if (corr_title_)  corr_title_->setText(tr("HOLDINGS CORRELATION MATRIX"));
+    if (corr_note_)
+        corr_note_->setText(tr("Top-10 holdings by weight. Values use a day-change sign proxy until "
+                               "OHLC history is wired in — treat the magnitudes as directional, not precise."));
+
+    if (sector_table_)
+        sector_table_->setHorizontalHeaderLabels(
+            {QString(), tr("SECTOR"), tr("POS"), tr("MKT VAL"), tr("WT"), tr("P&L"), tr("P&L%")});
+
+    // re-render dynamic content so donut centre text, performer card labels,
+    // concentration verdict strings, and correlation "Need 2+ holdings" message
+    // pick up new locale
+    if (has_data_) {
+        update_overview();
+        update_correlation();
+    }
 }
 
 QVector<AnalyticsSectorsView::SectorInfo> AnalyticsSectorsView::compute_sectors() const {
@@ -426,7 +470,7 @@ void AnalyticsSectorsView::update_donut(const QVector<SectorInfo>& sectors) {
     });
 
     // Center label
-    donut_center_->setText(QString("%1\nsectors").arg(sectors.size()));
+    donut_center_->setText(tr("%1\nsectors").arg(sectors.size()));
     donut_center_->adjustSize();
     auto reposition_center = [this]() {
         if (!donut_view_ || !donut_center_)
@@ -472,7 +516,7 @@ void AnalyticsSectorsView::update_donut(const QVector<SectorInfo>& sectors) {
         legend_lay->addLayout(row);
     }
     if (sectors.size() > shown) {
-        auto* more = new QLabel(QString("+%1 more").arg(sectors.size() - shown), legend_container_);
+        auto* more = new QLabel(tr("+%1 more").arg(sectors.size() - shown), legend_container_);
         more->setStyleSheet(QString("color:%1; font-size:%2px; background:transparent;")
                                  .arg(ui::colors::TEXT_TERTIARY())
                                  .arg(ui::fonts::font_px(-3)));
@@ -549,10 +593,10 @@ void AnalyticsSectorsView::update_performers(const QVector<SectorInfo>& sectors)
         QString metric_text;
     };
     const QVector<Card> cards = {
-        {"LARGEST",  &largest,  QColor(ui::colors::AMBER()),    format_pct(largest.weight)},
-        {"SMALLEST", &smallest, QColor(ui::colors::TEXT_SECONDARY()), format_pct(smallest.weight)},
-        {"BEST",     &best,     QColor(ui::colors::POSITIVE()), format_pct(best.pnl_percent, true)},
-        {"WORST",    &worst,    QColor(ui::colors::NEGATIVE()), format_pct(worst.pnl_percent, true)},
+        {tr("LARGEST"),  &largest,  QColor(ui::colors::AMBER()),    format_pct(largest.weight)},
+        {tr("SMALLEST"), &smallest, QColor(ui::colors::TEXT_SECONDARY()), format_pct(smallest.weight)},
+        {tr("BEST"),     &best,     QColor(ui::colors::POSITIVE()), format_pct(best.pnl_percent, true)},
+        {tr("WORST"),    &worst,    QColor(ui::colors::NEGATIVE()), format_pct(worst.pnl_percent, true)},
     };
 
     for (const auto& c : cards) {
@@ -588,7 +632,7 @@ void AnalyticsSectorsView::update_performers(const QVector<SectorInfo>& sectors)
                                    .arg(ui::fonts::DATA_FAMILY));
         cl->addWidget(metric);
 
-        auto* sub = new QLabel(QString("%1 positions").arg(c.s->count), card);
+        auto* sub = new QLabel(tr("%1 positions").arg(c.s->count), card);
         sub->setStyleSheet(QString("color:%1; font-size:%2px; background:transparent;")
                                 .arg(ui::colors::TEXT_TERTIARY())
                                 .arg(ui::fonts::font_px(-3)));
@@ -636,12 +680,12 @@ void AnalyticsSectorsView::update_concentration(const QVector<SectorInfo>& secto
         QString sub;
     };
     const QVector<Box> boxes = {
-        {"HHI CONCENTRATION", QString::number(hhi, 'f', 0),
+        {tr("HHI CONCENTRATION"), QString::number(hhi, 'f', 0),
          verdict_for_hhi(hhi),
-         "Herfindahl index across sectors (lower = more diversified)"},
-        {"TOP-3 CONCENTRATION", format_pct(top3),
+         tr("Herfindahl index across sectors (lower = more diversified)")},
+        {tr("TOP-3 CONCENTRATION"), format_pct(top3),
          verdict_for_top3(top3),
-         QString("Weight of the three largest sectors (%1)").arg(
+         tr("Weight of the three largest sectors (%1)").arg(
              [&]() {
                  QStringList parts;
                  for (int i = 0; i < std::min(qsizetype{3}, sectors.size()); ++i)
@@ -675,7 +719,13 @@ void AnalyticsSectorsView::update_concentration(const QVector<SectorInfo>& secto
                                 .arg(ui::fonts::DATA_FAMILY));
         value_row->addWidget(val);
 
-        auto* verdict = new QLabel(b.verdict, card);
+        // Translate the English verdict key to display string. verdict_color
+        // still pattern-matches on the English source (stable across locales).
+        QString verdict_display = b.verdict;
+        if (b.verdict == QStringLiteral("Diversified"))       verdict_display = tr("Diversified");
+        else if (b.verdict == QStringLiteral("Balanced"))     verdict_display = tr("Balanced");
+        else if (b.verdict == QStringLiteral("Concentrated")) verdict_display = tr("Concentrated");
+        auto* verdict = new QLabel(verdict_display, card);
         const QColor vc = verdict_color(b.verdict);
         verdict->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700;"
                                        "letter-spacing:1.5px; padding:4px 10px;"
@@ -711,7 +761,7 @@ void AnalyticsSectorsView::update_correlation() {
     }
 
     if (summary_.holdings.size() < 2) {
-        auto* msg = new QLabel("Need 2+ holdings for correlation analysis", corr_panel_);
+        auto* msg = new QLabel(tr("Need 2+ holdings for correlation analysis"), corr_panel_);
         msg->setAlignment(Qt::AlignCenter);
         msg->setStyleSheet(QString("color:%1; font-size:%2px; padding:40px; background:transparent;")
                                 .arg(ui::colors::TEXT_TERTIARY())

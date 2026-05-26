@@ -105,6 +105,9 @@ def build_strategy_signals(
         'williams_r': _williams_r_strategy,
         'cci': _cci_strategy,
         'obv_trend': _obv_trend,
+        'custom_combo': _custom_combo,
+        'buy_and_hold': _buy_and_hold,
+        'rebalance_periodic': _rebalance_periodic,
     }
 
     builder = strategy_builders.get(strategy_type)
@@ -462,6 +465,122 @@ def _obv_trend(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series,
 # Strategy Catalog (for frontend)
 # ============================================================================
 
+def _compute_indicator_signal(close, high, low, indicator_type, period, condition, threshold):
+    """Compute a boolean signal from an indicator + condition + threshold."""
+    n = len(close)
+    values = np.zeros(n)
+
+    if indicator_type == 'rsi':
+        values = ind.calculate_rsi(None, close, period)
+    elif indicator_type == 'sma':
+        values = ind.calculate_ma(None, close, period, ewm=False)
+    elif indicator_type == 'ema':
+        values = ind.calculate_ma(None, close, period, ewm=True)
+    elif indicator_type == 'macd_hist':
+        fast = ind.calculate_ma(None, close, max(1, period // 2), ewm=True)
+        slow = ind.calculate_ma(None, close, period, ewm=True)
+        signal_line = ind.calculate_ma(None, fast - slow, 9, ewm=True)
+        values = (fast - slow) - signal_line
+    elif indicator_type == 'bbands_pctb':
+        ma = ind.calculate_ma(None, close, period, ewm=False)
+        std = ind.calculate_std(None, close, period)
+        upper = ma + 2.0 * std
+        lower = ma - 2.0 * std
+        band_width = upper - lower
+        band_width = np.where(band_width == 0, 1, band_width)
+        values = (close - lower) / band_width * 100
+    elif indicator_type == 'atr':
+        tr = np.maximum(high - low, np.maximum(np.abs(high - np.roll(close, 1)),
+                                                np.abs(low - np.roll(close, 1))))
+        tr[0] = high[0] - low[0]
+        values = ind.calculate_ma(None, tr, period, ewm=True)
+    elif indicator_type == 'stochastic':
+        for i in range(period, n):
+            h = np.max(high[i - period:i + 1])
+            l = np.min(low[i - period:i + 1])
+            values[i] = ((close[i] - l) / (h - l) * 100) if h != l else 50
+    else:
+        values = ind.calculate_ma(None, close, period, ewm=False)
+
+    if condition == 'above':
+        return values > threshold
+    elif condition == 'below':
+        return values < threshold
+    elif condition == 'cross_up':
+        shifted = np.roll(values, 1)
+        shifted[0] = values[0]
+        return (shifted <= threshold) & (values > threshold)
+    elif condition == 'cross_down':
+        shifted = np.roll(values, 1)
+        shifted[0] = values[0]
+        return (shifted >= threshold) & (values < threshold)
+    else:
+        return values > threshold
+
+
+def _custom_combo(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
+    """Custom combo: combine 2-3 indicators with AND/OR logic."""
+    combo = params.get('comboConfig', {})
+    indicators = combo.get('indicators', [])
+    logic = combo.get('logic', 'and')
+
+    if len(indicators) < 2:
+        n = len(close)
+        return pd.Series(np.zeros(n, dtype=bool), index=index), pd.Series(np.zeros(n, dtype=bool), index=index)
+
+    entry_signals = []
+    exit_signals = []
+    for ind_cfg in indicators:
+        entry_signals.append(_compute_indicator_signal(
+            close, high, low,
+            ind_cfg.get('type', 'rsi'), int(ind_cfg.get('period', 14)),
+            ind_cfg.get('condition', 'below'), float(ind_cfg.get('threshold', 30))
+        ))
+        exit_signals.append(_compute_indicator_signal(
+            close, high, low,
+            ind_cfg.get('type', 'rsi'), int(ind_cfg.get('period', 14)),
+            ind_cfg.get('exitCondition', 'above'), float(ind_cfg.get('exitThreshold', 70))
+        ))
+
+    if logic == 'or':
+        entries = entry_signals[0]
+        for s in entry_signals[1:]:
+            entries = entries | s
+    else:
+        entries = entry_signals[0]
+        for s in entry_signals[1:]:
+            entries = entries & s
+
+    exits = exit_signals[0]
+    for s in exit_signals[1:]:
+        exits = exits | s
+
+    return pd.Series(entries, index=index), pd.Series(exits, index=index)
+
+
+def _buy_and_hold(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
+    """Buy on bar 1, never sell. For portfolio benchmarking."""
+    n = len(close)
+    entries = np.zeros(n, dtype=bool)
+    exits = np.zeros(n, dtype=bool)
+    entries[0] = True
+    return pd.Series(entries, index=index), pd.Series(exits, index=index)
+
+
+def _rebalance_periodic(vbt, close, high, low, volume, index, params) -> Tuple[pd.Series, pd.Series]:
+    """Periodic rebalance: exit+re-enter every N bars to reset position sizing."""
+    n = len(close)
+    period = int(params.get('rebalancePeriod', 63))  # default ~quarterly (63 trading days)
+
+    entries = np.zeros(n, dtype=bool)
+    exits = np.zeros(n, dtype=bool)
+    entries[0] = True
+    for i in range(period, n, period):
+        exits[i - 1] = True
+        entries[i] = True
+    return pd.Series(entries, index=index), pd.Series(exits, index=index)
+
+
 def get_strategy_catalog() -> list:
     """
     Return list of all available strategies with their parameters.
@@ -684,6 +803,29 @@ def get_strategy_catalog() -> list:
             'description': 'On-Balance Volume trend confirmation',
             'parameters': [
                 {'id': 'period', 'name': 'OBV SMA Period', 'default': 20, 'min': 5, 'max': 100},
+            ],
+        },
+        {
+            'type': 'custom_combo',
+            'name': 'Custom Combo',
+            'category': 'Multi-Indicator',
+            'description': 'Combine 2 indicators with AND/OR logic',
+            'parameters': [],
+        },
+        {
+            'type': 'buy_and_hold',
+            'name': 'Buy & Hold',
+            'category': 'Portfolio',
+            'description': 'Buy on day 1, hold through entire period',
+            'parameters': [],
+        },
+        {
+            'type': 'rebalance_periodic',
+            'name': 'Periodic Rebalance',
+            'category': 'Portfolio',
+            'description': 'Rebalance to target weights at fixed intervals',
+            'parameters': [
+                {'id': 'rebalancePeriod', 'name': 'Rebalance Every (days)', 'default': 63, 'min': 5, 'max': 252, 'step': 1},
             ],
         },
     ]

@@ -25,8 +25,12 @@ class CustomIndexView : public QWidget {
 
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
+    void retranslateUi();
     QWidget* build_create_panel();
     QWidget* build_index_list_panel();
     QWidget* build_performance_panel();
@@ -42,6 +46,9 @@ class CustomIndexView : public QWidget {
 
     // ── Tab container ─────────────────────────────────────────────────────────
     QTabWidget* tabs_ = nullptr;
+    int create_tab_index_ = -1;
+    int my_indices_tab_index_ = -1;
+    int performance_tab_index_ = -1;
 
     // ── CREATE tab ────────────────────────────────────────────────────────────
     QLineEdit* name_edit_ = nullptr;
@@ -50,16 +57,26 @@ class CustomIndexView : public QWidget {
     QTableWidget* const_table_ = nullptr;
     QPushButton* create_btn_ = nullptr;
     QLabel* create_status_ = nullptr;
+    QLabel* create_title_ = nullptr;
+    QLabel* name_field_label_ = nullptr;
+    QLabel* method_field_label_ = nullptr;
+    QLabel* base_field_label_ = nullptr;
+    QLabel* method_desc_ = nullptr;
+    QLabel* const_title_ = nullptr;
 
     // ── MY INDICES tab ────────────────────────────────────────────────────────
     QTableWidget* index_list_table_ = nullptr;
     QPushButton* delete_btn_ = nullptr;
     QLabel* list_empty_msg_ = nullptr;
+    QLabel* indices_title_ = nullptr;
 
     // ── PERFORMANCE tab ───────────────────────────────────────────────────────
     QStackedWidget* perf_stack_ = nullptr; // 0=placeholder, 1=chart
     QChartView* perf_chart_view_ = nullptr;
     QLabel* perf_title_ = nullptr;
+    QLabel* perf_placeholder_ = nullptr;
+    QString last_perf_index_name_;
+    bool last_perf_has_data_ = false;
 
     // ── State ─────────────────────────────────────────────────────────────────
     portfolio::PortfolioSummary summary_;

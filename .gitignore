@@ -1,6 +1,10 @@
 # .gitignore — Fincept Terminal (Qt6 / C++20)
 # ============================================================
 
+# ── CMake user presets (local paths — never commit) ─────────
+CMakeUserPresets.json
+fincept-qt/CMakeUserPresets.json
+
 # ── CMake build output ───────────────────────────────────────
 fincept-qt/build/
 fincept-qt/build-*/
@@ -106,7 +110,7 @@ node_modules/
 dist-ssr/
 
 # ── Claude Code — never commit ───────────────────────────────
-.claude/settings.local.json
+.claude/
 CLAUDE.md
 fincept-qt/DESIGN_SYSTEM.md
 
@@ -167,3 +171,8 @@ fincept-qt/docs/CRYPTO_CENTER_PHASE_3.md
 fincept-qt/docs/CRYPTO_CENTER_PHASE_4.md
 fincept-qt/docs/CRYPTO_CENTER_PHASE_5.md
 fincept-qt/docs/CRYPTO_WALLET_CONNECT.md
+
+# ── Markdown files — only README.md is tracked ────────────────
+*.md
+!README.md
+!**/README.md

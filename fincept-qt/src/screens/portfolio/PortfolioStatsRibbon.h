@@ -6,6 +6,8 @@
 #include <QLabel>
 #include <QWidget>
 
+#include <optional>
+
 class QGridLayout;
 
 namespace fincept::screens {
@@ -28,7 +30,12 @@ class PortfolioStatsRibbon : public QWidget {
     void set_metrics(const portfolio::ComputedMetrics& metrics);
     void refresh_theme();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    void retranslateUi();
+
     // A "hero" cell — small label, big value, smaller sub line.
     struct HeroCell {
         QWidget* container = nullptr;
@@ -53,6 +60,7 @@ class PortfolioStatsRibbon : public QWidget {
     HeroCell pnl_cell_;       // UNREALIZED P&L
     HeroCell day_cell_;       // TODAY
     QWidget* risk_cell_ = nullptr;
+    QLabel* risk_header_ = nullptr;
 
     // Risk-grid chips
     GridChip sharpe_;
@@ -61,6 +69,9 @@ class PortfolioStatsRibbon : public QWidget {
     GridChip vol_;
     GridChip mdd_;
     GridChip risk_;
+
+    // Cached state for re-rendering dynamic sub-line on language change.
+    std::optional<portfolio::PortfolioSummary> last_summary_;
 };
 
 } // namespace fincept::screens

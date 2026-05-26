@@ -23,6 +23,8 @@ class AgentsViewPanel : public QWidget {
     Q_OBJECT
   public:
     explicit AgentsViewPanel(QWidget* parent = nullptr);
+    QVariantMap save_draft() const;
+    void restore_draft(const QVariantMap& draft);
 
   public slots:
     void apply_tools_selection(const QStringList& tools);

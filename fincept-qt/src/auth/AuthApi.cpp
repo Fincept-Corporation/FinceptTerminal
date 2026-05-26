@@ -172,12 +172,6 @@ void AuthApi::request(const QString& method, const QString& endpoint, const QJso
         http.del(endpoint, handle);
 }
 
-// ── Health ───────────────────────────────────────────────────────────────────
-
-void AuthApi::check_health(std::function<void(bool)> cb) {
-    request("GET", "/health", {}, [cb](ApiResponse r) { cb(r.success); });
-}
-
 // ── Unauthenticated auth endpoints ───────────────────────────────────────────
 
 void AuthApi::login(const LoginRequest& req, Callback cb) {
@@ -207,10 +201,6 @@ void AuthApi::verify_mfa(const QString& email, const QString& otp, Callback cb) 
     request("POST", "/user/verify-mfa", body, cb);
 }
 
-void AuthApi::get_auth_status(Callback cb) {
-    request("GET", "/auth/status", {}, cb);
-}
-
 // ── Authenticated endpoints (HttpClient carries X-API-Key + X-Session-Token) ─
 
 void AuthApi::logout(Callback cb) {
@@ -223,18 +213,6 @@ void AuthApi::session_pulse(Callback cb) {
 
 void AuthApi::get_user_profile(Callback cb) {
     request("GET", "/user/profile", {}, cb);
-}
-
-void AuthApi::update_user_profile(const QJsonObject& data, Callback cb) {
-    request("PUT", "/user/profile", data, cb);
-}
-
-void AuthApi::validate_api_key(Callback cb) {
-    request("GET", "/auth/validate", {}, cb);
-}
-
-void AuthApi::regenerate_api_key(Callback cb) {
-    request("POST", "/user/regenerate-api-key", {}, cb);
 }
 
 // ── Subscription / payment ────────────────────────────────────────────────────

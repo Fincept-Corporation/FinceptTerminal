@@ -1,6 +1,6 @@
 // src/screens/geopolitics/GeopoliticsScreen.h
 #pragma once
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/geopolitics/GeopoliticsTypes.h"
 
 #include <QComboBox>

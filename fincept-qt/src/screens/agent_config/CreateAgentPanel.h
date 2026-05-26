@@ -23,6 +23,10 @@ class CreateAgentPanel : public QWidget {
   public:
     explicit CreateAgentPanel(QWidget* parent = nullptr);
 
+    // Called by AgentConfigScreen for IStatefulScreen state persistence.
+    QVariantMap save_draft() const;
+    void restore_draft(const QVariantMap& draft);
+
   protected:
     void showEvent(QShowEvent* event) override;
 

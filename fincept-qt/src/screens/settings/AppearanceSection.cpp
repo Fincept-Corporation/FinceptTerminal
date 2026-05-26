@@ -60,7 +60,7 @@ void AppearanceSection::build_ui() {
     vl->setSpacing(8);
 
     // ── TYPOGRAPHY ────────────────────────────────────────────────────────────
-    auto* t = new QLabel("TYPOGRAPHY");
+    auto* t = new QLabel(tr("TYPOGRAPHY"));
     t->setStyleSheet(section_title_ss());
     vl->addWidget(t);
     vl->addWidget(make_sep());
@@ -71,13 +71,13 @@ void AppearanceSection::build_ui() {
         app_font_size_->addItem(QString("%1px").arg(px));
     app_font_size_->setCurrentText(kDefaultFontSize);
     app_font_size_->setStyleSheet(combo_ss());
-    vl->addWidget(make_row("Font Size", app_font_size_));
+    vl->addWidget(make_row(tr("Font Size"), app_font_size_));
 
     app_font_family_ = new QComboBox;
     app_font_family_->addItems(QFontDatabase::families());
     app_font_family_->setCurrentText(kDefaultFontFamily);
     app_font_family_->setStyleSheet(combo_ss());
-    vl->addWidget(make_row("Font Family", app_font_family_));
+    vl->addWidget(make_row(tr("Font Family"), app_font_family_));
 
     // Debounced live preview — coalesce rapid changes into one apply after 300ms idle.
     //
@@ -128,7 +128,7 @@ void AppearanceSection::build_ui() {
     vl->addSpacing(8);
 
     // ── THEME ─────────────────────────────────────────────────────────────────
-    auto* t2 = new QLabel("THEME");
+    auto* t2 = new QLabel(tr("THEME"));
     t2->setStyleSheet(sub_title_ss());
     vl->addWidget(t2);
     vl->addSpacing(4);
@@ -137,7 +137,7 @@ void AppearanceSection::build_ui() {
     app_density_->addItems(ui::ThemeManager::available_densities());
     app_density_->setCurrentText("Default");
     app_density_->setStyleSheet(combo_ss());
-    vl->addWidget(make_row("Content Density", app_density_, "Controls padding and spacing throughout the UI."));
+    vl->addWidget(make_row(tr("Content Density"), app_density_, tr("Controls padding and spacing throughout the UI.")));
 
     connect(app_density_, &QComboBox::currentTextChanged, this, restart_debounce,
             Qt::UniqueConnection);
@@ -147,31 +147,31 @@ void AppearanceSection::build_ui() {
     vl->addSpacing(8);
 
     // ── INTERFACE ─────────────────────────────────────────────────────────────
-    auto* t3 = new QLabel("INTERFACE");
+    auto* t3 = new QLabel(tr("INTERFACE"));
     t3->setStyleSheet(sub_title_ss());
     vl->addWidget(t3);
     vl->addSpacing(4);
 
-    chat_bubble_toggle_ = new QCheckBox("Show AI Chat Bubble");
+    chat_bubble_toggle_ = new QCheckBox(tr("Show AI Chat Bubble"));
     chat_bubble_toggle_->setChecked(true);
     chat_bubble_toggle_->setStyleSheet(check_ss());
     vl->addWidget(
-        make_row("AI Chat Bubble", chat_bubble_toggle_, "Floating chat assistant in the bottom-right corner."));
+        make_row(tr("AI Chat Bubble"), chat_bubble_toggle_, tr("Floating chat assistant in the bottom-right corner.")));
 
-    ticker_bar_toggle_ = new QCheckBox("Show Ticker Bar");
+    ticker_bar_toggle_ = new QCheckBox(tr("Show Ticker Bar"));
     ticker_bar_toggle_->setChecked(true);
     ticker_bar_toggle_->setStyleSheet(check_ss());
-    vl->addWidget(make_row("Ticker Bar", ticker_bar_toggle_, "Live price ticker at the bottom of the screen."));
+    vl->addWidget(make_row(tr("Ticker Bar"), ticker_bar_toggle_, tr("Live price ticker at the bottom of the screen.")));
 
-    animations_toggle_ = new QCheckBox("Enable Animations");
+    animations_toggle_ = new QCheckBox(tr("Enable Animations"));
     animations_toggle_->setChecked(true);
     animations_toggle_->setStyleSheet(check_ss());
-    vl->addWidget(make_row("Animations", animations_toggle_, "Fade and transition effects throughout the UI."));
+    vl->addWidget(make_row(tr("Animations"), animations_toggle_, tr("Fade and transition effects throughout the UI.")));
 
     vl->addSpacing(16);
 
     // ── SAVE ──────────────────────────────────────────────────────────────────
-    auto* apply_btn = new QPushButton("Save Settings");
+    auto* apply_btn = new QPushButton(tr("Save Settings"));
     apply_btn->setFixedWidth(160);
     apply_btn->setStyleSheet(btn_primary_ss());
     connect(apply_btn, &QPushButton::clicked, this, [this]() {

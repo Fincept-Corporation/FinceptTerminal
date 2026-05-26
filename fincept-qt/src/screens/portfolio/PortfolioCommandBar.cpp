@@ -5,6 +5,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QMenu>
@@ -20,16 +21,18 @@ struct DetailBtnDef {
 };
 
 // Neutral tab pills — color is reserved for data, not navigation.
+// QT_TRANSLATE_NOOP marks the literal for lupdate under the
+// PortfolioCommandBar context; runtime tr() in build_detail_tabs() resolves it.
 static const DetailBtnDef kDetailButtons[] = {
-    {"SECTORS", portfolio::DetailView::AnalyticsSectors},
-    {"PERF/RISK", portfolio::DetailView::PerfRisk},
-    {"OPTIMIZE", portfolio::DetailView::Optimization},
-    {"QUANTSTATS", portfolio::DetailView::QuantStats},
-    {"REPORTS", portfolio::DetailView::ReportsPme},
-    {"INDICES", portfolio::DetailView::Indices},
-    {"RISK", portfolio::DetailView::RiskMgmt},
-    {"PLANNING", portfolio::DetailView::Planning},
-    {"ECONOMICS", portfolio::DetailView::Economics},
+    {QT_TRANSLATE_NOOP("fincept::screens::PortfolioCommandBar", "SECTORS"), portfolio::DetailView::AnalyticsSectors},
+    {QT_TRANSLATE_NOOP("fincept::screens::PortfolioCommandBar", "PERF/RISK"), portfolio::DetailView::PerfRisk},
+    {QT_TRANSLATE_NOOP("fincept::screens::PortfolioCommandBar", "OPTIMIZE"), portfolio::DetailView::Optimization},
+    {QT_TRANSLATE_NOOP("fincept::screens::PortfolioCommandBar", "QUANTSTATS"), portfolio::DetailView::QuantStats},
+    {QT_TRANSLATE_NOOP("fincept::screens::PortfolioCommandBar", "REPORTS"), portfolio::DetailView::ReportsPme},
+    {QT_TRANSLATE_NOOP("fincept::screens::PortfolioCommandBar", "INDICES"), portfolio::DetailView::Indices},
+    {QT_TRANSLATE_NOOP("fincept::screens::PortfolioCommandBar", "RISK"), portfolio::DetailView::RiskMgmt},
+    {QT_TRANSLATE_NOOP("fincept::screens::PortfolioCommandBar", "PLANNING"), portfolio::DetailView::Planning},
+    {QT_TRANSLATE_NOOP("fincept::screens::PortfolioCommandBar", "ECONOMICS"), portfolio::DetailView::Economics},
 };
 
 PortfolioCommandBar::PortfolioCommandBar(QWidget* parent) : QWidget(parent) {
@@ -94,14 +97,14 @@ void PortfolioCommandBar::build_row1(QHBoxLayout* layout) {
     refresh_btn_ = new QPushButton("\u21BB");
     refresh_btn_->setFixedSize(24, 22);
     refresh_btn_->setCursor(Qt::PointingHandCursor);
-    refresh_btn_->setToolTip("Refresh portfolio data");
+    refresh_btn_->setToolTip(tr("Refresh portfolio data"));
     refresh_btn_->setObjectName("pfIconBtn");
     connect(refresh_btn_, &QPushButton::clicked, this, &PortfolioCommandBar::refresh_requested);
     layout->addWidget(refresh_btn_);
 
     interval_cb_ = new QComboBox;
     interval_cb_->setFixedHeight(22);
-    interval_cb_->setToolTip("Auto-refresh interval");
+    interval_cb_->setToolTip(tr("Auto-refresh interval"));
     interval_cb_->addItem("1m", 60000);
     interval_cb_->addItem("5m", 300000);
     interval_cb_->addItem("10m", 600000);
@@ -121,7 +124,7 @@ void PortfolioCommandBar::build_row1(QHBoxLayout* layout) {
 }
 
 void PortfolioCommandBar::build_portfolio_selector() {
-    selector_btn_ = new QPushButton("SELECT PORTFOLIO \u25BE");
+    selector_btn_ = new QPushButton(tr("SELECT PORTFOLIO \u25BE"));
     selector_btn_->setFixedHeight(24);
     selector_btn_->setMinimumWidth(180);
     selector_btn_->setMaximumWidth(260);
@@ -140,7 +143,7 @@ void PortfolioCommandBar::build_portfolio_selector() {
     dd_layout->setSpacing(2);
 
     search_edit_ = new QLineEdit;
-    search_edit_->setPlaceholderText("Search portfolios...");
+    search_edit_->setPlaceholderText(tr("Search portfolios..."));
     search_edit_->setFixedHeight(26);
     search_edit_->setStyleSheet(QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
                                         "  padding:0 8px; font-size:11px; }"
@@ -181,35 +184,35 @@ void PortfolioCommandBar::build_portfolio_selector() {
     auto* btn_row = new QHBoxLayout;
     btn_row->setSpacing(4);
 
-    auto* create_btn = new QPushButton("+ CREATE NEW");
-    create_btn->setFixedHeight(24);
-    create_btn->setCursor(Qt::PointingHandCursor);
-    create_btn->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
-                                      "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
-                                      "QPushButton:hover { background:%2; }")
-                                  .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_BASE()));
-    connect(create_btn, &QPushButton::clicked, this, [this]() {
+    create_btn_ = new QPushButton(tr("+ CREATE NEW"));
+    create_btn_->setFixedHeight(24);
+    create_btn_->setCursor(Qt::PointingHandCursor);
+    create_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
+                                       "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+                                       "QPushButton:hover { background:%2; }")
+                                   .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_BASE()));
+    connect(create_btn_, &QPushButton::clicked, this, [this]() {
         dropdown_->hide();
         dropdown_visible_ = false;
         emit create_requested();
     });
-    btn_row->addWidget(create_btn);
+    btn_row->addWidget(create_btn_);
 
-    auto* delete_btn = new QPushButton("DELETE");
-    delete_btn->setFixedHeight(24);
-    delete_btn->setCursor(Qt::PointingHandCursor);
-    delete_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
-                                      "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
-                                      "QPushButton:hover { background:%1; color:%2; }")
-                                  .arg(ui::colors::NEGATIVE(), ui::colors::BG_BASE()));
-    connect(delete_btn, &QPushButton::clicked, this, [this]() {
+    delete_btn_ = new QPushButton(tr("DELETE"));
+    delete_btn_->setFixedHeight(24);
+    delete_btn_->setCursor(Qt::PointingHandCursor);
+    delete_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
+                                       "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+                                       "QPushButton:hover { background:%1; color:%2; }")
+                                   .arg(ui::colors::NEGATIVE(), ui::colors::BG_BASE()));
+    connect(delete_btn_, &QPushButton::clicked, this, [this]() {
         if (!selected_id_.isEmpty()) {
             dropdown_->hide();
             dropdown_visible_ = false;
             emit delete_requested(selected_id_);
         }
     });
-    btn_row->addWidget(delete_btn);
+    btn_row->addWidget(delete_btn_);
 
     dd_layout->addLayout(btn_row);
     dropdown_->hide();
@@ -220,7 +223,7 @@ void PortfolioCommandBar::build_overflow_menu() {
     overflow_btn_->setText("\u22EF"); // horizontal ellipsis
     overflow_btn_->setFixedSize(24, 22);
     overflow_btn_->setCursor(Qt::PointingHandCursor);
-    overflow_btn_->setToolTip("More actions");
+    overflow_btn_->setToolTip(tr("More actions"));
     overflow_btn_->setPopupMode(QToolButton::InstantPopup);
     overflow_btn_->setObjectName("pfOverflowBtn");
 
@@ -233,17 +236,21 @@ void PortfolioCommandBar::build_overflow_menu() {
                                       .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
                                            ui::colors::AMBER_DIM(), ui::colors::AMBER()));
 
-    auto* export_csv = overflow_menu_->addAction("Export CSV");
-    auto* export_json = overflow_menu_->addAction("Export JSON");
-    auto* import_action = overflow_menu_->addAction("Import JSON…");
+    export_csv_action_  = overflow_menu_->addAction(tr("Export CSV"));
+    export_json_action_ = overflow_menu_->addAction(tr("Export JSON"));
+    import_action_      = overflow_menu_->addAction(tr("Import JSON…"));
     overflow_menu_->addSeparator();
-    ffn_action_ = overflow_menu_->addAction("FFN Analysis");
+    ffn_action_ = overflow_menu_->addAction(tr("FFN Analysis"));
     ffn_action_->setCheckable(true);
 
-    connect(export_csv, &QAction::triggered, this, &PortfolioCommandBar::export_csv_requested);
-    connect(export_json, &QAction::triggered, this, &PortfolioCommandBar::export_json_requested);
-    connect(import_action, &QAction::triggered, this, &PortfolioCommandBar::import_requested);
-    connect(ffn_action_, &QAction::triggered, this, &PortfolioCommandBar::ffn_toggled);
+    connect(export_csv_action_,  &QAction::triggered, this, &PortfolioCommandBar::export_csv_requested);
+    connect(export_json_action_, &QAction::triggered, this, &PortfolioCommandBar::export_json_requested);
+    connect(import_action_,      &QAction::triggered, this, &PortfolioCommandBar::import_requested);
+    connect(ffn_action_,         &QAction::triggered, this, &PortfolioCommandBar::ffn_toggled);
+
+    overflow_menu_->addSeparator();
+    backtest_action_ = overflow_menu_->addAction(tr("Backtest Portfolio"));
+    connect(backtest_action_, &QAction::triggered, this, &PortfolioCommandBar::backtest_requested);
 
     overflow_btn_->setMenu(overflow_menu_);
 }
@@ -300,14 +307,18 @@ void PortfolioCommandBar::build_trade_cluster(QHBoxLayout* layout) {
         layout->addWidget(out);
     };
 
-    make_trade_btn(buy_btn_, "BUY", ui::colors::POSITIVE(), &PortfolioCommandBar::buy_requested);
-    make_trade_btn(sell_btn_, "SELL", ui::colors::NEGATIVE(), &PortfolioCommandBar::sell_requested);
-    make_trade_btn(div_btn_, "DIV", ui::colors::CYAN(), &PortfolioCommandBar::dividend_requested);
+    make_trade_btn(buy_btn_, tr("BUY"), ui::colors::POSITIVE(), &PortfolioCommandBar::buy_requested);
+    make_trade_btn(sell_btn_, tr("SELL"), ui::colors::NEGATIVE(), &PortfolioCommandBar::sell_requested);
+    make_trade_btn(div_btn_, tr("DIV"), ui::colors::CYAN(), &PortfolioCommandBar::dividend_requested);
 }
 
 void PortfolioCommandBar::build_detail_tabs(QHBoxLayout* layout) {
     for (const auto& def : kDetailButtons) {
-        auto* btn = new QPushButton(def.label);
+        // Translate the English source label at the call site so lupdate sees
+        // all 9 literals; the static array stores the source key for stable
+        // wiring (property("detailView") + signal).
+        const QString label = tr(def.label);
+        auto* btn = new QPushButton(label);
         btn->setFixedHeight(22);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setProperty("detailView", static_cast<int>(def.view));
@@ -333,8 +344,8 @@ void PortfolioCommandBar::build_tools_cluster(QHBoxLayout* layout) {
     // AI = AMBER (brand action). AGENT = CYAN (info-tier).
     // Custom hex colors (#9D4EDD purple, #00D4AA teal) violated DESIGN_SYSTEM
     // colour discipline — only AMBER/CYAN/POSITIVE/NEGATIVE/WARNING are allowed.
-    make_tool_btn(ai_btn_, "AI", ui::colors::AMBER(), &PortfolioCommandBar::ai_analyze_requested);
-    make_tool_btn(agent_btn_, "AGENT", ui::colors::CYAN(), &PortfolioCommandBar::agent_run_requested);
+    make_tool_btn(ai_btn_, tr("AI"), ui::colors::AMBER(), &PortfolioCommandBar::ai_analyze_requested);
+    make_tool_btn(agent_btn_, tr("AGENT"), ui::colors::CYAN(), &PortfolioCommandBar::agent_run_requested);
 }
 
 // ── Styling ──────────────────────────────────────────────────────────────────
@@ -424,7 +435,7 @@ void PortfolioCommandBar::update_selector_label() {
             return;
         }
     }
-    selector_btn_->setText("SELECT PORTFOLIO  \u25BE");
+    selector_btn_->setText(tr("SELECT PORTFOLIO  \u25BE"));
 }
 
 // ── Public setters ───────────────────────────────────────────────────────────
@@ -475,11 +486,12 @@ void PortfolioCommandBar::set_has_selection(bool has) {
 }
 
 void PortfolioCommandBar::set_has_portfolios(bool has) {
+    has_portfolios_ = has;
     trade_cluster_->setVisible(false);
     tabs_container_->setVisible(false);
     tools_cluster_->setVisible(false);
     if (!has) {
-        selector_btn_->setText("NO PORTFOLIOS \u2014 CREATE ONE  \u25BE");
+        selector_btn_->setText(tr("NO PORTFOLIOS \u2014 CREATE ONE  \u25BE"));
     }
 }
 
@@ -490,6 +502,48 @@ void PortfolioCommandBar::set_refresh_interval(int ms) {
             interval_cb_->setCurrentIndex(i);
             break;
         }
+    }
+}
+
+void PortfolioCommandBar::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PortfolioCommandBar::retranslateUi() {
+    // Row 1 — selector label depends on portfolio state.
+    if (has_portfolios_ && !selected_id_.isEmpty()) {
+        update_selector_label(); // re-emits "%1 (%2)  ▾" with the current portfolio
+    } else if (has_portfolios_) {
+        selector_btn_->setText(tr("SELECT PORTFOLIO  ▾"));
+    } else if (selector_btn_) {
+        selector_btn_->setText(tr("NO PORTFOLIOS — CREATE ONE  ▾"));
+    }
+
+    if (search_edit_)   search_edit_->setPlaceholderText(tr("Search portfolios..."));
+    if (create_btn_)    create_btn_->setText(tr("+ CREATE NEW"));
+    if (delete_btn_)    delete_btn_->setText(tr("DELETE"));
+    if (refresh_btn_)   refresh_btn_->setToolTip(tr("Refresh portfolio data"));
+    if (interval_cb_)   interval_cb_->setToolTip(tr("Auto-refresh interval"));
+    if (overflow_btn_)  overflow_btn_->setToolTip(tr("More actions"));
+
+    if (export_csv_action_)  export_csv_action_->setText(tr("Export CSV"));
+    if (export_json_action_) export_json_action_->setText(tr("Export JSON"));
+    if (import_action_)      import_action_->setText(tr("Import JSON…"));
+    if (ffn_action_)         ffn_action_->setText(tr("FFN Analysis"));
+
+    // Row 2 trade cluster
+    if (buy_btn_)   buy_btn_->setText(tr("BUY"));
+    if (sell_btn_)  sell_btn_->setText(tr("SELL"));
+    if (div_btn_)   div_btn_->setText(tr("DIV"));
+    if (ai_btn_)    ai_btn_->setText(tr("AI"));
+    if (agent_btn_) agent_btn_->setText(tr("AGENT"));
+
+    // Row 2 detail tabs — populated in kDetailButtons order, so iterate by index.
+    constexpr int kDetailCount = static_cast<int>(sizeof(kDetailButtons) / sizeof(kDetailButtons[0]));
+    for (int i = 0; i < detail_btns_.size() && i < kDetailCount; ++i) {
+        detail_btns_[i]->setText(tr(kDetailButtons[i].label));
     }
 }
 

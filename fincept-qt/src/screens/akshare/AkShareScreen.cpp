@@ -813,12 +813,21 @@ void AkShareScreen::set_loading(bool loading) {
 // ── IStatefulScreen ──────────────────────────────────────────────────────────
 
 QVariantMap AkShareScreen::save_state() const {
-    return {
+    QVariantMap state{
         {"source", active_source_},
         {"endpoint", active_endpoint_},
         {"search", search_input_ ? search_input_->text() : QString()},
         {"table_view", is_table_view_},
     };
+    if (param_symbol_) state["param_symbol"] = param_symbol_->text();
+    if (param_start_) state["param_start"] = param_start_->text();
+    if (param_end_) state["param_end"] = param_end_->text();
+    if (json_view_ && !json_view_->toPlainText().isEmpty()) {
+        const QString jt = json_view_->toPlainText();
+        if (jt.size() < 300000)
+            state["json_result"] = jt;
+    }
+    return state;
 }
 
 void AkShareScreen::restore_state(const QVariantMap& state) {
@@ -833,6 +842,13 @@ void AkShareScreen::restore_state(const QVariantMap& state) {
     const bool table_view = state.value("table_view", true).toBool();
     if (table_view != is_table_view_)
         on_view_toggle();
+
+    if (param_symbol_ && state.contains("param_symbol"))
+        param_symbol_->setText(state.value("param_symbol").toString());
+    if (param_start_ && state.contains("param_start"))
+        param_start_->setText(state.value("param_start").toString());
+    if (param_end_ && state.contains("param_end"))
+        param_end_->setText(state.value("param_end").toString());
 
     // Endpoint selection requires the endpoint list to be populated first,
     // which happens async after load_endpoints(). Defer restore.
@@ -853,6 +869,9 @@ void AkShareScreen::restore_state(const QVariantMap& state) {
             }
         });
     }
+
+    if (json_view_ && state.contains("json_result"))
+        json_view_->setPlainText(state.value("json_result").toString());
 }
 
 } // namespace fincept::screens

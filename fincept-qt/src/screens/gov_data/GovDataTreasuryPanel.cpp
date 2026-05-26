@@ -7,6 +7,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QDate>
+#include <QEvent>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -106,10 +107,18 @@ static QString build_treasury_style() {
 GovDataTreasuryPanel::GovDataTreasuryPanel(QWidget* parent) : QWidget(parent) {
     setStyleSheet(build_treasury_style());
     build_ui();
+    retranslateUi();
     connect(&services::GovDataService::instance(), &services::GovDataService::result_ready, this,
             &GovDataTreasuryPanel::on_result);
     connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
             [this]() { setStyleSheet(build_treasury_style()); });
+}
+
+void GovDataTreasuryPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
 }
 
 // ── Build UI ─────────────────────────────────────────────────────────────────
@@ -124,19 +133,16 @@ void GovDataTreasuryPanel::build_ui() {
 
     content_stack_ = new QStackedWidget;
 
-    // ── Page 0: Prices table ──
+    // ── Page 0: Prices table (headers set in retranslateUi) ──
     prices_table_ = new QTableWidget;
     prices_table_->setColumnCount(7);
-    prices_table_->setHorizontalHeaderLabels({"CUSIP", "TYPE", "RATE %", "MATURITY", "BID", "OFFER", "EOD PRICE"});
     prices_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     configure_table(prices_table_);
     content_stack_->addWidget(prices_table_);
 
-    // ── Page 1: Auctions table ──
+    // ── Page 1: Auctions table (headers set in retranslateUi) ──
     auctions_table_ = new QTableWidget;
     auctions_table_->setColumnCount(8);
-    auctions_table_->setHorizontalHeaderLabels(
-        {"CUSIP", "TYPE", "TERM", "AUCTION DATE", "HIGH RATE", "HIGH PRICE", "BID/COVER", "OFFERING"});
     auctions_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     configure_table(auctions_table_);
     content_stack_->addWidget(auctions_table_);
@@ -154,47 +160,49 @@ void GovDataTreasuryPanel::build_ui() {
     crhl->setContentsMargins(0, 0, 0, 0);
     crhl->setSpacing(8);
 
-    auto make_card = [&](const QString& label, QLabel*& val_out, const QString& sub = "") {
+    // Card factory captures title-label and sub-label pointers so retranslateUi
+    // can re-set their text on language change. The value label receives data
+    // from populate_summary and isn't translated.
+    auto make_card = [&](QLabel*& title_out, QLabel*& val_out, QLabel** sub_out = nullptr) {
         auto* card = new QWidget(this);
         card->setObjectName("govSumCard");
         card->setMinimumWidth(110);
         auto* cvl = new QVBoxLayout(card);
         cvl->setContentsMargins(12, 8, 12, 8);
         cvl->setSpacing(2);
-        auto* lbl = new QLabel(label);
-        lbl->setObjectName("govSumLabel");
+        title_out = new QLabel;
+        title_out->setObjectName("govSumLabel");
         val_out = new QLabel("—");
         val_out->setObjectName("govSumValue");
-        cvl->addWidget(lbl);
+        cvl->addWidget(title_out);
         cvl->addWidget(val_out);
-        if (!sub.isEmpty()) {
-            auto* sl = new QLabel(sub);
-            sl->setObjectName("govSumSub");
-            cvl->addWidget(sl);
+        if (sub_out) {
+            *sub_out = new QLabel;
+            (*sub_out)->setObjectName("govSumSub");
+            cvl->addWidget(*sub_out);
         }
         crhl->addWidget(card);
     };
 
-    make_card("TOTAL SECURITIES", total_securities_label_);
-    make_card("MIN RATE", min_rate_label_, "yield %");
-    make_card("MAX RATE", max_rate_label_, "yield %");
-    make_card("AVG RATE", avg_rate_label_, "yield %");
-    make_card("MIN PRICE", min_price_label_, "per $100");
-    make_card("MAX PRICE", max_price_label_, "per $100");
-    make_card("AVG PRICE", avg_price_label_, "per $100");
+    make_card(card_total_lbl_,     total_securities_label_);
+    make_card(card_min_rate_lbl_,  min_rate_label_,  &card_min_rate_sub_);
+    make_card(card_max_rate_lbl_,  max_rate_label_,  &card_max_rate_sub_);
+    make_card(card_avg_rate_lbl_,  avg_rate_label_,  &card_avg_rate_sub_);
+    make_card(card_min_price_lbl_, min_price_label_, &card_min_price_sub_);
+    make_card(card_max_price_lbl_, max_price_label_, &card_max_price_sub_);
+    make_card(card_avg_price_lbl_, avg_price_label_, &card_avg_price_sub_);
     crhl->addStretch(1);
     svl->addWidget(cards_row);
 
     // Breakdown table
-    auto* breakdown_hdr = new QLabel("SECURITY TYPE BREAKDOWN");
-    breakdown_hdr->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1px;"
-                                         " background:transparent; margin-top:8px;")
-                                     .arg(kGovDataTreasuryColor));
-    svl->addWidget(breakdown_hdr);
+    breakdown_hdr_lbl_ = new QLabel;
+    breakdown_hdr_lbl_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1px;"
+                                              " background:transparent; margin-top:8px;")
+                                          .arg(kGovDataTreasuryColor));
+    svl->addWidget(breakdown_hdr_lbl_);
 
     type_breakdown_table_ = new QTableWidget;
     type_breakdown_table_->setColumnCount(2);
-    type_breakdown_table_->setHorizontalHeaderLabels({"TYPE", "COUNT"});
     type_breakdown_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     type_breakdown_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     type_breakdown_table_->verticalHeader()->setVisible(false);
@@ -228,21 +236,21 @@ QWidget* GovDataTreasuryPanel::build_toolbar() {
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(5);
 
-    // Endpoint tabs
-    prices_btn_ = new QPushButton("PRICES");
+    // Endpoint tabs (text set in retranslateUi)
+    prices_btn_ = new QPushButton;
     prices_btn_->setObjectName("govTreasTab");
     prices_btn_->setCheckable(true);
     prices_btn_->setChecked(true);
     prices_btn_->setCursor(Qt::PointingHandCursor);
     connect(prices_btn_, &QPushButton::clicked, this, [this]() { on_endpoint_changed(Prices); });
 
-    auctions_btn_ = new QPushButton("AUCTIONS");
+    auctions_btn_ = new QPushButton;
     auctions_btn_->setObjectName("govTreasTab");
     auctions_btn_->setCheckable(true);
     auctions_btn_->setCursor(Qt::PointingHandCursor);
     connect(auctions_btn_, &QPushButton::clicked, this, [this]() { on_endpoint_changed(Auctions); });
 
-    summary_btn_ = new QPushButton("SUMMARY");
+    summary_btn_ = new QPushButton;
     summary_btn_->setObjectName("govTreasTab");
     summary_btn_->setCheckable(true);
     summary_btn_->setCursor(Qt::PointingHandCursor);
@@ -253,13 +261,13 @@ QWidget* GovDataTreasuryPanel::build_toolbar() {
     hl->addWidget(summary_btn_);
     hl->addStretch(1);
 
-    fetch_btn_ = new QPushButton("FETCH");
+    fetch_btn_ = new QPushButton;
     fetch_btn_->setObjectName("govFetchBtn");
     fetch_btn_->setCursor(Qt::PointingHandCursor);
     connect(fetch_btn_, &QPushButton::clicked, this, &GovDataTreasuryPanel::on_fetch);
     hl->addWidget(fetch_btn_);
 
-    export_btn_ = new QPushButton("CSV");
+    export_btn_ = new QPushButton;
     export_btn_->setObjectName("govCsvBtn");
     export_btn_->setCursor(Qt::PointingHandCursor);
     connect(export_btn_, &QPushButton::clicked, this, &GovDataTreasuryPanel::on_export_csv);
@@ -277,13 +285,10 @@ QWidget* GovDataTreasuryPanel::build_filter_bar() {
     hl->setContentsMargins(14, 0, 14, 0);
     hl->setSpacing(8);
 
-    auto make_lbl = [&](const QString& text) -> QLabel* {
-        auto* l = new QLabel(text);
-        l->setObjectName("govTreasuryFilterLabel");
-        return l;
-    };
-
-    hl->addWidget(make_lbl("FROM"));
+    // Filter labels (text set in retranslateUi)
+    filter_from_lbl_ = new QLabel;
+    filter_from_lbl_->setObjectName("govTreasuryFilterLabel");
+    hl->addWidget(filter_from_lbl_);
 
     start_date_ = new QDateEdit(QDate::currentDate().addMonths(-1));
     start_date_->setCalendarPopup(true);
@@ -291,7 +296,9 @@ QWidget* GovDataTreasuryPanel::build_filter_bar() {
     start_date_->setFixedHeight(24);
     hl->addWidget(start_date_);
 
-    hl->addWidget(make_lbl("TO"));
+    filter_to_lbl_ = new QLabel;
+    filter_to_lbl_->setObjectName("govTreasuryFilterLabel");
+    hl->addWidget(filter_to_lbl_);
 
     QDate end = QDate::currentDate().addDays(-1);
     if (end.dayOfWeek() == 6)
@@ -305,15 +312,19 @@ QWidget* GovDataTreasuryPanel::build_filter_bar() {
     hl->addWidget(end_date_);
 
     hl->addSpacing(16);
-    hl->addWidget(make_lbl("TYPE"));
+    filter_type_lbl_ = new QLabel;
+    filter_type_lbl_->setObjectName("govTreasuryFilterLabel");
+    hl->addWidget(filter_type_lbl_);
 
+    // ComboBox items: store the API key in userData; display text is set
+    // (and re-set on language change) by retranslateUi.
     security_type_ = new QComboBox;
-    security_type_->addItem("All", "all");
-    security_type_->addItem("Bills", "bill");
-    security_type_->addItem("Notes", "note");
-    security_type_->addItem("Bonds", "bond");
-    security_type_->addItem("TIPS", "tips");
-    security_type_->addItem("FRN", "frn");
+    security_type_->addItem(QString(), "all");
+    security_type_->addItem(QString(), "bill");
+    security_type_->addItem(QString(), "note");
+    security_type_->addItem(QString(), "bond");
+    security_type_->addItem(QString(), "tips");
+    security_type_->addItem(QString(), "frn");
     security_type_->setFixedHeight(24);
     hl->addWidget(security_type_);
 
@@ -325,7 +336,65 @@ QWidget* GovDataTreasuryPanel::build_filter_bar() {
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 void GovDataTreasuryPanel::load_initial_data() {
-    show_loading("Select PRICES, AUCTIONS or SUMMARY then click FETCH");
+    show_loading(tr("Select PRICES, AUCTIONS or SUMMARY then click FETCH"));
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void GovDataTreasuryPanel::retranslateUi() {
+    if (prices_btn_)   prices_btn_->setText(tr("PRICES"));
+    if (auctions_btn_) auctions_btn_->setText(tr("AUCTIONS"));
+    if (summary_btn_)  summary_btn_->setText(tr("SUMMARY"));
+    if (fetch_btn_)    fetch_btn_->setText(tr("FETCH"));
+    if (export_btn_)   export_btn_->setText(tr("CSV"));
+
+    if (filter_from_lbl_) filter_from_lbl_->setText(tr("FROM"));
+    if (filter_to_lbl_)   filter_to_lbl_->setText(tr("TO"));
+    if (filter_type_lbl_) filter_type_lbl_->setText(tr("TYPE"));
+
+    if (security_type_) {
+        // Preserve the user's current selection across language change by
+        // operating on the user-data key, not the visible text.
+        const QString cur = security_type_->currentData().toString();
+        security_type_->setItemText(0, tr("All"));
+        security_type_->setItemText(1, tr("Bills"));
+        security_type_->setItemText(2, tr("Notes"));
+        security_type_->setItemText(3, tr("Bonds"));
+        security_type_->setItemText(4, tr("TIPS"));
+        security_type_->setItemText(5, tr("FRN"));
+        const int idx = security_type_->findData(cur);
+        if (idx >= 0) security_type_->setCurrentIndex(idx);
+    }
+
+    if (prices_table_)
+        prices_table_->setHorizontalHeaderLabels(
+            {tr("CUSIP"), tr("TYPE"), tr("RATE %"), tr("MATURITY"),
+             tr("BID"), tr("OFFER"), tr("EOD PRICE")});
+    if (auctions_table_)
+        auctions_table_->setHorizontalHeaderLabels(
+            {tr("CUSIP"), tr("TYPE"), tr("TERM"), tr("AUCTION DATE"),
+             tr("HIGH RATE"), tr("HIGH PRICE"), tr("BID/COVER"), tr("OFFERING")});
+    if (type_breakdown_table_)
+        type_breakdown_table_->setHorizontalHeaderLabels({tr("TYPE"), tr("COUNT")});
+
+    if (card_total_lbl_)     card_total_lbl_->setText(tr("TOTAL SECURITIES"));
+    if (card_min_rate_lbl_)  card_min_rate_lbl_->setText(tr("MIN RATE"));
+    if (card_max_rate_lbl_)  card_max_rate_lbl_->setText(tr("MAX RATE"));
+    if (card_avg_rate_lbl_)  card_avg_rate_lbl_->setText(tr("AVG RATE"));
+    if (card_min_price_lbl_) card_min_price_lbl_->setText(tr("MIN PRICE"));
+    if (card_max_price_lbl_) card_max_price_lbl_->setText(tr("MAX PRICE"));
+    if (card_avg_price_lbl_) card_avg_price_lbl_->setText(tr("AVG PRICE"));
+
+    const QString yield_sub = tr("yield %");
+    const QString price_sub = tr("per $100");
+    if (card_min_rate_sub_)  card_min_rate_sub_->setText(yield_sub);
+    if (card_max_rate_sub_)  card_max_rate_sub_->setText(yield_sub);
+    if (card_avg_rate_sub_)  card_avg_rate_sub_->setText(yield_sub);
+    if (card_min_price_sub_) card_min_price_sub_->setText(price_sub);
+    if (card_max_price_sub_) card_max_price_sub_->setText(price_sub);
+    if (card_avg_price_sub_) card_avg_price_sub_->setText(price_sub);
+
+    if (breakdown_hdr_lbl_) breakdown_hdr_lbl_->setText(tr("SECURITY TYPE BREAKDOWN"));
 }
 
 void GovDataTreasuryPanel::on_endpoint_changed(int index) {
@@ -362,7 +431,7 @@ void GovDataTreasuryPanel::on_fetch() {
             break;
     }
 
-    show_loading("Loading US Treasury data…");
+    show_loading(tr("Loading US Treasury data…"));
     services::GovDataService::instance().execute(kGovDataTreasuryScript, command, args, "gov_treasury_" + command);
 }
 
@@ -494,7 +563,7 @@ void GovDataTreasuryPanel::show_loading(const QString& message) {
 
 void GovDataTreasuryPanel::show_error(const QString& message) {
     status_label_->setStyleSheet(QString("color:%1; font-size:12px; background:transparent;").arg(colors::NEGATIVE()));
-    status_label_->setText("Error: " + message);
+    status_label_->setText(tr("Error: %1").arg(message));
     content_stack_->setCurrentIndex(3);
 }
 

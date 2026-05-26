@@ -4,9 +4,12 @@
 #include "screens/fno/BuilderSubTab.h"
 #include "screens/fno/ChainSubTab.h"
 #include "screens/fno/FiiDiiSubTab.h"
+#include "screens/fno/LegEditorTable.h"
 #include "screens/fno/MultiStraddleSubTab.h"
 #include "screens/fno/OISubTab.h"
+#include "screens/fno/OptionChainTable.h"
 #include "screens/fno/ScreenerSubTab.h"
+#include "services/options/OptionChainService.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
@@ -16,6 +19,8 @@
 #include <QShowEvent>
 #include <QString>
 #include <QVBoxLayout>
+
+#include <cmath>
 
 namespace fincept::screens::fno {
 
@@ -144,6 +149,30 @@ void FnoScreen::ensure_tab_built(SubTab which) {
         BuilderSubTab* p = nullptr;
         replace_placeholder<BuilderSubTab>(stack_, tabs_, TabBuilder, p, this);
         builder_tab_ = p;
+        if (chain_tab_ && chain_tab_->table()) {
+            connect(chain_tab_->table(), &OptionChainTable::leg_clicked,
+                    builder_tab_, [this](qint64 token, double strike, bool is_call, int lots) {
+                Q_UNUSED(token);
+                const auto& chain = fincept::services::options::OptionChainService::instance().last_chain();
+                fincept::services::options::StrategyLeg leg;
+                leg.strike = strike;
+                leg.type = is_call ? fincept::trading::InstrumentType::CE
+                                   : fincept::trading::InstrumentType::PE;
+                leg.lots = lots;
+                for (const auto& row : chain.rows) {
+                    if (std::abs(row.strike - strike) < 1e-6) {
+                        const auto& q = is_call ? row.ce_quote : row.pe_quote;
+                        leg.entry_price = q.ltp;
+                        leg.iv_at_entry = is_call ? row.ce_iv : row.pe_iv;
+                        leg.lot_size = row.lot_size > 0 ? row.lot_size : 1;
+                        leg.instrument_token = is_call ? row.ce_token : row.pe_token;
+                        leg.symbol = is_call ? row.ce_symbol : row.pe_symbol;
+                        break;
+                    }
+                }
+                builder_tab_->legs_view()->leg_model()->append_leg(leg);
+            });
+        }
     }
     if (which == TabOI && !oi_tab_) {
         OISubTab* p = nullptr;

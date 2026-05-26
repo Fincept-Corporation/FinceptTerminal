@@ -10,6 +10,7 @@
 #include "screens/news/NewsFeedPanel.h"
 #include "screens/news/NewsSidePanel.h"
 #include "screens/news/NewsTickerStrip.h"
+#include "screens/news/dialogs/RssFeedManagerDialog.h"
 #include "services/news/NewsCorrelationService.h"
 #include "services/news/NewsNlpService.h"
 #include "services/notifications/NotificationService.h"
@@ -106,6 +107,39 @@ void NewsScreen::connect_signals() {
     connect(command_bar_, &NewsCommandBar::search_changed, this, &NewsScreen::on_search_changed);
     connect(command_bar_, &NewsCommandBar::refresh_clicked, this, &NewsScreen::on_refresh);
     connect(command_bar_, &NewsCommandBar::drawer_toggle_requested, this, &NewsScreen::on_drawer_toggle);
+    connect(command_bar_, &NewsCommandBar::manage_sources_clicked, this, &NewsScreen::on_manage_sources);
+
+    // Live-feed badge: state mirrored from NewsService, click toggles
+    // connect/disconnect.
+    connect(&services::NewsService::instance(), &services::NewsService::live_state_changed,
+            this, [this](bool connected) {
+                if (command_bar_)
+                    command_bar_->set_live_state(connected);
+            });
+    connect(command_bar_, &NewsCommandBar::live_toggle_clicked, this, [this]() {
+        auto& svc = services::NewsService::instance();
+        if (svc.is_live_connected()) {
+            svc.disconnect_live_feed();
+        } else {
+            svc.connect_live_feed();
+        }
+    });
+
+    // Auto-refresh cadence — 0 = manual, otherwise minutes.
+    connect(command_bar_, &NewsCommandBar::refresh_interval_changed, this, [this](int minutes) {
+        auto& svc = services::NewsService::instance();
+        if (minutes <= 0) {
+            svc.stop_auto_refresh();
+        } else {
+            svc.set_refresh_interval(minutes);
+            if (visible_)
+                svc.start_auto_refresh();
+        }
+        QSettings s;
+        s.beginGroup("news");
+        s.setValue("refresh_interval_minutes", minutes);
+        s.endGroup();
+    });
 
     // Feed panel
     connect(feed_panel_, &NewsFeedPanel::article_clicked, this, &NewsScreen::on_article_clicked);
@@ -147,7 +181,7 @@ void NewsScreen::connect_signals() {
 
     // Language filter
     connect(command_bar_, &NewsCommandBar::language_filter_changed, this, [this](const QString& lang) {
-        Q_UNUSED(lang);
+        active_lang_ = lang.isEmpty() ? QStringLiteral("ALL") : lang;
         apply_filters_async();
     });
 
@@ -158,6 +192,25 @@ void NewsScreen::connect_signals() {
         if (visible_)
             feed_panel_->model()->advance_pulse();
     });
+
+    // Restore persisted auto-refresh cadence (default 10 min).
+    {
+        QSettings s;
+        s.beginGroup("news");
+        const int minutes = s.value("refresh_interval_minutes", 10).toInt();
+        s.endGroup();
+        command_bar_->set_refresh_interval_minutes(minutes);
+        if (minutes > 0)
+            services::NewsService::instance().set_refresh_interval(minutes);
+    }
+
+    // Enrichment debounce — coalesce rapid filter changes (search typing,
+    // category clicks) into a single round of NER + geo + correlation +
+    // prediction calls so we don't saturate the Python runner.
+    enrichment_timer_ = new QTimer(this);
+    enrichment_timer_->setInterval(350);
+    enrichment_timer_->setSingleShot(true);
+    connect(enrichment_timer_, &QTimer::timeout, this, &NewsScreen::run_enrichment_now);
 
     // Debounced DB seen-write timer
     seen_flush_timer_ = new QTimer(this);
@@ -271,7 +324,14 @@ void NewsScreen::showEvent(QShowEvent* e) {
     visible_ = true;
     ticker_strip_->resume();
     pulse_timer_->start();
-    services::NewsService::instance().start_auto_refresh();
+    {
+        QSettings s;
+        s.beginGroup("news");
+        const int minutes = s.value("refresh_interval_minutes", 10).toInt();
+        s.endGroup();
+        if (minutes > 0)
+            services::NewsService::instance().start_auto_refresh();
+    }
     services::NewsService::instance().connect_live_feed();
     subscribe_mcp_events();
 
@@ -416,6 +476,15 @@ void NewsScreen::on_group_symbol_changed(const SymbolRef& ref) {
 
 void NewsScreen::on_refresh() {
     refresh_data(true);
+}
+
+void NewsScreen::on_manage_sources() {
+    RssFeedManagerDialog dlg(this);
+    dlg.exec();
+    if (dlg.changed()) {
+        LOG_INFO("NewsScreen", "RSS feed sources changed; reloading");
+        refresh_data(true);
+    }
 }
 
 void NewsScreen::on_article_clicked(const services::NewsArticle& article) {
@@ -610,6 +679,7 @@ void NewsScreen::apply_filters_async() {
     const QString search_lower = search_query_.toLower();
     const QString sort = sort_mode_;
     const QString variant = active_variant_;
+    const QString lang_filter = active_lang_.toLower();
 
     // For 7D / 30D ranges, merge DB history
     if (time_range == "7D" || time_range == "30D") {
@@ -639,7 +709,7 @@ void NewsScreen::apply_filters_async() {
     }
 
     (void)QtConcurrent::run([self, gen, articles_copy = std::move(articles_copy), category, time_range, search_lower, sort,
-                       variant]() {
+                       variant, lang_filter]() {
         int64_t window_sec = 0;
         if (time_range == "1H")
             window_sec = 3600;
@@ -668,10 +738,20 @@ void NewsScreen::apply_filters_async() {
         // filter the entire input down to zero (the single highest-impact
         // failure mode in this pipeline).
         int rejected_time = 0, rejected_variant = 0, rejected_category = 0, rejected_search = 0;
+        int rejected_lang = 0;
 
         for (const auto& a : articles_copy) {
             if (cutoff > 0 && a.sort_ts < cutoff) {
                 ++rejected_time;
+                continue;
+            }
+
+            // Language filter — drop articles whose detected lang doesn't
+            // match the picked ISO code. Empty `a.lang` is treated as
+            // unknown and passes through any filter (parser only sets it
+            // for feeds where the source advertises a language).
+            if (lang_filter != "all" && !a.lang.isEmpty() && a.lang.toLower() != lang_filter) {
+                ++rejected_lang;
                 continue;
             }
 
@@ -754,9 +834,10 @@ void NewsScreen::apply_filters_async() {
         if (!articles_copy.isEmpty() && filtered.isEmpty()) {
             LOG_WARN("NewsScreen",
                      QString("Filter rejected ALL %1 articles "
-                             "(time=%2 variant=%3 category=%4 search=%5 range=%6)")
-                         .arg(articles_copy.size()).arg(rejected_time).arg(rejected_variant)
-                         .arg(rejected_category).arg(rejected_search).arg(time_range));
+                             "(time=%2 lang=%3 variant=%4 category=%5 search=%6 range=%7)")
+                         .arg(articles_copy.size()).arg(rejected_time).arg(rejected_lang)
+                         .arg(rejected_variant).arg(rejected_category).arg(rejected_search)
+                         .arg(time_range));
         }
 
         QMetaObject::invokeMethod(
@@ -863,6 +944,80 @@ void NewsScreen::update_ui_from_filtered(int /*generation*/, const QVector<servi
 
     // Deviations
     compute_deviations();
+
+    // Intel-drawer enrichment (NER, geolocation, correlation signals,
+    // prediction-market odds) — debounced to avoid swamping the Python
+    // runner during rapid filter changes.
+    request_enrichment();
+}
+
+void NewsScreen::request_enrichment() {
+    if (!enrichment_timer_)
+        return;
+    enrichment_timer_->start();
+}
+
+void NewsScreen::run_enrichment_now() {
+    if (filtered_articles_.isEmpty())
+        return;
+
+    // Cap input size — Python NER on 1000+ articles is slow and adds
+    // little for the sidebar's top-N rendering. The top of the filtered
+    // list is what the user is looking at.
+    constexpr int kMaxEnrichArticles = 200;
+    const auto subset = filtered_articles_.mid(0, kMaxEnrichArticles);
+
+    const int gen = enrichment_generation_.fetch_add(1, std::memory_order_relaxed) + 1;
+    QPointer<NewsScreen> self = this;
+
+    // NER → entities sidebar + per-article cache (used by detail panel
+    // "key actors" lookup at on_article_clicked).
+    services::NewsNlpService::instance().extract_entities(
+        subset, [self, gen](bool ok, services::NerResult ner) {
+            if (!self || !ok)
+                return;
+            if (gen < self->enrichment_generation_.load(std::memory_order_relaxed) - 1)
+                return;
+            self->side_panel_->update_entities(ner);
+        });
+
+    // Geolocation → locations sidebar + feed-row geo dot flag.
+    services::NewsNlpService::instance().geolocate_articles(
+        subset, [self, gen](bool ok, QVector<services::ArticleGeo> geo) {
+            if (!self || !ok)
+                return;
+            if (gen < self->enrichment_generation_.load(std::memory_order_relaxed) - 1)
+                return;
+            self->side_panel_->update_locations(geo);
+            QSet<QString> geo_ids;
+            geo_ids.reserve(geo.size());
+            for (const auto& g : geo)
+                if (!g.locations.isEmpty())
+                    geo_ids.insert(g.id);
+            self->feed_panel_->model()->set_geo_articles(geo_ids);
+        });
+
+    // Correlation signals → signals sidebar.
+    services::NewsCorrelationService::instance().detect_signals(
+        subset, [self, gen](bool ok, QVector<services::CorrelationSignal> sigs) {
+            if (!self || !ok)
+                return;
+            if (gen < self->enrichment_generation_.load(std::memory_order_relaxed) - 1)
+                return;
+            self->side_panel_->update_signals(sigs);
+        });
+
+    // Prediction markets → predictions sidebar (one-shot per session,
+    // not article-dependent — but keeping it inside the same enrichment
+    // pass keeps the UI lit consistently after a refresh).
+    services::NewsCorrelationService::instance().fetch_predictions(
+        [self, gen](bool ok, QVector<services::PredictionMarket> preds) {
+            if (!self || !ok)
+                return;
+            if (gen < self->enrichment_generation_.load(std::memory_order_relaxed) - 1)
+                return;
+            self->side_panel_->update_predictions(preds);
+        });
 }
 
 void NewsScreen::update_monitors() {

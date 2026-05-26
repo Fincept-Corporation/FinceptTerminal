@@ -3,6 +3,7 @@
 
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -22,10 +23,10 @@ void PortfolioOrderPanel::build_ui() {
 
     // Header + close
     auto* header_row = new QHBoxLayout;
-    auto* title = new QLabel("ORDER ENTRY");
-    title->setStyleSheet(
+    title_label_ = new QLabel(tr("ORDER ENTRY"));
+    title_label_->setStyleSheet(
         QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::POSITIVE()));
-    header_row->addWidget(title);
+    header_row->addWidget(title_label_);
     header_row->addStretch();
 
     close_btn_ = new QPushButton("\u2715");
@@ -43,14 +44,14 @@ void PortfolioOrderPanel::build_ui() {
     auto* side_row = new QHBoxLayout;
     side_row->setSpacing(0);
 
-    buy_tab_ = new QPushButton("BUY");
+    buy_tab_ = new QPushButton(tr("BUY"));
     buy_tab_->setFixedHeight(26);
     buy_tab_->setCursor(Qt::PointingHandCursor);
     buy_tab_->setCheckable(true);
     buy_tab_->setChecked(true);
     side_row->addWidget(buy_tab_);
 
-    sell_tab_ = new QPushButton("SELL");
+    sell_tab_ = new QPushButton(tr("SELL"));
     sell_tab_->setFixedHeight(26);
     sell_tab_->setCursor(Qt::PointingHandCursor);
     sell_tab_->setCheckable(true);
@@ -97,11 +98,12 @@ void PortfolioOrderPanel::build_ui() {
     symbol_label_->setStyleSheet(QString("color:%1; font-size:16px; font-weight:700;").arg(ui::colors::CYAN()));
     layout->addWidget(symbol_label_);
 
-    auto add_info = [&](QLabel*& lbl, const QString& prefix) {
+    auto add_info = [&](QLabel*& lbl, QLabel*& prefix_out, const QString& prefix) {
         auto* row = new QHBoxLayout;
         auto* lab = new QLabel(prefix);
         lab->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
         row->addWidget(lab);
+        prefix_out = lab;
         lbl = new QLabel("--");
         lbl->setAlignment(Qt::AlignRight);
         lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY()));
@@ -109,12 +111,12 @@ void PortfolioOrderPanel::build_ui() {
         layout->addLayout(row);
     };
 
-    add_info(price_label_, "PRICE");
-    add_info(qty_label_, "QTY HELD");
-    add_info(mv_label_, "MKT VAL");
+    add_info(price_label_, price_prefix_, tr("PRICE"));
+    add_info(qty_label_, qty_prefix_, tr("QTY HELD"));
+    add_info(mv_label_, mv_prefix_, tr("MKT VAL"));
 
     // Submit button
-    submit_btn_ = new QPushButton("OPEN BUY ORDER");
+    submit_btn_ = new QPushButton(tr("OPEN BUY ORDER"));
     submit_btn_->setFixedHeight(32);
     submit_btn_->setCursor(Qt::PointingHandCursor);
     submit_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
@@ -132,11 +134,11 @@ void PortfolioOrderPanel::build_ui() {
     layout->addStretch();
 
     // Footer note
-    auto* note = new QLabel("Orders are recorded\nin your portfolio");
-    note->setWordWrap(true);
-    note->setAlignment(Qt::AlignCenter);
-    note->setStyleSheet(QString("color:%1; font-size:8px;").arg(ui::colors::TEXT_TERTIARY()));
-    layout->addWidget(note);
+    note_label_ = new QLabel(tr("Orders are recorded\nin your portfolio"));
+    note_label_->setWordWrap(true);
+    note_label_->setAlignment(Qt::AlignCenter);
+    note_label_->setStyleSheet(QString("color:%1; font-size:8px;").arg(ui::colors::TEXT_TERTIARY()));
+    layout->addWidget(note_label_);
 
     update_tabs();
 }
@@ -175,14 +177,34 @@ void PortfolioOrderPanel::update_display() {
         QString::number(holding_->quantity, 'f', holding_->quantity == std::floor(holding_->quantity) ? 0 : 2));
     mv_label_->setText(QString("%1 %2").arg(currency_).arg(QString::number(holding_->market_value, 'f', 2)));
 
-    // Update submit button text
-    submit_btn_->setText(QString("OPEN %1 ORDER").arg(side_));
+    // Update submit button text — text source keys match retranslateUi().
+    submit_btn_->setText(side_ == "BUY" ? tr("OPEN BUY ORDER") : tr("OPEN SELL ORDER"));
     const char* btn_color = (side_ == "BUY") ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
     const char* btn_text_color = (side_ == "BUY") ? "#000" : "#fff";
     submit_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
                                        "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
                                        "QPushButton:hover { opacity:0.9; }")
                                    .arg(btn_color, btn_text_color));
+}
+
+void PortfolioOrderPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PortfolioOrderPanel::retranslateUi() {
+    if (title_label_)  title_label_->setText(tr("ORDER ENTRY"));
+    if (buy_tab_)      buy_tab_->setText(tr("BUY"));
+    if (sell_tab_)     sell_tab_->setText(tr("SELL"));
+    if (price_prefix_) price_prefix_->setText(tr("PRICE"));
+    if (qty_prefix_)   qty_prefix_->setText(tr("QTY HELD"));
+    if (mv_prefix_)    mv_prefix_->setText(tr("MKT VAL"));
+    if (note_label_)   note_label_->setText(tr("Orders are recorded\nin your portfolio"));
+    if (submit_btn_)
+        submit_btn_->setText(side_ == "BUY" ? tr("OPEN BUY ORDER") : tr("OPEN SELL ORDER"));
+    // Re-render the formatted value cells (currency-prefixed MKT VAL etc.).
+    update_display();
 }
 
 } // namespace fincept::screens

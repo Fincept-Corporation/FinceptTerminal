@@ -14,7 +14,7 @@ constexpr const char* kTopic = "news:general";
 constexpr int kMaxArticles = 30; // headline cap; NewsService publishes the full feed
 } // namespace
 
-NewsWidget::NewsWidget(QWidget* parent) : BaseWidget("MARKET NEWS", parent, ui::colors::CYAN) {
+NewsWidget::NewsWidget(QWidget* parent) : BaseWidget(tr("MARKET NEWS"), parent, ui::colors::CYAN) {
     scroll_area_ = new QScrollArea;
     scroll_area_->setWidgetResizable(true);
 
@@ -101,7 +101,7 @@ void NewsWidget::populate(const QVector<services::NewsArticle>& articles) {
     }
 
     if (articles.isEmpty()) {
-        auto* empty = new QLabel(QStringLiteral("No news available."));
+        auto* empty = new QLabel(tr("No news available."));
         empty->setAlignment(Qt::AlignCenter);
         empty->setStyleSheet(QString("color: %1; font-size: 11px; padding: 12px; background: transparent;")
                                  .arg(ui::colors::TEXT_TERTIARY()));
@@ -154,6 +154,13 @@ void NewsWidget::populate(const QVector<services::NewsArticle>& articles) {
         news_layout_->insertWidget(news_layout_->count() - 1, row);
         ++rendered;
     }
+}
+
+void NewsWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("MARKET NEWS"));
+    if (!last_articles_.isEmpty())
+        populate(last_articles_); // re-render "No news available." / time strings if any
 }
 
 } // namespace fincept::screens::widgets

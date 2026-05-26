@@ -301,8 +301,8 @@ class Pyttsx3TtsProvider final : public PythonTtsProvider {
 // ── DeepgramTtsProvider ──────────────────────────────────────────────────────
 //
 // POSTs text to Deepgram /v1/speak (Aura-2 voices) and pipes returned PCM
-// straight into pyaudio. Reads API key from SecureStorage; voice model from
-// AppConfig key "voice/deepgram/tts_model".
+// straight into sounddevice. Reads API key from SecureStorage; voice model
+// from AppConfig key "voice/deepgram/tts_model".
 
 class DeepgramTtsProvider final : public PythonTtsProvider {
   public:

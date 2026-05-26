@@ -68,7 +68,9 @@ class AccountDataStream : public QObject {
     void orderbook_fetched(const QString& account_id,
                            const QVector<QPair<double, double>>& bids,
                            const QVector<QPair<double, double>>& asks,
-                           double spread, double spread_pct);
+                           double spread, double spread_pct,
+                           const QVector<int>& bid_orders,
+                           const QVector<int>& ask_orders);
     void time_sales_fetched(const QString& account_id, const QVector<BrokerTrade>& trades);
     void latest_trade_fetched(const QString& account_id, const BrokerTrade& trade);
     void calendar_fetched(const QString& account_id, const QVector<MarketCalendarDay>& days);
@@ -125,6 +127,7 @@ class AccountDataStream : public QObject {
     std::atomic<bool> quote_fetching_{false};
     std::atomic<bool> candles_fetching_{false};
     std::atomic<bool> portfolio_fetching_{false};
+    std::atomic<int> ws_tick_count_{0};
 };
 
 } // namespace fincept::trading

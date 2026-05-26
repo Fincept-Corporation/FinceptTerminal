@@ -18,6 +18,7 @@ struct LlmGlobalSettings {
     double temperature = 0.7;
     int max_tokens = 4096;
     QString system_prompt;
+    int max_tool_rounds = 40;
 };
 
 struct LlmModelConfig {

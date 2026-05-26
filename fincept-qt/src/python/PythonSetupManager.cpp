@@ -43,12 +43,12 @@ QString PythonSetupManager::uv_path() const {
 }
 
 QString PythonSetupManager::base_python_path() const {
-    // May block up to 10s — never call from the UI thread. Background threads / pre-exec only.
-    Q_ASSERT(QCoreApplication::instance() == nullptr ||
-             QThread::currentThread() != QCoreApplication::instance()->thread());
-
     if (!cached_python_path_.isEmpty())
         return cached_python_path_;
+
+    // BLOCKING: spawns `uv python find` and waits up to 10s. Acceptable from
+    // the main thread only pre-window (see main.cpp's check_status() call);
+    // post-window callers must run this on a background thread.
 
     // `uv python find` spawns a process — resolve once per session.
     QProcess proc;
@@ -778,7 +778,7 @@ bool PythonSetupManager::install_packages(const QString& venv_name, const QStrin
     // marker ensures check_status() returns needs_setup=true on the next
     // launch so the failed packages are retried automatically.
     emit_progress(step_key, 100,
-                  QString("Done — %1 package(s) failed (will retry on next launch)").arg(failed.size()),
+                  QString("Failed: %1").arg(failed.join(", ").left(200)),
                   /*is_error=*/true);
     // Returning false here prevents run_setup() from writing the .setup_complete
     // sentinel. Without this, the sentinel would be written even though one or

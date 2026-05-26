@@ -879,12 +879,18 @@ void DBnomicsScreen::rebuild_comparison_view() {
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap DBnomicsScreen::save_state() const {
-    return {
+    QVariantMap state{
         {"provider", selection_panel_->selected_provider()},
         {"dataset", selection_panel_->selected_dataset()},
         {"series", selection_panel_->selected_series()},
         {"view_mode", static_cast<int>(view_mode_)},
     };
+    if (selection_panel_) {
+        state["global_search"] = selection_panel_->global_search_text();
+        state["provider_filter"] = selection_panel_->provider_filter_text();
+        state["series_search"] = selection_panel_->series_search_text();
+    }
+    return state;
 }
 
 void DBnomicsScreen::restore_state(const QVariantMap& state) {
@@ -904,6 +910,15 @@ void DBnomicsScreen::restore_state(const QVariantMap& state) {
         on_dataset_selected(ds);
     if (!ser.isEmpty())
         on_series_selected(prov, ds, ser);
+
+    if (selection_panel_) {
+        if (state.contains("global_search"))
+            selection_panel_->set_global_search_text(state.value("global_search").toString());
+        if (state.contains("provider_filter"))
+            selection_panel_->set_provider_filter_text(state.value("provider_filter").toString());
+        if (state.contains("series_search"))
+            selection_panel_->set_series_search_text(state.value("series_search").toString());
+    }
 }
 
 } // namespace fincept::screens

@@ -13,10 +13,12 @@
 #include "screens/equity_research/EquitySentimentTab.h"
 #include "screens/equity_research/EquityTalippTab.h"
 #include "screens/equity_research/EquityTechnicalsTab.h"
+#include "services/backtesting/BacktestingService.h"
 #include "services/equity/EquityResearchService.h"
 #include "ui/theme/Theme.h"
 
 #include <QApplication>
+#include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -25,6 +27,7 @@ namespace fincept::screens {
 
 EquityResearchScreen::EquityResearchScreen(QWidget* parent) : QWidget(parent) {
     build_ui();
+    retranslateUi();
 
     // Refresh timer — only started in showEvent
     refresh_timer_ = new QTimer(this);
@@ -104,14 +107,16 @@ void EquityResearchScreen::build_ui() {
     news_tab_ = new EquityNewsTab;
     sentiment_tab_ = new EquitySentimentTab;
 
-    tab_widget_->addTab(overview_tab_, "Overview");
-    tab_widget_->addTab(financials_tab_, "Financials");
-    tab_widget_->addTab(analysis_tab_, "Analysis");
-    tab_widget_->addTab(technicals_tab_, "Technicals");
-    tab_widget_->addTab(talipp_tab_, "TALIpp");
-    tab_widget_->addTab(peers_tab_, "Peers");
-    tab_widget_->addTab(news_tab_, "News");
-    tab_widget_->addTab(sentiment_tab_, "Sentiment");
+    // Tab titles are re-set by retranslateUi(); add with placeholder strings
+    // first so the tab order remains fixed regardless of locale text width.
+    tab_widget_->addTab(overview_tab_,   QString());
+    tab_widget_->addTab(financials_tab_, QString());
+    tab_widget_->addTab(analysis_tab_,   QString());
+    tab_widget_->addTab(technicals_tab_, QString());
+    tab_widget_->addTab(talipp_tab_,     QString());
+    tab_widget_->addTab(peers_tab_,      QString());
+    tab_widget_->addTab(news_tab_,       QString());
+    tab_widget_->addTab(sentiment_tab_,  QString());
 
     connect(tab_widget_, &QTabWidget::currentChanged, this, &EquityResearchScreen::on_tab_changed);
 
@@ -128,15 +133,14 @@ QWidget* EquityResearchScreen::build_title_bar() {
     hl->setContentsMargins(16, 8, 16, 8);
     hl->setSpacing(12);
 
-    auto* title = new QLabel("EQUITY RESEARCH");
-    title->setStyleSheet(
+    title_label_ = new QLabel;
+    title_label_->setStyleSheet(
         QString("color:%1; font-size:14px; font-weight:700; letter-spacing:2px;").arg(ui::colors::AMBER()));
-    hl->addWidget(title);
+    hl->addWidget(title_label_);
 
     symbol_label_ = new QLabel;
     symbol_label_->setStyleSheet(QString("color:%1; font-size:14px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY()));
     symbol_label_->setCursor(Qt::OpenHandCursor);
-    symbol_label_->setToolTip("Drag to broadcast this symbol to any panel");
     // Drag-out: pull the current symbol from the live member so the filter
     // always ships the most recent ticker, not whatever was loaded at build.
     symbol_dnd::installDragSource(
@@ -145,11 +149,33 @@ QWidget* EquityResearchScreen::build_title_bar() {
         link_group_);
     hl->addWidget(symbol_label_);
 
+    auto* backtest_btn = new QPushButton(tr("BACKTEST"), container);
+    backtest_btn->setCursor(Qt::PointingHandCursor);
+    backtest_btn->setFixedHeight(24);
+    backtest_btn->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                "padding:0 10px; font-size:%3px; font-family:%4; font-weight:700; letter-spacing:0.5px; }"
+                "QPushButton:hover { background:%5; color:%6; }")
+            .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM())
+            .arg(ui::fonts::TINY)
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::colors::AMBER(), ui::colors::BG_BASE()));
+    connect(backtest_btn, &QPushButton::clicked, this, [this]() {
+        if (current_symbol_.isEmpty()) return;
+        QJsonObject config;
+        QJsonArray symbols;
+        symbols.append(current_symbol_);
+        config["symbols"] = symbols;
+        services::backtest::BacktestingService::instance().set_pending_portfolio_config(config);
+        EventBus::instance().publish("nav.switch_screen", {{"screen_id", QString("backtesting")}});
+    });
+    hl->addWidget(backtest_btn);
+
     hl->addStretch();
 
-    auto* hint = new QLabel("Use /stock, /fund, /index... in command bar to search");
-    hint->setStyleSheet(QString("color:%1; font-size:12px;").arg(ui::colors::TEXT_TERTIARY()));
-    hl->addWidget(hint);
+    hint_label_ = new QLabel;
+    hint_label_->setStyleSheet(QString("color:%1; font-size:12px;").arg(ui::colors::TEXT_TERTIARY()));
+    hl->addWidget(hint_label_);
 
     return container;
 }
@@ -176,13 +202,15 @@ QWidget* EquityResearchScreen::build_quote_bar() {
         return l;
     };
 
-    sym_label_ = make_label("—", ui::colors::AMBER());
-    price_label_ = make_label("—", ui::colors::TEXT_PRIMARY());
-    change_label_ = make_label("—");
-    vol_label_ = make_label("VOL: —");
-    hl_label_ = make_label("H/L: —");
-    mktcap_label_ = make_label("MKT CAP: —");
-    rec_label_ = make_label("—");
+    // Em-dash placeholders are typographic, not text — left raw. The VOL/H/L/
+    // MKT CAP prefixes are translated via retranslateUi().
+    sym_label_ = make_label(QStringLiteral("—"), ui::colors::AMBER());
+    price_label_ = make_label(QStringLiteral("—"), ui::colors::TEXT_PRIMARY());
+    change_label_ = make_label(QStringLiteral("—"));
+    vol_label_ = make_label(QString());
+    hl_label_ = make_label(QString());
+    mktcap_label_ = make_label(QString());
+    rec_label_ = make_label(QStringLiteral("—"));
     hl->addStretch();
 
     return bar;
@@ -247,7 +275,7 @@ void EquityResearchScreen::load_symbol(const QString& symbol) {
     // Update title bar and quote bar
     symbol_label_->setText(symbol);
     sym_label_->setText(symbol);
-    price_label_->setText("Loading\xe2\x80\xa6");
+    price_label_->setText(tr("Loading…"));
 
     // Overview always loads (tab 0 is default)
     overview_tab_->set_symbol(symbol);
@@ -307,12 +335,50 @@ void EquityResearchScreen::update_quote_bar(const services::equity::QuoteData& q
         return QString::number(static_cast<qint64>(v));
     };
 
-    vol_label_->setText("VOL: " + fmt_vol(q.volume));
-    hl_label_->setText(QString("H:%1%2  L:%1%3").arg(cs).arg(q.high, 0, 'f', 2).arg(q.low, 0, 'f', 2));
+    vol_label_->setText(tr("VOL: %1").arg(fmt_vol(q.volume)));
+    hl_label_->setText(tr("H:%1%2  L:%1%3").arg(cs).arg(q.high, 0, 'f', 2).arg(q.low, 0, 'f', 2));
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+// The quote bar is mostly numeric data — only the label prefixes (VOL/H/L,
+// MKT CAP) need localization. update_quote_bar() rewrites VOL/H/L on every
+// quote refresh, so when the language changes the next refresh will pick up
+// the new prefix automatically. MKT CAP shows "MKT CAP: —" until populated;
+// retranslate handles the placeholder.
+
+void EquityResearchScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
+}
+
+void EquityResearchScreen::retranslateUi() {
+    if (title_label_)  title_label_->setText(tr("EQUITY RESEARCH"));
+    if (symbol_label_) symbol_label_->setToolTip(tr("Drag to broadcast this symbol to any panel"));
+    if (hint_label_)   hint_label_->setText(tr("Use /stock, /fund, /index... in command bar to search"));
+
+    if (vol_label_)    vol_label_->setText(tr("VOL: %1").arg(QStringLiteral("—")));
+    if (hl_label_)     hl_label_->setText(tr("H/L: %1").arg(QStringLiteral("—")));
+    if (mktcap_label_) mktcap_label_->setText(tr("MKT CAP: %1").arg(QStringLiteral("—")));
+
+    if (tab_widget_) {
+        tab_widget_->setTabText(0, tr("Overview"));
+        tab_widget_->setTabText(1, tr("Financials"));
+        tab_widget_->setTabText(2, tr("Analysis"));
+        tab_widget_->setTabText(3, tr("Technicals"));
+        // "TALIpp" is a library name — kept verbatim across locales.
+        tab_widget_->setTabText(4, QStringLiteral("TALIpp"));
+        tab_widget_->setTabText(5, tr("Peers"));
+        tab_widget_->setTabText(6, tr("News"));
+        tab_widget_->setTabText(7, tr("Sentiment"));
+    }
 }
 
 QVariantMap EquityResearchScreen::save_state() const {
-    return {{"symbol", current_symbol_}, {"tab_index", tab_widget_ ? tab_widget_->currentIndex() : 0}};
+    QVariantMap state{{"symbol", current_symbol_}, {"tab_index", tab_widget_ ? tab_widget_->currentIndex() : 0}};
+    if (peers_tab_) state["peers"] = peers_tab_->peers_text();
+    return state;
 }
 
 void EquityResearchScreen::restore_state(const QVariantMap& state) {
@@ -326,6 +392,8 @@ void EquityResearchScreen::restore_state(const QVariantMap& state) {
         if (idx >= 0 && idx < tab_widget_->count())
             tab_widget_->setCurrentIndex(idx);
     }
+    if (peers_tab_ && state.contains("peers"))
+        peers_tab_->set_peers_text(state.value("peers").toString());
 }
 
 } // namespace fincept::screens

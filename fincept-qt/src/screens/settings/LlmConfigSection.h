@@ -69,6 +69,7 @@ class LlmConfigSection : public QWidget {
     // Global settings (lives at bottom of provider tab)
     QDoubleSpinBox* temp_spin_ = nullptr;
     QSpinBox* tokens_spin_ = nullptr;
+    QSpinBox* tool_rounds_spin_ = nullptr;
     QPlainTextEdit* system_prompt_ = nullptr;
     QPushButton* save_global_btn_ = nullptr;
 

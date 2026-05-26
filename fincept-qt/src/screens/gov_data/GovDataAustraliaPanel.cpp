@@ -7,6 +7,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QDesktopServices>
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
@@ -28,10 +29,18 @@ using namespace fincept::ui;
 GovDataAustraliaPanel::GovDataAustraliaPanel(QWidget* parent) : QWidget(parent) {
     setStyleSheet(make_gov_panel_style(kGovDataAustraliaColor));
     build_ui();
+    retranslateUi();
     connect(&services::GovDataService::instance(), &services::GovDataService::result_ready, this,
             &GovDataAustraliaPanel::on_result);
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this]() { setStyleSheet(make_gov_panel_style(kGovDataAustraliaColor)); });
+}
+
+void GovDataAustraliaPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
 }
 
 // ── UI Construction ──────────────────────────────────────────────────────────
@@ -50,7 +59,7 @@ void GovDataAustraliaPanel::build_ui() {
     auto* bcl = new QHBoxLayout(breadcrumb_);
     bcl->setContentsMargins(14, 0, 14, 0);
     bcl->setSpacing(4);
-    breadcrumb_label_ = new QLabel("All Agencies");
+    breadcrumb_label_ = new QLabel;
     breadcrumb_label_->setObjectName("govBreadcrumbText");
     bcl->addWidget(breadcrumb_label_);
     bcl->addStretch(1);
@@ -62,10 +71,9 @@ void GovDataAustraliaPanel::build_ui() {
     // Content stack
     content_stack_ = new QStackedWidget;
 
-    // Page 0 — Agencies table: NAME | DESCRIPTION | CREATED
+    // Page 0 — Agencies table: NAME | DESCRIPTION | CREATED (headers set in retranslateUi)
     agencies_table_ = new QTableWidget;
     agencies_table_->setColumnCount(3);
-    agencies_table_->setHorizontalHeaderLabels({"NAME", "DESCRIPTION", "CREATED"});
     agencies_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
     agencies_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     agencies_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
@@ -75,10 +83,9 @@ void GovDataAustraliaPanel::build_ui() {
     connect(agencies_table_, &QTableWidget::cellDoubleClicked, this, &GovDataAustraliaPanel::on_agency_doubleclicked);
     content_stack_->addWidget(agencies_table_); // index 0
 
-    // Page 1 — Datasets table: TITLE | LICENSE | AUTHOR | RESOURCES | MODIFIED
+    // Page 1 — Datasets table (headers set in retranslateUi)
     datasets_table_ = new QTableWidget;
     datasets_table_->setColumnCount(5);
-    datasets_table_->setHorizontalHeaderLabels({"TITLE", "LICENSE", "AUTHOR", "RESOURCES", "MODIFIED"});
     datasets_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     datasets_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     datasets_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
@@ -92,10 +99,9 @@ void GovDataAustraliaPanel::build_ui() {
     connect(datasets_table_, &QTableWidget::cellDoubleClicked, this, &GovDataAustraliaPanel::on_dataset_doubleclicked);
     content_stack_->addWidget(datasets_table_); // index 1
 
-    // Page 2 — Resources table: NAME | FORMAT | SIZE | OPEN
+    // Page 2 — Resources table (headers set in retranslateUi)
     resources_table_ = new QTableWidget;
     resources_table_->setColumnCount(4);
-    resources_table_->setHorizontalHeaderLabels({"NAME", "FORMAT", "SIZE", "OPEN"});
     resources_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     resources_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     resources_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
@@ -143,8 +149,8 @@ QWidget* GovDataAustraliaPanel::build_toolbar() {
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(5);
 
-    // Back button — hidden until drilling in
-    back_btn_ = new QPushButton("← BACK");
+    // Back button — hidden until drilling in (text set in retranslateUi)
+    back_btn_ = new QPushButton;
     back_btn_->setObjectName("govBackBtn");
     back_btn_->setVisible(false);
     back_btn_->setCursor(Qt::PointingHandCursor);
@@ -153,8 +159,8 @@ QWidget* GovDataAustraliaPanel::build_toolbar() {
 
     hl->addSpacing(4);
 
-    // Tab: Agencies
-    agencies_btn_ = new QPushButton("AGENCIES");
+    // Tab: Agencies (text set in retranslateUi)
+    agencies_btn_ = new QPushButton;
     agencies_btn_->setObjectName("govTabBtn");
     agencies_btn_->setCheckable(true);
     agencies_btn_->setChecked(true);
@@ -171,8 +177,8 @@ QWidget* GovDataAustraliaPanel::build_toolbar() {
     });
     hl->addWidget(agencies_btn_);
 
-    // Tab: Datasets (jump back to cached datasets view)
-    datasets_btn_ = new QPushButton("DATASETS");
+    // Tab: Datasets (jump back to cached datasets view, text set in retranslateUi)
+    datasets_btn_ = new QPushButton;
     datasets_btn_->setObjectName("govTabBtn");
     datasets_btn_->setCheckable(true);
     datasets_btn_->setChecked(false);
@@ -187,8 +193,8 @@ QWidget* GovDataAustraliaPanel::build_toolbar() {
     });
     hl->addWidget(datasets_btn_);
 
-    // Tab: Recent
-    recent_btn_ = new QPushButton("RECENT");
+    // Tab: Recent (text set in retranslateUi)
+    recent_btn_ = new QPushButton;
     recent_btn_->setObjectName("govTabBtn");
     recent_btn_->setCheckable(true);
     recent_btn_->setChecked(false);
@@ -198,16 +204,15 @@ QWidget* GovDataAustraliaPanel::build_toolbar() {
 
     hl->addSpacing(10);
 
-    // Search input
+    // Search input (placeholder set in retranslateUi)
     search_input_ = new QLineEdit;
     search_input_->setObjectName("govSearch");
-    search_input_->setPlaceholderText("Search datasets…");
     search_input_->setFixedWidth(200);
     search_input_->setFixedHeight(26);
     connect(search_input_, &QLineEdit::returnPressed, this, &GovDataAustraliaPanel::on_search);
     hl->addWidget(search_input_);
 
-    fetch_btn_ = new QPushButton("FETCH");
+    fetch_btn_ = new QPushButton;
     fetch_btn_->setObjectName("govFetchBtn");
     fetch_btn_->setCursor(Qt::PointingHandCursor);
     connect(fetch_btn_, &QPushButton::clicked, this, &GovDataAustraliaPanel::on_fetch);
@@ -215,7 +220,7 @@ QWidget* GovDataAustraliaPanel::build_toolbar() {
 
     hl->addStretch(1);
 
-    export_btn_ = new QPushButton("CSV");
+    export_btn_ = new QPushButton;
     export_btn_->setObjectName("govCsvBtn");
     export_btn_->setCursor(Qt::PointingHandCursor);
     connect(export_btn_, &QPushButton::clicked, this, &GovDataAustraliaPanel::on_export_csv);
@@ -224,10 +229,33 @@ QWidget* GovDataAustraliaPanel::build_toolbar() {
     return bar;
 }
 
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void GovDataAustraliaPanel::retranslateUi() {
+    if (back_btn_)     back_btn_->setText(tr("← BACK"));
+    if (agencies_btn_) agencies_btn_->setText(tr("AGENCIES"));
+    if (datasets_btn_) datasets_btn_->setText(tr("DATASETS"));
+    if (recent_btn_)   recent_btn_->setText(tr("RECENT"));
+    if (fetch_btn_)    fetch_btn_->setText(tr("FETCH"));
+    if (export_btn_)   export_btn_->setText(tr("CSV"));
+    if (search_input_) search_input_->setPlaceholderText(tr("Search datasets…"));
+
+    if (agencies_table_)
+        agencies_table_->setHorizontalHeaderLabels({tr("NAME"), tr("DESCRIPTION"), tr("CREATED")});
+    if (datasets_table_)
+        datasets_table_->setHorizontalHeaderLabels(
+            {tr("TITLE"), tr("LICENSE"), tr("AUTHOR"), tr("RESOURCES"), tr("MODIFIED")});
+    if (resources_table_)
+        resources_table_->setHorizontalHeaderLabels({tr("NAME"), tr("FORMAT"), tr("SIZE"), tr("OPEN")});
+
+    // Re-render the breadcrumb so its current path picks up the new language.
+    update_breadcrumb();
+}
+
 // ── Initial load ─────────────────────────────────────────────────────────────
 
 void GovDataAustraliaPanel::load_initial_data() {
-    show_loading("Loading Australian Government agencies…");
+    show_loading(tr("Loading Australian Government agencies…"));
     services::GovDataService::instance().execute(kGovDataAustraliaScript, "organizations", {}, "ausgov_agencies");
 }
 
@@ -354,7 +382,7 @@ void GovDataAustraliaPanel::populate_agencies(const QJsonArray& json) {
         agencies_table_->setItem(i, 2, created_item);
     }
 
-    row_count_label_->setText(QString::number(json.size()) + " agencies");
+    row_count_label_->setText(tr("%1 agencies").arg(json.size()));
 }
 
 void GovDataAustraliaPanel::populate_datasets(const QJsonArray& json, int total_count) {
@@ -393,7 +421,7 @@ void GovDataAustraliaPanel::populate_datasets(const QJsonArray& json, int total_
                 author = org["name"].toString();
         }
         if (author.isEmpty())
-            author = "—";
+            author = QStringLiteral("—");
         datasets_table_->setItem(i, 2, new QTableWidgetItem(author));
 
         // Resource count — prefer resource_count field, fallback to resources array size
@@ -416,7 +444,7 @@ void GovDataAustraliaPanel::populate_datasets(const QJsonArray& json, int total_
         datasets_table_->setItem(i, 4, mod_item);
     }
 
-    row_count_label_->setText(QString("Showing %1 of %2").arg(json.size()).arg(total_count));
+    row_count_label_->setText(tr("Showing %1 of %2").arg(json.size()).arg(total_count));
 }
 
 void GovDataAustraliaPanel::populate_resources(const QJsonArray& resources) {
@@ -440,21 +468,21 @@ void GovDataAustraliaPanel::populate_resources(const QJsonArray& resources) {
         resources_table_->setItem(i, 1, fmt_item);
 
         const double size_bytes = obj["size"].toDouble(0.0);
-        QString size_str = "—";
+        QString size_str = QStringLiteral("—");
         if (size_bytes > 0.0) {
             if (size_bytes < 1024.0)
-                size_str = QString::number(size_bytes, 'f', 0) + " B";
+                size_str = tr("%1 B").arg(QString::number(size_bytes, 'f', 0));
             else if (size_bytes < 1024.0 * 1024.0)
-                size_str = QString::number(size_bytes / 1024.0, 'f', 1) + " KB";
+                size_str = tr("%1 KB").arg(QString::number(size_bytes / 1024.0, 'f', 1));
             else
-                size_str = QString::number(size_bytes / (1024.0 * 1024.0), 'f', 1) + " MB";
+                size_str = tr("%1 MB").arg(QString::number(size_bytes / (1024.0 * 1024.0), 'f', 1));
         }
         auto* sz_item = new QTableWidgetItem(size_str);
         sz_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         resources_table_->setItem(i, 2, sz_item);
 
         const QString url = obj["url"].toString();
-        auto* url_item = new QTableWidgetItem(url.isEmpty() ? "—" : "↗ OPEN");
+        auto* url_item = new QTableWidgetItem(url.isEmpty() ? QStringLiteral("—") : tr("↗ OPEN"));
         url_item->setData(Qt::UserRole, url);
         if (!url.isEmpty())
             url_item->setForeground(QColor(kGovDataAustraliaColor));
@@ -462,7 +490,7 @@ void GovDataAustraliaPanel::populate_resources(const QJsonArray& resources) {
         resources_table_->setItem(i, 3, url_item);
     }
 
-    row_count_label_->setText(QString::number(resources.size()) + " files");
+    row_count_label_->setText(tr("%1 files").arg(resources.size()));
 }
 
 // ── Navigation slots ──────────────────────────────────────────────────────────
@@ -478,9 +506,7 @@ void GovDataAustraliaPanel::on_agency_doubleclicked(int row, int /*col*/) {
         selected_agency_ = item->text();
 
     showing_recent_ = false;
-    show_loading("Loading datasets for "
-                 " + selected_agency_ + "
-                 "…");
+    show_loading(tr("Loading datasets for \"%1\"…").arg(selected_agency_));
 
     services::GovDataService::instance().execute(kGovDataAustraliaScript, "org-datasets", {selected_agency_id_, "100"},
                                                  "ausgov_datasets_" + selected_agency_id_);
@@ -527,9 +553,7 @@ void GovDataAustraliaPanel::on_search() {
     selected_agency_.clear();
     selected_agency_id_.clear();
 
-    show_loading("Searching for "
-                 " + query + "
-                 "…");
+    show_loading(tr("Searching for \"%1\"…").arg(query));
     services::GovDataService::instance().execute(kGovDataAustraliaScript, "search", {query, "50"},
                                                  "ausgov_search_" + query);
 }
@@ -538,7 +562,7 @@ void GovDataAustraliaPanel::on_recent() {
     selected_agency_.clear();
     selected_agency_id_.clear();
 
-    show_loading("Loading recent datasets…");
+    show_loading(tr("Loading recent datasets…"));
     services::GovDataService::instance().execute(kGovDataAustraliaScript, "recent", {"20"}, "ausgov_recent");
 }
 
@@ -572,26 +596,27 @@ void GovDataAustraliaPanel::update_breadcrumb() {
     QString text;
     switch (current_view_) {
         case Agencies:
-            text = "All Agencies";
+            text = tr("All Agencies");
             break;
         case Datasets:
             if (showing_recent_) {
-                text = "Recent Datasets";
+                text = tr("Recent Datasets");
             } else if (!selected_agency_.isEmpty()) {
-                text = "All Agencies  ›  " + selected_agency_ + "  ›  Datasets";
+                text = tr("All Agencies  ›  %1  ›  Datasets").arg(selected_agency_);
             } else {
-                text = "Search Results";
+                text = tr("Search Results");
             }
             break;
         case Resources:
             if (!selected_agency_.isEmpty()) {
-                text = "All Agencies  ›  " + selected_agency_ + "  ›  Datasets  ›  " + selected_dataset_title_;
+                text = tr("All Agencies  ›  %1  ›  Datasets  ›  %2")
+                           .arg(selected_agency_, selected_dataset_title_);
             } else {
-                text = "Datasets  ›  " + selected_dataset_title_ + "  ›  Resources";
+                text = tr("Datasets  ›  %1  ›  Resources").arg(selected_dataset_title_);
             }
             break;
         case Status:
-            text = "Loading…";
+            text = tr("Loading…");
             break;
     }
     breadcrumb_label_->setText(text);
@@ -609,7 +634,7 @@ void GovDataAustraliaPanel::show_loading(const QString& message) {
 void GovDataAustraliaPanel::show_error(const QString& message) {
     status_label_->setStyleSheet(
         QString("color:%1; font-size:12px; background:transparent;").arg(ui::colors::NEGATIVE()));
-    status_label_->setText("Error: " + message);
+    status_label_->setText(tr("Error: %1").arg(message));
     content_stack_->setCurrentIndex(Status);
 }
 

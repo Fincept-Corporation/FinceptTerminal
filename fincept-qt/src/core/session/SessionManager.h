@@ -27,10 +27,6 @@ class SessionManager : public QObject {
     QByteArray load_geometry(int window_id) const;
     QByteArray load_state(int window_id) const;
 
-    // Track how many windows were open at last shutdown
-    void save_window_count(int count);
-    int load_window_count() const;
-
     // Track the exact set of window IDs that were open at last shutdown.
     // Used on startup to restore every window (not just window 0) so that
     // multi-monitor layouts survive across app relaunches.

@@ -96,15 +96,6 @@ void UserApi::get_user_usage(int days, Callback cb) {
     request("GET", QString("/user/usage?days=%1").arg(days), {}, cb);
 }
 
-// ── Session ──────────────────────────────────────────────────────────────────
-
-void UserApi::logout(Callback cb) {
-    request("POST", "/user/logout", {}, cb);
-}
-void UserApi::validate_session(Callback cb) {
-    request("POST", "/user/validate-session", {}, cb);
-}
-
 // ── Login history ────────────────────────────────────────────────────────────
 
 void UserApi::get_login_history(int limit, int offset, Callback cb) {
@@ -122,24 +113,11 @@ void UserApi::disable_mfa(Callback cb) {
 
 // ── Subscriptions ────────────────────────────────────────────────────────────
 
-void UserApi::get_user_subscriptions(Callback cb) {
-    request("GET", "/user/subscriptions", {}, cb);
-}
-void UserApi::get_user_transactions(Callback cb) {
-    request("GET", "/user/transactions", {}, cb);
-}
-
-void UserApi::subscribe_to_database(const QString& db_name, Callback cb) {
-    QJsonObject body;
-    body["database_name"] = db_name;
-    request("POST", "/user/subscribe", body, cb);
-}
-
-// ── Payment ──────────────────────────────────────────────────────────────────
-
 void UserApi::get_user_subscription(Callback cb) {
     request("GET", "/user/subscriptions", {}, cb);
 }
+
+// ── Payment ──────────────────────────────────────────────────────────────────
 
 void UserApi::get_payment_history(int page, int limit, Callback cb) {
     request("GET", QString("/user/transactions?page=%1&limit=%2").arg(page).arg(limit), {}, cb);
@@ -179,24 +157,6 @@ void UserApi::update_ticket_status(int ticket_id, const QString& status, Callbac
 
 void UserApi::get_support_categories(Callback cb) {
     request("GET", "/support/categories", {}, cb);
-}
-
-void UserApi::submit_feedback(int rating, const QString& feedback_text, const QString& category, Callback cb) {
-    QJsonObject body;
-    body["rating"] = rating;
-    body["feedback_text"] = feedback_text;
-    body["category"] = category;
-    request("POST", "/support/feedback", body, cb);
-}
-
-void UserApi::submit_contact_form(const QString& name, const QString& email, const QString& subject,
-                                  const QString& message, Callback cb) {
-    QJsonObject body;
-    body["name"] = name;
-    body["email"] = email;
-    body["subject"] = subject;
-    body["message"] = message;
-    request("POST", "/support/contact", body, cb);
 }
 
 } // namespace fincept::auth

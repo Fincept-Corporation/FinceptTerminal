@@ -162,6 +162,11 @@ QWidget* NewsDetailPanel::build_content_view() {
     copy_btn_ = new QPushButton("COPY URL", content);
     copy_btn_->setObjectName("newsDetailCopyBtn");
     copy_btn_->setFixedHeight(24);
+    copy_title_btn_ = new QPushButton("COPY TITLE", content);
+    copy_title_btn_->setObjectName("newsDetailCopyTitleBtn");
+    copy_title_btn_->setFixedHeight(24);
+    copy_title_btn_->setFixedWidth(copy_title_btn_->fontMetrics().horizontalAdvance("COPY TITLE") + 20);
+    copy_title_btn_->setToolTip("Copy article headline to clipboard");
     analyze_btn_ = new QPushButton("ANALYZE", content);
     analyze_btn_->setObjectName("newsDetailAnalyzeBtn");
     analyze_btn_->setFixedHeight(24);
@@ -183,6 +188,7 @@ QWidget* NewsDetailPanel::build_content_view() {
 
     action_layout->addWidget(open_btn_);
     action_layout->addWidget(copy_btn_);
+    action_layout->addWidget(copy_title_btn_);   // new
     action_layout->addWidget(analyze_btn_);
     action_layout->addWidget(save_btn_);
     action_layout->addWidget(bookmark_btn_);
@@ -196,6 +202,17 @@ QWidget* NewsDetailPanel::build_content_view() {
     connect(copy_btn_, &QPushButton::clicked, this, [this]() {
         if (has_article_)
             QApplication::clipboard()->setText(current_article_.link);
+    });
+    connect(copy_title_btn_, &QPushButton::clicked, this, [this]() {
+        if (!has_article_ || current_article_.headline.isEmpty())
+            return;
+        QApplication::clipboard()->setText(current_article_.headline);
+
+        // Brief visual confirmation — flip label for ~1 s, then revert.
+        copy_title_btn_->setText("COPIED");
+        QTimer::singleShot(1000, this, [this]() {
+            copy_title_btn_->setText("COPY TITLE");
+        });
     });
     connect(analyze_btn_, &QPushButton::clicked, this, [this]() {
         if (!has_article_)
@@ -284,10 +301,20 @@ QWidget* NewsDetailPanel::build_content_view() {
     ai_sentiment_->setObjectName("newsDetailAiSentiment");
     ai_urgency_ = new QLabel(analysis_section_);
     ai_urgency_->setObjectName("newsDetailAiUrgency");
+    ai_confidence_ = new QLabel(analysis_section_);
+    ai_confidence_->setObjectName("newsDetailAiConfidence");
     ai_row_layout->addWidget(ai_sentiment_);
     ai_row_layout->addWidget(ai_urgency_);
+    ai_row_layout->addWidget(ai_confidence_);
     ai_row_layout->addStretch();
     analysis_layout->addWidget(ai_row);
+
+    // Keywords row (populated in show_analysis).
+    ai_keywords_ = new QLabel(analysis_section_);
+    ai_keywords_->setObjectName("newsDetailAiKeywords");
+    ai_keywords_->setWordWrap(true);
+    ai_keywords_->hide();
+    analysis_layout->addWidget(ai_keywords_);
 
     auto* kp_title = new QLabel("KEY POINTS", analysis_section_);
     kp_title->setObjectName("newsDetailSubTitle");
@@ -318,6 +345,13 @@ QWidget* NewsDetailPanel::build_content_view() {
     topics_layout_->setContentsMargins(0, 0, 0, 0);
     topics_layout_->setSpacing(2);
     analysis_layout->addWidget(topics_container);
+
+    // Credits footer (e.g. "Credits used: 1 / remaining: 9").
+    ai_credits_ = new QLabel(analysis_section_);
+    ai_credits_->setObjectName("newsDetailAiCredits");
+    ai_credits_->setStyleSheet("color:#94a3b8; font-size:10px;");
+    ai_credits_->hide();
+    analysis_layout->addWidget(ai_credits_);
 
     layout->addWidget(analysis_section_);
 
@@ -452,17 +486,23 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
             QString("color: %1; font-weight: 700; background: transparent;").arg(ui::colors::CYAN()));
     }
 
-    // Threat classification in impact label
+    summary_label_->setText(article.summary.isEmpty() ? "No summary available." : article.summary);
+
+    // Impact + (optional) threat classification share the impact label.
+    // Threat takes precedence when present so users see the more specific
+    // signal — the bare impact level alone wasn't useful here.
     if (article.threat.level != services::ThreatLevel::INFO) {
-        QString threat_text = services::threat_level_string(article.threat.level);
-        QString threat_color = services::threat_level_color(article.threat.level);
-        impact_label_->setText(QString("Threat: %1 (%2, %3% conf)")
+        const QString threat_text = services::threat_level_string(article.threat.level);
+        const QString threat_color = services::threat_level_color(article.threat.level);
+        impact_label_->setText(QString("Impact: %1  •  Threat: %2 (%3, %4% conf)")
+                                   .arg(services::impact_string(article.impact))
                                    .arg(threat_text, article.threat.category)
                                    .arg(static_cast<int>(article.threat.confidence * 100)));
         impact_label_->setStyleSheet(QString("color: %1; background: transparent;").arg(threat_color));
+    } else {
+        impact_label_->setText(QString("Impact: %1").arg(services::impact_string(article.impact)));
+        impact_label_->setStyleSheet("background: transparent;");
     }
-    summary_label_->setText(article.summary.isEmpty() ? "No summary available." : article.summary);
-    impact_label_->setText(QString("Impact: %1").arg(services::impact_string(article.impact)));
 
     if (!article.tickers.isEmpty())
         tickers_label_->setText("$" + article.tickers.join("  $"));
@@ -506,10 +546,16 @@ void NewsDetailPanel::show_analysis(const services::NewsAnalysis& analysis) {
     double score = std::clamp(analysis.sentiment.score, -1.0, 1.0);
     QString sent_color =
         score > 0.1 ? ui::colors::POSITIVE : (score < -0.1 ? ui::colors::NEGATIVE : ui::colors::WARNING);
-    ai_sentiment_->setText(QString("Sentiment: %1%2").arg(score >= 0 ? "+" : "").arg(score, 0, 'f', 2));
+    ai_sentiment_->setText(QString("Sentiment: %1%2  •  int %3")
+                               .arg(score >= 0 ? "+" : "")
+                               .arg(score, 0, 'f', 2)
+                               .arg(analysis.sentiment.intensity, 0, 'f', 2));
     ai_sentiment_->setStyleSheet(QString("color: %1;").arg(sent_color));
 
     ai_urgency_->setText(QString("Urgency: %1").arg(analysis.market_impact.urgency));
+
+    ai_confidence_->setText(
+        QString("Conf: %1%").arg(static_cast<int>(analysis.sentiment.confidence * 100)));
 
     // Key points
     while (key_points_layout_->count() > 0) {
@@ -563,6 +609,32 @@ void NewsDetailPanel::show_analysis(const services::NewsAnalysis& analysis) {
     }
     topics_flow->addStretch();
     topics_layout_->addWidget(topics_row);
+
+    // Keywords — show as a single hashtagged line under topics.
+    if (!analysis.keywords.isEmpty()) {
+        QStringList tagged;
+        tagged.reserve(analysis.keywords.size());
+        for (const auto& k : analysis.keywords) {
+            const QString trimmed = k.trimmed();
+            if (!trimmed.isEmpty())
+                tagged << "#" + trimmed;
+        }
+        ai_keywords_->setText(tagged.join("  "));
+        ai_keywords_->show();
+    } else {
+        ai_keywords_->hide();
+    }
+
+    // Credits footer — only shown when the backend reported a credit
+    // count (zero/zero means the API didn't surface it).
+    if (analysis.credits_used > 0 || analysis.credits_remaining > 0) {
+        ai_credits_->setText(QString("Credits used: %1  •  remaining: %2")
+                                 .arg(analysis.credits_used)
+                                 .arg(analysis.credits_remaining));
+        ai_credits_->show();
+    } else {
+        ai_credits_->hide();
+    }
 
     analysis_section_->show();
 }

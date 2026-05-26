@@ -24,6 +24,9 @@ class GovDataFrancePanel : public QWidget {
   public slots:
     void load_initial_data();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_result(const QString& request_id, const services::GovDataResult& result);
     void on_dataset_row_double_clicked(int row);
@@ -38,6 +41,7 @@ class GovDataFrancePanel : public QWidget {
 
     void build_ui();
     QWidget* build_toolbar();
+    void retranslateUi();
 
     void populate_services(const QJsonArray& data);
     void populate_datasets(const QJsonArray& data);

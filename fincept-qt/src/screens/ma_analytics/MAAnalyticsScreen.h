@@ -1,6 +1,6 @@
 // src/screens/ma_analytics/MAAnalyticsScreen.h
 #pragma once
-#include "screens/IStatefulScreen.h"
+#include "screens/common/IStatefulScreen.h"
 #include "services/ma_analytics/MAAnalyticsTypes.h"
 
 #include <QHideEvent>

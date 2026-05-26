@@ -23,6 +23,9 @@ class PortfolioTxnPanel : public QWidget {
     void clear();
     void refresh_theme();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   signals:
     /// Emitted when the user toggles the collapse chevron in the header.
     /// `collapsed=true` → caller should shrink the panel to header height;
@@ -33,7 +36,9 @@ class PortfolioTxnPanel : public QWidget {
     void build_ui();
     void populate();
     void apply_collapsed_state();
+    void retranslateUi();
 
+    QLabel* title_label_ = nullptr;
     QLabel* count_label_ = nullptr;
     QPushButton* collapse_btn_ = nullptr;
     QTableWidget* table_ = nullptr;

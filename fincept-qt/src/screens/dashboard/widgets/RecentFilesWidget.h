@@ -15,6 +15,7 @@ class RecentFilesWidget : public BaseWidget {
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
     void on_theme_changed() override;
+    void retranslateUi() override;
 
   private:
     void apply_styles();

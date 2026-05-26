@@ -23,6 +23,9 @@ class GovDataTreasuryPanel : public QWidget {
   public slots:
     void load_initial_data();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_result(const QString& request_id, const services::GovDataResult& result);
     void on_endpoint_changed(int index);
@@ -33,6 +36,7 @@ class GovDataTreasuryPanel : public QWidget {
     void build_ui();
     QWidget* build_toolbar();
     QWidget* build_filter_bar();
+    void retranslateUi();
     void show_loading(const QString& message);
     void show_error(const QString& message);
     void populate_prices(const QJsonObject& data);
@@ -68,6 +72,27 @@ class GovDataTreasuryPanel : public QWidget {
     QLabel* max_price_label_ = nullptr;
     QLabel* avg_price_label_ = nullptr;
     QTableWidget* type_breakdown_table_ = nullptr;
+
+    // Filter bar labels (cached for retranslateUi)
+    QLabel* filter_from_lbl_ = nullptr;
+    QLabel* filter_to_lbl_ = nullptr;
+    QLabel* filter_type_lbl_ = nullptr;
+
+    // Summary card title + sub labels (cached for retranslateUi)
+    QLabel* card_total_lbl_ = nullptr;
+    QLabel* card_min_rate_lbl_ = nullptr;
+    QLabel* card_min_rate_sub_ = nullptr;
+    QLabel* card_max_rate_lbl_ = nullptr;
+    QLabel* card_max_rate_sub_ = nullptr;
+    QLabel* card_avg_rate_lbl_ = nullptr;
+    QLabel* card_avg_rate_sub_ = nullptr;
+    QLabel* card_min_price_lbl_ = nullptr;
+    QLabel* card_min_price_sub_ = nullptr;
+    QLabel* card_max_price_lbl_ = nullptr;
+    QLabel* card_max_price_sub_ = nullptr;
+    QLabel* card_avg_price_lbl_ = nullptr;
+    QLabel* card_avg_price_sub_ = nullptr;
+    QLabel* breakdown_hdr_lbl_ = nullptr;
 };
 
 } // namespace fincept::screens

@@ -36,8 +36,6 @@ class NewsDetailPanel : public QWidget {
   signals:
     void analyze_requested(const QString& article_url);
     void related_article_clicked(const services::NewsArticle& article);
-    void open_in_browser(const QString& url);
-    void copy_url(const QString& url);
     void bookmark_requested(const services::NewsArticle& article);
     void panel_closed();
 
@@ -64,6 +62,9 @@ class NewsDetailPanel : public QWidget {
     QLabel* ai_summary_ = nullptr;
     QLabel* ai_sentiment_ = nullptr;
     QLabel* ai_urgency_ = nullptr;
+    QLabel* ai_confidence_ = nullptr;
+    QLabel* ai_keywords_ = nullptr;
+    QLabel* ai_credits_ = nullptr;
     QVBoxLayout* key_points_layout_ = nullptr;
     QVBoxLayout* risk_layout_ = nullptr;
     QVBoxLayout* topics_layout_ = nullptr;
@@ -92,6 +93,7 @@ class NewsDetailPanel : public QWidget {
     // Action buttons
     QPushButton* open_btn_ = nullptr;
     QPushButton* copy_btn_ = nullptr;
+    QPushButton* copy_title_btn_ = nullptr;
     QPushButton* save_btn_ = nullptr;
     QPushButton* bookmark_btn_ = nullptr;
     QPushButton* close_btn_ = nullptr;

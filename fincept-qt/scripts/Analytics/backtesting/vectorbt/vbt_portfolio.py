@@ -192,6 +192,21 @@ class SimplePortfolio:
         self._positions_accessor = None
         self._returns_accessor_obj = None
 
+    @classmethod
+    def from_equity_series(cls, equity: pd.Series, init_cash: float) -> 'SimplePortfolio':
+        """Build a SimplePortfolio from a pre-computed equity series (e.g. multi-asset combined)."""
+        empty_trades = pd.DataFrame(columns=[
+            'Entry Idx', 'Exit Idx', 'Size', 'Entry Price', 'Exit Price',
+            'PnL', 'Return', 'Entry Fees', 'Exit Fees', 'Direction', 'Status',
+        ])
+        close_proxy = pd.Series(equity.values, index=equity.index, name='Close')
+        return cls(
+            equity_series=equity,
+            close_series=close_proxy,
+            trade_records=empty_trades,
+            init_cash=init_cash,
+        )
+
     # ------------------------------------------------------------------
     # Core value / return methods (existing)
     # ------------------------------------------------------------------

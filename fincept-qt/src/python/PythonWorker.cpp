@@ -46,6 +46,10 @@ PythonWorker::PythonWorker() {
             proc_->kill();
         }
     });
+
+    connect(&PythonRunner::instance(), &PythonRunner::python_ready, this, [this]() {
+        ensure_started();
+    });
 }
 
 PythonWorker::~PythonWorker() {
@@ -53,6 +57,18 @@ PythonWorker::~PythonWorker() {
 }
 
 void PythonWorker::submit(const QString& action, const QJsonObject& payload, Callback cb) {
+    // QProcess and our in_flight_/queue_ containers are owned by this
+    // worker's thread (main thread in practice). MCP tool handlers call
+    // submit() from QtConcurrent worker threads — touching proc_->write()
+    // from there triggers `QSocketNotifier: cannot be enabled or disabled
+    // from another thread` and the daemon stalls. Marshal back if needed.
+    if (QThread::currentThread() != this->thread()) {
+        QMetaObject::invokeMethod(this, [this, action, payload, cb = std::move(cb)]() mutable {
+            submit(action, payload, std::move(cb));
+        }, Qt::QueuedConnection);
+        return;
+    }
+
     ensure_started();
 
     const int id = next_id_++;

@@ -3,7 +3,9 @@
 #include "auth/AuthManager.h"
 #include "auth/AuthTypes.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/LanguageSwitcher.h"
 
+#include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHideEvent>
@@ -107,6 +109,15 @@ LoginScreen::LoginScreen(QWidget* parent) : QWidget(parent) {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
 
+    // Top-right language picker — available before login so users can change
+    // the UI language without authenticating. Posts QEvent::LanguageChange
+    // app-wide, which retranslates this screen via changeEvent below.
+    auto* top_row = new QHBoxLayout;
+    top_row->setContentsMargins(20, 20, 20, 0);
+    top_row->addStretch();
+    top_row->addWidget(new ui::LanguageSwitcher(this));
+    root->addLayout(top_row);
+
     auto* overlay = new QVBoxLayout;
     overlay->setAlignment(Qt::AlignCenter);
     root->addLayout(overlay, 1);
@@ -122,6 +133,8 @@ LoginScreen::LoginScreen(QWidget* parent) : QWidget(parent) {
 
     overlay->addWidget(pages_, 0, Qt::AlignCenter);
 
+    retranslateUi();
+
     auto& auth = auth::AuthManager::instance();
     connect(&auth, &auth::AuthManager::login_succeeded, this, &LoginScreen::on_login_succeeded);
     connect(&auth, &auth::AuthManager::login_failed, this, &LoginScreen::on_login_failed);
@@ -129,23 +142,30 @@ LoginScreen::LoginScreen(QWidget* parent) : QWidget(parent) {
     connect(&auth, &auth::AuthManager::login_active_session, this, &LoginScreen::on_active_session);
     connect(&auth, &auth::AuthManager::mfa_verified, this, &LoginScreen::on_mfa_verified);
     connect(&auth, &auth::AuthManager::mfa_failed, this, &LoginScreen::on_mfa_failed);
+    connect(&auth, &auth::AuthManager::logged_out, this, [this]() {
+        if (email_input_) email_input_->clear();
+        if (password_input_) {
+            password_input_->clear();
+            password_input_->setEchoMode(QLineEdit::Password);
+        }
+        if (mfa_input_) mfa_input_->clear();
+        clear_error();
+        if (mfa_error_) mfa_error_->hide();
+        if (pages_) pages_->setCurrentIndex(0);
+    });
 }
 
 // ── Background Paint ─────────────────────────────────────────────────────────
 
 void LoginScreen::hideEvent(QHideEvent* event) {
-    // Wipe credential + MFA inputs whenever this screen leaves the stack so
-    // they can't be recovered or pre-filled after a logout/navigation.
-    if (email_input_) email_input_->clear();
-    if (password_input_) {
-        password_input_->clear();
-        password_input_->setEchoMode(QLineEdit::Password);
-    }
-    if (mfa_input_) mfa_input_->clear();
-    clear_error();
-    if (mfa_error_) mfa_error_->hide();
-    if (pages_) pages_->setCurrentIndex(0);
     QWidget::hideEvent(event);
+}
+
+void LoginScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
 }
 
 void LoginScreen::paintEvent(QPaintEvent* /*event*/) {
@@ -183,15 +203,16 @@ void LoginScreen::build_login_page() {
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 14, 0);
 
-    auto* title = new QLabel("SIGN IN");
-    title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                                 "background: transparent; letter-spacing: 1px;"
-                                 "font-family: 'Consolas','Courier New',monospace;")
-                             .arg(ui::colors::AMBER()));
-    hl->addWidget(title);
+    login_title_ = new QLabel;
+    login_title_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
+                                        "background: transparent; letter-spacing: 1px;"
+                                        "font-family: 'Consolas','Courier New',monospace;")
+                                    .arg(ui::colors::AMBER()));
+    hl->addWidget(login_title_);
     hl->addStretch();
 
-    auto* brand = new QLabel("FINCEPT");
+    // Brand mark — not translated.
+    auto* brand = new QLabel(QStringLiteral("FINCEPT"));
     brand->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
                                  "background: transparent; letter-spacing: 0.5px;"
                                  "font-family: 'Consolas','Courier New',monospace;")
@@ -199,27 +220,26 @@ void LoginScreen::build_login_page() {
     hl->addWidget(brand);
     vl->addWidget(header);
 
-    auto* subtitle = new QLabel("Access your terminal account");
-    subtitle->setStyleSheet(muted_style());
-    vl->addWidget(subtitle);
+    login_subtitle_ = new QLabel;
+    login_subtitle_->setStyleSheet(muted_style());
+    vl->addWidget(login_subtitle_);
 
     vl->addWidget(make_separator());
 
     // Email
-    auto* email_lbl = new QLabel("EMAIL");
-    email_lbl->setStyleSheet(label_style());
-    vl->addWidget(email_lbl);
+    email_lbl_ = new QLabel;
+    email_lbl_->setStyleSheet(label_style());
+    vl->addWidget(email_lbl_);
 
     email_input_ = new QLineEdit;
-    email_input_->setPlaceholderText("user@domain.com");
     email_input_->setFixedHeight(34);
     email_input_->setStyleSheet(input_style());
     vl->addWidget(email_input_);
 
     // Password
-    auto* pw_lbl = new QLabel("PASSWORD");
-    pw_lbl->setStyleSheet(label_style());
-    vl->addWidget(pw_lbl);
+    pw_lbl_ = new QLabel;
+    pw_lbl_->setStyleSheet(label_style());
+    vl->addWidget(pw_lbl_);
 
     auto* pw_row = new QWidget(this);
     pw_row->setStyleSheet("background: transparent;");
@@ -228,19 +248,18 @@ void LoginScreen::build_login_page() {
     prl->setSpacing(4);
 
     password_input_ = new QLineEdit;
-    password_input_->setPlaceholderText("enter password");
     password_input_->setEchoMode(QLineEdit::Password);
     password_input_->setFixedHeight(34);
     password_input_->setStyleSheet(input_style());
     prl->addWidget(password_input_);
 
-    show_pw_btn_ = new QPushButton("SHOW");
+    show_pw_btn_ = new QPushButton;
     show_pw_btn_->setFixedSize(58, 34);
     show_pw_btn_->setStyleSheet(btn_standard());
     connect(show_pw_btn_, &QPushButton::clicked, this, [this]() {
         bool hidden = password_input_->echoMode() == QLineEdit::Password;
         password_input_->setEchoMode(hidden ? QLineEdit::Normal : QLineEdit::Password);
-        show_pw_btn_->setText(hidden ? "HIDE" : "SHOW");
+        show_pw_btn_->setText(hidden ? tr("HIDE") : tr("SHOW"));
     });
     prl->addWidget(show_pw_btn_);
     vl->addWidget(pw_row);
@@ -262,13 +281,13 @@ void LoginScreen::build_login_page() {
     auto* brl = new QHBoxLayout(btn_row);
     brl->setContentsMargins(0, 0, 0, 0);
 
-    auto* forgot_btn = new QPushButton("FORGOT PASSWORD?");
-    forgot_btn->setStyleSheet(link_style());
-    connect(forgot_btn, &QPushButton::clicked, this, &LoginScreen::navigate_forgot_password);
-    brl->addWidget(forgot_btn);
+    forgot_btn_ = new QPushButton;
+    forgot_btn_->setStyleSheet(link_style());
+    connect(forgot_btn_, &QPushButton::clicked, this, &LoginScreen::navigate_forgot_password);
+    brl->addWidget(forgot_btn_);
     brl->addStretch();
 
-    login_btn_ = new QPushButton("  SIGN IN  ");
+    login_btn_ = new QPushButton;
     login_btn_->setFixedHeight(32);
     login_btn_->setStyleSheet(btn_primary());
     connect(login_btn_, &QPushButton::clicked, this, &LoginScreen::on_login);
@@ -284,18 +303,18 @@ void LoginScreen::build_login_page() {
     rrl->setContentsMargins(0, 0, 0, 0);
     rrl->setAlignment(Qt::AlignCenter);
 
-    auto* no_acct = new QLabel("No account?");
-    no_acct->setStyleSheet(muted_style());
-    rrl->addWidget(no_acct);
+    no_account_lbl_ = new QLabel;
+    no_account_lbl_->setStyleSheet(muted_style());
+    rrl->addWidget(no_account_lbl_);
 
-    auto* signup_btn = new QPushButton("SIGN UP");
-    signup_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none;"
-                                      "  font-size: 13px; font-weight: 700;"
-                                      "  font-family: 'Consolas','Courier New',monospace; }"
-                                      "QPushButton:hover { color: %2; }")
-                                  .arg(ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
-    connect(signup_btn, &QPushButton::clicked, this, &LoginScreen::navigate_register);
-    rrl->addWidget(signup_btn);
+    signup_btn_ = new QPushButton;
+    signup_btn_->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none;"
+                                       "  font-size: 13px; font-weight: 700;"
+                                       "  font-family: 'Consolas','Courier New',monospace; }"
+                                       "QPushButton:hover { color: %2; }")
+                                   .arg(ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
+    connect(signup_btn_, &QPushButton::clicked, this, &LoginScreen::navigate_register);
+    rrl->addWidget(signup_btn_);
     vl->addWidget(reg_row);
 
     connect(password_input_, &QLineEdit::returnPressed, this, &LoginScreen::on_login);
@@ -320,35 +339,35 @@ void LoginScreen::build_mfa_page() {
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 14, 0);
 
-    auto* title = new QLabel("TWO-FACTOR AUTH");
-    title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                                 "background: transparent; letter-spacing: 1px;"
-                                 "font-family: 'Consolas','Courier New',monospace;")
-                             .arg(ui::colors::AMBER()));
-    hl->addWidget(title);
+    mfa_title_ = new QLabel;
+    mfa_title_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
+                                      "background: transparent; letter-spacing: 1px;"
+                                      "font-family: 'Consolas','Courier New',monospace;")
+                                  .arg(ui::colors::AMBER()));
+    hl->addWidget(mfa_title_);
     hl->addStretch();
 
-    auto* indicator = new QLabel("SECURE");
-    indicator->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
-                                     "background: transparent; letter-spacing: 0.5px;"
-                                     "font-family: 'Consolas','Courier New',monospace;")
-                                 .arg(ui::colors::POSITIVE()));
-    hl->addWidget(indicator);
+    mfa_indicator_ = new QLabel;
+    mfa_indicator_->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
+                                          "background: transparent; letter-spacing: 0.5px;"
+                                          "font-family: 'Consolas','Courier New',monospace;")
+                                      .arg(ui::colors::POSITIVE()));
+    hl->addWidget(mfa_indicator_);
     vl->addWidget(header);
 
-    auto* sub = new QLabel("Enter the 6-digit code from your authenticator");
-    sub->setWordWrap(true);
-    sub->setStyleSheet(muted_style());
-    vl->addWidget(sub);
+    mfa_sub_ = new QLabel;
+    mfa_sub_->setWordWrap(true);
+    mfa_sub_->setStyleSheet(muted_style());
+    vl->addWidget(mfa_sub_);
 
     vl->addWidget(make_separator());
 
-    auto* lbl = new QLabel("VERIFICATION CODE");
-    lbl->setStyleSheet(label_style());
-    vl->addWidget(lbl);
+    mfa_code_lbl_ = new QLabel;
+    mfa_code_lbl_->setStyleSheet(label_style());
+    vl->addWidget(mfa_code_lbl_);
 
     mfa_input_ = new QLineEdit;
-    mfa_input_->setPlaceholderText("000000");
+    mfa_input_->setPlaceholderText(QStringLiteral("000000"));
     mfa_input_->setMaxLength(6);
     mfa_input_->setAlignment(Qt::AlignCenter);
     mfa_input_->setFixedHeight(40);
@@ -374,16 +393,16 @@ void LoginScreen::build_mfa_page() {
     mfa_error_->hide();
     vl->addWidget(mfa_error_);
 
-    mfa_verify_btn_ = new QPushButton("  VERIFY  ");
+    mfa_verify_btn_ = new QPushButton;
     mfa_verify_btn_->setFixedHeight(32);
     mfa_verify_btn_->setStyleSheet(btn_primary());
     connect(mfa_verify_btn_, &QPushButton::clicked, this, &LoginScreen::on_mfa_verify);
     vl->addWidget(mfa_verify_btn_);
 
-    auto* back = new QPushButton("BACK TO LOGIN");
-    back->setStyleSheet(link_style());
-    connect(back, &QPushButton::clicked, this, [this]() { pages_->setCurrentIndex(0); });
-    vl->addWidget(back, 0, Qt::AlignCenter);
+    mfa_back_btn_ = new QPushButton;
+    mfa_back_btn_->setStyleSheet(link_style());
+    connect(mfa_back_btn_, &QPushButton::clicked, this, [this]() { pages_->setCurrentIndex(0); });
+    vl->addWidget(mfa_back_btn_, 0, Qt::AlignCenter);
 
     vl->addStretch();
     connect(mfa_input_, &QLineEdit::returnPressed, this, &LoginScreen::on_mfa_verify);
@@ -406,20 +425,20 @@ void LoginScreen::build_conflict_page() {
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 14, 0);
 
-    auto* title = new QLabel("SESSION CONFLICT");
-    title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
-                                 "background: transparent; letter-spacing: 1px;"
-                                 "font-family: 'Consolas','Courier New',monospace;")
-                             .arg(ui::colors::WARNING()));
-    hl->addWidget(title);
+    conflict_title_ = new QLabel;
+    conflict_title_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 700;"
+                                           "background: transparent; letter-spacing: 1px;"
+                                           "font-family: 'Consolas','Courier New',monospace;")
+                                       .arg(ui::colors::WARNING()));
+    hl->addWidget(conflict_title_);
     hl->addStretch();
 
-    auto* warn = new QLabel("WARNING");
-    warn->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
-                                "background: transparent; letter-spacing: 0.5px;"
-                                "font-family: 'Consolas','Courier New',monospace;")
-                            .arg(ui::colors::WARNING()));
-    hl->addWidget(warn);
+    conflict_warning_lbl_ = new QLabel;
+    conflict_warning_lbl_->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700;"
+                                                 "background: transparent; letter-spacing: 0.5px;"
+                                                 "font-family: 'Consolas','Courier New',monospace;")
+                                             .arg(ui::colors::WARNING()));
+    hl->addWidget(conflict_warning_lbl_);
     vl->addWidget(header);
 
     conflict_msg_ = new QLabel;
@@ -431,20 +450,52 @@ void LoginScreen::build_conflict_page() {
 
     vl->addWidget(make_separator());
 
-    auto* force_btn = new QPushButton("  LOG OUT OTHER SESSION & CONTINUE  ");
-    force_btn->setFixedHeight(32);
-    force_btn->setStyleSheet(btn_danger());
-    connect(force_btn, &QPushButton::clicked, this, &LoginScreen::on_force_login);
-    vl->addWidget(force_btn);
+    force_login_btn_ = new QPushButton;
+    force_login_btn_->setFixedHeight(32);
+    force_login_btn_->setStyleSheet(btn_danger());
+    connect(force_login_btn_, &QPushButton::clicked, this, &LoginScreen::on_force_login);
+    vl->addWidget(force_login_btn_);
 
-    auto* cancel_btn = new QPushButton("  CANCEL  ");
-    cancel_btn->setFixedHeight(32);
-    cancel_btn->setStyleSheet(btn_standard());
-    connect(cancel_btn, &QPushButton::clicked, this, [this]() { pages_->setCurrentIndex(0); });
-    vl->addWidget(cancel_btn);
+    cancel_btn_ = new QPushButton;
+    cancel_btn_->setFixedHeight(32);
+    cancel_btn_->setStyleSheet(btn_standard());
+    connect(cancel_btn_, &QPushButton::clicked, this, [this]() { pages_->setCurrentIndex(0); });
+    vl->addWidget(cancel_btn_);
 
     vl->addStretch();
     pages_->addWidget(conflict_page_);
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void LoginScreen::retranslateUi() {
+    if (login_title_)    login_title_->setText(tr("SIGN IN"));
+    if (login_subtitle_) login_subtitle_->setText(tr("Access your terminal account"));
+    if (email_lbl_)      email_lbl_->setText(tr("EMAIL"));
+    if (pw_lbl_)         pw_lbl_->setText(tr("PASSWORD"));
+    if (email_input_)    email_input_->setPlaceholderText(tr("user@domain.com"));
+    if (password_input_) password_input_->setPlaceholderText(tr("enter password"));
+    if (show_pw_btn_) {
+        // Preserve current visibility state when re-translating.
+        const bool showing = password_input_ && password_input_->echoMode() != QLineEdit::Password;
+        show_pw_btn_->setText(showing ? tr("HIDE") : tr("SHOW"));
+    }
+    if (forgot_btn_)      forgot_btn_->setText(tr("FORGOT PASSWORD?"));
+    if (login_btn_)       login_btn_->setText(tr("  SIGN IN  "));
+    if (no_account_lbl_)  no_account_lbl_->setText(tr("No account?"));
+    if (signup_btn_)      signup_btn_->setText(tr("SIGN UP"));
+
+    if (mfa_title_)     mfa_title_->setText(tr("TWO-FACTOR AUTH"));
+    if (mfa_indicator_) mfa_indicator_->setText(tr("SECURE"));
+    if (mfa_sub_)       mfa_sub_->setText(tr("Enter the 6-digit code from your authenticator"));
+    if (mfa_code_lbl_)  mfa_code_lbl_->setText(tr("VERIFICATION CODE"));
+    if (mfa_verify_btn_) mfa_verify_btn_->setText(tr("  VERIFY  "));
+    if (mfa_back_btn_)   mfa_back_btn_->setText(tr("BACK TO LOGIN"));
+
+    if (conflict_title_)       conflict_title_->setText(tr("SESSION CONFLICT"));
+    if (conflict_warning_lbl_) conflict_warning_lbl_->setText(tr("WARNING"));
+    if (force_login_btn_)      force_login_btn_->setText(tr("  LOG OUT OTHER SESSION & CONTINUE  "));
+    if (cancel_btn_)           cancel_btn_->setText(tr("  CANCEL  "));
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────────
@@ -459,7 +510,7 @@ void LoginScreen::on_login() {
         return;
     }
     if (password.isEmpty()) {
-        show_error("Please enter your password");
+        show_error(tr("Please enter your password"));
         return;
     }
 
@@ -471,7 +522,7 @@ void LoginScreen::on_login() {
 void LoginScreen::on_mfa_verify() {
     QString code = mfa_input_->text().trimmed();
     if (code.isEmpty()) {
-        mfa_error_->setText("Please enter the code");
+        mfa_error_->setText(tr("Please enter the code"));
         mfa_error_->show();
         return;
     }
@@ -490,6 +541,14 @@ void LoginScreen::on_force_login() {
 
 void LoginScreen::on_login_succeeded() {
     set_loading(false);
+    if (email_input_) email_input_->clear();
+    if (password_input_) {
+        password_input_->clear();
+        password_input_->setEchoMode(QLineEdit::Password);
+    }
+    if (mfa_input_) mfa_input_->clear();
+    clear_error();
+    if (mfa_error_) mfa_error_->hide();
     pages_->setCurrentIndex(0);
     for (auto* b : conflict_page_->findChildren<QPushButton*>())
         b->setEnabled(true);
@@ -546,7 +605,7 @@ void LoginScreen::set_loading(bool loading) {
     login_btn_->setEnabled(!loading);
     email_input_->setEnabled(!loading);
     password_input_->setEnabled(!loading);
-    login_btn_->setText(loading ? "  SIGNING IN...  " : "  SIGN IN  ");
+    login_btn_->setText(loading ? tr("  SIGNING IN...  ") : tr("  SIGN IN  "));
 }
 
 } // namespace fincept::screens

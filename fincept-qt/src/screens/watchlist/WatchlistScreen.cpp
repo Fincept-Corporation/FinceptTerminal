@@ -2,22 +2,28 @@
 
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
+#include "services/backtesting/BacktestingService.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
 #include "core/symbol/SymbolDragSource.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/formatting/NumberFormat.h"
 
 #    include "datahub/DataHub.h"
 #    include "datahub/DataHubMetaTypes.h"
 
+#include <QFile>
+#include <QFileDialog>
 #include <QHBoxLayout>
 #include <QHideEvent>
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QPointer>
+#include <QSet>
 #include <QShowEvent>
 #include <QSplitter>
+#include <QTextStream>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -124,6 +130,50 @@ void WatchlistScreen::hideEvent(QHideEvent* event) {
     unsubscribe_mcp_events();
 }
 
+void WatchlistScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void WatchlistScreen::retranslateUi() {
+    if (sidebar_title_) sidebar_title_->setText(tr("WATCHLISTS"));
+    if (wl_count_)      wl_count_->setText(tr("%1 lists").arg(watchlists_.size()));
+
+    // Top bar
+    if (panel_title_) {
+        if (current_wl_id_.isEmpty()) {
+            panel_title_->setText(tr("Select a watchlist"));
+        } else {
+            // Watchlist name itself is user data — only the empty state is translatable.
+            for (const auto& wl : watchlists_) {
+                if (wl.id == current_wl_id_) {
+                    panel_title_->setText(wl.name.toUpper());
+                    break;
+                }
+            }
+        }
+    }
+    if (stock_count_ && !current_wl_id_.isEmpty())
+        stock_count_->setText(tr("%1 symbols").arg(stocks_.size()));
+    if (refresh_btn_)    refresh_btn_->setText(tr("REFRESH"));
+    if (del_wl_btn_)     del_wl_btn_->setText(tr("DELETE LIST"));
+    if (import_csv_btn_) import_csv_btn_->setText(tr("IMPORT CSV"));
+    if (export_csv_btn_) export_csv_btn_->setText(tr("EXPORT CSV"));
+
+    // Add bar
+    if (add_label_) add_label_->setText(tr("ADD:"));
+    if (add_input_) add_input_->setPlaceholderText(tr("AAPL, MSFT, TSLA..."));
+    if (add_btn_)   add_btn_->setText(tr("ADD"));
+    if (remove_btn_) remove_btn_->setText(tr("REMOVE SELECTED"));
+
+    // Table headers — reapply so the live header row reflects the new language.
+    if (table_) {
+        table_->set_headers({tr("SYMBOL"), tr("NAME"), tr("PRICE"), tr("CHANGE"),
+                             tr("CHG %"), tr("HIGH"), tr("LOW"), tr("VOLUME")});
+    }
+}
+
 // ── MCP-driven UI sync ──────────────────────────────────────────────────────
 // MCP watchlist tools publish watchlist.created / watchlist.deleted /
 // watchlist.updated when the LLM mutates watchlists via AI Chat or
@@ -191,7 +241,7 @@ QWidget* WatchlistScreen::build_sidebar() {
     hl->setContentsMargins(12, 0, 8, 0);
     hl->setSpacing(6);
 
-    sidebar_title_ = new QLabel("WATCHLISTS");
+    sidebar_title_ = new QLabel(tr("WATCHLISTS"));
     hl->addWidget(sidebar_title_);
     hl->addStretch();
 
@@ -208,7 +258,7 @@ QWidget* WatchlistScreen::build_sidebar() {
     lay->addWidget(wl_list_);
 
     // Footer count
-    wl_count_ = new QLabel("0 lists");
+    wl_count_ = new QLabel(tr("0 lists"));
     wl_count_->setFixedHeight(26);
     wl_count_->setAlignment(Qt::AlignCenter);
     lay->addWidget(wl_count_);
@@ -232,7 +282,7 @@ QWidget* WatchlistScreen::build_main_panel() {
     tl->setContentsMargins(14, 0, 14, 0);
     tl->setSpacing(8);
 
-    panel_title_ = new QLabel("Select a watchlist");
+    panel_title_ = new QLabel(tr("Select a watchlist"));
     tl->addWidget(panel_title_);
 
     tl->addStretch();
@@ -240,13 +290,37 @@ QWidget* WatchlistScreen::build_main_panel() {
     stock_count_ = new QLabel;
     tl->addWidget(stock_count_);
 
-    refresh_btn_ = new QPushButton("REFRESH");
+    refresh_btn_ = new QPushButton(tr("REFRESH"));
     connect(refresh_btn_, &QPushButton::clicked, this, &WatchlistScreen::on_refresh);
     tl->addWidget(refresh_btn_);
 
-    del_wl_btn_ = new QPushButton("DELETE LIST");
+    del_wl_btn_ = new QPushButton(tr("DELETE LIST"));
     connect(del_wl_btn_, &QPushButton::clicked, this, &WatchlistScreen::on_delete_watchlist);
+    del_wl_btn_->setEnabled(false);
     tl->addWidget(del_wl_btn_);
+
+    import_csv_btn_ = new QPushButton(tr("IMPORT CSV"));
+    connect(import_csv_btn_, &QPushButton::clicked, this, &WatchlistScreen::on_import_csv);
+    import_csv_btn_->setEnabled(false);
+    tl->addWidget(import_csv_btn_);
+
+    export_csv_btn_ = new QPushButton(tr("EXPORT CSV"));
+    connect(export_csv_btn_, &QPushButton::clicked, this, &WatchlistScreen::on_export_csv);
+    export_csv_btn_->setEnabled(false);
+    tl->addWidget(export_csv_btn_);
+
+    auto* backtest_btn = new QPushButton(tr("BACKTEST"));
+    connect(backtest_btn, &QPushButton::clicked, this, [this]() {
+        if (stocks_.isEmpty()) return;
+        QJsonArray symbols;
+        for (const auto& s : stocks_)
+            symbols.append(s.symbol);
+        QJsonObject config;
+        config["symbols"] = symbols;
+        services::backtest::BacktestingService::instance().set_pending_portfolio_config(config);
+        EventBus::instance().publish("nav.switch_screen", {{"screen_id", QString("backtesting")}});
+    });
+    tl->addWidget(backtest_btn);
 
     lay->addWidget(top_bar_);
 
@@ -257,20 +331,20 @@ QWidget* WatchlistScreen::build_main_panel() {
     al->setContentsMargins(14, 0, 14, 0);
     al->setSpacing(6);
 
-    add_label_ = new QLabel("ADD:");
+    add_label_ = new QLabel(tr("ADD:"));
     al->addWidget(add_label_);
 
     add_input_ = new QLineEdit;
-    add_input_->setPlaceholderText("AAPL, MSFT, TSLA...");
+    add_input_->setPlaceholderText(tr("AAPL, MSFT, TSLA..."));
     add_input_->setFixedHeight(28);
     al->addWidget(add_input_, 1);
 
-    add_btn_ = new QPushButton("ADD");
+    add_btn_ = new QPushButton(tr("ADD"));
     connect(add_btn_, &QPushButton::clicked, this, &WatchlistScreen::on_add_stock);
     connect(add_input_, &QLineEdit::returnPressed, this, &WatchlistScreen::on_add_stock);
     al->addWidget(add_btn_);
 
-    remove_btn_ = new QPushButton("REMOVE SELECTED");
+    remove_btn_ = new QPushButton(tr("REMOVE SELECTED"));
     connect(remove_btn_, &QPushButton::clicked, this, &WatchlistScreen::on_remove_stock);
     al->addWidget(remove_btn_);
 
@@ -278,8 +352,10 @@ QWidget* WatchlistScreen::build_main_panel() {
 
     // Table — the main data area
     table_ = new ui::DataTable;
-    table_->set_headers({"SYMBOL", "NAME", "PRICE", "CHANGE", "CHG %", "HIGH", "LOW", "VOLUME"});
+    table_->set_headers({tr("SYMBOL"), tr("NAME"), tr("PRICE"), tr("CHANGE"),
+                         tr("CHG %"), tr("HIGH"), tr("LOW"), tr("VOLUME")});
     table_->set_column_widths({100, 160, 100, 90, 80, 90, 90, 110});
+    table_->setSortingEnabled(true); // opt-in: WatchlistScreen stamps numeric EditRole values
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
 
@@ -380,6 +456,12 @@ void WatchlistScreen::refresh_theme() {
     if (del_wl_btn_)
         del_wl_btn_->setStyleSheet(danger_btn_style());
 
+    if (import_csv_btn_)
+        import_csv_btn_->setStyleSheet(std_btn_style());
+
+    if (export_csv_btn_)
+        export_csv_btn_->setStyleSheet(std_btn_style());
+
     // Add bar
     if (add_bar_)
         add_bar_->setStyleSheet(
@@ -431,7 +513,7 @@ void WatchlistScreen::load_watchlists() {
     }
     wl_list_->blockSignals(false);
 
-    wl_count_->setText(QString("%1 lists").arg(watchlists_.size()));
+    wl_count_->setText(tr("%1 lists").arg(watchlists_.size()));
 
     // Select first watchlist
     if (!watchlists_.isEmpty()) {
@@ -450,7 +532,7 @@ void WatchlistScreen::load_stocks() {
         stocks_ = r.value();
     }
 
-    stock_count_->setText(QString("%1 symbols").arg(stocks_.size()));
+    stock_count_->setText(tr("%1 symbols").arg(stocks_.size()));
     fetch_quotes();
 }
 
@@ -478,10 +560,12 @@ void WatchlistScreen::rebuild_from_cache() {
     }
     if (quotes.isEmpty()) {
         // No data yet — show placeholder rows.
+        table_->setSortingEnabled(false);
         table_->clear_data();
         for (const auto& s : stocks_) {
             table_->add_row({s.symbol, s.name, "--", "--", "--", "--", "--", "--"});
         }
+        table_->setSortingEnabled(true);
         return;
     }
     populate_table(quotes);
@@ -531,6 +615,9 @@ void WatchlistScreen::hub_unsubscribe_all() {
 
 
 void WatchlistScreen::populate_table(const QVector<services::QuoteData>& quotes) {
+    // Disable sorting during population to prevent per-row re-sorting
+    // (avoids both visual flickering and O(n log n) overhead per insert).
+    table_->setSortingEnabled(false);
     table_->clear_data();
 
     // Build a map for quick lookup
@@ -543,13 +630,25 @@ void WatchlistScreen::populate_table(const QVector<services::QuoteData>& quotes)
         auto it = quote_map.find(s.symbol);
         if (it != quote_map.end()) {
             const auto& q = it.value();
-            table_->add_row({q.symbol, q.name.isEmpty() ? s.name : q.name, QString("$%1").arg(q.price, 0, 'f', 2),
+            table_->add_row({q.symbol, q.name.isEmpty() ? s.name : q.name,
+                             QString("$%1").arg(q.price, 0, 'f', 2),
                              QString("%1%2").arg(q.change >= 0 ? "+" : "").arg(q.change, 0, 'f', 2),
                              QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2),
-                             QString("$%1").arg(q.high, 0, 'f', 2), QString("$%1").arg(q.low, 0, 'f', 2),
-                             QString::number(static_cast<qint64>(q.volume))});
+                             QString("$%1").arg(q.high, 0, 'f', 2),
+                             QString("$%1").arg(q.low, 0, 'f', 2),
+                             fincept::ui::formatting::format_compact_volume(static_cast<qint64>(q.volume))});
 
             int row = table_->rowCount() - 1;
+
+            // Stamp numeric EditRole values so Qt sorts by magnitude,
+            // not by the display string ("$2.5M" vs "$999K" etc.).
+            table_->set_cell_numeric(row, 2, q.price);       // PRICE
+            table_->set_cell_numeric(row, 3, q.change);      // CHANGE
+            table_->set_cell_numeric(row, 4, q.change_pct);  // CHG %
+            table_->set_cell_numeric(row, 5, q.high);        // HIGH
+            table_->set_cell_numeric(row, 6, q.low);         // LOW
+            table_->set_cell_numeric(row, 7, q.volume);      // VOLUME
+
             // Green = good, Red = bad
             QString chg_color = q.change_pct >= 0 ? colors::POSITIVE : colors::NEGATIVE;
             table_->set_cell_color(row, 3, chg_color);
@@ -558,6 +657,9 @@ void WatchlistScreen::populate_table(const QVector<services::QuoteData>& quotes)
             table_->add_row({s.symbol, s.name, "--", "--", "--", "--", "--", "--"});
         }
     }
+
+    // Re-enable sorting — Qt will apply the current sort column/order once.
+    table_->setSortingEnabled(true);
 }
 
 // ── Slots ────────────────────────────────────────────────────────────────────
@@ -569,11 +671,14 @@ void WatchlistScreen::on_watchlist_selected(int row) {
     panel_title_->setText(watchlists_[row].name.toUpper());
     load_stocks();
     ScreenStateManager::instance().notify_changed(this);
+    if (del_wl_btn_) del_wl_btn_->setEnabled(true);
+    if (import_csv_btn_) import_csv_btn_->setEnabled(true);
+    if (export_csv_btn_) export_csv_btn_->setEnabled(true);
 }
 
 void WatchlistScreen::on_add_watchlist() {
     bool ok = false;
-    QString name = QInputDialog::getText(this, "New Watchlist", "Name:", QLineEdit::Normal, "", &ok);
+    QString name = QInputDialog::getText(this, tr("New Watchlist"), tr("Name:"), QLineEdit::Normal, "", &ok);
     if (!ok || name.trimmed().isEmpty())
         return;
 
@@ -589,8 +694,8 @@ void WatchlistScreen::on_delete_watchlist() {
     if (current_wl_id_.isEmpty())
         return;
 
-    auto reply = QMessageBox::question(this, "Delete Watchlist",
-                                       "Are you sure you want to delete this watchlist and all its stocks?",
+    auto reply = QMessageBox::question(this, tr("Delete Watchlist"),
+                                       tr("Are you sure you want to delete this watchlist and all its stocks?"),
                                        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
 
     if (reply != QMessageBox::Yes)
@@ -599,8 +704,11 @@ void WatchlistScreen::on_delete_watchlist() {
     fincept::WatchlistRepository::instance().remove(current_wl_id_);
     current_wl_id_.clear();
     table_->clear_data();
-    panel_title_->setText("Select a watchlist");
+    panel_title_->setText(tr("Select a watchlist"));
     stock_count_->clear();
+    if (del_wl_btn_) del_wl_btn_->setEnabled(false);
+    if (import_csv_btn_) import_csv_btn_->setEnabled(false);
+    if (export_csv_btn_) export_csv_btn_->setEnabled(false);
     load_watchlists();
 }
 
@@ -641,6 +749,175 @@ void WatchlistScreen::on_refresh() {
     if (!current_wl_id_.isEmpty()) {
         fetch_quotes();
     }
+}
+
+void WatchlistScreen::on_export_csv() {
+    if (current_wl_id_.isEmpty())
+        return;
+
+    QString wl_name;
+    for (const auto& wl : watchlists_) {
+        if (wl.id == current_wl_id_) {
+            wl_name = wl.name;
+            break;
+        }
+    }
+    
+    if (wl_name.isEmpty()) return;
+
+    const QString suggested = wl_name + QStringLiteral(".csv");
+
+    const QString path = QFileDialog::getSaveFileName(
+        this, tr("Export Watchlist to CSV"), suggested,
+        tr("CSV Files (*.csv)"));
+    if (path.isEmpty())
+        return;
+
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Export failed"),
+                             tr("Could not open file for writing:\n%1")
+                                 .arg(path));
+        return;
+    }
+
+    QTextStream out(&f);
+    out.setEncoding(QStringConverter::Utf8);
+
+    out << "SYMBOL,NAME,PRICE,CHANGE,CHG %,HIGH,LOW,VOLUME\n";
+
+    auto csv_escape = [](const QString& s) -> QString {
+        if (s.contains(',') || s.contains('"') || s.contains('\n')) {
+            QString e = s;
+            e.replace('"', QStringLiteral("\"\""));
+            return '"' + e + '"';
+        }
+        return s;
+    };
+
+    for (const auto& s : stocks_) {
+        const auto it = row_cache_.find(s.symbol);
+        if (it == row_cache_.end()) {
+            out << csv_escape(s.symbol) << ','
+                << csv_escape(s.name) << ",,,,,,\n";
+            continue;
+        }
+        const auto& q = it.value();
+        out << csv_escape(q.symbol) << ','
+            << csv_escape(q.name.isEmpty() ? s.name : q.name) << ','
+            << QString::number(q.price, 'f', 2) << ','
+            << QString::number(q.change, 'f', 2) << ','
+            << QString::number(q.change_pct, 'f', 2) << ','
+            << QString::number(q.high, 'f', 2) << ','
+            << QString::number(q.low, 'f', 2) << ','
+            << fincept::ui::formatting::format_compact_volume(static_cast<qint64>(q.volume)) << '\n';
+    }
+}
+
+void WatchlistScreen::on_import_csv() {
+    if (current_wl_id_.isEmpty()) return;
+
+    const QString path = QFileDialog::getOpenFileName(
+        this, tr("Import CSV"), "", tr("CSV Files (*.csv)"));
+    if (path.isEmpty()) return;
+
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Import failed"),
+                             tr("Could not open file for reading:\n%1").arg(path));
+        return;
+    }
+
+    QTextStream in(&f);
+    in.setEncoding(QStringConverter::Utf8);
+
+    QString header_line = in.readLine();
+    if (header_line.isEmpty()) return;
+
+    auto parse_csv_line = [](const QString& line) -> QStringList {
+        QStringList fields;
+        QString current;
+        bool in_quotes = false;
+        for (int i = 0; i < line.length(); ++i) {
+            QChar c = line[i];
+            if (c == '"') {
+                if (i + 1 < line.length() && line[i+1] == '"') {
+                    current += '"';
+                    ++i;
+                } else {
+                    in_quotes = !in_quotes;
+                }
+            } else if (c == ',' && !in_quotes) {
+                fields.append(current);
+                current.clear();
+            } else {
+                current += c;
+            }
+        }
+        fields.append(current);
+        return fields;
+    };
+
+    QStringList headers = parse_csv_line(header_line);
+    int sym_col = -1;
+    int name_col = -1;
+    for (int i = 0; i < headers.size(); ++i) {
+        QString h = headers[i].trimmed().toUpper();
+        if (h == "SYMBOL") sym_col = i;
+        else if (h == "NAME") name_col = i;
+    }
+
+    if (sym_col == -1) {
+        QMessageBox::warning(this, tr("Import failed"), tr("CSV missing SYMBOL column."));
+        return;
+    }
+
+    auto& repo = fincept::WatchlistRepository::instance();
+
+    QSet<QString> existing;
+    auto stocks_res = repo.get_stocks(current_wl_id_);
+    if (stocks_res.is_ok()) {
+        for (const auto& s : stocks_res.value()) {
+            existing.insert(s.symbol.trimmed().toUpper());
+        }
+    }
+
+    int imported = 0;
+    int skipped = 0;
+
+    while (!in.atEnd()) {
+        QString line = in.readLine();
+        if (line.trimmed().isEmpty()) continue;
+
+        QStringList fields = parse_csv_line(line);
+        if (fields.size() <= sym_col) continue;
+
+        QString sym = fields[sym_col].trimmed();
+        if (sym.isEmpty()) continue;
+
+        QString upper_sym = sym.toUpper();
+        if (existing.contains(upper_sym)) {
+            skipped++;
+            continue;
+        }
+
+        QString name = "";
+        if (name_col != -1 && fields.size() > name_col) {
+            name = fields[name_col].trimmed();
+        }
+
+        repo.add_stock(current_wl_id_, sym, name);
+        existing.insert(upper_sym);
+        imported++;
+    }
+
+    if (wl_list_) {
+        on_watchlist_selected(wl_list_->currentRow());
+    }
+
+    QMessageBox::information(this, tr("Import Complete"),
+                             tr("Imported %1, skipped %2 duplicates.")
+                             .arg(imported).arg(skipped));
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────

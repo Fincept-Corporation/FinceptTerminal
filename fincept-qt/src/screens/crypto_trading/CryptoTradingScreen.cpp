@@ -1,4 +1,11 @@
-// Crypto Trading Screen — coordinator
+// Crypto Trading Screen — coordinator.
+//
+// Core: ctor/dtor, show/hide events, setup_ui, setup_timers, update_clock,
+// hub subscribe/unsubscribe, init_exchange, load_portfolio, save_state/restore_state,
+// current_symbol / on_group_symbol_changed. Other concerns:
+//   - CryptoTradingScreen_Handlers.cpp   — UI action handlers
+//   - CryptoTradingScreen_Refresh.cpp    — per-panel refresh + WS feed-mode
+//   - CryptoTradingScreen_AsyncFetch.cpp — REST fetch helpers
 #include "screens/crypto_trading/CryptoTradingScreen.h"
 
 #include "core/logging/Logger.h"
@@ -30,16 +37,13 @@
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
 
+
 namespace fincept::screens {
 
 using namespace fincept::trading;
 using namespace fincept::screens::crypto;
 
 static const QString TAG = "CryptoTrading";
-
-// ============================================================================
-// Constructor / Destructor
-// ============================================================================
 
 CryptoTradingScreen::CryptoTradingScreen(QWidget* parent) : QWidget(parent) {
     LOG_INFO(TAG, "Constructing CryptoTradingScreen");
@@ -567,5 +571,44 @@ void CryptoTradingScreen::load_portfolio() {
 // Async Fetchers
 // ============================================================================
 
+ 
+
+
+QVariantMap CryptoTradingScreen::save_state() const {
+    return {
+        {"exchange_id", exchange_id_},
+        {"selected_symbol", selected_symbol_},
+    };
+}
+
+void CryptoTradingScreen::restore_state(const QVariantMap& state) {
+    const QString exch = state.value("exchange_id", "kraken").toString();
+    const QString sym = state.value("selected_symbol", "BTC/USDT").toString();
+
+    const bool exch_changed = (exch != exchange_id_);
+    const bool sym_changed = (sym != selected_symbol_);
+
+    if (!exch_changed && !sym_changed)
+        return;
+
+    // When both change, avoid two teardown/re-subscribe cycles: set the
+    // symbol first so the exchange-change path re-initializes on the NEW
+    // symbol directly, and skip the follow-up switch_symbol call.
+    if (exch_changed) {
+        if (sym_changed) {
+            selected_symbol_ = sym;
+            symbol_input_->setText(sym);
+            ticker_bar_->set_symbol(sym);
+            order_entry_->set_symbol(sym);
+            watchlist_->set_active_symbol(sym);
+        }
+        on_exchange_changed(exch);
+        return;
+    }
+
+    if (sym_changed)
+        on_symbol_selected(sym);
+}
+ 
 
 } // namespace fincept::screens

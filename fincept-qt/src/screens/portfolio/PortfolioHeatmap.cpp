@@ -4,6 +4,7 @@
 #include "screens/portfolio/PortfolioPanelHeader.h"
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QGridLayout>
 #include <QScrollArea>
 #include <QVBoxLayout>
@@ -32,7 +33,8 @@ void PortfolioHeatmap::build_ui() {
     layout->setSpacing(0);
 
     // Unified panel header — HOLDINGS title + 3 mode buttons in the controls slot.
-    auto header = make_panel_header("HOLDINGS", this);
+    auto header = make_panel_header(tr("HOLDINGS"), this);
+    title_label_ = header.title_label;
 
     auto make_mode_btn = [&header](const QString& text) {
         auto* btn = new QPushButton(text);
@@ -50,9 +52,9 @@ void PortfolioHeatmap::build_ui() {
         return btn;
     };
 
-    pnl_btn_ = make_mode_btn("PNL");
-    weight_btn_ = make_mode_btn("WT");
-    day_btn_ = make_mode_btn("DAY");
+    pnl_btn_ = make_mode_btn(tr("PNL"));
+    weight_btn_ = make_mode_btn(tr("WT"));
+    day_btn_ = make_mode_btn(tr("DAY"));
     pnl_btn_->setChecked(true);
 
     auto set_mode = [this](portfolio::HeatmapMode m) {
@@ -107,12 +109,12 @@ void PortfolioHeatmap::build_ui() {
     movers_sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
     layout->addWidget(movers_sep);
 
-    auto* movers_header = new QLabel("TOP MOVERS");
-    movers_header->setStyleSheet(
+    movers_header_ = new QLabel(tr("TOP MOVERS"));
+    movers_header_->setStyleSheet(
         QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;"
                 "  padding-top:4px;")
             .arg(ui::colors::TEXT_TERTIARY()));
-    layout->addWidget(movers_header);
+    layout->addWidget(movers_header_);
 
     top_gainer_ = new QLabel;
     top_gainer_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;").arg(ui::colors::POSITIVE()));
@@ -271,6 +273,23 @@ void PortfolioHeatmap::update_top_movers() {
                             .arg(worst->symbol)
                             .arg(worst->day_change_percent >= 0 ? "+" : "")
                             .arg(QString::number(worst->day_change_percent, 'f', 2)));
+}
+
+void PortfolioHeatmap::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PortfolioHeatmap::retranslateUi() {
+    if (title_label_)    title_label_->setText(tr("HOLDINGS"));
+    if (pnl_btn_)        pnl_btn_->setText(tr("PNL"));
+    if (weight_btn_)     weight_btn_->setText(tr("WT"));
+    if (day_btn_)        day_btn_->setText(tr("DAY"));
+    if (movers_header_)  movers_header_->setText(tr("TOP MOVERS"));
+    // Block text is "SYMBOL\n+x.xx%" — pure data, no tr() needed.
+    // top_gainer_/top_loser_ contents likewise are formatted from data; no
+    // change on language switch.
 }
 
 void PortfolioHeatmap::refresh_theme() {

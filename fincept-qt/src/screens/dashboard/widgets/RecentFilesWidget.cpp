@@ -17,7 +17,7 @@ using fincept::services::FileManagerService;
 
 static const char* MF = "font-family:'Consolas','Courier New',monospace;";
 
-RecentFilesWidget::RecentFilesWidget(QWidget* parent) : BaseWidget("Recent Files", parent, ui::colors::AMBER.get()) {
+RecentFilesWidget::RecentFilesWidget(QWidget* parent) : BaseWidget(tr("Recent Files"), parent, ui::colors::AMBER.get()) {
 
     scroll_ = new QScrollArea;
     scroll_->setWidgetResizable(true);
@@ -74,7 +74,7 @@ void RecentFilesWidget::refresh_data() {
         files.resize(8);
 
     if (files.isEmpty()) {
-        auto* empty = new QLabel("No files yet");
+        auto* empty = new QLabel(tr("No files yet"));
         empty->setAlignment(Qt::AlignCenter);
         empty->setStyleSheet(
             QString("color:%1;font-size:11px;background:transparent;padding:16px;%2").arg(colors::TEXT_DIM(), MF));
@@ -134,6 +134,12 @@ void RecentFilesWidget::apply_styles() {
 
 void RecentFilesWidget::on_theme_changed() {
     apply_styles();
+}
+
+void RecentFilesWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("Recent Files"));
+    refresh_data(); // re-renders any "no files" / row labels in the new language
 }
 
 } // namespace fincept::screens::widgets

@@ -57,7 +57,9 @@ class DataStreamManager : public QObject
     void orderbook_fetched(const QString& account_id,
                            const QVector<QPair<double, double>>& bids,
                            const QVector<QPair<double, double>>& asks,
-                           double spread, double spread_pct);
+                           double spread, double spread_pct,
+                           const QVector<int>& bid_orders,
+                           const QVector<int>& ask_orders);
     void time_sales_fetched(const QString& account_id, const QVector<BrokerTrade>& trades);
     void latest_trade_fetched(const QString& account_id, const BrokerTrade& trade);
     void calendar_fetched(const QString& account_id, const QVector<MarketCalendarDay>& days);

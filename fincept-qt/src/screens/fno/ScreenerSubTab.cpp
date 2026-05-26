@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "services/options/OptionChainService.h"
 #include "ui/theme/Theme.h"
 
 #include <QColor>
@@ -238,6 +239,17 @@ void ScreenerSubTab::setup_ui() {
     count_label_ = new QLabel(QStringLiteral("0 of 0 strikes match"), this);
     count_label_->setObjectName("fnoScreenerCount");
     root->addWidget(count_label_);
+
+    connect(&fincept::services::options::OptionChainService::instance(),
+            &fincept::services::options::OptionChainService::chain_published,
+            this, [this](const fincept::services::options::OptionChain& chain) {
+                on_chain_published(QVariant::fromValue(chain));
+            });
+    subscribed_ = true;
+
+    const auto& cached = fincept::services::options::OptionChainService::instance().last_chain();
+    if (!cached.rows.isEmpty())
+        on_chain_published(QVariant::fromValue(cached));
 }
 
 QVariantMap ScreenerSubTab::save_state() const {
@@ -274,10 +286,6 @@ void ScreenerSubTab::showEvent(QShowEvent* e) {
 
 void ScreenerSubTab::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
-    if (!subscribed_)
-        return;
-    fincept::datahub::DataHub::instance().unsubscribe_pattern(this, QStringLiteral("option:chain:*"));
-    subscribed_ = false;
 }
 
 void ScreenerSubTab::on_chain_published(const QVariant& v) {

@@ -18,13 +18,13 @@ QStringList SectorHeatmapWidget::sector_symbols() {
 
 QMap<QString, QString> SectorHeatmapWidget::sector_labels() {
     return {
-        {"XLK", "Technology"},     {"XLV", "Healthcare"},  {"XLF", "Financials"},     {"XLE", "Energy"},
-        {"XLY", "Consumer Disc."}, {"XLI", "Industrials"}, {"XLB", "Materials"},      {"XLU", "Utilities"},
-        {"XLRE", "Real Estate"},   {"XLC", "Comm. Svc."},  {"XLP", "Consumer Stap."}, {"SOXX", "Semis"},
+        {"XLK", tr("Technology")},     {"XLV", tr("Healthcare")},  {"XLF", tr("Financials")},     {"XLE", tr("Energy")},
+        {"XLY", tr("Consumer Disc.")}, {"XLI", tr("Industrials")}, {"XLB", tr("Materials")},      {"XLU", tr("Utilities")},
+        {"XLRE", tr("Real Estate")},   {"XLC", tr("Comm. Svc.")},  {"XLP", tr("Consumer Stap.")}, {"SOXX", tr("Semis")},
     };
 }
 
-SectorHeatmapWidget::SectorHeatmapWidget(QWidget* parent) : BaseWidget("SECTOR HEATMAP", parent) {
+SectorHeatmapWidget::SectorHeatmapWidget(QWidget* parent) : BaseWidget(tr("SECTOR HEATMAP"), parent) {
     grid_container_ = new QWidget(this);
     grid_ = new QGridLayout(grid_container_);
     grid_->setContentsMargins(4, 4, 4, 4);
@@ -150,6 +150,12 @@ void SectorHeatmapWidget::populate(const QVector<services::QuoteData>& quotes) {
         grid_->addWidget(cell, idx / 3, idx % 3);
         ++idx;
     }
+}
+
+void SectorHeatmapWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("SECTOR HEATMAP"));
+    rebuild_from_cache(); // re-renders sector cell labels in the new language
 }
 
 } // namespace fincept::screens::widgets

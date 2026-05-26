@@ -32,7 +32,7 @@ QString fmt_money(double v) {
 } // namespace
 
 MarginUsageWidget::MarginUsageWidget(const QJsonObject& cfg, QWidget* parent)
-    : BaseWidget("MARGIN USAGE", parent) {
+    : BaseWidget(tr("MARGIN USAGE"), parent) {
     auto* vl = content_layout();
     vl->setContentsMargins(10, 8, 10, 8);
     vl->setSpacing(6);
@@ -55,15 +55,15 @@ MarginUsageWidget::MarginUsageWidget(const QJsonObject& cfg, QWidget* parent)
         grid->addWidget(value_out, row, 1);
     };
 
-    make_row(0, "Available", available_val_);
-    make_row(1, "Used", used_val_);
-    make_row(2, "Total", total_val_);
-    make_row(3, "Collateral", collateral_val_);
+    make_row(0, tr("Available"), available_val_);
+    make_row(1, tr("Used"), used_val_);
+    make_row(2, tr("Total"), total_val_);
+    make_row(3, tr("Collateral"), collateral_val_);
 
     vl->addLayout(grid);
     vl->addSpacing(4);
 
-    usage_pct_label_ = new QLabel("Usage: —");
+    usage_pct_label_ = new QLabel(tr("Usage: —"));
     usage_pct_label_->setObjectName("marginUsagePctLabel");
     vl->addWidget(usage_pct_label_);
 
@@ -99,7 +99,7 @@ void MarginUsageWidget::apply_config(const QJsonObject& cfg) {
         broker_id_ = acct.broker_id;
         header_hint_->setText(acct.display_name.isEmpty() ? account_id_ : acct.display_name);
     } else {
-        header_hint_->setText("No active account — click gear to configure");
+        header_hint_->setText(tr("No active account — click gear to configure"));
     }
 
     if (isVisible() && !broker_id_.isEmpty() && !account_id_.isEmpty()) {
@@ -166,7 +166,7 @@ void MarginUsageWidget::populate(const trading::BrokerFunds& funds) {
         pct = qBound(0, int((funds.used_margin / denom) * 100.0 + 0.5), 100);
     }
     usage_bar_->setValue(pct);
-    usage_pct_label_->setText(QString("Usage: %1%").arg(pct));
+    usage_pct_label_->setText(tr("Usage: %1%").arg(pct));
 
     QColor bar_color = ui::colors::POSITIVE();
     if (pct >= 80)
@@ -183,7 +183,7 @@ void MarginUsageWidget::populate(const trading::BrokerFunds& funds) {
 
 QDialog* MarginUsageWidget::make_config_dialog(QWidget* parent) {
     auto* dlg = new QDialog(parent);
-    dlg->setWindowTitle("Configure — Margin Usage");
+    dlg->setWindowTitle(tr("Configure — Margin Usage"));
     auto* form = new QFormLayout(dlg);
 
     auto* combo = new QComboBox(dlg);
@@ -194,7 +194,7 @@ QDialog* MarginUsageWidget::make_config_dialog(QWidget* parent) {
         if (a.account_id == account_id_)
             combo->setCurrentIndex(combo->count() - 1);
     }
-    form->addRow("Broker account", combo);
+    form->addRow(tr("Broker account"), combo);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg);
     form->addRow(buttons);
@@ -247,6 +247,12 @@ void MarginUsageWidget::apply_styles() {
             QString("QProgressBar{background:%1;border:none;border-radius:2px;}"
                     "QProgressBar::chunk{background:%2;border-radius:2px;}")
                 .arg(ui::colors::BG_RAISED(), ui::colors::POSITIVE()));
+}
+
+void MarginUsageWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("MARGIN USAGE"));
+    hub_resubscribe(); // re-renders header hint + cached funds row in the new language
 }
 
 } // namespace fincept::screens::widgets

@@ -54,6 +54,20 @@ class AccountManagementDialog : public QDialog {
     void exchange_and_store_token_async(const QString& api_key, const QString& api_secret,
                                         const QString& request_token);
 
+    // Fyers-specific form + handlers
+    void build_fyers_form();
+    void on_connect_fyers_browser();
+    void on_connect_fyers_manual_paste();
+    void fyers_exchange_and_store_token_async(const QString& client_id, const QString& api_secret,
+                                              const QString& auth_code);
+
+    // MT4 (MetaAPI)-specific form + handlers
+    void build_mt4_form();
+    void on_connect_mt4();
+    void mt4_provision_async(const QString& meta_token, const QString& mt4_login,
+                              const QString& mt4_password, const QString& mt4_server,
+                              const QString& region);
+
     // Left panel — account list
     QListWidget* account_list_ = nullptr;
     QPushButton* add_btn_ = nullptr;
@@ -99,6 +113,37 @@ class AccountManagementDialog : public QDialog {
     QPushButton*   z_rename_btn_ = nullptr;
 
     trading::auth::RedirectServer* z_redirect_server_ = nullptr;
+
+    // Fyers-specific widgets
+    QWidget*       fyers_page_ = nullptr;
+    QLabel*        f_title_ = nullptr;
+    QLabel*        f_status_ = nullptr;
+    QPushButton*   f_setup_toggle_ = nullptr;
+    QWidget*       f_setup_panel_ = nullptr;
+    QLineEdit*     f_client_id_ = nullptr;
+    QLineEdit*     f_api_secret_ = nullptr;
+    QPushButton*   f_browser_btn_ = nullptr;
+    QPushButton*   f_manual_toggle_ = nullptr;
+    QWidget*       f_manual_panel_ = nullptr;
+    QLineEdit*     f_manual_token_ = nullptr;
+    QPushButton*   f_manual_connect_btn_ = nullptr;
+    QPushButton*   f_rename_btn_ = nullptr;
+    trading::auth::RedirectServer* f_redirect_server_ = nullptr;
+
+    // MT4 (MetaAPI)-specific widgets
+    QWidget*     mt4_page_ = nullptr;
+    QLabel*      mt4_title_ = nullptr;
+    QLabel*      mt4_status_ = nullptr;
+    QPushButton* mt4_setup_toggle_ = nullptr;
+    QWidget*     mt4_setup_panel_ = nullptr;
+    QLineEdit*   mt4_meta_token_ = nullptr;
+    QLineEdit*   mt4_login_ = nullptr;
+    QLineEdit*   mt4_password_ = nullptr;
+    QLineEdit*   mt4_server_ = nullptr;
+    QComboBox*   mt4_region_ = nullptr;
+    QComboBox*   mt4_account_type_ = nullptr;
+    QPushButton* mt4_connect_btn_ = nullptr;
+    QPushButton* mt4_rename_btn_ = nullptr;
 
     // Currently selected account
     QString selected_account_id_;

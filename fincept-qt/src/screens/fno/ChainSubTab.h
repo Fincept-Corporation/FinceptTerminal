@@ -38,6 +38,8 @@ class ChainSubTab : public QWidget {
     explicit ChainSubTab(QWidget* parent = nullptr);
     ~ChainSubTab() override;
 
+    OptionChainTable* table() const { return table_; }
+
     // Lightweight save/restore for the F&O screen aggregator.
     QVariantMap save_state() const;
     void restore_state(const QVariantMap& state);

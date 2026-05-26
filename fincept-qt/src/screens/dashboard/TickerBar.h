@@ -1,5 +1,6 @@
 #pragma once
 #include <QHideEvent>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QShowEvent>
@@ -40,6 +41,7 @@ class TickerBar : public QWidget {
     void hideEvent(QHideEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void load_symbols();
@@ -59,9 +61,12 @@ class TickerBar : public QWidget {
 
     // ── Inline edit overlay ──
     QWidget*     edit_bar_   = nullptr;
+    QLabel*      edit_label_ = nullptr;
     QLineEdit*   edit_input_ = nullptr;
     QPushButton* edit_ok_    = nullptr;
     QPushButton* edit_cancel_ = nullptr;
+
+    void retranslateUi();
 };
 
 } // namespace fincept::screens

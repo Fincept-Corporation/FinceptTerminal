@@ -1,0 +1,79 @@
+id: in.fincept.FinceptTerminal
+runtime: org.kde.Platform
+runtime-version: '6.8'
+sdk: org.kde.Sdk
+command: FinceptTerminal
+
+finish-args:
+  # Network — market data, trading APIs, LLM providers, news feeds,
+  # WebSocket streams, and first-run Python runtime download.
+  - --share=network
+  # X11 / Wayland display
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  # GPU acceleration for Qt rendering and charts
+  - --device=dri
+  # Audio — voice commands / speech recognition
+  - --socket=pulseaudio
+  # Persist app data across updates (Python runtime, databases, cache)
+  - --persist=.local/share/com.fincept.terminal
+
+modules:
+  # ── md4c (CommonMark markdown parser) ──────────────────────────────────────
+  # Built and installed separately so the main build's find_package() can
+  # locate it when FETCHCONTENT_FULLY_DISCONNECTED is ON.
+  - name: md4c
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_SHARED_LIBS=OFF
+    sources:
+      - type: git
+        url: https://github.com/mity/md4c.git
+        commit: 729e6b8b320caa96328968ab27d7db2235e4fb47
+
+  # ── Main application ───────────────────────────────────────────────────────
+  - name: FinceptTerminal
+    buildsystem: simple
+    build-commands:
+      - |
+        SRC=$(pwd)
+        cmake -B _build -S fincept-qt -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=/app \
+          -DFINCEPT_QT_PIN_MODE=MINOR \
+          -DFETCHCONTENT_FULLY_DISCONNECTED=ON \
+          -DFETCHCONTENT_SOURCE_DIR_QXLSX=$SRC/vendor/qxlsx \
+          -DFETCHCONTENT_SOURCE_DIR_MD4C=$SRC/vendor/md4c \
+          -DFETCHCONTENT_SOURCE_DIR_QGEOVIEW=$SRC/vendor/qgeoview \
+          -DFETCHCONTENT_SOURCE_DIR_QTADS=$SRC/vendor/qtads \
+          -DFETCHCONTENT_SOURCE_DIR_ED25519=$SRC/vendor/ed25519
+      - cmake --build _build --parallel
+      - cmake --install _build
+    sources:
+      # Main repository
+      - type: git
+        url: https://github.com/Fincept-Corporation/FinceptTerminal.git
+        tag: v4.0.3
+      # Vendored FetchContent dependencies (no network during build)
+      - type: git
+        url: https://github.com/QtExcel/QXlsx.git
+        commit: 3192b808a283f8eb18c97b9a087bf085054e9bb0
+        dest: vendor/qxlsx
+      - type: git
+        url: https://github.com/mity/md4c.git
+        commit: 729e6b8b320caa96328968ab27d7db2235e4fb47
+        dest: vendor/md4c
+      - type: git
+        url: https://github.com/AmonRaNet/QGeoView.git
+        commit: 4b2c52c80940e1073c259ded1a57df83036ba1c9
+        dest: vendor/qgeoview
+      - type: git
+        url: https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System.git
+        commit: 87cffe5d40307c61141c88b88c10c5e7d181d880
+        dest: vendor/qtads
+      - type: git
+        url: https://github.com/orlp/ed25519.git
+        commit: b1f19fab4aebe607805620d25a5e42566ce46a0e
+        dest: vendor/ed25519

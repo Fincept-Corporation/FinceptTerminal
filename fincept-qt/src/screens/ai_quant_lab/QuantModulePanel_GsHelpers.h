@@ -10,6 +10,7 @@
 
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
 #include <QHBoxLayout>
 #include <QJsonValue>
 #include <QLabel>
@@ -93,7 +94,8 @@ inline QString format_val(const QJsonValue& val) {
         return QString::number(v, 'f', 4);
     }
     if (val.isBool())
-        return val.toBool() ? "YES" : "NO";
+        return val.toBool() ? QCoreApplication::translate("QuantModulePanel", "YES")
+                            : QCoreApplication::translate("QuantModulePanel", "NO");
     if (val.isString())
         return val.toString();
     return QString::fromUtf8("—");

@@ -4,6 +4,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QTimeZone>
 
@@ -40,8 +41,8 @@ PortfolioStatusBar::PortfolioStatusBar(QWidget* parent) : QWidget(parent) {
 
     add_divider();
 
-    auto* version_lbl = make_label(ui::colors::TEXT_TERTIARY);
-    version_lbl->setText("PORTFOLIO TERMINAL v4.0");
+    version_label_ = make_label(ui::colors::TEXT_TERTIARY);
+    version_label_->setText(tr("PORTFOLIO TERMINAL v4.0"));
 
     add_divider();
 
@@ -52,12 +53,12 @@ PortfolioStatusBar::PortfolioStatusBar(QWidget* parent) : QWidget(parent) {
 
     // Live indicator
     live_label_ = make_label(ui::colors::POSITIVE, true);
-    live_label_->setText("\u25CF LIVE");
+    live_label_->setText("\u25CF " + tr("LIVE"));
 
     add_divider();
 
     positions_label_ = make_label(ui::colors::TEXT_SECONDARY);
-    positions_label_->setText("0 positions");
+    positions_label_->setText(tr("0 positions"));
 
     layout->addStretch();
 
@@ -100,17 +101,36 @@ void PortfolioStatusBar::set_portfolio_name(const QString& name) {
 }
 
 void PortfolioStatusBar::set_summary(const portfolio::PortfolioSummary& s) {
+    last_summary_ = s;
     auto fmt = [](double v) { return QString::number(v, 'f', 2); };
 
     set_portfolio_name(s.portfolio.name);
-    positions_label_->setText(QString("%1 positions").arg(s.total_positions));
+    positions_label_->setText(tr("%1 positions").arg(s.total_positions));
 
-    nav_label_->setText(QString("NAV %1 %2").arg(s.portfolio.currency, fmt(s.total_market_value)));
+    nav_label_->setText(tr("NAV %1 %2").arg(s.portfolio.currency, fmt(s.total_market_value)));
 
     double pnl = s.total_unrealized_pnl;
-    pnl_label_->setText(QString("P&L %1%2").arg(pnl >= 0 ? "+" : "").arg(fmt(pnl)));
+    pnl_label_->setText(tr("P&L %1%2").arg(pnl >= 0 ? "+" : "").arg(fmt(pnl)));
     pnl_label_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;")
                                   .arg(pnl >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+}
+
+void PortfolioStatusBar::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PortfolioStatusBar::retranslateUi() {
+    if (version_label_)  version_label_->setText(tr("PORTFOLIO TERMINAL v4.0"));
+    if (live_label_)     live_label_->setText("● " + tr("LIVE"));
+
+    if (last_summary_.has_value()) {
+        // Re-render dynamic strings from cached summary.
+        set_summary(*last_summary_);
+    } else if (positions_label_) {
+        positions_label_->setText(tr("0 positions"));
+    }
 }
 
 } // namespace fincept::screens

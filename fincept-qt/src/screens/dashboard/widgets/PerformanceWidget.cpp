@@ -16,12 +16,12 @@ inline const QStringList kPerfSymbols = {"^GSPC", "^IXIC", "^DJI", "^RUT", "^VIX
 namespace fincept::screens::widgets {
 
 PerformanceWidget::PerformanceWidget(QWidget* parent)
-    : BaseWidget("PERFORMANCE TRACKER", parent, ui::colors::POSITIVE()) {
+    : BaseWidget(tr("PERFORMANCE TRACKER"), parent, ui::colors::POSITIVE()) {
     auto* vl = content_layout();
 
     // We'll show metrics derived from real benchmark ETF data
-    QStringList labels = {"S&P 500 Daily",         "NASDAQ Daily",         "DOW Daily", "Russell 2000 Daily",
-                          "S&P 500 vs DOW Spread", "NASDAQ vs S&P Spread", "VIX Level", "Gold Daily"};
+    QStringList labels = {tr("S&P 500 Daily"),         tr("NASDAQ Daily"),         tr("DOW Daily"), tr("Russell 2000 Daily"),
+                          tr("S&P 500 vs DOW Spread"), tr("NASDAQ vs S&P Spread"), tr("VIX Level"), tr("Gold Daily")};
 
     for (const auto& label : labels) {
         auto* row = new QWidget(this);
@@ -34,7 +34,7 @@ PerformanceWidget::PerformanceWidget(QWidget* parent)
         rl->addWidget(mr.label);
         rl->addStretch();
 
-        mr.period = new QLabel("TODAY");
+        mr.period = new QLabel(tr("TODAY"));
         rl->addWidget(mr.period);
 
         mr.value = new QLabel("--");
@@ -177,6 +177,12 @@ void PerformanceWidget::populate(const QVector<services::QuoteData>& quotes) {
     // Gold daily
     if (map.contains("GC=F"))
         set_row(7, map["GC=F"]->change_pct);
+}
+
+void PerformanceWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    set_title(tr("PERFORMANCE TRACKER"));
+    rebuild_from_cache(); // re-derives metric labels from cached quotes
 }
 
 } // namespace fincept::screens::widgets

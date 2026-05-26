@@ -110,6 +110,7 @@ std::vector<ToolDef> get_watchlist_tools() {
         t.name = "delete_watchlist";
         t.description = "Delete a watchlist by ID.";
         t.category = "watchlist";
+        t.is_destructive = true;  // mutation tool — penalise on read-style queries
         t.input_schema.properties =
             QJsonObject{{"watchlist_id", QJsonObject{{"type", "string"}, {"description", "Watchlist ID"}}}};
         t.input_schema.required = {"watchlist_id"};
@@ -210,6 +211,7 @@ std::vector<ToolDef> get_watchlist_tools() {
         t.name = "remove_from_watchlist";
         t.description = "Remove a symbol from a watchlist.";
         t.category = "watchlist";
+        t.is_destructive = true;  // mutation tool — penalise on read-style queries
         t.input_schema.properties = QJsonObject{
             {"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol to remove"}}},
             {"watchlist_id", QJsonObject{{"type", "string"},

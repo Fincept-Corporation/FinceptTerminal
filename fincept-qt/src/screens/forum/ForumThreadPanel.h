@@ -19,6 +19,8 @@ class ForumThreadPanel : public QWidget {
     void show_post(const services::ForumPostDetail& detail);
     void set_loading(bool on);
     void clear();
+    QString reply_draft() const;
+    void set_reply_draft(const QString& text);
 
   signals:
     void back_requested();

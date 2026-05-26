@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-deepgram_tts.py — Stdin text -> Deepgram Aura TTS -> pyaudio playback.
+deepgram_tts.py — Stdin text -> Deepgram Aura TTS -> sounddevice playback.
 
 JSON-lines stdout protocol matches tts.py so TtsService can swap providers
 transparently:
@@ -11,7 +11,7 @@ transparently:
 
 Strategy: POST text to Deepgram's /v1/speak endpoint with linear16 / 24000Hz
 mono / container=none. Response body is raw PCM streamed as it's synthesised;
-we pipe it directly into a pyaudio output stream so playback starts before
+we pipe it directly into a sounddevice output stream so playback starts before
 the full clip arrives (low latency, no temp files, no ffmpeg).
 
 Environment variables (set by DeepgramTtsProvider in C++):
@@ -42,19 +42,17 @@ CHANNELS    = 1
 PLAYBACK_CHUNK = 4096 # bytes; ~85 ms at 24 kHz int16 mono
 
 
-def play_stream(audio_iter, pyaudio_mod) -> None:
-    """Write raw PCM bytes from `audio_iter` to a pyaudio output stream."""
-    pa = pyaudio_mod.PyAudio()
+def play_stream(audio_iter, sd_mod) -> None:
+    """Write raw PCM bytes from `audio_iter` to a sounddevice output stream."""
     try:
-        stream = pa.open(
-            format=pyaudio_mod.paInt16,
+        stream = sd_mod.RawOutputStream(
+            samplerate=SAMPLE_RATE,
             channels=CHANNELS,
-            rate=SAMPLE_RATE,
-            output=True,
+            dtype="int16",
         )
+        stream.start()
     except Exception as ex:
-        pa.terminate()
-        raise RuntimeError(f"pyaudio open output failed: {ex}") from ex
+        raise RuntimeError(f"sounddevice open output failed: {ex}") from ex
 
     try:
         emit({"status": "speaking"})
@@ -64,11 +62,10 @@ def play_stream(audio_iter, pyaudio_mod) -> None:
             stream.write(chunk)
     finally:
         try:
-            stream.stop_stream()
+            stream.stop()
             stream.close()
         except Exception:
             pass
-        pa.terminate()
 
 
 def main() -> int:
@@ -102,12 +99,12 @@ def main() -> int:
         diag("requests not available — falling back to urllib")
 
     try:
-        import pyaudio
-        diag(f"pyaudio imported, version={getattr(pyaudio, '__version__', '?')}")
+        import sounddevice as sd
+        diag(f"sounddevice imported, version={getattr(sd, '__version__', '?')}")
     except ImportError as e:
-        diag(f"pyaudio import failed: {e}")
+        diag(f"sounddevice import failed: {e}")
         emit({"fatal": (
-            "PyAudio not available in venv-numpy2. "
+            "sounddevice not available in venv-numpy2. "
             "Open Settings -> Python Env -> Reinstall packages."
         )})
         return 1
@@ -147,7 +144,7 @@ def main() -> int:
                         emit({"fatal": f"Deepgram TTS HTTP {resp.status_code}: {body}"})
                     return 1
                 resp.raw.decode_content = True
-                play_stream(resp.iter_content(chunk_size=PLAYBACK_CHUNK), pyaudio)
+                play_stream(resp.iter_content(chunk_size=PLAYBACK_CHUNK), sd)
         else:
             import urllib.request
             req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
@@ -163,7 +160,7 @@ def main() -> int:
                         if not chunk:
                             return
                         yield chunk
-                play_stream(_iter(), pyaudio)
+                play_stream(_iter(), sd)
     except Exception as ex:
         diag(f"runtime exception: {ex}")
         emit({"error": f"Deepgram TTS error: {ex}"})

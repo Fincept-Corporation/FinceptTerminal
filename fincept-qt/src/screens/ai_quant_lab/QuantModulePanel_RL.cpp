@@ -44,40 +44,40 @@ QWidget* QuantModulePanel::build_rl_trading_panel() {
     algo->addItems({"PPO", "DQN", "A2C", "SAC", "TD3"});
     algo->setStyleSheet(combo_ss());
     combo_inputs_["rl_algo"] = algo;
-    vl->addWidget(build_input_row("RL Algorithm", algo, w));
+    vl->addWidget(build_input_row(tr("RL Algorithm"), algo, w));
 
     auto* ticker = new QLineEdit(w);
-    ticker->setPlaceholderText("AAPL");
+    ticker->setPlaceholderText(tr("AAPL"));
     ticker->setStyleSheet(input_ss());
     text_inputs_["rl_ticker"] = ticker;
-    vl->addWidget(build_input_row("Ticker", ticker, w));
+    vl->addWidget(build_input_row(tr("Ticker"), ticker, w));
 
     auto* episodes = new QSpinBox(w);
     episodes->setRange(10, 10000);
     episodes->setValue(100);
     episodes->setStyleSheet(spinbox_ss());
     int_inputs_["rl_episodes"] = episodes;
-    vl->addWidget(build_input_row("Training Episodes", episodes, w));
+    vl->addWidget(build_input_row(tr("Training Episodes"), episodes, w));
 
     auto* lr = make_double_spin(0.00001, 1.0, 0.0003, 5, "", w);
     double_inputs_["rl_learning_rate"] = lr;
-    vl->addWidget(build_input_row("Learning Rate", lr, w));
+    vl->addWidget(build_input_row(tr("Learning Rate"), lr, w));
 
     auto* capital = make_double_spin(1000, 1e12, 100000, 0, "", w);
     double_inputs_["rl_capital"] = capital;
-    vl->addWidget(build_input_row("Initial Capital ($)", capital, w));
+    vl->addWidget(build_input_row(tr("Initial Capital ($)"), capital, w));
 
-    rl_train_button_ = make_run_button("TRAIN RL AGENT", w);
+    rl_train_button_ = make_run_button(tr("TRAIN RL AGENT"), w);
     connect(rl_train_button_, &QPushButton::clicked, this, [this]() {
         if (!rl_train_button_ || !rl_log_console_) return;
         rl_log_console_->clear();
         rl_progress_bar_->setValue(0);
         rl_progress_bar_->setVisible(true);
-        rl_progress_stats_->setText("step 0 / — · reward — · loss —");
+        rl_progress_stats_->setText(tr("step 0 / — · reward — · loss —"));
         rl_progress_stats_->setVisible(true);
         rl_log_console_->setVisible(true);
         rl_train_button_->setEnabled(false);
-        status_label_->setText("Training RL Agent...");
+        status_label_->setText(tr("Training RL Agent..."));
         QJsonObject params;
         params["algorithm"] = combo_inputs_["rl_algo"]->currentText();
         params["ticker"] = text_inputs_["rl_ticker"]->text();

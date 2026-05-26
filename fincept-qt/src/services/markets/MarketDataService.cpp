@@ -144,15 +144,39 @@ void MarketDataService::refresh(const QStringList& topics) {
             // object so root is already the {quotes,sparklines,histories} map.
             // publish to hub, store in cache. We don't need the flush_batch code
             // path here because no callback chain is waiting on this refresh tick.
+            //
+            // CRITICAL: every requested topic MUST end with either publish()
+            // (success) or publish_error() (failure) so the hub clears its
+            // `in_flight` flag. Silently dropping errored/missing symbols
+            // pins the topic for 30s (refresh_timeout_ms) and triggers the
+            // BaseWidget watchdog to render "No data yet — click refresh to
+            // retry" on every dashboard widget that subscribed to one of
+            // them. yfinance fails per-symbol frequently (rate limits,
+            // closed-market windows like ^N225 outside Asia hours, transient
+            // 4xx), so tracking and erroring on misses is the difference
+            // between "tile flashes a row missing" and "tile permanently
+            // stuck in loading state".
+            auto& hub = datahub::DataHub::instance();
             const QJsonArray quotes_arr = root.value("quotes").toArray();
+            QSet<QString> quotes_seen;
             int quotes_ok = 0;
             for (const auto& v : quotes_arr) {
                 const QJsonObject q = v.toObject();
-                if (q.isEmpty() || q.contains("error"))
+                const QString sym = q.value("symbol").toString();
+                if (!sym.isEmpty())
+                    quotes_seen.insert(sym);
+                if (q.isEmpty() || q.contains("error")) {
+                    if (!sym.isEmpty()) {
+                        const QString errstr =
+                            q.value("error").toString(QStringLiteral("no data"));
+                        hub.publish_error(QStringLiteral("market:quote:") + sym,
+                                          errstr.left(200));
+                    }
                     continue;
+                }
                 QuoteData qd{
-                    q["symbol"].toString(),
-                    q["name"].toString(q["symbol"].toString()),
+                    sym,
+                    q["name"].toString(sym),
                     q["price"].toDouble(),
                     q["change"].toDouble(),
                     q["change_percent"].toDouble(),
@@ -178,14 +202,26 @@ void MarketDataService::refresh(const QStringList& topics) {
                 self->publish_quote_to_hub(qd);
                 ++quotes_ok;
             }
+            // Any requested quote symbol that didn't appear in the response
+            // at all — surface as an error so the hub doesn't pin it.
+            for (const auto& s : quote_syms) {
+                if (!quotes_seen.contains(s))
+                    hub.publish_error(QStringLiteral("market:quote:") + s,
+                                      QStringLiteral("missing from batch response"));
+            }
 
             // Sparklines — {sym: [closes]}
             const QJsonObject sparks = root.value("sparklines").toObject();
+            QSet<QString> sparks_seen;
             int sparks_ok = 0;
             for (auto it = sparks.begin(); it != sparks.end(); ++it) {
+                sparks_seen.insert(it.key());
                 const QJsonArray closes = it.value().toArray();
-                if (closes.isEmpty())
+                if (closes.isEmpty()) {
+                    hub.publish_error(QStringLiteral("market:sparkline:") + it.key(),
+                                      QStringLiteral("no data"));
                     continue;
+                }
                 QVector<double> prices;
                 prices.reserve(closes.size());
                 for (const auto& c : closes)
@@ -193,17 +229,32 @@ void MarketDataService::refresh(const QStringList& topics) {
                 self->publish_sparkline_to_hub(it.key(), prices);
                 ++sparks_ok;
             }
+            for (const auto& s : spark_syms) {
+                if (!sparks_seen.contains(s))
+                    hub.publish_error(QStringLiteral("market:sparkline:") + s,
+                                      QStringLiteral("missing from batch response"));
+            }
 
             // Histories — array of {symbol, period, interval, points[]}
             const QJsonArray hists = root.value("histories").toArray();
+            QSet<QString> hists_seen;
             int hists_ok = 0;
             for (const auto& hv : hists) {
                 const QJsonObject h = hv.toObject();
-                if (h.contains("error"))
-                    continue;
                 const QString sym = h.value("symbol").toString();
                 const QString per = h.value("period").toString();
                 const QString ivl = h.value("interval").toString();
+                const QString topic = QStringLiteral("market:history:") + sym +
+                                      QLatin1Char(':') + per +
+                                      QLatin1Char(':') + ivl;
+                if (!sym.isEmpty() && !per.isEmpty() && !ivl.isEmpty())
+                    hists_seen.insert(topic);
+                if (h.contains("error")) {
+                    const QString errstr =
+                        h.value("error").toString(QStringLiteral("no data"));
+                    hub.publish_error(topic, errstr.left(200));
+                    continue;
+                }
                 const QJsonArray pts = h.value("points").toArray();
                 QVector<HistoryPoint> points;
                 points.reserve(pts.size());
@@ -220,6 +271,11 @@ void MarketDataService::refresh(const QStringList& topics) {
                 }
                 self->publish_history_to_hub(sym, per, ivl, points);
                 ++hists_ok;
+            }
+            for (const auto& h : hist_reqs) {
+                if (!hists_seen.contains(h.topic))
+                    hub.publish_error(h.topic,
+                                      QStringLiteral("missing from batch response"));
             }
 
             LOG_INFO("MarketData",

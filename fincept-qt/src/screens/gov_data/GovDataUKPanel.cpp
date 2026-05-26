@@ -7,6 +7,8 @@
 #include "ui/theme/Theme.h"
 
 #include <QDesktopServices>
+#include <QEvent>
+#include <algorithm>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
@@ -42,10 +44,18 @@ GovDataUKPanel::GovDataUKPanel(QWidget* parent) : QWidget(parent) {
     };
     setStyleSheet(make_gov_panel_style(kGovDataUKColor, uk_extra()));
     build_ui();
+    retranslateUi();
     connect(&services::GovDataService::instance(), &services::GovDataService::result_ready, this,
             &GovDataUKPanel::on_result);
     connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,
             [this, uk_extra]() { setStyleSheet(make_gov_panel_style(kGovDataUKColor, uk_extra())); });
+}
+
+void GovDataUKPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
 }
 
 // ── UI Construction ──────────────────────────────────────────────────────────
@@ -64,7 +74,7 @@ void GovDataUKPanel::build_ui() {
     auto* bcl = new QHBoxLayout(breadcrumb_);
     bcl->setContentsMargins(14, 0, 14, 0);
     bcl->setSpacing(4);
-    breadcrumb_label_ = new QLabel("All Publishers");
+    breadcrumb_label_ = new QLabel;
     breadcrumb_label_->setObjectName("govBreadcrumbText");
     bcl->addWidget(breadcrumb_label_);
     bcl->addStretch(1);
@@ -76,19 +86,29 @@ void GovDataUKPanel::build_ui() {
     // Content stack
     content_stack_ = new QStackedWidget;
 
-    // Page 0 — Publishers table (single stretch column: NAME)
+    auto wrap_with_pager = [](QTableWidget* table, ui::PaginationBar*& pager, QWidget* parent) {
+        auto* w = new QWidget(parent);
+        auto* vl = new QVBoxLayout(w);
+        vl->setContentsMargins(0, 0, 0, 0);
+        vl->setSpacing(0);
+        vl->addWidget(table, 1);
+        pager = new ui::PaginationBar(parent);
+        vl->addWidget(pager);
+        return w;
+    };
+
+    // Page 0 — Publishers table (single stretch column, header set in retranslateUi)
     publishers_table_ = new QTableWidget;
     publishers_table_->setColumnCount(1);
-    publishers_table_->setHorizontalHeaderLabels({"NAME"});
     publishers_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     configure_table(publishers_table_);
     connect(publishers_table_, &QTableWidget::cellDoubleClicked, this, &GovDataUKPanel::on_publisher_doubleclicked);
-    content_stack_->addWidget(publishers_table_); // index 0
+    content_stack_->addWidget(wrap_with_pager(publishers_table_, pub_pager_, this)); // index 0
+    connect(pub_pager_, &ui::PaginationBar::page_changed, this, [this]() { render_publishers_page(); });
 
-    // Page 1 — Datasets table: TITLE | FILES | MODIFIED | TAGS
+    // Page 1 — Datasets table: TITLE | FILES | MODIFIED | TAGS (headers set in retranslateUi)
     datasets_table_ = new QTableWidget;
     datasets_table_->setColumnCount(4);
-    datasets_table_->setHorizontalHeaderLabels({"TITLE", "FILES", "MODIFIED", "TAGS"});
     datasets_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     datasets_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     datasets_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
@@ -98,12 +118,12 @@ void GovDataUKPanel::build_ui() {
     datasets_table_->setColumnWidth(3, 200);
     configure_table(datasets_table_);
     connect(datasets_table_, &QTableWidget::cellDoubleClicked, this, &GovDataUKPanel::on_dataset_doubleclicked);
-    content_stack_->addWidget(datasets_table_); // index 1
+    content_stack_->addWidget(wrap_with_pager(datasets_table_, ds_pager_, this)); // index 1
+    connect(ds_pager_, &ui::PaginationBar::page_changed, this, [this]() { render_datasets_page(); });
 
-    // Page 2 — Resources table: NAME | FORMAT | SIZE | MODIFIED | OPEN
+    // Page 2 — Resources table: NAME | FORMAT | SIZE | MODIFIED | OPEN (headers set in retranslateUi)
     resources_table_ = new QTableWidget;
     resources_table_->setColumnCount(5);
-    resources_table_->setHorizontalHeaderLabels({"NAME", "FORMAT", "SIZE", "MODIFIED", "OPEN"});
     resources_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     resources_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     resources_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
@@ -127,7 +147,7 @@ void GovDataUKPanel::build_ui() {
                 QDesktopServices::openUrl(QUrl(url));
         },
         Qt::UniqueConnection);
-    content_stack_->addWidget(resources_table_); // index 2
+    content_stack_->addWidget(wrap_with_pager(resources_table_, res_pager_, this)); // index 2
 
     // Page 3 — Status / loading / error
     auto* status_page = new QWidget(this);
@@ -153,8 +173,8 @@ QWidget* GovDataUKPanel::build_toolbar() {
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(5);
 
-    // Back button — hidden until we drill in
-    back_btn_ = new QPushButton("← BACK");
+    // Back button — hidden until we drill in (text set in retranslateUi)
+    back_btn_ = new QPushButton;
     back_btn_->setObjectName("govBackBtn");
     back_btn_->setVisible(false);
     back_btn_->setCursor(Qt::PointingHandCursor);
@@ -163,8 +183,8 @@ QWidget* GovDataUKPanel::build_toolbar() {
 
     hl->addSpacing(4);
 
-    // Tab: Publishers
-    publishers_btn_ = new QPushButton("PUBLISHERS");
+    // Tab: Publishers (text set in retranslateUi)
+    publishers_btn_ = new QPushButton;
     publishers_btn_->setObjectName("govTabBtn");
     publishers_btn_->setCheckable(true);
     publishers_btn_->setChecked(true);
@@ -181,8 +201,8 @@ QWidget* GovDataUKPanel::build_toolbar() {
     });
     hl->addWidget(publishers_btn_);
 
-    // Tab: Datasets
-    datasets_btn_ = new QPushButton("DATASETS");
+    // Tab: Datasets (text set in retranslateUi)
+    datasets_btn_ = new QPushButton;
     datasets_btn_->setObjectName("govTabBtn");
     datasets_btn_->setCheckable(true);
     datasets_btn_->setChecked(false);
@@ -199,8 +219,8 @@ QWidget* GovDataUKPanel::build_toolbar() {
 
     hl->addSpacing(6);
 
-    // Popular shortcut
-    popular_btn_ = new QPushButton("POPULAR");
+    // Popular shortcut (text set in retranslateUi)
+    popular_btn_ = new QPushButton;
     popular_btn_->setObjectName("govPopularBtn");
     popular_btn_->setCursor(Qt::PointingHandCursor);
     connect(popular_btn_, &QPushButton::clicked, this, &GovDataUKPanel::on_popular);
@@ -208,16 +228,15 @@ QWidget* GovDataUKPanel::build_toolbar() {
 
     hl->addSpacing(10);
 
-    // Search input
+    // Search input (placeholder set in retranslateUi)
     search_input_ = new QLineEdit;
     search_input_->setObjectName("govSearch");
-    search_input_->setPlaceholderText("Search datasets…");
     search_input_->setFixedWidth(200);
     search_input_->setFixedHeight(26);
     connect(search_input_, &QLineEdit::returnPressed, this, &GovDataUKPanel::on_search);
     hl->addWidget(search_input_);
 
-    fetch_btn_ = new QPushButton("FETCH");
+    fetch_btn_ = new QPushButton;
     fetch_btn_->setObjectName("govFetchBtn");
     fetch_btn_->setCursor(Qt::PointingHandCursor);
     connect(fetch_btn_, &QPushButton::clicked, this, &GovDataUKPanel::on_fetch);
@@ -225,7 +244,7 @@ QWidget* GovDataUKPanel::build_toolbar() {
 
     hl->addStretch(1);
 
-    export_btn_ = new QPushButton("CSV");
+    export_btn_ = new QPushButton;
     export_btn_->setObjectName("govCsvBtn");
     export_btn_->setCursor(Qt::PointingHandCursor);
     connect(export_btn_, &QPushButton::clicked, this, &GovDataUKPanel::on_export_csv);
@@ -234,10 +253,33 @@ QWidget* GovDataUKPanel::build_toolbar() {
     return bar;
 }
 
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void GovDataUKPanel::retranslateUi() {
+    if (back_btn_)       back_btn_->setText(tr("← BACK"));
+    if (publishers_btn_) publishers_btn_->setText(tr("PUBLISHERS"));
+    if (datasets_btn_)   datasets_btn_->setText(tr("DATASETS"));
+    if (popular_btn_)    popular_btn_->setText(tr("POPULAR"));
+    if (fetch_btn_)      fetch_btn_->setText(tr("FETCH"));
+    if (export_btn_)     export_btn_->setText(tr("CSV"));
+    if (search_input_)   search_input_->setPlaceholderText(tr("Search datasets…"));
+
+    if (publishers_table_)
+        publishers_table_->setHorizontalHeaderLabels({tr("NAME")});
+    if (datasets_table_)
+        datasets_table_->setHorizontalHeaderLabels({tr("TITLE"), tr("FILES"), tr("MODIFIED"), tr("TAGS")});
+    if (resources_table_)
+        resources_table_->setHorizontalHeaderLabels(
+            {tr("NAME"), tr("FORMAT"), tr("SIZE"), tr("MODIFIED"), tr("OPEN")});
+
+    // Re-render the breadcrumb so its current path picks up the new language.
+    update_breadcrumb();
+}
+
 // ── Initial load ─────────────────────────────────────────────────────────────
 
 void GovDataUKPanel::load_initial_data() {
-    show_loading("Loading UK Government publishers…");
+    show_loading(tr("Loading UK Government publishers…"));
     services::GovDataService::instance().execute(kGovDataUKScript, "publishers", {}, "ukgov_publishers");
 }
 
@@ -310,45 +352,51 @@ void GovDataUKPanel::on_result(const QString& request_id, const services::GovDat
 // ── Populate tables ───────────────────────────────────────────────────────────
 
 void GovDataUKPanel::populate_publishers(const QJsonArray& json) {
+    current_publishers_ = json;
+    pub_pager_->set_total(json.size());
+    render_publishers_page();
+    row_count_label_->setText(tr("%1 publishers").arg(json.size()));
+}
+
+void GovDataUKPanel::render_publishers_page() {
+    const int start = pub_pager_->offset();
+    const int count = std::min<int>(pub_pager_->page_size(), current_publishers_.size() - start);
     publishers_table_->setRowCount(0);
-    publishers_table_->setRowCount(json.size());
+    publishers_table_->setRowCount(count);
 
-    for (int i = 0; i < json.size(); ++i) {
-        const auto obj = json[i].toObject();
-
-        // Prefer display_name → title → name → id
+    for (int i = 0; i < count; ++i) {
+        const auto obj = current_publishers_[start + i].toObject();
         QString name = obj["display_name"].toString();
-        if (name.isEmpty())
-            name = obj["title"].toString();
-        if (name.isEmpty())
-            name = obj["name"].toString();
-        if (name.isEmpty())
-            name = obj["id"].toString();
-
-        // Use id as the navigation key (name field as fallback)
+        if (name.isEmpty()) name = obj["title"].toString();
+        if (name.isEmpty()) name = obj["name"].toString();
+        if (name.isEmpty()) name = obj["id"].toString();
         const QString id = obj["id"].toString().isEmpty() ? obj["name"].toString() : obj["id"].toString();
 
         auto* name_item = new QTableWidgetItem(name);
         name_item->setData(Qt::UserRole, id);
-        name_item->setData(Qt::UserRole + 1, name); // store display name for breadcrumb
+        name_item->setData(Qt::UserRole + 1, name);
         name_item->setForeground(QColor(kGovDataUKColor));
         publishers_table_->setItem(i, 0, name_item);
     }
-
-    row_count_label_->setText(QString::number(json.size()) + " publishers");
 }
 
 void GovDataUKPanel::populate_datasets(const QJsonArray& json, int total_count) {
+    current_datasets_ = json;
+    ds_pager_->set_total(json.size());
+    render_datasets_page();
+    row_count_label_->setText(tr("Showing %1 of %2").arg(json.size()).arg(total_count));
+}
+
+void GovDataUKPanel::render_datasets_page() {
+    const int start = ds_pager_->offset();
+    const int count = std::min<int>(ds_pager_->page_size(), current_datasets_.size() - start);
     datasets_table_->setRowCount(0);
-    datasets_table_->setRowCount(json.size());
+    datasets_table_->setRowCount(count);
 
-    for (int i = 0; i < json.size(); ++i) {
-        const auto obj = json[i].toObject();
-
+    for (int i = 0; i < count; ++i) {
+        const auto obj = current_datasets_[start + i].toObject();
         QString title = obj["title"].toString();
-        if (title.isEmpty())
-            title = obj["name"].toString();
-
+        if (title.isEmpty()) title = obj["name"].toString();
         const QString id = obj["id"].toString().isEmpty() ? obj["name"].toString() : obj["id"].toString();
 
         auto* title_item = new QTableWidgetItem(title);
@@ -362,40 +410,40 @@ void GovDataUKPanel::populate_datasets(const QJsonArray& json, int total_count) 
         datasets_table_->setItem(i, 1, res_item);
 
         QString modified = obj["metadata_modified"].toString();
-        if (modified.length() > 10)
-            modified = modified.left(10);
+        if (modified.length() > 10) modified = modified.left(10);
         datasets_table_->setItem(i, 2, new QTableWidgetItem(modified));
 
         QStringList tags;
         for (const auto& t : obj["tags"].toArray()) {
-            if (t.isString())
-                tags << t.toString();
-            else if (t.isObject())
-                tags << t.toObject()["name"].toString();
+            if (t.isString()) tags << t.toString();
+            else if (t.isObject()) tags << t.toObject()["name"].toString();
         }
         QString tags_str = tags.mid(0, 3).join(", ");
-        if (tags.size() > 3)
-            tags_str += QString(" +%1").arg(tags.size() - 3);
+        if (tags.size() > 3) tags_str += QString(" +%1").arg(tags.size() - 3);
         auto* tag_item = new QTableWidgetItem(tags_str);
         tag_item->setForeground(QColor(colors::TEXT_SECONDARY()));
         datasets_table_->setItem(i, 3, tag_item);
     }
-
-    row_count_label_->setText(QString("Showing %1 of %2").arg(json.size()).arg(total_count));
 }
 
 void GovDataUKPanel::populate_resources(const QJsonArray& json) {
+    current_resources_ = json;
+    res_pager_->set_total(json.size());
+    render_resources_page();
+    row_count_label_->setText(tr("%1 files").arg(json.size()));
+}
+
+void GovDataUKPanel::render_resources_page() {
+    const int start = res_pager_->offset();
+    const int count = std::min<int>(res_pager_->page_size(), current_resources_.size() - start);
     resources_table_->setRowCount(0);
-    resources_table_->setRowCount(json.size());
+    resources_table_->setRowCount(count);
 
-    for (int i = 0; i < json.size(); ++i) {
-        const auto obj = json[i].toObject();
-
+    for (int i = 0; i < count; ++i) {
+        const auto obj = current_resources_[start + i].toObject();
         QString name = obj["name"].toString();
-        if (name.isEmpty())
-            name = obj["description"].toString().left(60);
-        if (name.isEmpty())
-            name = obj["id"].toString();
+        if (name.isEmpty()) name = obj["description"].toString().left(60);
+        if (name.isEmpty()) name = obj["id"].toString();
         resources_table_->setItem(i, 0, new QTableWidgetItem(name));
 
         const QString format = obj["format"].toString().toUpper();
@@ -405,34 +453,30 @@ void GovDataUKPanel::populate_resources(const QJsonArray& json) {
         resources_table_->setItem(i, 1, fmt_item);
 
         const double size_bytes = obj["size"].toDouble(0.0);
-        QString size_str = "—";
+        QString size_str = QStringLiteral("—");
         if (size_bytes > 0.0) {
             if (size_bytes < 1024.0)
-                size_str = QString::number(size_bytes, 'f', 0) + " B";
+                size_str = tr("%1 B").arg(QString::number(size_bytes, 'f', 0));
             else if (size_bytes < 1024.0 * 1024.0)
-                size_str = QString::number(size_bytes / 1024.0, 'f', 1) + " KB";
+                size_str = tr("%1 KB").arg(QString::number(size_bytes / 1024.0, 'f', 1));
             else
-                size_str = QString::number(size_bytes / (1024.0 * 1024.0), 'f', 1) + " MB";
+                size_str = tr("%1 MB").arg(QString::number(size_bytes / (1024.0 * 1024.0), 'f', 1));
         }
         auto* sz_item = new QTableWidgetItem(size_str);
         sz_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         resources_table_->setItem(i, 2, sz_item);
 
         QString modified = obj["last_modified"].toString();
-        if (modified.length() > 10)
-            modified = modified.left(10);
+        if (modified.length() > 10) modified = modified.left(10);
         resources_table_->setItem(i, 3, new QTableWidgetItem(modified));
 
         const QString url = obj["url"].toString();
-        auto* url_item = new QTableWidgetItem(url.isEmpty() ? "—" : "↗ OPEN");
+        auto* url_item = new QTableWidgetItem(url.isEmpty() ? QStringLiteral("—") : tr("↗ OPEN"));
         url_item->setData(Qt::UserRole, url);
-        if (!url.isEmpty())
-            url_item->setForeground(QColor(kGovDataUKColor));
+        if (!url.isEmpty()) url_item->setForeground(QColor(kGovDataUKColor));
         url_item->setTextAlignment(Qt::AlignCenter);
         resources_table_->setItem(i, 4, url_item);
     }
-
-    row_count_label_->setText(QString::number(json.size()) + " files");
 }
 
 // ── Navigation slots ──────────────────────────────────────────────────────────
@@ -447,9 +491,7 @@ void GovDataUKPanel::on_publisher_doubleclicked(int row, int /*col*/) {
     if (selected_publisher_.isEmpty())
         selected_publisher_ = item->text();
 
-    show_loading("Loading datasets for "
-                 " + selected_publisher_ + "
-                 "…");
+    show_loading(tr("Loading datasets for \"%1\"…").arg(selected_publisher_));
     services::GovDataService::instance().execute(kGovDataUKScript, "datasets", {selected_publisher_id_, "100"},
                                                  "ukgov_datasets_" + selected_publisher_id_);
 }
@@ -460,7 +502,7 @@ void GovDataUKPanel::on_dataset_doubleclicked(int row, int /*col*/) {
         return;
 
     selected_dataset_id_ = item->data(Qt::UserRole).toString();
-    show_loading("Loading resources…");
+    show_loading(tr("Loading resources…"));
     services::GovDataService::instance().execute(kGovDataUKScript, "resources", {selected_dataset_id_},
                                                  "ukgov_resources_" + selected_dataset_id_);
 }
@@ -480,14 +522,12 @@ void GovDataUKPanel::on_search() {
     if (query.isEmpty())
         return;
 
-    show_loading("Searching for "
-                 " + query + "
-                 "…");
+    show_loading(tr("Searching for \"%1\"…").arg(query));
     services::GovDataService::instance().execute(kGovDataUKScript, "search", {query, "50"}, "ukgov_search_" + query);
 }
 
 void GovDataUKPanel::on_popular() {
-    show_loading("Loading popular publishers…");
+    show_loading(tr("Loading popular publishers…"));
     services::GovDataService::instance().execute(kGovDataUKScript, "popular-publishers", {}, "ukgov_popular");
 }
 
@@ -516,20 +556,23 @@ void GovDataUKPanel::update_toolbar_state() {
 }
 
 void GovDataUKPanel::update_breadcrumb() {
+    // The "  ›  " separator is wrapped together with the surrounding segments
+    // so translators control spacing and punctuation per language.
     QString text;
     switch (current_view_) {
         case Publishers:
-            text = "All Publishers";
+            text = tr("All Publishers");
             break;
         case Datasets:
-            text = selected_publisher_.isEmpty() ? "Search Results"
-                                                 : "All Publishers  ›  " + selected_publisher_ + "  ›  Datasets";
+            text = selected_publisher_.isEmpty()
+                       ? tr("Search Results")
+                       : tr("All Publishers  ›  %1  ›  Datasets").arg(selected_publisher_);
             break;
         case Resources:
-            text = "All Publishers  ›  " + selected_publisher_ + "  ›  Datasets  ›  Resources";
+            text = tr("All Publishers  ›  %1  ›  Datasets  ›  Resources").arg(selected_publisher_);
             break;
         case Status:
-            text = "Loading…";
+            text = tr("Loading…");
             break;
     }
     breadcrumb_label_->setText(text);
@@ -545,7 +588,7 @@ void GovDataUKPanel::show_loading(const QString& message) {
 
 void GovDataUKPanel::show_error(const QString& message) {
     status_label_->setStyleSheet(QString("color:%1; font-size:12px; background:transparent;").arg(colors::NEGATIVE()));
-    status_label_->setText("Error: " + message);
+    status_label_->setText(tr("Error: %1").arg(message));
     content_stack_->setCurrentIndex(Status);
 }
 

@@ -16,9 +16,6 @@ class AuthApi : public QObject {
 
     static AuthApi& instance();
 
-    // Health
-    void check_health(std::function<void(bool)> cb);
-
     // Auth (unauthenticated — no API key needed)
     void login(const LoginRequest& req, Callback cb);
     void register_user(const RegisterRequest& req, Callback cb);
@@ -31,12 +28,6 @@ class AuthApi : public QObject {
     void logout(Callback cb);
     void session_pulse(Callback cb);
     void get_user_profile(Callback cb);
-    void update_user_profile(const QJsonObject& data, Callback cb);
-    void validate_api_key(Callback cb);
-    void regenerate_api_key(Callback cb);
-
-    // Unauthenticated
-    void get_auth_status(Callback cb);
 
     // Subscription / payment
     void get_subscription_plans(Callback cb);

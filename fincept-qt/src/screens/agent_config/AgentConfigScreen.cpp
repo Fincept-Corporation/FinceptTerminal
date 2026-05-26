@@ -3,7 +3,9 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "core/events/EventBus.h"
 #include "screens/agent_config/AgentChatPanel.h"
+#include "screens/agent_config/AgenticTasksPanel.h"
 #include "screens/agent_config/AgentsViewPanel.h"
 #include "screens/agent_config/CreateAgentPanel.h"
 #include "screens/agent_config/PlannerViewPanel.h"
@@ -12,9 +14,11 @@
 #include "screens/agent_config/ToolsViewPanel.h"
 #include "screens/agent_config/WorkflowsViewPanel.h"
 #include "services/agents/AgentService.h"
+#include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QShowEvent>
 #include <QVBoxLayout>
@@ -28,11 +32,19 @@ struct ViewMeta {
     const char* label;
 };
 
+// QT_TRANSLATE_NOOP marks these literals for lupdate without translating at
+// initialization time — actual lookup happens in make_nav_btn() / status-view
+// update via tr(), so the active translator is consulted on every render.
 static constexpr ViewMeta kViews[] = {
-    {services::AgentViewMode::Agents, "AGENTS"},   {services::AgentViewMode::Create, "CREATE"},
-    {services::AgentViewMode::Teams, "TEAMS"},     {services::AgentViewMode::Workflows, "WORKFLOWS"},
-    {services::AgentViewMode::Planner, "PLANNER"}, {services::AgentViewMode::Tools, "TOOLS"},
-    {services::AgentViewMode::Chat, "CHAT"},       {services::AgentViewMode::System, "SYSTEM"},
+    {services::AgentViewMode::Agents,    QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "AGENTS")},
+    {services::AgentViewMode::Create,    QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "CREATE")},
+    {services::AgentViewMode::Teams,     QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "TEAMS")},
+    {services::AgentViewMode::Workflows, QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "WORKFLOWS")},
+    {services::AgentViewMode::Planner,   QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "PLANNER")},
+    {services::AgentViewMode::Tools,     QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "TOOLS")},
+    {services::AgentViewMode::Chat,      QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "CHAT")},
+    {services::AgentViewMode::System,    QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "SYSTEM")},
+    {services::AgentViewMode::Agentic,   QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "AGENTIC")},
 };
 
 // ── Constructor ──────────────────────────────────────────────────────────────
@@ -43,6 +55,23 @@ AgentConfigScreen::AgentConfigScreen(QWidget* parent) : QWidget(parent) {
     setup_service_connections();
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this](const ui::ThemeTokens&) { update(); });
+
+    // Read the Agentic-Mode setting and apply visibility. The toggle widget
+    // (DeveloperSection) publishes settings.agentic_mode_changed via EventBus
+    // on user change; we react in-place without restart.
+    {
+        auto r = fincept::SettingsRepository::instance().get(
+            QStringLiteral("agentic_mode_enabled"), QStringLiteral("false"));
+        agentic_mode_enabled_ = r.is_ok() && r.value() == QStringLiteral("true");
+    }
+    connect(&fincept::EventBus::instance(), &fincept::EventBus::eventPublished, this,
+            [this](const QString& event, const QVariantMap& data) {
+                if (event == QStringLiteral("settings.agentic_mode_changed")) {
+                    agentic_mode_enabled_ = data.value("enabled").toBool();
+                    apply_agentic_visibility();
+                }
+            });
+    apply_agentic_visibility();
 }
 
 // ── UI construction ──────────────────────────────────────────────────────────
@@ -75,10 +104,10 @@ void AgentConfigScreen::build_nav_bar(QVBoxLayout* root) {
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(0);
 
-    auto* title = new QLabel("AGENT STUDIO");
-    title->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;padding-right:16px;")
-                             .arg(ui::colors::AMBER()));
-    hl->addWidget(title);
+    title_label_ = new QLabel(tr("AGENT STUDIO"));
+    title_label_->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;padding-right:16px;")
+                                    .arg(ui::colors::AMBER()));
+    hl->addWidget(title_label_);
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::VLine);
@@ -88,6 +117,8 @@ void AgentConfigScreen::build_nav_bar(QVBoxLayout* root) {
 
     for (const auto& vm : kViews) {
         auto* btn = make_nav_btn(vm.label, vm.mode);
+        if (vm.mode == services::AgentViewMode::Agentic)
+            agentic_nav_idx_ = nav_buttons_.size();
         hl->addWidget(btn);
         nav_buttons_.append(btn);
     }
@@ -112,24 +143,54 @@ void AgentConfigScreen::build_status_bar(QVBoxLayout* root) {
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(12, 0, 12, 0);
 
-    status_label_ = new QLabel("READY");
+    status_label_ = new QLabel(tr("READY"));
     status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     hl->addWidget(status_label_);
     hl->addStretch();
 
-    auto* view_label = new QLabel;
-    view_label->setObjectName("AgentStatusView");
-    view_label->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::AMBER()));
-    hl->addWidget(view_label);
+    view_label_ = new QLabel;
+    view_label_->setObjectName("AgentStatusView");
+    view_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::AMBER()));
+    hl->addWidget(view_label_);
 
     root->addWidget(bar);
 
-    connect(view_stack_, &QStackedWidget::currentChanged, this, [this, view_label](int) {
-        // Find the label for the current mode
+    connect(view_stack_, &QStackedWidget::currentChanged, this, [this](int) {
+        // Translate the mode label through tr() each time — picks up the
+        // active locale automatically.
         const int idx = static_cast<int>(current_view_);
         if (idx >= 0 && idx < static_cast<int>(std::size(kViews)))
-            view_label->setText(kViews[idx].label);
+            view_label_->setText(tr(kViews[idx].label));
     });
+}
+
+void AgentConfigScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
+}
+
+void AgentConfigScreen::retranslateUi() {
+    if (title_label_) title_label_->setText(tr("AGENT STUDIO"));
+    // Nav buttons — apply the QT_TR_NOOP-marked label through tr() in order
+    // so the table-driven mode mapping survives the language switch.
+    for (int i = 0; i < nav_buttons_.size() && i < static_cast<int>(std::size(kViews)); ++i)
+        nav_buttons_[i]->setText(tr(kViews[i].label));
+    // Refresh the status-view label (right side of the status bar) with the
+    // newly-translated mode name for whatever panel is currently visible.
+    if (view_label_) {
+        const int idx = static_cast<int>(current_view_);
+        if (idx >= 0 && idx < static_cast<int>(std::size(kViews)))
+            view_label_->setText(tr(kViews[idx].label));
+    }
+    // The free-form status label (READY / ERROR / DONE …) is state-driven;
+    // we only restore the default "READY" idle state. Any active error or
+    // execution result will be overwritten by the next AgentService signal.
+    if (status_label_ && status_label_->text().isEmpty())
+        status_label_->setText(tr("READY"));
+    if (agent_count_label_)
+        agent_count_label_->setText(tr("%1 agents").arg(last_agent_count_));
 }
 
 QPushButton* AgentConfigScreen::make_nav_btn(const QString& text, services::AgentViewMode mode) {
@@ -190,6 +251,10 @@ void AgentConfigScreen::ensure_panel_built(services::AgentViewMode mode) {
             system_panel_ = new SystemViewPanel;
             panel = system_panel_;
             break;
+        case services::AgentViewMode::Agentic:
+            agentic_panel_ = new AgenticTasksPanel;
+            panel = agentic_panel_;
+            break;
     }
 
     // Add panel to stack — no placeholder removal needed, index tracked via pointer
@@ -219,8 +284,20 @@ QWidget* AgentConfigScreen::panel_widget(services::AgentViewMode mode) const {
             return chat_panel_;
         case services::AgentViewMode::System:
             return system_panel_;
+        case services::AgentViewMode::Agentic:
+            return agentic_panel_;
     }
     return nullptr;
+}
+
+void AgentConfigScreen::apply_agentic_visibility() {
+    if (agentic_nav_idx_ < 0 || agentic_nav_idx_ >= nav_buttons_.size())
+        return;
+    nav_buttons_[agentic_nav_idx_]->setVisible(agentic_mode_enabled_);
+    // If the user toggles agentic mode off while the panel is current, fall
+    // back to the chat view so they don't sit on a hidden tab.
+    if (!agentic_mode_enabled_ && current_view_ == services::AgentViewMode::Agentic)
+        set_view(services::AgentViewMode::Chat);
 }
 
 void AgentConfigScreen::wire_cross_panel_signals() {
@@ -302,20 +379,21 @@ void AgentConfigScreen::setup_service_connections() {
 
     connect(&svc, &services::AgentService::agents_discovered, this,
             [this](QVector<services::AgentInfo> agents, QVector<services::AgentCategory>) {
-                agent_count_label_->setText(QString("%1 agents").arg(agents.size()));
+                last_agent_count_ = agents.size();
+                agent_count_label_->setText(tr("%1 agents").arg(last_agent_count_));
             });
 
     connect(&svc, &services::AgentService::error_occurred, this, [this](const QString& ctx, const QString& msg) {
-        status_label_->setText(QString("ERROR [%1]: %2").arg(ctx, msg.left(60)));
+        status_label_->setText(tr("ERROR [%1]: %2").arg(ctx, msg.left(60)));
         status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE()));
     });
 
     connect(&svc, &services::AgentService::agent_result, this, [this](services::AgentExecutionResult r) {
         if (r.success) {
-            status_label_->setText(QString("DONE (%1ms)").arg(r.execution_time_ms));
+            status_label_->setText(tr("DONE (%1ms)").arg(r.execution_time_ms));
             status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::POSITIVE()));
         } else {
-            status_label_->setText(QString("FAILED: %1").arg(r.error.left(60)));
+            status_label_->setText(tr("FAILED: %1").arg(r.error.left(60)));
             status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE()));
         }
     });
@@ -351,7 +429,14 @@ void AgentConfigScreen::hideEvent(QHideEvent* event) {
 // ── IStatefulScreen ──────────────────────────────────────────────────────────
 
 QVariantMap AgentConfigScreen::save_state() const {
-    return {{"view", static_cast<int>(current_view_)}};
+    QVariantMap state{{"view", static_cast<int>(current_view_)}};
+    if (create_panel_)
+        state["create_draft"] = create_panel_->save_draft();
+    if (agents_panel_)
+        state["agents_draft"] = agents_panel_->save_draft();
+    if (workflows_panel_)
+        state["workflows_draft"] = workflows_panel_->save_draft();
+    return state;
 }
 
 void AgentConfigScreen::restore_state(const QVariantMap& state) {
@@ -359,6 +444,12 @@ void AgentConfigScreen::restore_state(const QVariantMap& state) {
     if (v < 0)
         return;
     set_view(static_cast<services::AgentViewMode>(v));
+    if (create_panel_ && state.contains("create_draft"))
+        create_panel_->restore_draft(state.value("create_draft").toMap());
+    if (agents_panel_ && state.contains("agents_draft"))
+        agents_panel_->restore_draft(state.value("agents_draft").toMap());
+    if (workflows_panel_ && state.contains("workflows_draft"))
+        workflows_panel_->restore_draft(state.value("workflows_draft").toMap());
 }
 
 } // namespace fincept::screens

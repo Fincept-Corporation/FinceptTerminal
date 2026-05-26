@@ -4,6 +4,7 @@
 // Auth: SHA256(api_key:api_secret) for token exchange
 
 #include "trading/BrokerInterface.h"
+#include "trading/adapter/BrokerEnumMap.h"
 
 namespace fincept::trading {
 
@@ -13,6 +14,8 @@ class FyersBroker : public IBroker {
     const char* name() const override { return "Fyers"; }
     const char* base_url() const override { return "https://api-t1.fyers.in"; }
     const char* ws_adapter_name() const override { return "fyers"; }
+
+    static QString fyers_login_url(const QString& client_id, const QString& redirect_uri);
 
     BrokerProfile profile() const override {
         return BrokerProfile{
@@ -41,7 +44,7 @@ class FyersBroker : public IBroker {
             .has_native_paper = false,
             .default_paper_balance = 1000000.0,
             .default_watchlist = {"HDFCBANK", "ICICIBANK", "SBIN", "KOTAKBANK", "AXISBANK", "TCS", "INFY", "RELIANCE",
-                                  "TATAMOTORS", "BAJFINANCE"},
+                                  "BAJFINANCE"},
             .default_symbol = "RELIANCE",
             .default_exchange = "NSE",
             .brokerage_info = "\u20B920/order or 0.03% (whichever lower)",
@@ -65,13 +68,34 @@ class FyersBroker : public IBroker {
                                                    const QString& resolution, const QString& from_date,
                                                    const QString& to_date) override;
 
+    // Market depth — GET /data/depth (5-level bid/ask)
+    ApiResponse<QVector<BrokerQuote>> get_historical_quotes_single(const BrokerCredentials& creds,
+                                                                    const QString& symbol, const QString& start,
+                                                                    const QString& end, int limit = 1000) override;
+
+    // Market clock — GET /api/v3/marketStatus.
+    ApiResponse<MarketClock> get_clock(const BrokerCredentials& creds) override;
+
+    // GTT — /api/v3/gtt/orders[/sync].
+    GttPlaceResponse gtt_place(const BrokerCredentials& creds, const GttOrder& order) override;
+    ApiResponse<GttOrder> gtt_get(const BrokerCredentials& creds, const QString& gtt_id) override;
+    ApiResponse<QVector<GttOrder>> gtt_list(const BrokerCredentials& creds) override;
+    ApiResponse<GttOrder> gtt_modify(const BrokerCredentials& creds, const QString& gtt_id,
+                                     const GttOrder& updated) override;
+    ApiResponse<QJsonObject> gtt_cancel(const BrokerCredentials& creds, const QString& gtt_id) override;
+
+    // Multi-order batch (up to 10 legs) — non-virtual; callers reach via dynamic_cast.
+    ApiResponse<QJsonObject> place_multi_order(const BrokerCredentials& creds,
+                                               const QVector<UnifiedOrder>& orders);
+
   protected:
     QMap<QString, QString> auth_headers(const BrokerCredentials& creds) const override;
 
   private:
-    static int fyers_order_type(OrderType t);
-    static int fyers_side(OrderSide s);
-    static QString fyers_product(ProductType p);
+    /// Fyers uses int wire values for type/side and string for product, so
+    /// two maps are needed.
+    static const BrokerEnumMap<int>& fyers_int_map();
+    static const BrokerEnumMap<QString>& fyers_str_map();
 };
 
 } // namespace fincept::trading

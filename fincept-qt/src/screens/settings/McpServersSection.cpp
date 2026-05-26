@@ -68,7 +68,7 @@ void McpServersSection::build_ui() {
                              QString(ui::colors::BORDER_DIM()) + ";");
     auto* tbl = new QHBoxLayout(title_bar);
     tbl->setContentsMargins(16, 0, 16, 0);
-    auto* title = new QLabel("MCP SERVERS");
+    auto* title = new QLabel(tr("MCP SERVERS"));
     title->setStyleSheet("color:" + QString(ui::colors::AMBER()) + ";font-weight:700;letter-spacing:1px;");
     tbl->addWidget(title);
     tbl->addStretch();
