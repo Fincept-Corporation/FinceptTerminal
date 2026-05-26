@@ -630,6 +630,7 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v029();
     fincept::register_migration_v030();
     fincept::register_migration_v031();
+    fincept::register_migration_v032();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";

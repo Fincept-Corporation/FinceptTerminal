@@ -792,6 +792,7 @@ set(STORAGE_SOURCES
     src/storage/repositories/CustomIndexRepository.cpp
     src/storage/repositories/DataMappingRepository.cpp
     src/storage/repositories/AccountRepository.cpp
+    src/storage/repositories/TranslationCacheRepository.cpp
 
     # Workflow migration
     src/storage/sqlite/migrations/v008_workflows.cpp
@@ -834,6 +835,7 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v029_secure_credentials.cpp
     src/storage/sqlite/migrations/v030_max_tool_rounds.cpp
     src/storage/sqlite/migrations/v031_rss_feeds.cpp
+    src/storage/sqlite/migrations/v032_translation_cache.cpp
 )
 
 # Python runner
@@ -1025,6 +1027,7 @@ set(SERVICE_SOURCES
     src/services/news/NewsMonitorService.cpp
     src/services/news/NewsNlpService.cpp
     src/services/news/NewsCorrelationService.cpp
+    src/services/translation/TranslationService.cpp
     src/services/databento/DatabentoService.cpp
     src/services/dbnomics/DBnomicsService.cpp
     src/services/gov_data/GovDataService.cpp
@@ -2118,6 +2121,7 @@ set_source_files_properties(
     src/storage/repositories/CustomIndexRepository.cpp
     src/storage/repositories/DataMappingRepository.cpp
     src/storage/repositories/AccountRepository.cpp
+    src/storage/repositories/TranslationCacheRepository.cpp
     # Migration files — each defines sql() helper in anonymous namespace
     src/storage/sqlite/migrations/v001_initial.cpp
     src/storage/sqlite/migrations/v002_llm_chat.cpp
@@ -2150,6 +2154,7 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v029_secure_credentials.cpp
     src/storage/sqlite/migrations/v030_max_tool_rounds.cpp
     src/storage/sqlite/migrations/v031_rss_feeds.cpp
+    src/storage/sqlite/migrations/v032_translation_cache.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
@@ -2340,6 +2345,7 @@ set_source_files_properties(
     src/storage/repositories/WorkflowRepository.cpp
     src/storage/repositories/CustomIndexRepository.cpp
     src/storage/repositories/DataMappingRepository.cpp
+    src/storage/repositories/TranslationCacheRepository.cpp
     PROPERTIES UNITY_BUILD_BATCH_SIZE 3
 )
 

@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "services/news/NewsService.h"
+#include "services/translation/TranslationService.h"
 
 #include <QStringList>
 
@@ -10,6 +11,54 @@ namespace fincept::screens {
 NewsFeedModel::NewsFeedModel(QObject* parent) : QAbstractListModel(parent) {
     qRegisterMetaType<services::NewsArticle>("NewsArticle");
     qRegisterMetaType<services::NewsCluster>("NewsCluster");
+
+    // When the LLM finishes translating a batch of headlines/summaries, swap
+    // them into the in-model copies and emit dataChanged for the affected
+    // rows so QListView repaints. We tolerate any extra keys we don't host —
+    // the cache is shared across panels.
+    connect(&services::TranslationService::instance(),
+            &services::TranslationService::translations_ready, this,
+            [this](QHash<QString, QString> results) {
+                if (results.isEmpty())
+                    return;
+                bool any = false;
+                int first_changed = INT_MAX;
+                int last_changed = -1;
+                if (view_mode_ == QStringLiteral("WIRE")) {
+                    for (int i = 0; i < articles_.size(); ++i) {
+                        auto& a = articles_[i];
+                        auto hit = results.constFind(a.headline);
+                        if (hit != results.constEnd() && !hit.value().isEmpty()) {
+                            a.headline = hit.value();
+                            any = true;
+                            first_changed = std::min(first_changed, i);
+                            last_changed = std::max(last_changed, i);
+                        }
+                        auto sum_hit = results.constFind(a.summary);
+                        if (sum_hit != results.constEnd() && !sum_hit.value().isEmpty()) {
+                            a.summary = sum_hit.value();
+                            any = true;
+                            first_changed = std::min(first_changed, i);
+                            last_changed = std::max(last_changed, i);
+                        }
+                    }
+                } else {
+                    for (int i = 0; i < clusters_.size(); ++i) {
+                        auto& c = clusters_[i];
+                        auto hit = results.constFind(c.lead_article.headline);
+                        if (hit != results.constEnd() && !hit.value().isEmpty()) {
+                            c.lead_article.headline = hit.value();
+                            any = true;
+                            first_changed = std::min(first_changed, i);
+                            last_changed = std::max(last_changed, i);
+                        }
+                    }
+                }
+                if (any && last_changed >= 0) {
+                    emit dataChanged(index(first_changed, 0), index(last_changed, 0),
+                                     {Qt::DisplayRole, ArticleRole, ClusterRole});
+                }
+            });
 }
 
 int NewsFeedModel::rowCount(const QModelIndex& parent) const {
@@ -107,15 +156,53 @@ void NewsFeedModel::set_wire_articles(const QVector<services::NewsArticle>& arti
     beginResetModel();
     articles_ = articles;
 
+    // If the user picked a non-English UI language, swap any cached
+    // translations into the article copies the view sees and enqueue any
+    // missing headlines/summaries for background translation. The
+    // translations_ready signal handler upstairs handles late deliveries.
+    auto& tr = services::TranslationService::instance();
+    if (tr.is_active()) {
+        // Skip translating articles already in the target language family
+        // (e.g. zh_CN target ↔ "zh" detected source) to save tokens.
+        const QString target_prefix =
+            tr.target_lang().section(QLatin1Char('_'), 0, 0);
+        QStringList pending_headlines;
+        QStringList pending_summaries;
+        for (auto& a : articles_) {
+            const bool same_lang =
+                !target_prefix.isEmpty() && a.lang.startsWith(target_prefix);
+            if (same_lang)
+                continue;
+            if (!a.headline.isEmpty()) {
+                const QString cached = tr.cached(a.headline);
+                if (!cached.isEmpty())
+                    a.headline = cached;
+                else
+                    pending_headlines.append(a.headline);
+            }
+            if (!a.summary.isEmpty()) {
+                const QString cached = tr.cached(a.summary);
+                if (!cached.isEmpty())
+                    a.summary = cached;
+                else
+                    pending_summaries.append(a.summary);
+            }
+        }
+        if (!pending_headlines.isEmpty())
+            tr.request_batch(pending_headlines, QStringLiteral("news.headline"));
+        if (!pending_summaries.isEmpty())
+            tr.request_batch(pending_summaries, QStringLiteral("news.summary"));
+    }
+
     // Rebuild O(1) lookup cache, incremental unseen counter, and pre-formatted rows
     article_id_to_row_.clear();
-    article_id_to_row_.reserve(articles.size());
+    article_id_to_row_.reserve(articles_.size());
     formatted_rows_.clear();
-    formatted_rows_.reserve(articles.size());
+    formatted_rows_.reserve(articles_.size());
     unseen_count_ = 0;
 
-    for (int i = 0; i < articles.size(); ++i) {
-        const auto& a = articles[i];
+    for (int i = 0; i < articles_.size(); ++i) {
+        const auto& a = articles_[i];
         article_id_to_row_.insert(a.id, i);
         if (!seen_ids_.contains(a.id))
             ++unseen_count_;
@@ -145,13 +232,32 @@ void NewsFeedModel::set_wire_articles(const QVector<services::NewsArticle>& arti
 void NewsFeedModel::set_clusters(const QVector<services::NewsCluster>& clusters) {
     beginResetModel();
     clusters_ = clusters;
+
+    // Mirror set_wire_articles: substitute cached translations for lead-
+    // article headlines and enqueue misses for the LLM.
+    auto& tr = services::TranslationService::instance();
+    if (tr.is_active()) {
+        QStringList pending;
+        for (auto& c : clusters_) {
+            if (c.lead_article.headline.isEmpty())
+                continue;
+            const QString cached = tr.cached(c.lead_article.headline);
+            if (!cached.isEmpty())
+                c.lead_article.headline = cached;
+            else
+                pending.append(c.lead_article.headline);
+        }
+        if (!pending.isEmpty())
+            tr.request_batch(pending, QStringLiteral("news.headline"));
+    }
+
     // Rebuild O(1) lookup cache and incremental unseen counter
     cluster_id_to_row_.clear();
-    cluster_id_to_row_.reserve(clusters.size());
+    cluster_id_to_row_.reserve(clusters_.size());
     unseen_count_ = 0;
-    for (int i = 0; i < clusters.size(); ++i) {
-        cluster_id_to_row_.insert(clusters[i].lead_article.id, i);
-        if (!seen_ids_.contains(clusters[i].lead_article.id))
+    for (int i = 0; i < clusters_.size(); ++i) {
+        cluster_id_to_row_.insert(clusters_[i].lead_article.id, i);
+        if (!seen_ids_.contains(clusters_[i].lead_article.id))
             ++unseen_count_;
     }
     endResetModel();

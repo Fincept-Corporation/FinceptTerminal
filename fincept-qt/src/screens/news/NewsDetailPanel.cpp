@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "services/file_manager/FileManagerService.h"
+#include "services/translation/TranslationService.h"
 #include "storage/repositories/NewsArticleRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -449,7 +450,28 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
     stack_->setCurrentIndex(1);
     open_panel();
 
-    headline_label_->setText(article.headline);
+    // Substitute LLM-cached translations for the visible text when the
+    // user's UI language is non-English. NewsFeedModel has already
+    // requested translation for headlines/summaries during the wire feed
+    // load, so the cache lookup is usually hot by the time the user
+    // clicks an article.
+    {
+        auto& tr = services::TranslationService::instance();
+        if (tr.is_active()) {
+            QString h = tr.cached(article.headline);
+            if (!h.isEmpty())
+                current_article_.headline = h;
+            else if (!article.headline.isEmpty())
+                tr.request_batch({article.headline}, QStringLiteral("news.headline"));
+            QString s = tr.cached(article.summary);
+            if (!s.isEmpty())
+                current_article_.summary = s;
+            else if (!article.summary.isEmpty())
+                tr.request_batch({article.summary}, QStringLiteral("news.summary"));
+        }
+    }
+
+    headline_label_->setText(current_article_.headline);
 
     // Priority badge
     QString pstr = services::priority_string(article.priority);
@@ -486,7 +508,8 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
             QString("color: %1; font-weight: 700; background: transparent;").arg(ui::colors::CYAN()));
     }
 
-    summary_label_->setText(article.summary.isEmpty() ? "No summary available." : article.summary);
+    summary_label_->setText(current_article_.summary.isEmpty() ? "No summary available."
+                                                                : current_article_.summary);
 
     // Impact + (optional) threat classification share the impact label.
     // Threat takes precedence when present so users see the more specific
