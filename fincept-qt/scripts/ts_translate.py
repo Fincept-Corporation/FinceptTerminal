@@ -305,7 +305,22 @@ def cmd_apply(args: argparse.Namespace) -> int:
             skipped += 1
             continue
         tr_el = msg.find("translation")
-        tr_el.text = translations[source]
+        text = translations[source]
+
+        # Plural-aware messages (<message numerus="yes">) must store text
+        # inside <numerusform> children — lrelease rejects characters
+        # outside the form tags. Chinese has one plural form so a single
+        # numerusform is correct.
+        if msg.get("numerus") == "yes":
+            # Drop any pre-existing children and rebuild from scratch.
+            for child in list(tr_el):
+                tr_el.remove(child)
+            tr_el.text = "\n            "
+            nf = ET.SubElement(tr_el, "numerusform")
+            nf.text = text
+            nf.tail = "\n        "
+        else:
+            tr_el.text = text
         # Removing `type="unfinished"` is what marks the row as done in
         # Qt Linguist; lrelease only emits finished rows into the .qm.
         if "type" in tr_el.attrib:

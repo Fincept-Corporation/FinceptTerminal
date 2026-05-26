@@ -223,7 +223,8 @@
     </message>
     <message numerus="yes">
         <source>%n msg</source>
-        <translation>%n 条消息<numerusform />
+        <translation>
+            <numerusform>%n 条消息</numerusform>
         </translation>
     </message>
 </context>
@@ -15592,7 +15593,8 @@ distributions of future returns, drawdowns, and terminal wealth.</source>
     </message>
     <message numerus="yes">
         <source>%n holdings</source>
-        <translation>%n 个持仓<numerusform>%n 个持仓</numerusform>
+        <translation>
+            <numerusform>%n 个持仓</numerusform>
         </translation>
     </message>
     <message>
@@ -19278,7 +19280,8 @@ Build with Qt6 Multimedia for inline playback.</source>
     </message>
     <message numerus="yes">
         <source>Loaded %n table(s)</source>
-        <translation>已加载 %n 个表格<numerusform />
+        <translation>
+            <numerusform>已加载 %n 个表格</numerusform>
         </translation>
     </message>
     <message>
