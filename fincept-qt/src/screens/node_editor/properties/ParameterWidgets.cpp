@@ -5,6 +5,7 @@
 #include "services/agents/AgentTypes.h"
 #include "services/file_manager/FileManagerService.h"
 #include "storage/repositories/LlmProfileRepository.h"
+#include "storage/repositories/DataSourceRepository.h"
 #include "ui/theme/Theme.h"
 
 #include <QFileDialog>
@@ -429,6 +430,46 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         });
 
         QObject::connect(refresh_btn, &QPushButton::clicked, container, [populate_tools]() { populate_tools(); });
+    } else if (param.type == "datasource_connection_select") {
+        auto* combo = new QComboBox;
+        combo->setMaximumWidth(260);
+        combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        combo->setStyleSheet(
+            QString("QComboBox { %1 }"
+                    "QComboBox::drop-down { background:%2; border:1px solid %2; width:18px; }"
+                    "QComboBox QAbstractItemView { background:%3; color:%4;"
+                    "  border:1px solid %2; selection-background-color:%5;"
+                    "  font-family:Consolas; }")
+                .arg(input_style(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER(),
+                     ui::colors::TEXT_PRIMARY(), ui::colors::AMBER()));
+
+        combo->addItem("— select connection —", QString());
+
+        // Get the connector ID from param placeholder
+        QString provider = param.placeholder;
+
+        // Load all saved connections of this provider type
+        auto res = DataSourceRepository::instance().list_all();
+        if (res.is_ok()) {
+            for (const auto& ds : res.value()) {
+                if (ds.provider == provider && ds.enabled) {
+                    QString display = ds.display_name + "  [" + ds.alias + "]";
+                    combo->addItem(display, ds.id);
+                }
+            }
+        }
+
+        QString saved = current_value.toString();
+        int idx = combo->findData(saved);
+        if (idx >= 0) {
+            combo->setCurrentIndex(idx);
+        }
+
+        layout->addWidget(combo);
+
+        QObject::connect(combo, &QComboBox::currentIndexChanged, container, [key, on_change, combo](int) {
+            on_change(key, QJsonValue(combo->currentData().toString()));
+        });
     }
 
     return container;
