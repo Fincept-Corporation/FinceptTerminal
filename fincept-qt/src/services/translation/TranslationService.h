@@ -78,13 +78,23 @@ class TranslationService : public QObject {
 
     void on_language_changed(const QString& code);
 
-    /// Drain pending_ into a snapshot, fire one LLM call, store results,
-    /// emit translations_ready. Runs on a QtConcurrent worker thread.
+    /// Drain pending_ into a snapshot, fire one LLM call, then hand the
+    /// results to apply_results() on the GUI thread. Runs on a QtConcurrent
+    /// worker thread. MUST NOT touch QSqlDatabase — see apply_results().
     void flush();
 
     /// Schedules flush() after a short coalescing window so multiple
     /// request_* calls during a single news refresh get batched.
     void schedule_flush();
+
+    /// GUI-thread sequel to flush(). Performs the SQLite cache writes,
+    /// updates memory_cache_, and emits translations_ready. Kept on the
+    /// main thread because the per-thread QSqlDatabase connection that a
+    /// pooled worker would otherwise acquire becomes a use-after-free
+    /// hazard during app shutdown.
+    void apply_results(const QHash<QString, QString>& results,
+                       const QHash<QString, QString>& snapshot, const QStringList& sources,
+                       const QString& target, const QString& provider, const QString& model);
 
     /// Parse `{"src": "trans", ...}` shaped JSON from the model — robust
     /// against Markdown fences and stray prose.

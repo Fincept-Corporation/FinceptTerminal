@@ -233,9 +233,27 @@ void TranslationService::flush() {
                  QStringLiteral("LLM translate failed (%1 sources): %2").arg(sources.size()).arg(resp.error));
     }
 
-    // Persist + memoize successful translations.
-    const QString provider = llm.active_provider();
-    const QString model = llm.active_model();
+    // Hand all post-LLM work (cache writes, signal emission, provider/model
+    // lookup) back to the GUI thread. The worker thread MUST NOT touch
+    // QSqlDatabase — every thread that does acquires a thread-local
+    // connection registry entry, and Qt's global QSqlDatabasePrivate is
+    // torn down during app shutdown before pooled worker threads finish
+    // their TLS cleanup, which segfaults (see crash 133BAD55-4422).
+    QMetaObject::invokeMethod(
+        this,
+        [this, results, snapshot, sources, target]() {
+            auto& llm2 = ai_chat::LlmService::instance();
+            apply_results(results, snapshot, sources, target, llm2.active_provider(),
+                          llm2.active_model());
+        },
+        Qt::QueuedConnection);
+}
+
+void TranslationService::apply_results(const QHash<QString, QString>& results,
+                                       const QHash<QString, QString>& snapshot,
+                                       const QStringList& sources, const QString& target,
+                                       const QString& provider, const QString& model) {
+    // Runs on the main thread — safe to touch the SQLite cache.
     auto& repo = TranslationCacheRepository::instance();
     {
         QMutexLocker lock(&mutex_);
@@ -260,19 +278,17 @@ void TranslationService::flush() {
         flushing_ = false;
     }
 
-    if (!results.isEmpty()) {
-        // Marshal back to the GUI thread for downstream model updates.
-        QMetaObject::invokeMethod(
-            this, [this, results]() { emit translations_ready(results); }, Qt::QueuedConnection);
-    }
+    if (!results.isEmpty())
+        emit translations_ready(results);
 
     // If more entries piled up while we were waiting, keep going.
+    bool more;
     {
         QMutexLocker lock(&mutex_);
-        if (!pending_.isEmpty()) {
-            QMetaObject::invokeMethod(flush_timer_, qOverload<>(&QTimer::start), Qt::QueuedConnection);
-        }
+        more = !pending_.isEmpty();
     }
+    if (more)
+        flush_timer_->start();
 }
 
 QHash<QString, QString> TranslationService::parse_llm_json(const QString& body,
