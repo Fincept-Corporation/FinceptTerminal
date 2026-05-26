@@ -115,6 +115,10 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
 
     // ── State ────────────────────────────────────────────────────────────
     QString active_session_id_;
+    // Snapshot of request‑time context – used by the async response handler
+    QString pending_req_session_;
+    QString pending_req_provider_;
+    QString pending_req_model_;
     QString active_session_title_;
     mutable QMutex history_mutex_;
     std::vector<ai_chat::ConversationMessage> history_;

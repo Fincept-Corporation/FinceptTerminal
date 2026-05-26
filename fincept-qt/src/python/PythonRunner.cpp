@@ -337,6 +337,9 @@ void PythonRunner::find_python_async() {
                     LOG_WARN("Python", "No Python interpreter found");
                 }
                 python_init_done_ = true;
+                if (!python_path_.isEmpty()) {
+                    emit python_ready();
+                }
 
                 // Drain any requests that were queued while we were detecting
                 start_next();
