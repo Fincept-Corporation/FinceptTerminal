@@ -87,6 +87,7 @@ struct AlgoDeployment {
     QString exchange;                            // e.g. "NSE", "NASDAQ" — from broker profile
     QString product_type;                        // e.g. "MIS", "CNC" — broker-specific
     QString mode;                                // paper | live
+    QString entry_side = "BUY";                 // BUY | SELL — direction of the entry signal
     QString backend = "paper";                   // paper | equity_broker | crypto_exchange
     QString broker_id;                           // BrokerRegistry id; empty for paper
     QString broker_account_id;                   // AccountManager id; empty for paper or single-account brokers
@@ -110,6 +111,7 @@ struct AlgoDeployment {
     double position_qty = 0;
     QString position_side;
     double position_entry = 0;
+    double current_price = 0;
 
     StrategyKind kind() const { return kind_from_id(strategy_id); }
     TradingBackend backend_enum() const { return backend_from_string(backend); }

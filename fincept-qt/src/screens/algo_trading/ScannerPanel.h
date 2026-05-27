@@ -36,7 +36,9 @@ class ScannerPanel : public QWidget {
     QSpinBox*     lookback_spin_     = nullptr;
     QComboBox*    preset_combo_      = nullptr;
     QComboBox*    logic_combo_       = nullptr;
-    QTableWidget* results_table_     = nullptr; // replaced QVBoxLayout
+    QComboBox*    data_source_combo_ = nullptr;
+    QComboBox*    account_combo_     = nullptr;
+    QTableWidget* results_table_     = nullptr;
     QLabel*       status_label_      = nullptr;
 };
 

@@ -116,6 +116,9 @@ void EquityTradingScreen::showEvent(QShowEvent* event) {
     DataStreamManager::instance().start_all_active();
     DataStreamManager::instance().resume_all();
 
+    // Hub subscriptions for streaming data (D4)
+    hub_subscribe_streaming();
+
     // UI-local timers
     if (clock_timer_)
         clock_timer_->start();
@@ -132,6 +135,7 @@ void EquityTradingScreen::showEvent(QShowEvent* event) {
 
 void EquityTradingScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
+    hub_unsubscribe_all();
     DataStreamManager::instance().pause_all();
     if (clock_timer_)
         clock_timer_->stop();
@@ -143,7 +147,7 @@ void EquityTradingScreen::hideEvent(QHideEvent* event) {
         {"selected_symbol", selected_symbol_},
         {"selected_exchange", selected_exchange_},
     });
-    LOG_INFO(TAG, "Screen hidden — data streams paused");
+    LOG_INFO(TAG, "Screen hidden — data streams paused, hub unsubscribed");
 }
 
 // ============================================================================
@@ -360,18 +364,9 @@ void EquityTradingScreen::update_clock() {
 
 void EquityTradingScreen::connect_data_stream_signals() {
     auto& dsm = DataStreamManager::instance();
-    connect(&dsm, &DataStreamManager::quote_updated,
-            this, &EquityTradingScreen::on_stream_quote_updated);
-    connect(&dsm, &DataStreamManager::watchlist_updated,
-            this, &EquityTradingScreen::on_stream_watchlist_updated);
-    connect(&dsm, &DataStreamManager::positions_updated,
-            this, &EquityTradingScreen::on_stream_positions_updated);
-    connect(&dsm, &DataStreamManager::holdings_updated,
-            this, &EquityTradingScreen::on_stream_holdings_updated);
-    connect(&dsm, &DataStreamManager::orders_updated,
-            this, &EquityTradingScreen::on_stream_orders_updated);
-    connect(&dsm, &DataStreamManager::funds_updated,
-            this, &EquityTradingScreen::on_stream_funds_updated);
+    // Streaming data (quotes, positions, holdings, orders, funds) now comes
+    // via DataHub subscriptions — see hub_subscribe_streaming().
+    // Only on-demand / one-shot signals remain wired here.
     connect(&dsm, &DataStreamManager::candles_fetched,
             this, &EquityTradingScreen::on_stream_candles_fetched);
     connect(&dsm, &DataStreamManager::orderbook_fetched,
@@ -384,6 +379,10 @@ void EquityTradingScreen::connect_data_stream_signals() {
             this, &EquityTradingScreen::on_stream_calendar_fetched);
     connect(&dsm, &DataStreamManager::clock_fetched,
             this, &EquityTradingScreen::on_stream_clock_fetched);
+    connect(&dsm, &DataStreamManager::connection_state_changed,
+            this, [this](const QString& /*account_id*/, ConnectionState /*state*/) {
+        update_connection_status();
+    });
     connect(&dsm, &DataStreamManager::token_expired,
             this, &EquityTradingScreen::handle_token_expired);
 }
@@ -507,13 +506,19 @@ void EquityTradingScreen::update_account_menu() {
 void EquityTradingScreen::update_connection_status() {
     const auto accounts = AccountManager::instance().active_accounts();
     int connected = 0;
+    int expired = 0;
     for (const auto& a : accounts) {
         if (a.state == ConnectionState::Connected)
             ++connected;
+        else if (a.state == ConnectionState::TokenExpired)
+            ++expired;
     }
     if (accounts.isEmpty()) {
         conn_label_->setText("○ NO ACCOUNTS");
         conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY()));
+    } else if (expired > 0 && connected == 0) {
+        conn_label_->setText(QString::fromUtf8("\xe2\x9a\xa0 TOKEN EXPIRED \xe2\x80\x94 click ACCOUNTS"));
+        conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::NEGATIVE()));
     } else if (connected == accounts.size()) {
         conn_label_->setText(QString("● %1/%2 CONNECTED").arg(connected).arg(accounts.size()));
         conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::POSITIVE()));

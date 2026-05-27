@@ -137,6 +137,8 @@ void PortfolioScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     refresh_timer_->start();
     status_bar_->start_clock();
+    if (blotter_ && !current_summary_.portfolio.broker_account_id.isEmpty())
+        blotter_->hub_resubscribe_broker_quotes(current_summary_.portfolio.broker_account_id);
 }
 
 void PortfolioScreen::hideEvent(QHideEvent* event) {

@@ -5,6 +5,8 @@
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
+#include "storage/sqlite/Database.h"
+#include "trading/UnifiedTrading.h"
 
 #include <QFile>
 #include <QJsonDocument>
@@ -43,7 +45,20 @@ void AlgoTradingService::run_python(const QString& script, const QStringList& ar
 // ── Strategy CRUD ─────────────────────────────────────────────────────────────
 void AlgoTradingService::save_strategy(const AlgoStrategy& strategy) {
     QJsonObject obj;
-    obj["id"] = strategy.id.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces) : strategy.id;
+
+    // Upsert by name: if a strategy with the same name exists, reuse its ID
+    QString resolved_id = strategy.id;
+    if (resolved_id.isEmpty() && !strategy.name.isEmpty()) {
+        auto q = fincept::Database::instance().execute(
+            "SELECT id FROM algo_strategies WHERE name = ? AND is_active = 1 LIMIT 1",
+            {strategy.name});
+        if (q.is_ok() && q.value().next())
+            resolved_id = q.value().value(0).toString();
+    }
+    if (resolved_id.isEmpty())
+        resolved_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+
+    obj["id"] = resolved_id;
     obj["name"] = strategy.name;
     obj["description"] = strategy.description;
     obj["timeframe"] = strategy.timeframe;
@@ -92,33 +107,59 @@ static QVector<AlgoStrategy> parse_strategies(const QJsonArray& arr) {
     return strategies;
 }
 
+static QVector<AlgoStrategy> load_dsl_strategies_from_db() {
+    QVector<AlgoStrategy> result;
+    auto q = fincept::Database::instance().execute(
+        "SELECT id, name, description, timeframe, entry_conditions, exit_conditions, "
+        "entry_logic, exit_logic, stop_loss, take_profit, trailing_stop, "
+        "created_at, updated_at "
+        "FROM algo_strategies WHERE is_active = 1 ORDER BY created_at DESC", {});
+    if (q.is_err())
+        return result;
+    auto& query = q.value();
+    while (query.next()) {
+        AlgoStrategy s;
+        s.id               = query.value(0).toString();
+        s.name             = query.value(1).toString();
+        s.description      = query.value(2).toString();
+        s.timeframe        = query.value(3).toString();
+        s.entry_conditions = QJsonDocument::fromJson(query.value(4).toString().toUtf8()).array();
+        s.exit_conditions  = QJsonDocument::fromJson(query.value(5).toString().toUtf8()).array();
+        s.entry_logic      = query.value(6).isNull() ? QStringLiteral("AND") : query.value(6).toString();
+        s.exit_logic       = query.value(7).isNull() ? QStringLiteral("AND") : query.value(7).toString();
+        s.stop_loss        = query.value(8).toDouble();
+        s.take_profit      = query.value(9).toDouble();
+        s.trailing_stop    = query.value(10).toDouble();
+        s.created_at       = query.value(11).toString();
+        s.updated_at       = query.value(12).toString();
+        result.append(s);
+    }
+    return result;
+}
+
 void AlgoTradingService::list_strategies() {
-    // Fast path: read pre-generated registry_index.json directly — no Python spawn needed
+    QVector<AlgoStrategy> all;
+
+    // 1. Load QC strategies from pre-generated registry_index.json
     const QString json_path =
         python::PythonRunner::instance().scripts_dir() + "/strategies/registry_index.json";
     QFile f(json_path);
     if (f.open(QIODevice::ReadOnly)) {
         auto doc = QJsonDocument::fromJson(f.readAll());
         f.close();
-        if (!doc.isNull()) {
-            LOG_INFO("AlgoTrading", QString("Loaded registry from %1").arg(json_path));
-            emit strategies_loaded(parse_strategies(doc.object()["strategies"].toArray()));
-            return;
-        }
+        if (!doc.isNull())
+            all = parse_strategies(doc.object()["strategies"].toArray());
     }
 
-    // Fallback: run Python to regenerate the index
-    LOG_WARN("AlgoTrading", "registry_index.json missing — falling back to Python");
-    run_python("algo_trading/backtest_engine.py", {"list_registry"}, "list_strategies",
-               [this](bool ok, const QString& out) {
-                   if (!ok) {
-                       emit error_occurred("list_strategies", out);
-                       return;
-                   }
-                   auto doc = QJsonDocument::fromJson(python::extract_json(out).toUtf8());
-                   auto obj = doc.object();
-                   emit strategies_loaded(parse_strategies(obj["strategies"].toArray()));
-               });
+    // 2. Load user-saved DSL strategies from the database
+    auto dsl = load_dsl_strategies_from_db();
+    if (!dsl.isEmpty()) {
+        all.append(dsl);
+        LOG_INFO("AlgoTrading", QString("Loaded %1 DSL strategies from DB").arg(dsl.size()));
+    }
+
+    LOG_INFO("AlgoTrading", QString("Total strategies: %1 (QC + DSL)").arg(all.size()));
+    emit strategies_loaded(all);
 }
 
 void AlgoTradingService::delete_strategy(const QString& id) {
@@ -133,110 +174,10 @@ void AlgoTradingService::delete_strategy(const QString& id) {
                });
 }
 
-// ── Deployment lifecycle ──────────────────────────────────────────────────────
-void AlgoTradingService::deploy_strategy(const QString& strategy_id, const QString& symbol, const QString& mode,
-                                         const QString& timeframe, double quantity) {
-    auto deploy_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    // algo_live_runner is a long-running process — start and don't wait for completion
-    run_python("algo_trading/algo_live_runner.py",
-               {"--deploy-id", deploy_id, "--strategy-id", strategy_id, "--symbol", symbol, "--mode", mode,
-                "--timeframe", timeframe, "--quantity", QString::number(quantity), "--db", algo_db_path()},
-               "deploy", [this, deploy_id](bool ok, const QString& out) {
-                   if (!ok) {
-                       emit error_occurred("deploy", out);
-                       return;
-                   }
-                   emit deployment_started(deploy_id);
-               });
-}
-
-void AlgoTradingService::stop_deployment(const QString& deployment_id) {
-    run_python("algo_trading/algo_manager.py", {"stop", deployment_id, "--db", algo_db_path()}, "stop_deployment",
-               [this, deployment_id](bool ok, const QString& out) {
-                   if (!ok) {
-                       emit error_occurred("stop_deployment", out);
-                       return;
-                   }
-                   emit deployment_stopped(deployment_id);
-               });
-}
-
-void AlgoTradingService::stop_all_deployments() {
-    run_python("algo_trading/algo_manager.py", {"stop_all", "--db", algo_db_path()}, "stop_all",
-               [this](bool ok, const QString& out) {
-                   if (!ok) {
-                       emit error_occurred("stop_all", out);
-                       return;
-                   }
-                   LOG_INFO("AlgoTrading", "All deployments stopped");
-               });
-}
-
-static QVector<AlgoDeployment> parse_deployments(const QJsonArray& arr) {
-    QVector<AlgoDeployment> deployments;
-    deployments.reserve(arr.size());
-    for (const auto& v : arr) {
-        auto o = v.toObject();
-        AlgoDeployment d;
-        d.id = o["id"].toString();
-        d.strategy_id = o["strategy_id"].toString();
-        d.strategy_name = o["strategy_name"].toString();
-        d.strategy_kind = o["strategy_kind"].toString("dsl");
-        d.symbol = o["symbol"].toString();
-        d.exchange = o["exchange"].toString();
-        d.product_type = o["product_type"].toString();
-        d.mode = o["mode"].toString();
-        d.backend = o["backend"].toString("paper");
-        d.broker_id = o["broker_id"].toString();
-        d.broker_account_id = o["broker_account_id"].toString();
-        d.paper_portfolio_id = o["paper_portfolio_id"].toString();
-        d.status = o["status"].toString();
-        d.timeframe = o["timeframe"].toString();
-        d.quantity = o["quantity"].toDouble();
-        d.max_order_value = o["max_order_value"].toDouble();
-        d.max_daily_loss = o["max_daily_loss"].toDouble();
-        d.error_message = o["error_message"].toString();
-        d.pid = static_cast<qint64>(o["pid"].toDouble());
-        d.total_pnl = o["total_pnl"].toDouble();
-        d.unrealized_pnl = o["unrealized_pnl"].toDouble();
-        d.total_trades = o["total_trades"].toInt();
-        d.win_rate = o["win_rate"].toDouble();
-        d.max_drawdown = o["max_drawdown"].toDouble();
-        d.position_qty = o["current_position_qty"].toDouble();
-        d.position_side = o["current_position_side"].toString();
-        d.position_entry = o["current_position_entry"].toDouble();
-        d.created_at = o["created_at"].toString();
-        d.updated_at = o["updated_at"].toString();
-        deployments.append(d);
-    }
-    return deployments;
-}
-
-void AlgoTradingService::list_deployments() {
-    const QVariant cached = fincept::CacheManager::instance().get(kDeploymentsCacheKey);
-    if (!cached.isNull()) {
-        auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
-        if (!doc.isNull()) {
-            emit deployments_loaded(parse_deployments(doc.object()["deployments"].toArray()));
-            return;
-        }
-    }
-
-    run_python("algo_trading/algo_manager.py", {"list_deployments", "--db", algo_db_path()}, "list_deployments",
-               [this](bool ok, const QString& out) {
-                   if (!ok) {
-                       emit error_occurred("list_deployments", out);
-                       return;
-                   }
-                   auto doc = QJsonDocument::fromJson(python::extract_json(out).toUtf8());
-                   auto obj = doc.object();
-                   fincept::CacheManager::instance().put(
-                       kDeploymentsCacheKey,
-                       QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
-                       kDeploymentsTtlSec, "algo_trading");
-                   emit deployments_loaded(parse_deployments(obj["deployments"].toArray()));
-               });
-}
+// ── Deployment lifecycle — now handled by AlgoEngine (src/algo_engine/) ──────
+// deploy_strategy, stop_deployment, stop_all_deployments, remove_deployment,
+// list_deployments, check_bridge_needed have been removed.
+// Use fincept::algo::AlgoEngine::instance() for all deployment operations.
 
 // ── Backtesting ───────────────────────────────────────────────────────────────
 void AlgoTradingService::run_backtest(const QString& strategy_id, const QString& symbol, const QString& start_date,
@@ -260,26 +201,6 @@ void AlgoTradingService::run_backtest(const QString& strategy_id, const QString&
                });
 }
 
-// ── Scanner ───────────────────────────────────────────────────────────────────
-void AlgoTradingService::run_scan(const QJsonArray& conditions, const QStringList& symbols, const QString& timeframe,
-                                  int lookback_days, const QString& logic) {
-    QJsonObject params;
-    params["conditions"] = conditions;
-    params["symbols"] = QJsonArray::fromStringList(symbols);
-    params["timeframe"] = timeframe;
-    params["lookback_days"] = lookback_days;
-    params["logic"] = logic;
-    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
-
-    run_python("algo_trading/scanner_engine.py", {"scan", json, "--db", algo_db_path()}, "scan",
-               [this](bool ok, const QString& out) {
-                   if (!ok) {
-                       emit error_occurred("scan", out);
-                       return;
-                   }
-                   auto doc = QJsonDocument::fromJson(python::extract_json(out).toUtf8());
-                   emit scan_result(doc.object());
-               });
-}
+// Scanner is now in AlgoScanner (src/algo_engine/AlgoScanner.h/.cpp).
 
 } // namespace fincept::services::algo

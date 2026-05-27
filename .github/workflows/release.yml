@@ -67,6 +67,11 @@ jobs:
           echo "QT_IFW_DIR=${IFW_DIR}" >> "$GITHUB_ENV"
           echo "PATH=${IFW_DIR}/bin:${PATH}" >> "$GITHUB_ENV"
 
+      # ── yt-dlp (bundled for dashboard video playback) ────────────────────
+      - name: Install yt-dlp
+        shell: bash
+        run: pip install yt-dlp
+
       # ── Configure + Build ─────────────────────────────────────────────────
       - name: Configure CMake
         shell: bash
@@ -77,7 +82,8 @@ jobs:
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
             -DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}" \
             -DDEPLOY_QT=ON \
-            -DFINCEPT_BUILD_INSTALLER=ON
+            -DFINCEPT_BUILD_INSTALLER=ON \
+            -DFINCEPT_REQUIRE_BUNDLED_YTDLP=ON
 
       - name: Build
         shell: bash
@@ -294,6 +300,10 @@ jobs:
           cache: true
           cache-key-prefix: qt-linux-x64-release
 
+      # ── yt-dlp (bundled for dashboard video playback) ────────────────────
+      - name: Install yt-dlp
+        run: pip install yt-dlp
+
       # ── Configure + Build ─────────────────────────────────────────────────
       # No FINCEPT_BUILD_INSTALLER / no QtIFW on Linux — we ship an AppImage
       # instead (see "Build AppImage" step below).
@@ -305,7 +315,8 @@ jobs:
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
             -DOPENSSL_ROOT_DIR=/usr \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DFINCEPT_REQUIRE_BUNDLED_YTDLP=ON
 
       - name: Build
         working-directory: fincept-qt
@@ -493,6 +504,93 @@ jobs:
               zsyncmake "build/${OUTPUT}" -o "build/${OUTPUT}.zsync" || true
           fi
 
+      # ── Build .deb package ────────────────────────────────────────────────
+      - name: Build .deb package
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -Po 'project\(FinceptTerminal VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
+          DEB_NAME="fincept-terminal_${VERSION}_amd64"
+          DEB_ROOT="build/${DEB_NAME}"
+
+          mkdir -p "${DEB_ROOT}/DEBIAN"
+          mkdir -p "${DEB_ROOT}/usr"
+
+          cmake --install build --prefix "${DEB_ROOT}/usr"
+
+          cat > "${DEB_ROOT}/DEBIAN/control" <<EOF
+          Package: fincept-terminal
+          Version: ${VERSION}
+          Section: finance
+          Priority: optional
+          Architecture: amd64
+          Depends: libgl1, libxcb-cursor0, libxkbcommon0, libfontconfig1, libfreetype6, libdbus-1-3
+          Maintainer: Fincept Corporation <support@fincept.in>
+          Homepage: https://github.com/Fincept-Corporation/FinceptTerminal
+          Description: Professional financial intelligence terminal
+           Native C++20 desktop terminal with real-time market data, AI analytics,
+           multi-broker trading, portfolio management, and 1300+ Python scripts.
+          EOF
+          # Remove leading whitespace from control file (YAML heredoc indent)
+          sed -i 's/^          //' "${DEB_ROOT}/DEBIAN/control"
+
+          dpkg-deb --build --root-owner-group "${DEB_ROOT}"
+          mv "build/${DEB_NAME}.deb" "build/FinceptTerminal-${VERSION}-linux-x64.deb"
+          echo "Built: FinceptTerminal-${VERSION}-linux-x64.deb ($(du -sh "build/FinceptTerminal-${VERSION}-linux-x64.deb" | cut -f1))"
+
+      # ── Build .rpm package ────────────────────────────────────────────────
+      - name: Build .rpm package
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y rpm -qq
+
+          VERSION=$(grep -Po 'project\(FinceptTerminal VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
+          RPM_ROOT="build/rpm-root"
+
+          mkdir -p "${RPM_ROOT}/usr"
+          cmake --install build --prefix "${RPM_ROOT}/usr"
+
+          mkdir -p ~/rpmbuild/{SPECS,BUILDROOT}
+
+          cat > ~/rpmbuild/SPECS/fincept-terminal.spec <<EOF
+          Name:           fincept-terminal
+          Version:        ${VERSION}
+          Release:        1
+          Summary:        Professional financial intelligence terminal
+          License:        AGPL-3.0-or-later
+          URL:            https://github.com/Fincept-Corporation/FinceptTerminal
+          AutoReqProv:    no
+
+          %description
+          Native C++20 desktop terminal with real-time market data, AI analytics,
+          multi-broker trading, portfolio management, and 1300+ Python scripts.
+
+          %install
+          cp -a ${PWD}/${RPM_ROOT}/* %{buildroot}/
+
+          %files
+          /usr/bin/FinceptTerminal
+          /usr/bin/yt-dlp
+          /usr/share/fincept-terminal/
+          /usr/share/applications/fincept-terminal.desktop
+          /usr/share/metainfo/fincept-terminal.appdata.xml
+          /usr/share/icons/hicolor/256x256/apps/fincept-terminal.png
+          EOF
+          # Remove leading whitespace from spec file
+          sed -i 's/^          //' ~/rpmbuild/SPECS/fincept-terminal.spec
+
+          rpmbuild -bb ~/rpmbuild/SPECS/fincept-terminal.spec \
+            --buildroot "${PWD}/${RPM_ROOT}" \
+            --define "_rpmdir ${PWD}/build"
+
+          mv build/x86_64/fincept-terminal-${VERSION}-1.x86_64.rpm \
+             "build/FinceptTerminal-${VERSION}-linux-x64.rpm" 2>/dev/null || \
+          mv build/*/fincept-terminal-*.rpm \
+             "build/FinceptTerminal-${VERSION}-linux-x64.rpm"
+
+          echo "Built: FinceptTerminal-${VERSION}-linux-x64.rpm ($(du -sh "build/FinceptTerminal-${VERSION}-linux-x64.rpm" | cut -f1))"
+
       # ── Upload ────────────────────────────────────────────────────────────
       # Version-stamped filename so update-manifest regex picks it up.
       - name: Upload artifact
@@ -502,6 +600,8 @@ jobs:
           path: |
             fincept-qt/build/FinceptTerminal-*-linux-x64-setup.run
             fincept-qt/build/FinceptTerminal-*-linux-x64-setup.run.zsync
+            fincept-qt/build/FinceptTerminal-*-linux-x64.deb
+            fincept-qt/build/FinceptTerminal-*-linux-x64.rpm
           retention-days: 30
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -572,6 +672,10 @@ jobs:
             echo "WARNING: No source icon — app will use generic icon"
           fi
 
+      # ── yt-dlp (bundled for dashboard video playback) ────────────────────
+      - name: Install yt-dlp
+        run: pip install yt-dlp
+
       # ── Configure + Build ─────────────────────────────────────────────────
       # No FINCEPT_BUILD_INSTALLER on macOS — we ship a DMG built from the
       # post-processed bundle (see "Generate Installer (DMG)" step below).
@@ -584,7 +688,8 @@ jobs:
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DFINCEPT_REQUIRE_BUNDLED_YTDLP=ON
 
       - name: Build
         working-directory: fincept-qt
@@ -1549,15 +1654,17 @@ jobs:
 
             ### Downloads
 
-            | Platform | File | Notes |
-            |----------|------|-------|
-            | **Windows x64** | `FinceptTerminal-*-setup*.exe` | Run installer → `FinceptTerminal.exe` |
-            | **Linux x64** | `FinceptTerminal-*.run` | `chmod +x` → run installer |
+            | Platform | File | Install |
+            |----------|------|---------|
+            | **Windows x64** | `FinceptTerminal-*-setup*.exe` | Run installer |
+            | **Linux (Debian/Ubuntu)** | `FinceptTerminal-*-linux-x64.deb` | `sudo dpkg -i *.deb` |
+            | **Linux (Fedora/RHEL)** | `FinceptTerminal-*-linux-x64.rpm` | `sudo dnf install *.rpm` |
+            | **Linux (portable)** | `FinceptTerminal-*-linux-x64-setup.run` | `chmod +x` then run |
             | **macOS Apple Silicon** | `FinceptTerminal-*.dmg` or setup | Open DMG → drag to Applications |
 
             ### Requirements
             - Windows 10/11 x64
-            - Ubuntu 20.04+ / Debian 11+
+            - Ubuntu 20.04+ / Debian 11+ / Fedora 36+ / RHEL 9+
             - macOS 13+ (Apple Silicon)
 
             See the [README](https://github.com/Fincept-Corporation/FinceptTerminal#readme) for full installation instructions.

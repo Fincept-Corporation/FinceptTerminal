@@ -372,10 +372,9 @@ QPair<QString, QString> McpProvider::parse_openai_function_name(const QString& f
         return {fn_name.left(pos), decode_tool_name_from_wire(fn_name.mid(pos + 2))};
 
     // Fallback: some models (minimax, certain OpenRouter routes) drop the
-    // "<server>__" prefix and call the tool by its bare advertised name
-    // (e.g. "tool.list" instead of "fincept-terminal__tool-dot-list").
-    // Accept either the raw dotted form or the wire-encoded form if it
-    // matches a known internal tool — anything else is still rejected.
+    // "<server>__" prefix and call the tool by its bare advertised name.
+    // Accept either the raw form or the wire-encoded form if it matches
+    // a known internal tool — anything else is still rejected.
     if (!fn_name.isEmpty()) {
         const QString decoded = decode_tool_name_from_wire(fn_name);
         if (instance().has_tool(decoded))

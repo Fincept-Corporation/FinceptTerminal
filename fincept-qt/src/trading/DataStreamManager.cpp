@@ -105,19 +105,7 @@ QStringList DataStreamManager::active_stream_ids() const {
 // ── Signal wiring ───────────────────────────────────────────────────────────
 
 void DataStreamManager::wire_stream_signals(AccountDataStream* stream) {
-    // Forward all per-stream signals to aggregated manager signals
-    connect(stream, &AccountDataStream::quote_updated,
-            this, &DataStreamManager::quote_updated);
-    connect(stream, &AccountDataStream::watchlist_updated,
-            this, &DataStreamManager::watchlist_updated);
-    connect(stream, &AccountDataStream::positions_updated,
-            this, &DataStreamManager::positions_updated);
-    connect(stream, &AccountDataStream::holdings_updated,
-            this, &DataStreamManager::holdings_updated);
-    connect(stream, &AccountDataStream::orders_updated,
-            this, &DataStreamManager::orders_updated);
-    connect(stream, &AccountDataStream::funds_updated,
-            this, &DataStreamManager::funds_updated);
+    // On-demand / one-shot signals — relayed directly (no hub topic)
     connect(stream, &AccountDataStream::candles_fetched,
             this, &DataStreamManager::candles_fetched);
     connect(stream, &AccountDataStream::orderbook_fetched,
@@ -132,6 +120,10 @@ void DataStreamManager::wire_stream_signals(AccountDataStream* stream) {
             this, &DataStreamManager::clock_fetched);
     connect(stream, &AccountDataStream::connection_state_changed,
             this, &DataStreamManager::connection_state_changed);
+    connect(stream, &AccountDataStream::connection_state_changed,
+            this, [](const QString& account_id, ConnectionState state) {
+        AccountManager::instance().set_connection_state(account_id, state);
+    });
     connect(stream, &AccountDataStream::token_expired,
             this, &DataStreamManager::token_expired);
 

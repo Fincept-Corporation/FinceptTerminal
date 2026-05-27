@@ -57,6 +57,8 @@ class EquityResearchScreen : public QWidget, public IStatefulScreen, public IGro
     void update_quote_bar(const services::equity::QuoteData& q);
     void load_symbol(const QString& symbol);
     void retranslateUi();
+    void hub_subscribe_broker_quote();
+    void hub_unsubscribe_broker_quote();
 
     // Title bar
     QLabel* title_label_ = nullptr;
@@ -86,6 +88,7 @@ class EquityResearchScreen : public QWidget, public IStatefulScreen, public IGro
     QTimer* refresh_timer_ = nullptr;
     QString current_symbol_;
     QString current_currency_;
+    bool hub_broker_active_ = false;
 
     // Symbol group link — SymbolGroup::None when unlinked.
     SymbolGroup link_group_ = SymbolGroup::None;

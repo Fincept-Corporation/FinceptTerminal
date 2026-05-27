@@ -125,6 +125,7 @@ Result<void> apply_v023(QSqlDatabase& db) {
         {"algo_deployments", "paper_portfolio_id", "TEXT DEFAULT ''"},
         {"algo_deployments", "max_order_value",    "REAL DEFAULT 0"},
         {"algo_deployments", "max_daily_loss",     "REAL DEFAULT 0"},
+        {"algo_deployments", "entry_side",         "TEXT DEFAULT 'BUY'"},
         {"algo_deployments", "pid",                "INTEGER DEFAULT 0"},
     };
     for (const auto& c : deployment_cols) {
@@ -204,6 +205,18 @@ Result<void> apply_v023(QSqlDatabase& db) {
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         )sql");
+        if (r.is_err())
+            return r;
+    }
+
+    // Add current_price and entry_side to algo_metrics for live dashboard display.
+    {
+        auto r = v023_add_column_if_missing(db, "algo_metrics", "current_price", "REAL DEFAULT 0");
+        if (r.is_err())
+            return r;
+    }
+    {
+        auto r = v023_add_column_if_missing(db, "algo_metrics", "entry_side", "TEXT DEFAULT 'BUY'");
         if (r.is_err())
             return r;
     }

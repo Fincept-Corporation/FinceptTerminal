@@ -6,8 +6,14 @@
 #include "trading/AccountManager.h"
 #include "trading/PaperTrading.h"
 
+#include "storage/sqlite/Database.h"
+
 #include <QJsonObject>
 #include <QMutexLocker>
+#include <QPointer>
+#include <QSqlQuery>
+#include <QTimer>
+#include <QtConcurrent/QtConcurrentRun>
 
 namespace fincept::trading {
 
@@ -282,24 +288,6 @@ QVector<UnifiedTrading::BroadcastResult> UnifiedTrading::broadcast_order(const Q
     }
 
     return results;
-}
-
-// ============================================================================
-// Order Bridge (simplified — no detached threads in Qt)
-// ============================================================================
-
-void UnifiedTrading::start_order_bridge() {
-    bridge_running_.store(true);
-    LOG_INFO("UnifiedTrading", "Order signal bridge started");
-}
-
-void UnifiedTrading::stop_order_bridge() {
-    bridge_running_.store(false);
-    LOG_INFO("UnifiedTrading", "Order signal bridge stopping");
-}
-
-bool UnifiedTrading::is_bridge_running() const {
-    return bridge_running_.load();
 }
 
 } // namespace fincept::trading

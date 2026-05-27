@@ -5,6 +5,7 @@
 #include "trading/BrokerRegistry.h"
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
+#include "trading/brokers/alpaca/AlpacaWebSocket.h"
 #include "trading/websocket/FyersWebSocket.h"
 
 #include <QDate>
@@ -138,13 +139,30 @@ BrokerQuote AccountDataStream::cached_quote(const QString& symbol) const {
 
 // ── Timer callbacks ─────────────────────────────────────────────────────────
 
+// ── Token expiry check ─────────────────────────────────────────────────────
+
+bool AccountDataStream::is_token_expired() const {
+    auto creds = AccountManager::instance().load_credentials(account_id_);
+    if (creds.additional_data.isEmpty())
+        return false;
+    auto doc = QJsonDocument::fromJson(creds.additional_data.toUtf8());
+    qint64 expires_at = static_cast<qint64>(doc.object().value("token_expires_at").toDouble(0));
+    return expires_at > 0 && expires_at <= QDateTime::currentSecsSinceEpoch();
+}
+
 void AccountDataStream::on_quote_timer() {
-    // Always poll — WS supplements with faster ticks but polling ensures
-    // data is available for newly-selected symbols and after market close.
+    if (is_token_expired()) {
+        emit token_expired(account_id_);
+        return;
+    }
     async_fetch_quote();
 }
 
 void AccountDataStream::on_portfolio_timer() {
+    if (is_token_expired()) {
+        emit token_expired(account_id_);
+        return;
+    }
     if (portfolio_fetching_.exchange(true))
         return;
     async_fetch_positions();
@@ -155,8 +173,10 @@ void AccountDataStream::on_portfolio_timer() {
 }
 
 void AccountDataStream::on_watchlist_timer() {
-    // Always run watchlist polling — the watchlist UI needs the batch
-    // watchlist_updated signal which WS tick_received doesn't provide.
+    if (is_token_expired()) {
+        emit token_expired(account_id_);
+        return;
+    }
     async_fetch_watchlist_quotes();
 }
 
@@ -609,6 +629,7 @@ void AccountDataStream::ws_init() {
 
         connect(fws, &FyersWebSocket::connected, this, [this]() {
             LOG_INFO(ADS_TAG, QString("Fyers HSM connected for %1").arg(account_id_));
+            emit connection_state_changed(account_id_, ConnectionState::Connected);
             auto to_fyers = [](const QString& sym) {
                 return sym.contains(':') ? sym : QStringLiteral("NSE:") + sym + QStringLiteral("-EQ");
             };
@@ -624,6 +645,7 @@ void AccountDataStream::ws_init() {
 
         connect(fws, &FyersWebSocket::disconnected, this, [this]() {
             LOG_WARN(ADS_TAG, QString("Fyers HSM disconnected for %1").arg(account_id_));
+            emit connection_state_changed(account_id_, ConnectionState::Disconnected);
         });
 
         connect(fws, &FyersWebSocket::error_occurred, this, [this](const QString& err) {
@@ -631,6 +653,76 @@ void AccountDataStream::ws_init() {
         });
 
         fws->open();
+        return;
+    }
+
+    if (broker_id_ == "alpaca") {
+        auto creds = AccountManager::instance().load_credentials(account_id_);
+        if (creds.api_key.isEmpty() || creds.api_secret.isEmpty())
+            return;
+
+        auto* aws = new AlpacaWebSocket(creds.api_key, creds.api_secret, this);
+        ws_ = aws;
+
+        connect(aws, &AlpacaWebSocket::tick_received, this, [this](const BrokerQuote& q) {
+            ++ws_tick_count_;
+            quote_cache_[q.symbol] = q;
+            emit quote_updated(account_id_, q.symbol, q);
+        });
+
+        connect(aws, &AlpacaWebSocket::trade_received, this, [this](const BrokerTrade& trade) {
+            auto it = quote_cache_.find(trade.symbol);
+            if (it != quote_cache_.end()) {
+                it->ltp = trade.price;
+                const auto dt = QDateTime::fromString(trade.timestamp, Qt::ISODateWithMs);
+                it->timestamp = dt.isValid() ? dt.toMSecsSinceEpoch() : 0;
+                emit quote_updated(account_id_, trade.symbol, it.value());
+            }
+        });
+
+        connect(aws, &AlpacaWebSocket::bar_received, this,
+                [this](const QString& symbol, const BrokerCandle& bar) {
+            auto it = quote_cache_.find(symbol);
+            if (it != quote_cache_.end()) {
+                it->open = bar.open;
+                it->high = bar.high;
+                it->low = bar.low;
+                it->close = bar.close;
+                it->volume = bar.volume;
+                it->change = bar.close - bar.open;
+                it->change_pct = bar.open > 0 ? ((bar.close - bar.open) / bar.open) * 100.0 : 0;
+                emit quote_updated(account_id_, symbol, it.value());
+            }
+        });
+
+        connect(aws, &AlpacaWebSocket::connected, this, [this]() {
+            LOG_INFO(ADS_TAG, QString("Alpaca WS connected for %1").arg(account_id_));
+            emit connection_state_changed(account_id_, ConnectionState::Connected);
+            QStringList symbols;
+            if (!selected_symbol_.isEmpty())
+                symbols.append(selected_symbol_);
+            for (const auto& s : watchlist_symbols_) {
+                if (!symbols.contains(s))
+                    symbols.append(s);
+            }
+            if (auto* a = qobject_cast<AlpacaWebSocket*>(ws_))
+                a->subscribe(symbols);
+        });
+
+        connect(aws, &AlpacaWebSocket::disconnected, this, [this]() {
+            LOG_WARN(ADS_TAG, QString("Alpaca WS disconnected for %1").arg(account_id_));
+            emit connection_state_changed(account_id_, ConnectionState::Disconnected);
+        });
+
+        connect(aws, &AlpacaWebSocket::error_occurred, this, [this](const QString& err) {
+            LOG_ERROR(ADS_TAG, QString("Alpaca WS error: %1").arg(err));
+        });
+
+        connect(aws, &AlpacaWebSocket::market_closed, this, [this]() {
+            LOG_INFO(ADS_TAG, QString("Alpaca market closed for %1 — falling back to polling").arg(account_id_));
+        });
+
+        aws->open();
         return;
     }
 
@@ -667,6 +759,8 @@ bool AccountDataStream::ws_active() const {
         return false;
     if (auto* fws = qobject_cast<FyersWebSocket*>(ws_))
         return fws->is_connected() && ws_tick_count_ > 0;
+    if (auto* aws = qobject_cast<AlpacaWebSocket*>(ws_))
+        return aws->is_connected() && ws_tick_count_ > 0;
     return false;
 }
 
@@ -682,6 +776,17 @@ void AccountDataStream::ws_resubscribe() {
             fyers_symbols.append(to_fyers(s));
         fyers_symbols.removeDuplicates();
         fws->set_subscriptions(fyers_symbols);
+    }
+
+    if (auto* aws = qobject_cast<AlpacaWebSocket*>(ws_)) {
+        QStringList symbols;
+        if (!selected_symbol_.isEmpty())
+            symbols.append(selected_symbol_);
+        for (const auto& s : watchlist_symbols_) {
+            if (!symbols.contains(s))
+                symbols.append(s);
+        }
+        aws->set_subscriptions(symbols);
     }
 }
 

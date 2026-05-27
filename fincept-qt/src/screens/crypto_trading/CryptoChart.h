@@ -3,6 +3,7 @@
 // OHLC tooltip, and a last-price tag pinned to the right axis.
 
 #include "trading/TradingTypes.h"
+#include "ui/charts/ChartOverlayManager.h"
 
 #include <QPushButton>
 #include <QVector>
@@ -20,6 +21,8 @@ class QGraphicsEllipseItem;
 class QGraphicsSimpleTextItem;
 class QLabel;
 
+namespace fincept::ui { class IndicatorPicker; }
+
 namespace fincept::screens::crypto {
 
 class HoverChartView; // forward; defined in the .cpp
@@ -34,6 +37,7 @@ class CryptoChart : public QWidget {
     void clear();
 
     QString current_timeframe() const;
+    fincept::ui::ChartOverlayManager* overlay_manager() const { return overlay_mgr_; }
 
   signals:
     void timeframe_changed(const QString& tf);
@@ -94,6 +98,9 @@ class CryptoChart : public QWidget {
     // Pending timeframe request while a fetch is already in-flight
     // set_candles() will emit timeframe_changed again if this is set
     QString pending_tf_;
+
+    fincept::ui::ChartOverlayManager* overlay_mgr_ = nullptr;
+    fincept::ui::IndicatorPicker* indicator_picker_ = nullptr;
 
     friend class HoverChartView;
 };

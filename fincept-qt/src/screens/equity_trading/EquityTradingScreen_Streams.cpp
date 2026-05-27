@@ -1,142 +1,168 @@
 // src/screens/equity_trading/EquityTradingScreen_Streams.cpp
 //
-// DataStream broker→UI slots: per-stream callbacks that propagate quote,
-// watchlist, positions, holdings, orders, funds, candles, orderbook,
-// time/sales, latest trade, calendar, and market clock updates into the
-// screen widgets.
+// DataHub subscription wiring (D4 migration) + on-demand legacy signal slots.
+//
+// Streaming data (quotes, positions, holdings, orders, funds) is consumed
+// via DataHub::subscribe() instead of direct DataStreamManager signals.
+// On-demand / one-shot data (candles, orderbook, time/sales, calendar, clock)
+// remains wired as legacy signals — no hub topic exists for those.
 //
 // Part of the partial-class split of EquityTradingScreen.cpp.
 
 #include "screens/equity_trading/EquityTradingScreen.h"
 
 #include "core/logging/Logger.h"
-#include "core/session/ScreenStateManager.h"
-#include "core/symbol/SymbolContext.h"
-#include "core/symbol/SymbolDragSource.h"
-#include "screens/equity_trading/AccountManagementDialog.h"
-#include "screens/equity_trading/BroadcastOrderDialog.h"
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "screens/equity_trading/EquityBottomPanel.h"
 #include "screens/equity_trading/EquityChart.h"
 #include "screens/equity_trading/EquityOrderBook.h"
 #include "screens/equity_trading/EquityOrderEntry.h"
 #include "screens/equity_trading/EquityTickerBar.h"
 #include "screens/equity_trading/EquityWatchlist.h"
-#include "services/portfolio/PortfolioService.h"
-#include "storage/repositories/SettingsRepository.h"
 #include "trading/AccountManager.h"
-#include "trading/BrokerRegistry.h"
+#include "trading/BrokerTopic.h"
 #include "trading/DataStreamManager.h"
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
-#include "ui/theme/StyleSheets.h"
-#include "ui/theme/Theme.h"
-
-#include <QApplication>
-#include <QCheckBox>
-#include <QComboBox>
-#include <QCompleter>
-#include <QDate>
-#include <QDateTime>
-#include <QDialog>
-#include <QDialogButtonBox>
-#include <QFormLayout>
-#include <QHBoxLayout>
-#include <QHash>
-#include <QHeaderView>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QLineEdit>
-#include <QMessageBox>
-#include <QMouseEvent>
-#include <QPointer>
-#include <QPushButton>
-#include <QRadioButton>
-#include <QScrollBar>
-#include <QSplitter>
-#include <QStringListModel>
-#include <QTableWidget>
-#include <QVBoxLayout>
-
-#include <memory>
-
-#include <QtConcurrent/QtConcurrent>
 
 namespace fincept::screens {
 
 using namespace fincept::trading;
 using namespace fincept::screens::equity;
 
-void EquityTradingScreen::on_stream_quote_updated(const QString& account_id, const QString& symbol,
-                                                   const BrokerQuote& quote) {
-    // Update UI only for focused account's selected symbol
-    if (account_id == focused_account_id_ && symbol == selected_symbol_) {
-        current_price_ = quote.ltp;
-        ticker_bar_->update_quote(quote.ltp, quote.change, quote.change_pct, quote.high, quote.low,
-                                  quote.volume, quote.bid, quote.ask);
-        order_entry_->set_current_price(quote.ltp);
+static const QString TAG = "EquityTrading";
+
+// ============================================================================
+// DataHub subscription helpers (D4)
+// ============================================================================
+
+QString EquityTradingScreen::broker_id_for_focused() const {
+    if (focused_account_id_.isEmpty())
+        return {};
+    return AccountManager::instance().get_account(focused_account_id_).broker_id;
+}
+
+void EquityTradingScreen::hub_subscribe_streaming() {
+    auto& hub = datahub::DataHub::instance();
+    hub.unsubscribe(this);
+    hub_active_ = false;
+    watchlist_quote_cache_.clear();
+
+    const QString bid = broker_id_for_focused();
+    if (bid.isEmpty() || focused_account_id_.isEmpty())
+        return;
+
+    const QString aid = focused_account_id_;
+
+    // ── Positions ──
+    hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("positions")),
+                  [this](const QVariant& v) {
+                      if (!v.canConvert<QVector<BrokerPosition>>())
+                          return;
+                      bottom_panel_->set_positions(v.value<QVector<BrokerPosition>>());
+                  });
+
+    // ── Holdings ──
+    hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("holdings")),
+                  [this](const QVariant& v) {
+                      if (!v.canConvert<QVector<BrokerHolding>>())
+                          return;
+                      bottom_panel_->set_holdings(v.value<QVector<BrokerHolding>>());
+                  });
+
+    // ── Orders ──
+    hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("orders")),
+                  [this](const QVariant& v) {
+                      if (!v.canConvert<QVector<BrokerOrderInfo>>())
+                          return;
+                      bottom_panel_->set_orders(v.value<QVector<BrokerOrderInfo>>());
+                  });
+
+    // ── Balance / Funds ──
+    hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("balance")),
+                  [this](const QVariant& v) {
+                      if (!v.canConvert<BrokerFunds>())
+                          return;
+                      const auto funds = v.value<BrokerFunds>();
+                      bottom_panel_->set_funds(funds);
+                      order_entry_->set_balance(funds.available_balance);
+                  });
+
+    // ── Quotes (per-symbol subscriptions for ticker + watchlist + paper trading) ──
+    hub_subscribe_quotes();
+
+    hub_active_ = true;
+    LOG_INFO(TAG, QString("Hub subscribed: %1 / %2").arg(bid, aid));
+}
+
+void EquityTradingScreen::hub_subscribe_quotes() {
+    auto& hub = datahub::DataHub::instance();
+    const QString bid = broker_id_for_focused();
+    if (bid.isEmpty() || focused_account_id_.isEmpty())
+        return;
+
+    const QString aid = focused_account_id_;
+
+    // Build deduplicated symbol set: selected symbol + watchlist
+    QSet<QString> symbols;
+    symbols.insert(selected_symbol_);
+    for (const auto& s : watchlist_symbols_)
+        symbols.insert(s);
+
+    for (const auto& sym : symbols) {
+        const QString topic = broker_topic(bid, aid, QStringLiteral("quote"), sym);
+        hub.subscribe(this, topic, [this, sym](const QVariant& v) {
+            if (!v.canConvert<BrokerQuote>())
+                return;
+            const auto quote = v.value<BrokerQuote>();
+
+            // Cache for watchlist rebuild
+            watchlist_quote_cache_[sym] = quote;
+
+            // Ticker bar + order entry for selected symbol
+            if (sym == selected_symbol_) {
+                current_price_ = quote.ltp;
+                ticker_bar_->update_quote(quote.ltp, quote.change, quote.change_pct,
+                                          quote.high, quote.low, quote.volume,
+                                          quote.bid, quote.ask);
+                order_entry_->set_current_price(quote.ltp);
+            }
+
+            // Rebuild watchlist from cache
+            QVector<BrokerQuote> wl_quotes;
+            wl_quotes.reserve(watchlist_quote_cache_.size());
+            for (auto it = watchlist_quote_cache_.cbegin(); it != watchlist_quote_cache_.cend(); ++it)
+                wl_quotes.append(it.value());
+            watchlist_->update_quotes(wl_quotes);
+
+            // Feed paper trading engine
+            auto account = AccountManager::instance().get_account(focused_account_id_);
+            if (account.trading_mode == "paper" && !account.paper_portfolio_id.isEmpty() && quote.ltp > 0) {
+                pt_update_position_price(account.paper_portfolio_id, sym, quote.ltp);
+                PriceData pd;
+                pd.last = quote.ltp;
+                pd.bid = quote.bid;
+                pd.ask = quote.ask;
+                pd.timestamp = quote.timestamp;
+                OrderMatcher::instance().check_orders(sym, pd, account.paper_portfolio_id);
+                OrderMatcher::instance().check_sl_tp_triggers(account.paper_portfolio_id, sym, quote.ltp);
+            }
+        });
     }
-
-    // Feed ALL account quotes into paper trading engine for order matching
-    auto account = AccountManager::instance().get_account(account_id);
-    if (account.trading_mode == "paper" && !account.paper_portfolio_id.isEmpty() && quote.ltp > 0) {
-        pt_update_position_price(account.paper_portfolio_id, symbol, quote.ltp);
-        PriceData pd;
-        pd.last = quote.ltp;
-        pd.bid = quote.bid;
-        pd.ask = quote.ask;
-        pd.timestamp = quote.timestamp;
-        OrderMatcher::instance().check_orders(symbol, pd, account.paper_portfolio_id);
-        OrderMatcher::instance().check_sl_tp_triggers(account.paper_portfolio_id, symbol, quote.ltp);
-    }
 }
 
-void EquityTradingScreen::on_stream_watchlist_updated(const QString& account_id,
-                                                       const QVector<BrokerQuote>& quotes) {
-    if (account_id == focused_account_id_)
-        watchlist_->update_quotes(quotes);
-
-    // Feed into paper trading for all accounts
-    auto account = AccountManager::instance().get_account(account_id);
-    if (account.trading_mode == "paper" && !account.paper_portfolio_id.isEmpty()) {
-        for (const auto& q : quotes) {
-            if (q.ltp <= 0)
-                continue;
-            pt_update_position_price(account.paper_portfolio_id, q.symbol, q.ltp);
-            PriceData pd;
-            pd.last = q.ltp;
-            pd.bid = q.bid;
-            pd.ask = q.ask;
-            pd.timestamp = q.timestamp;
-            OrderMatcher::instance().check_orders(q.symbol, pd, account.paper_portfolio_id);
-        }
-    }
+void EquityTradingScreen::hub_unsubscribe_all() {
+    if (!hub_active_)
+        return;
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_active_ = false;
+    LOG_INFO(TAG, "Hub unsubscribed");
 }
 
-void EquityTradingScreen::on_stream_positions_updated(const QString& account_id,
-                                                       const QVector<BrokerPosition>& positions) {
-    if (account_id == focused_account_id_)
-        bottom_panel_->set_positions(positions);
-}
-
-void EquityTradingScreen::on_stream_holdings_updated(const QString& account_id,
-                                                      const QVector<BrokerHolding>& holdings) {
-    if (account_id == focused_account_id_)
-        bottom_panel_->set_holdings(holdings);
-}
-
-void EquityTradingScreen::on_stream_orders_updated(const QString& account_id,
-                                                    const QVector<BrokerOrderInfo>& orders) {
-    if (account_id == focused_account_id_)
-        bottom_panel_->set_orders(orders);
-}
-
-void EquityTradingScreen::on_stream_funds_updated(const QString& account_id, const BrokerFunds& funds) {
-    if (account_id == focused_account_id_) {
-        bottom_panel_->set_funds(funds);
-        order_entry_->set_balance(funds.available_balance);
-    }
-}
+// ============================================================================
+// On-demand legacy signal slots (no hub topic — D4 exception)
+// ============================================================================
 
 void EquityTradingScreen::on_stream_candles_fetched(const QString& account_id,
                                                      const QVector<BrokerCandle>& candles) {
@@ -176,9 +202,5 @@ void EquityTradingScreen::on_stream_clock_fetched(const QString& account_id, con
     if (account_id == focused_account_id_)
         bottom_panel_->set_clock(clock);
 }
-
-// ============================================================================
-// Slot Handlers
-// ============================================================================
 
 } // namespace fincept::screens

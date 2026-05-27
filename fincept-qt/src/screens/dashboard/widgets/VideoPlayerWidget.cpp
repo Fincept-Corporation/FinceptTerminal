@@ -300,7 +300,7 @@ void VideoPlayerWidget::resolve_youtube_and_play(const QString& youtube_url, con
     // --no-playlist: single video only
     // -g: print URL only, don't download
     proc->start(ytdlp_program,
-                {"-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best", "--no-playlist", "-g", youtube_url});
+                {"-f", "best[ext=mp4]/best", "--no-playlist", "-g", youtube_url});
 }
 
 void VideoPlayerWidget::on_ytdlp_finished(int exit_code, QProcess::ExitStatus /*status*/) {

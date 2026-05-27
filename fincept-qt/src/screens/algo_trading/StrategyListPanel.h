@@ -23,6 +23,8 @@ class StrategyListPanel : public QWidget {
     void on_sort_changed(int index);
     void on_error(const QString& context, const QString& msg);
     void on_filter_changed(const QString& text);
+    void on_deploy_clicked(int row);
+    void on_delete_clicked(int row);
     void go_to_page(int page);
 
   private:

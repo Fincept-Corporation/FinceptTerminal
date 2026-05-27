@@ -5,6 +5,10 @@
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
 #include "core/symbol/SymbolDragSource.h"
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
+#include "trading/AccountManager.h"
+#include "trading/BrokerTopic.h"
 #include "screens/equity_research/EquityAnalysisTab.h"
 #include "screens/equity_research/EquityFinancialsTab.h"
 #include "screens/equity_research/EquityNewsTab.h"
@@ -64,10 +68,12 @@ EquityResearchScreen::EquityResearchScreen(QWidget* parent) : QWidget(parent) {
 void EquityResearchScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
     refresh_timer_->start();
+    hub_subscribe_broker_quote();
 }
 
 void EquityResearchScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+    hub_unsubscribe_broker_quote();
     refresh_timer_->stop();
 }
 
@@ -286,6 +292,10 @@ void EquityResearchScreen::load_symbol(const QString& symbol) {
     // Trigger quote + info + historical
     services::equity::EquityResearchService::instance().load_symbol(symbol);
 
+    // Subscribe to broker live quote if this is an Indian stock with Fyers connected
+    if (isVisible())
+        hub_subscribe_broker_quote();
+
     // Publish to linked group so Watchlist/EquityTrading/News/etc. follow.
     if (link_group_ != SymbolGroup::None) {
         SymbolContext::instance().set_group_symbol(
@@ -384,8 +394,8 @@ QVariantMap EquityResearchScreen::save_state() const {
 void EquityResearchScreen::restore_state(const QVariantMap& state) {
     const QString sym = state.value("symbol").toString();
     if (!sym.isEmpty()) {
-        current_symbol_ = sym;
-        services::equity::EquityResearchService::instance().load_symbol(sym);
+        current_symbol_.clear();
+        load_symbol(sym);
     }
     if (tab_widget_) {
         const int idx = state.value("tab_index", 0).toInt();
@@ -394,6 +404,64 @@ void EquityResearchScreen::restore_state(const QVariantMap& state) {
     }
     if (peers_tab_ && state.contains("peers"))
         peers_tab_->set_peers_text(state.value("peers").toString());
+}
+
+// ── Broker live quote subscription ──────────────────────────────────────────
+
+void EquityResearchScreen::hub_subscribe_broker_quote() {
+    hub_unsubscribe_broker_quote();
+
+    if (current_symbol_.isEmpty())
+        return;
+    // Only Indian stocks are streamable via Fyers
+    if (!current_symbol_.endsWith(QStringLiteral(".NS")) && !current_symbol_.endsWith(QStringLiteral(".BO")))
+        return;
+
+    // Find a connected Fyers account
+    const auto accounts = trading::AccountManager::instance().active_accounts();
+    QString fyers_account_id;
+    for (const auto& a : accounts) {
+        if (a.broker_id == QStringLiteral("fyers") && a.state == trading::ConnectionState::Connected) {
+            fyers_account_id = a.account_id;
+            break;
+        }
+    }
+    if (fyers_account_id.isEmpty())
+        return;
+
+    // Strip .NS/.BO suffix to get plain broker symbol
+    QString broker_sym = current_symbol_.left(current_symbol_.length() - 3);
+    const QString topic = trading::broker_topic(QStringLiteral("fyers"), fyers_account_id,
+                                                QStringLiteral("quote"), broker_sym);
+    const QString sym = current_symbol_;
+
+    datahub::DataHub::instance().subscribe(this, topic, [this, sym](const QVariant& v) {
+        if (!v.canConvert<trading::BrokerQuote>())
+            return;
+        const auto bq = v.value<trading::BrokerQuote>();
+        services::equity::QuoteData qd;
+        qd.symbol = sym;
+        qd.price = bq.ltp;
+        qd.change = bq.change;
+        qd.change_pct = bq.change_pct;
+        qd.high = bq.high;
+        qd.low = bq.low;
+        qd.volume = bq.volume;
+        qd.timestamp = bq.timestamp;
+        update_quote_bar(qd);
+    });
+
+    refresh_timer_->stop(); // broker stream is faster than 30s polling
+    hub_broker_active_ = true;
+}
+
+void EquityResearchScreen::hub_unsubscribe_broker_quote() {
+    if (!hub_broker_active_)
+        return;
+    datahub::DataHub::instance().unsubscribe(this);
+    hub_broker_active_ = false;
+    if (isVisible())
+        refresh_timer_->start();
 }
 
 } // namespace fincept::screens

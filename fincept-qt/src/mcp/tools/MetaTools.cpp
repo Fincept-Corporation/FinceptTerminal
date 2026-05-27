@@ -1,4 +1,4 @@
-// MetaTools.cpp — Self-introspection tools (tool.list, tool.describe, mcp.health).
+// MetaTools.cpp — Self-introspection tools (tool_list, tool_describe, mcp_health).
 
 #include "mcp/tools/MetaTools.h"
 
@@ -27,8 +27,8 @@ static constexpr const char* TAG = "MetaTools";
 //
 // Why file-local statics rather than a singleton service: the MCP system
 // already has too many singletons. These counters are read by exactly one
-// consumer (mcp.health) and written by exactly two writers (tool.list and
-// tool.describe). A class wrapper would be overhead.
+// consumer (mcp_health) and written by exactly two writers (tool_list and
+// tool_describe). A class wrapper would be overhead.
 //
 // Thread safety: tool handlers run on QtConcurrent worker threads. Atomics
 // for scalar counters; mutex+QHash for the per-tool surface map.
@@ -40,7 +40,7 @@ namespace telemetry {
     static std::atomic<qint64> g_tool_describe_misses{0};
 
     static QMutex g_surface_mutex;
-    static QHash<QString, qint64> g_surfaces; // tool name → times surfaced by tool.list
+    static QHash<QString, qint64> g_surfaces; // tool name → times surfaced by tool_list
 
     static void record_surfaces(const QStringList& names) {
         if (names.isEmpty())
@@ -81,7 +81,7 @@ namespace telemetry {
 std::vector<ToolDef> get_meta_tools() {
     std::vector<ToolDef> tools;
 
-    // ── tool.list ───────────────────────────────────────────────────────
+    // ── tool_list ────────────────────────────────────────────────────────
     //
     // Tool RAG entry point. Replaces the old regex-over-everything variant
     // with BM25 semantic ranking — proven by Anthropic's own Tool Search
@@ -91,16 +91,16 @@ std::vector<ToolDef> get_meta_tools() {
     // The LLM is expected to call this with a NATURAL LANGUAGE query
     // describing the action it wants to perform. Multi-intent requests
     // ("get news on AAPL and add to watchlist") should issue MULTIPLE
-    // tool.list calls, one per intent — Anthropic's recommended pattern.
+    // tool_list calls, one per intent — Anthropic's recommended pattern.
     {
         ToolDef t;
-        t.name = "tool.list";
+        t.name = "tool_list";
         t.description =
             "Search the tool catalog by natural-language query (BM25). Returns the top-K most "
             "relevant tools as {name, category, description, destructive, score}. "
             "Use this whenever you need a capability you don't already have a tool for. "
             "For multi-intent requests, call multiple times — once per intent. "
-            "After picking a tool, call tool.describe(name) for the full input schema.";
+            "After picking a tool, call tool_describe(name) for the full input schema.";
         t.category = "meta";
         t.input_schema = ToolSchemaBuilder()
             .string("query", "Natural-language description of the capability you need "
@@ -154,12 +154,12 @@ std::vector<ToolDef> get_meta_tools() {
         tools.push_back(std::move(t));
     }
 
-    // ── tool.describe ───────────────────────────────────────────────────
+    // ── tool_describe ────────────────────────────────────────────────────
     {
         ToolDef t;
-        t.name = "tool.describe";
+        t.name = "tool_describe";
         t.description = "Return the full description and JSON Schema for one MCP tool. "
-                        "Use after tool.list to fetch the parameter shape before calling.";
+                        "Use after tool_list to fetch the parameter shape before calling.";
         t.category = "meta";
         t.input_schema = ToolSchemaBuilder()
             .string("name", "Bare tool name (without server_id__ prefix)").required().length(1, 128)
@@ -185,10 +185,10 @@ std::vector<ToolDef> get_meta_tools() {
         tools.push_back(std::move(t));
     }
 
-    // ── mcp.health ──────────────────────────────────────────────────────
+    // ── mcp_health ───────────────────────────────────────────────────────
     {
         ToolDef t;
-        t.name = "mcp.health";
+        t.name = "mcp_health";
         t.description = "Snapshot of MCP system health: internal tool counts by category, "
                         "external server statuses + last errors, and DataHub topic activity. "
                         "Useful for agents to self-diagnose ('why is my tool failing?').";

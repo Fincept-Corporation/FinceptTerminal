@@ -46,13 +46,7 @@ class DataStreamManager : public QObject
     int max_requests_per_sec() const override;
 
   signals:
-    // Aggregated signals — the UI connects to these instead of individual streams
-    void quote_updated(const QString& account_id, const QString& symbol, const BrokerQuote& quote);
-    void watchlist_updated(const QString& account_id, const QVector<BrokerQuote>& quotes);
-    void positions_updated(const QString& account_id, const QVector<BrokerPosition>& positions);
-    void holdings_updated(const QString& account_id, const QVector<BrokerHolding>& holdings);
-    void orders_updated(const QString& account_id, const QVector<BrokerOrderInfo>& orders);
-    void funds_updated(const QString& account_id, const BrokerFunds& funds);
+    // On-demand / one-shot signals — no hub topic exists for these
     void candles_fetched(const QString& account_id, const QVector<BrokerCandle>& candles);
     void orderbook_fetched(const QString& account_id,
                            const QVector<QPair<double, double>>& bids,

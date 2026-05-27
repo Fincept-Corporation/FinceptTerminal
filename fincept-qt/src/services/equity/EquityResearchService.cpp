@@ -128,22 +128,28 @@ void EquityResearchService::load_info_only(const QString& symbol) {
 void EquityResearchService::load_historical_only(const QString& symbol, const QString& period) {
     if (symbol.isEmpty())
         return;
-    const QVariant hcv = fincept::CacheManager::instance().get("equity:candles:" + symbol);
+    const QString cache_key = "equity:candles:" + symbol + ":" + period;
+    const QVariant hcv = fincept::CacheManager::instance().get(cache_key);
     if (!hcv.isNull()) {
-        emit historical_loaded(symbol, parse_candles(QJsonDocument::fromJson(hcv.toString().toUtf8()).array()));
-        return;
+        auto arr = QJsonDocument::fromJson(hcv.toString().toUtf8()).array();
+        if (!arr.isEmpty()) {
+            emit historical_loaded(symbol, parse_candles(arr));
+            return;
+        }
     }
     run_python("yfinance_data.py", {"historical_period", symbol, period, "1d"},
-               [this, symbol](bool ok, const QString& out) {
+               [this, symbol, cache_key](bool ok, const QString& out) {
                    if (!ok) {
                        emit error_occurred("Historical", "Failed to fetch historical for " + symbol);
                        return;
                    }
                    auto arr = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).array();
-                   fincept::CacheManager::instance().put(
-                       "equity:candles:" + symbol,
-                       QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
-                       kHistoricalTtlSec, "equity");
+                   if (!arr.isEmpty()) {
+                       fincept::CacheManager::instance().put(
+                           cache_key,
+                           QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                           kHistoricalTtlSec, "equity");
+                   }
                    emit historical_loaded(symbol, parse_candles(arr));
                });
 }

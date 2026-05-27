@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+<title>KLineChart</title>
+<script src="vendor/klinecharts.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #080808; font-family: Consolas, 'Courier New', monospace; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+  #toolbar { display: flex; align-items: center; gap: 2px; padding: 3px 6px; background: #0a0a0a; border-bottom: 1px solid #1a1a1a; flex-shrink: 0; flex-wrap: wrap; }
+  #chart { flex: 1; min-height: 0; }
+  .tb-group { display: flex; align-items: center; gap: 1px; margin-right: 6px; }
+  .tb-sep { width: 1px; height: 18px; background: #222; margin: 0 4px; }
+  .tb-btn { background: transparent; border: 1px solid transparent; color: #808080; font: 10px Consolas; padding: 2px 6px; cursor: pointer; border-radius: 2px; white-space: nowrap; }
+  .tb-btn:hover { background: #161616; color: #e5e5e5; border-color: #333; }
+  .tb-btn.active { background: #1a1a1a; color: #d97706; border-color: #d97706; }
+  .tb-dropdown { position: relative; display: inline-block; }
+  .tb-dropdown-content { display: none; position: absolute; top: 100%; left: 0; background: #111; border: 1px solid #222; min-width: 140px; z-index: 100; max-height: 300px; overflow-y: auto; }
+  .tb-dropdown:hover .tb-dropdown-content { display: block; }
+  .tb-dropdown-content .tb-btn { display: block; width: 100%; text-align: left; border: none; padding: 4px 10px; border-radius: 0; }
+  .tb-dropdown-content .tb-btn:hover { background: #1a1a1a; }
+  .tb-dropdown-content .section { color: #d97706; font-size: 9px; padding: 6px 10px 2px; font-weight: 700; letter-spacing: 0.5px; }
+  #debug { position: fixed; bottom: 2px; left: 4px; color: #525252; font: 9px Consolas; z-index: 999; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <!-- Chart Type -->
+    <div class="tb-group">
+      <div class="tb-dropdown">
+        <button class="tb-btn" id="chartTypeBtn">Candle ▾</button>
+        <div class="tb-dropdown-content">
+          <button class="tb-btn" onclick="setChartType('candle_solid')">Candle Solid</button>
+          <button class="tb-btn" onclick="setChartType('candle_stroke')">Candle Stroke</button>
+          <button class="tb-btn" onclick="setChartType('candle_up_stroke')">Candle Up Stroke</button>
+          <button class="tb-btn" onclick="setChartType('ohlc')">OHLC</button>
+          <button class="tb-btn" onclick="setChartType('area')">Area</button>
+        </div>
+      </div>
+    </div>
+    <div class="tb-sep"></div>
+
+    <!-- Indicators -->
+    <div class="tb-group">
+      <div class="tb-dropdown">
+        <button class="tb-btn">Indicators ▾</button>
+        <div class="tb-dropdown-content">
+          <div class="section">OVERLAY (on chart)</div>
+          <button class="tb-btn" onclick="toggleIndicator('MA','candle_pane')">MA</button>
+          <button class="tb-btn" onclick="toggleIndicator('EMA','candle_pane')">EMA</button>
+          <button class="tb-btn" onclick="toggleIndicator('SMA','candle_pane')">SMA</button>
+          <button class="tb-btn" onclick="toggleIndicator('BOLL','candle_pane')">Bollinger</button>
+          <button class="tb-btn" onclick="toggleIndicator('SAR','candle_pane')">Parabolic SAR</button>
+
+          <div class="section">SUB-PANEL</div>
+          <button class="tb-btn" onclick="toggleIndicator('VOL')">Volume</button>
+          <button class="tb-btn" onclick="toggleIndicator('MACD')">MACD</button>
+          <button class="tb-btn" onclick="toggleIndicator('RSI')">RSI</button>
+          <button class="tb-btn" onclick="toggleIndicator('KDJ')">KDJ</button>
+          <button class="tb-btn" onclick="toggleIndicator('WR')">Williams %R</button>
+          <button class="tb-btn" onclick="toggleIndicator('OBV')">OBV</button>
+          <button class="tb-btn" onclick="toggleIndicator('DMI')">DMI</button>
+          <button class="tb-btn" onclick="toggleIndicator('CR')">CR</button>
+          <button class="tb-btn" onclick="toggleIndicator('PSY')">PSY</button>
+          <button class="tb-btn" onclick="toggleIndicator('DMA')">DMA</button>
+          <button class="tb-btn" onclick="toggleIndicator('TRIX')">TRIX</button>
+          <button class="tb-btn" onclick="toggleIndicator('BRAR')">BRAR</button>
+          <button class="tb-btn" onclick="toggleIndicator('VR')">VR</button>
+          <button class="tb-btn" onclick="toggleIndicator('EMV')">EMV</button>
+          <button class="tb-btn" onclick="toggleIndicator('AO')">Awesome Osc</button>
+          <button class="tb-btn" onclick="toggleIndicator('ROC')">ROC</button>
+          <button class="tb-btn" onclick="toggleIndicator('PVT')">PVT</button>
+          <button class="tb-btn" onclick="toggleIndicator('AVP')">AVP</button>
+        </div>
+      </div>
+    </div>
+    <div class="tb-sep"></div>
+
+    <!-- Drawing Tools -->
+    <div class="tb-group">
+      <div class="tb-dropdown">
+        <button class="tb-btn">Drawing ▾</button>
+        <div class="tb-dropdown-content">
+          <div class="section">LINES</div>
+          <button class="tb-btn" onclick="addOverlay('horizontalStraightLine')">Horizontal Line</button>
+          <button class="tb-btn" onclick="addOverlay('verticalStraightLine')">Vertical Line</button>
+          <button class="tb-btn" onclick="addOverlay('straightLine')">Trend Line</button>
+          <button class="tb-btn" onclick="addOverlay('rayLine')">Ray</button>
+          <button class="tb-btn" onclick="addOverlay('segment')">Segment</button>
+          <button class="tb-btn" onclick="addOverlay('horizontalRayLine')">Horizontal Ray</button>
+          <button class="tb-btn" onclick="addOverlay('horizontalSegment')">Horizontal Segment</button>
+          <button class="tb-btn" onclick="addOverlay('priceChannelLine')">Price Channel</button>
+          <button class="tb-btn" onclick="addOverlay('parallelStraightLine')">Parallel Lines</button>
+
+          <div class="section">FIBONACCI</div>
+          <button class="tb-btn" onclick="addOverlay('fibonacciLine')">Fibonacci Retrace</button>
+
+          <div class="section">SHAPES</div>
+          <button class="tb-btn" onclick="addOverlay('rect')">Rectangle</button>
+          <button class="tb-btn" onclick="addOverlay('circle')">Circle</button>
+          <button class="tb-btn" onclick="addOverlay('triangle')">Triangle</button>
+
+          <div class="section">ANNOTATIONS</div>
+          <button class="tb-btn" onclick="addOverlay('simpleAnnotation')">Annotation</button>
+          <button class="tb-btn" onclick="addOverlay('simpleTag')">Tag</button>
+        </div>
+      </div>
+    </div>
+    <div class="tb-sep"></div>
+
+    <!-- Quick Actions -->
+    <div class="tb-group">
+      <button class="tb-btn" onclick="toggleIndicator('MA','candle_pane')" title="Moving Average">MA</button>
+      <button class="tb-btn" onclick="toggleIndicator('VOL')" title="Volume">VOL</button>
+      <button class="tb-btn" onclick="toggleIndicator('MACD')" title="MACD">MACD</button>
+      <button class="tb-btn" onclick="toggleIndicator('RSI')" title="RSI">RSI</button>
+      <button class="tb-btn" onclick="toggleIndicator('BOLL','candle_pane')" title="Bollinger Bands">BOLL</button>
+    </div>
+    <div class="tb-sep"></div>
+
+    <!-- Utilities -->
+    <div class="tb-group">
+      <button class="tb-btn" onclick="removeAllOverlays()" title="Clear drawings">Clear Draw</button>
+      <button class="tb-btn" onclick="removeAllIndicators()" title="Clear indicators">Clear Ind</button>
+      <button class="tb-btn" onclick="chart.zoomAtCoordinate(0.8)" title="Zoom In">+</button>
+      <button class="tb-btn" onclick="chart.zoomAtCoordinate(1.2)" title="Zoom Out">−</button>
+    </div>
+  </div>
+
+  <div id="chart"></div>
+</div>
+<div id="debug"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  var dbg = document.getElementById('debug');
+  function log(msg) { dbg.textContent = msg; }
+
+  var chart;
+  try {
+    chart = klinecharts.init('chart', {
+      styles: {
+        grid: {
+          show: true,
+          horizontal: { show: true, size: 1, color: '#1a1a1a', style: 'dashed' },
+          vertical:   { show: true, size: 1, color: '#1a1a1a', style: 'dashed' }
+        },
+        candle: {
+          type: 'candle_solid',
+          bar: {
+            upColor: '#16a34a', downColor: '#dc2626', noChangeColor: '#888888',
+            upBorderColor: '#16a34a', downBorderColor: '#dc2626', noChangeBorderColor: '#888888',
+            upWickColor: '#16a34a', downWickColor: '#dc2626', noChangeWickColor: '#888888'
+          },
+          priceMark: {
+            show: true,
+            high: { show: true, color: '#e5e5e5', textSize: 10 },
+            low:  { show: true, color: '#e5e5e5', textSize: 10 },
+            last: {
+              show: true, upColor: '#16a34a', downColor: '#dc2626', noChangeColor: '#888888',
+              line: { show: true, style: 'dashed', size: 1 },
+              text: { show: true, size: 10, paddingLeft: 4, paddingRight: 4, paddingTop: 2, paddingBottom: 2, color: '#fff' }
+            }
+          },
+          tooltip: {
+            showRule: 'always', showType: 'standard',
+            text: { size: 11, color: '#e5e5e5', family: 'Consolas, Courier New, monospace', weight: 'normal' }
+          }
+        },
+        indicator: {
+          ohlc: { upColor: '#16a34a', downColor: '#dc2626', noChangeColor: '#888888' },
+          lastValueMark: { show: true, text: { color: '#fff', size: 10 } },
+          tooltip: { showRule: 'always', text: { size: 11, color: '#e5e5e5', family: 'Consolas, monospace' } }
+        },
+        xAxis: {
+          show: true,
+          axisLine: { show: true, color: '#1a1a1a', size: 1 },
+          tickLine: { show: true, color: '#1a1a1a', size: 1 },
+          tickText: { show: true, color: '#808080', size: 10, family: 'Consolas, Courier New, monospace' }
+        },
+        yAxis: {
+          show: true, position: 'right',
+          axisLine: { show: true, color: '#1a1a1a', size: 1 },
+          tickLine: { show: true, color: '#1a1a1a', size: 1 },
+          tickText: { show: true, color: '#808080', size: 10, family: 'Consolas, Courier New, monospace' }
+        },
+        separator: { size: 2, color: '#1a1a1a', activeBackgroundColor: '#333' },
+        crosshair: {
+          show: true,
+          horizontal: {
+            show: true,
+            line: { show: true, style: 'dashed', size: 1, color: '#d97706' },
+            text: { show: true, color: '#080808', size: 10, family: 'Consolas, monospace',
+                    backgroundColor: '#d97706', paddingLeft: 4, paddingRight: 4, paddingTop: 2, paddingBottom: 2 }
+          },
+          vertical: {
+            show: true,
+            line: { show: true, style: 'dashed', size: 1, color: '#d97706' },
+            text: { show: true, color: '#080808', size: 10, family: 'Consolas, monospace',
+                    backgroundColor: '#d97706', paddingLeft: 4, paddingRight: 4, paddingTop: 2, paddingBottom: 2 }
+          }
+        },
+        overlay: {
+          point: { color: '#d97706', borderColor: '#d97706', activeColor: '#d97706', activeBorderColor: '#d97706' },
+          line: { color: '#d97706', size: 1 },
+          rect: { color: 'rgba(217,119,6,0.1)', borderColor: '#d97706', borderSize: 1 },
+          text: { color: '#e5e5e5', size: 11, family: 'Consolas, monospace' }
+        }
+      }
+    });
+    window.chart = chart;
+    log('ready');
+  } catch (e) {
+    log('INIT ERROR: ' + e.message);
+    return;
+  }
+
+  // Default: add volume sub-panel
+  chart.createIndicator('VOL');
+
+  window.addEventListener('resize', function() { chart.resize(); });
+
+  // --- Track active indicators for toggle behavior ---
+  var activeIndicators = {};
+
+  window.toggleIndicator = function(name, paneId) {
+    var key = name + (paneId || '');
+    if (activeIndicators[key]) {
+      chart.removeIndicator(name, paneId || activeIndicators[key]);
+      delete activeIndicators[key];
+    } else {
+      var id;
+      if (paneId === 'candle_pane') {
+        id = chart.createIndicator(name, { isStack: true, pane: { id: 'candle_pane' } });
+      } else {
+        id = chart.createIndicator(name);
+      }
+      activeIndicators[key] = id || paneId || true;
+    }
+  };
+
+  window.addOverlay = function(name) {
+    chart.createOverlay(name);
+  };
+
+  window.removeAllOverlays = function() {
+    chart.removeOverlay();
+  };
+
+  window.removeAllIndicators = function() {
+    var keys = Object.keys(activeIndicators);
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      // Extract indicator name (remove pane suffix)
+      var name = k.replace('candle_pane', '');
+      chart.removeIndicator(name);
+    }
+    activeIndicators = {};
+    // Re-add volume
+    chart.createIndicator('VOL');
+  };
+
+  window.setChartType = function(type) {
+    chart.setStyles({ candle: { type: type } });
+    var labels = {
+      'candle_solid': 'Candle', 'candle_stroke': 'Stroke', 'candle_up_stroke': 'Up Stroke',
+      'ohlc': 'OHLC', 'area': 'Area'
+    };
+    document.getElementById('chartTypeBtn').textContent = (labels[type] || type) + ' ▾';
+  };
+
+  // --- API exposed to C++ via runJavaScript() ---
+
+  window.setCandles = function(data) {
+    try {
+      if (!Array.isArray(data) || data.length === 0) {
+        log('no data');
+        return;
+      }
+      chart.applyNewData(data);
+      log(data.length + ' bars loaded');
+    } catch (e) {
+      log('ERROR: ' + e.message);
+    }
+  };
+
+  window.updateCandle = function(candle) {
+    try { chart.updateData(candle); } catch (e) { log('update err: ' + e.message); }
+  };
+
+  window.addIndicator = function(name, paneId) {
+    try { window.toggleIndicator(name, paneId); } catch (e) { log('ind err: ' + e.message); }
+  };
+
+  window.removeIndicator = function(name, paneId) {
+    try { chart.removeIndicator(name, paneId); } catch (e) {}
+  };
+
+  window.clearChart = function() {
+    chart.clearData();
+  };
+
+  window.setTheme = function(styles) {
+    chart.setStyles(styles);
+  };
+
+  window._chartReady = true;
+})();
+</script>
+</body>
+</html>

@@ -7,6 +7,11 @@
 #include <QDateTime>
 #include <QEvent>
 #include <QFrame>
+#include <QCoreApplication>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QTextStream>
 #include <QHBoxLayout>
 #include <QPainter>
 #include <QScrollArea>
@@ -433,9 +438,21 @@ QWidget* EquityOverviewTab::build_chart_panel() {
 
     vl->addLayout(btn_row);
 
-    // Canvas
+    // Chart widget — prefer KLineChart when WebEngine is available
+#ifdef HAS_QT_WEBENGINE
+    kline_chart_ = new fincept::ui::KLineChartWidget;
+    if (kline_chart_->is_available()) {
+        vl->addWidget(kline_chart_, 1);
+    } else {
+        delete kline_chart_;
+        kline_chart_ = nullptr;
+        candle_canvas_ = new ResearchCandleCanvas;
+        vl->addWidget(candle_canvas_, 1);
+    }
+#else
     candle_canvas_ = new ResearchCandleCanvas;
     vl->addWidget(candle_canvas_, 1);
+#endif
 
     return p;
 }
@@ -621,7 +638,7 @@ void EquityOverviewTab::render_info(const services::equity::StockInfo& info) {
         low_val_->setText(fmt_price(cached_quote_.low));
         prev_close_val_->setText(fmt_price(cached_quote_.prev_close));
     }
-    if (historical_loaded_ && !cached_candles_.isEmpty()) {
+    if (historical_loaded_ && !cached_candles_.isEmpty() && candle_canvas_) {
         candle_canvas_->set_candles(cached_candles_,
                                     currency_symbol(current_currency_.isEmpty() ? "USD" : current_currency_));
     }
@@ -713,6 +730,38 @@ void EquityOverviewTab::on_historical_loaded(QString symbol, QVector<services::e
 }
 
 void EquityOverviewTab::rebuild_chart(const QVector<services::equity::Candle>& candles) {
+#ifdef HAS_QT_WEBENGINE
+    if (kline_chart_) {
+        QJsonArray arr;
+        for (const auto& c : candles) {
+            QJsonObject obj;
+            obj[QStringLiteral("timestamp")] = static_cast<double>(c.timestamp);
+            obj[QStringLiteral("open")] = c.open;
+            obj[QStringLiteral("high")] = c.high;
+            obj[QStringLiteral("low")] = c.low;
+            obj[QStringLiteral("close")] = c.close;
+            obj[QStringLiteral("volume")] = static_cast<double>(c.volume);
+            arr.append(obj);
+        }
+        {
+            QFile dbg(QCoreApplication::applicationDirPath() + "/kline_debug.txt");
+            if (dbg.open(QIODevice::Append | QIODevice::Text)) {
+                QTextStream ts(&dbg);
+                ts << QDateTime::currentDateTime().toString("HH:mm:ss")
+                   << " rebuild_chart: candles=" << candles.size()
+                   << " json_arr=" << arr.size() << "\n";
+                if (!candles.isEmpty()) {
+                    const auto& f = candles.first();
+                    ts << "  first: ts=" << f.timestamp << " o=" << f.open
+                       << " h=" << f.high << " l=" << f.low
+                       << " c=" << f.close << " v=" << f.volume << "\n";
+                }
+            }
+        }
+        kline_chart_->set_candles(arr);
+        return;
+    }
+#endif
     const QString cs = currency_symbol(current_currency_.isEmpty() ? "USD" : current_currency_);
     candle_canvas_->set_candles(candles, cs);
 }

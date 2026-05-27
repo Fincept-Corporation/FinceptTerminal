@@ -3,6 +3,10 @@
 #include "services/equity/EquityResearchModels.h"
 #include "ui/widgets/LoadingOverlay.h"
 
+#ifdef HAS_QT_WEBENGINE
+#include "ui/charts/KLineChartWidget.h"
+#endif
+
 #include <QHash>
 #include <QLabel>
 #include <QPixmap>
@@ -127,6 +131,9 @@ class EquityOverviewTab : public QWidget {
     QLabel* short_pct_val_ = nullptr;
 
     // Chart
+#ifdef HAS_QT_WEBENGINE
+    fincept::ui::KLineChartWidget* kline_chart_ = nullptr;
+#endif
     ResearchCandleCanvas* candle_canvas_ = nullptr;
     QPushButton* btn_1m_ = nullptr;
     QPushButton* btn_3m_ = nullptr;

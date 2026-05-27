@@ -194,7 +194,7 @@ void LlmService::ensure_config() const {
             "Be concise, accurate, and finance-focused.";
     }
 
-    // Tool RAG discovery hint: lists categories dynamically so the model can form good tool.list() queries.
+    // Tool RAG discovery hint: lists categories dynamically so the model can form good tool_list() queries.
     // The `[Tool discovery]` sentinel makes append idempotent across reloads. Cached static for prompt-cache stability.
     if (tools_enabled_ && !system_prompt_.contains("[Tool discovery]")) {
         // Tool registry is immutable after McpInit; runtime additions won't appear until restart (acceptable here).
@@ -211,11 +211,11 @@ void LlmService::ensure_config() const {
             QString hint =
                 "\n\n[Tool discovery] You see only a small subset of tools each turn. "
                 "To find a tool for any action you don't already have, call "
-                "tool.list(query=\"<natural-language description>\"). "
+                "tool_list(query=\"<natural-language description>\"). "
                 "It returns the top 5 most relevant tools (BM25-ranked). "
-                "Then call tool.describe(name) for the full input schema, then invoke it. "
+                "Then call tool_describe(name) for the full input schema, then invoke it. "
                 "For requests with multiple intents (\"get news AND add to watchlist\"), "
-                "call tool.list MULTIPLE TIMES — once per intent. "
+                "call tool_list MULTIPLE TIMES — once per intent. "
                 "Never decline an action you can fulfil via a discoverable tool.";
             if (!sorted_cats.isEmpty()) {
                 hint += "\nAvailable tool categories: " + sorted_cats.join(", ") + ".";

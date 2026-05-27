@@ -1,6 +1,8 @@
 // src/screens/algo_trading/StrategyListPanel.cpp
 #include "screens/algo_trading/StrategyListPanel.h"
+#include "screens/algo_trading/AlgoDeployDialog.h"
 
+#include "algo_engine/AlgoEngine.h"
 #include "core/logging/Logger.h"
 #include "services/algo_trading/AlgoTradingService.h"
 #include "ui/theme/Theme.h"
@@ -9,6 +11,7 @@
 
 #include <QHeaderView>
 #include <QHBoxLayout>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QTableWidgetItem>
@@ -31,6 +34,7 @@ StrategyListPanel::StrategyListPanel(QWidget* parent) : QWidget(parent) {
 void StrategyListPanel::connect_service() {
     auto& svc = AlgoTradingService::instance();
     connect(&svc, &AlgoTradingService::strategies_loaded, this, &StrategyListPanel::on_strategies_loaded);
+    connect(&svc, &AlgoTradingService::strategy_deleted, this, [&svc](const QString&) { svc.list_strategies(); });
     connect(&svc, &AlgoTradingService::error_occurred, this, &StrategyListPanel::on_error);
 }
 
@@ -109,24 +113,28 @@ void StrategyListPanel::build_ui() {
 
     // ── Table ────────────────────────────────────────────────────────────────
     table_ = new QTableWidget(this);
-    table_->setColumnCount(4); // #, NAME, CATEGORY, ID
-    table_->setHorizontalHeaderLabels({"#", "STRATEGY NAME", "CATEGORY", "ID"});
+    table_->setColumnCount(6); // #, NAME, CATEGORY, ID, DEPLOY, DELETE
+    table_->setHorizontalHeaderLabels({"#", "STRATEGY NAME", "CATEGORY", "ID", "", ""});
     table_->verticalHeader()->setVisible(false);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setAlternatingRowColors(true);
-    table_->setSortingEnabled(false); // we sort ourselves
+    table_->setSortingEnabled(false);
     table_->setShowGrid(false);
     table_->setFocusPolicy(Qt::NoFocus);
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
     table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
     table_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed);
+    table_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);
+    table_->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Fixed);
     table_->setColumnWidth(0, 40);
     table_->setColumnWidth(2, 180);
     table_->setColumnWidth(3, 120);
-    table_->verticalHeader()->setDefaultSectionSize(26);
+    table_->setColumnWidth(4, 80);
+    table_->setColumnWidth(5, 70);
+    table_->verticalHeader()->setDefaultSectionSize(30);
     table_->setStyleSheet(
         QString("QTableWidget { background:%1; alternate-background-color:%2;"
                 " color:%3; border:none; font-size:%4px; font-family:%5; gridline-color:%6; }"
@@ -233,6 +241,37 @@ void StrategyListPanel::render_page() {
         auto* id_item = new QTableWidgetItem(s.id);
         id_item->setForeground(QColor(colors::TEXT_TERTIARY()));
         table_->setItem(row, 3, id_item);
+
+        // Col 4: DEPLOY button
+        auto* deploy_btn = new QPushButton("DEPLOY", table_);
+        deploy_btn->setCursor(Qt::PointingHandCursor);
+        deploy_btn->setFixedHeight(22);
+        deploy_btn->setStyleSheet(
+            QString("QPushButton { background: transparent; color: %1; border: 1px solid %1;"
+                    " font-size: %2px; font-weight: 700; font-family: %3; padding: 1px 8px; }"
+                    "QPushButton:hover { background: rgba(217,119,6,0.1); }")
+                .arg(colors::AMBER())
+                .arg(fonts::TINY)
+                .arg(fonts::DATA_FAMILY()));
+        connect(deploy_btn, &QPushButton::clicked, this, [this, row]() { on_deploy_clicked(row); });
+        table_->setCellWidget(row, 4, deploy_btn);
+
+        // Col 5: DELETE button (only for DSL strategies — QC strategies come from file registry)
+        const bool is_dsl = !s.id.startsWith("FCT-");
+        if (is_dsl) {
+            auto* delete_btn = new QPushButton("DELETE", table_);
+            delete_btn->setCursor(Qt::PointingHandCursor);
+            delete_btn->setFixedHeight(22);
+            delete_btn->setStyleSheet(
+                QString("QPushButton { background: transparent; color: %1; border: 1px solid %1;"
+                        " font-size: %2px; font-weight: 700; font-family: %3; padding: 1px 8px; }"
+                        "QPushButton:hover { background: rgba(220,38,38,0.1); }")
+                    .arg(colors::NEGATIVE())
+                    .arg(fonts::TINY)
+                    .arg(fonts::DATA_FAMILY()));
+            connect(delete_btn, &QPushButton::clicked, this, [this, row]() { on_delete_clicked(row); });
+            table_->setCellWidget(row, 5, delete_btn);
+        }
     }
 
     update_pagination_controls();
@@ -332,6 +371,35 @@ void StrategyListPanel::on_strategies_loaded(QVector<AlgoStrategy> strategies) {
 
 void StrategyListPanel::on_error(const QString& context, const QString& msg) {
     LOG_ERROR("AlgoTrading", QString("StrategyList error [%1]: %2").arg(context, msg));
+}
+
+void StrategyListPanel::on_deploy_clicked(int row) {
+    const int abs_index = current_page_ * kPageSize + row;
+    if (abs_index < 0 || abs_index >= filtered_.size())
+        return;
+
+    const auto& strategy = filtered_[abs_index];
+    AlgoDeployDialog dialog(strategy.id, strategy.name, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        auto deployment = dialog.result();
+        fincept::algo::AlgoEngine::instance().start_deployment(deployment, strategy);
+        LOG_INFO("AlgoTrading", QString("Deploy requested: %1 on %2").arg(strategy.name, deployment.symbol));
+    }
+}
+
+void StrategyListPanel::on_delete_clicked(int row) {
+    const int abs_index = current_page_ * kPageSize + row;
+    if (abs_index < 0 || abs_index >= filtered_.size())
+        return;
+
+    const auto& strategy = filtered_[abs_index];
+    auto answer = QMessageBox::question(this, "Delete Strategy",
+                                        QString("Delete \"%1\"?").arg(strategy.name),
+                                        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer == QMessageBox::Yes) {
+        AlgoTradingService::instance().delete_strategy(strategy.id);
+        LOG_INFO("AlgoTrading", QString("Delete requested: %1").arg(strategy.name));
+    }
 }
 
 } // namespace fincept::screens

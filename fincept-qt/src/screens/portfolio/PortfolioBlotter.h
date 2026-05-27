@@ -1,6 +1,7 @@
 // src/screens/portfolio/PortfolioBlotter.h
 #pragma once
 #include "screens/portfolio/PortfolioTypes.h"
+#include "trading/TradingTypes.h"
 
 #include <QComboBox>
 #include <QHash>
@@ -26,6 +27,7 @@ class PortfolioBlotter : public QWidget {
     /// Show only rows whose symbol is in @p symbols. Empty list = show all.
     void set_sector_filter(const QStringList& symbols);
     void refresh_theme();
+    void hub_resubscribe_broker_quotes(const QString& broker_account_id);
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -78,6 +80,7 @@ class PortfolioBlotter : public QWidget {
     void hub_resubscribe_sparklines();
     void hub_unsubscribe_all();
     void repaint_sparkline_cells();
+    void update_row_price(const QString& symbol, double ltp, double change_pct);
     bool hub_active_ = false;
 
     QVector<portfolio::HoldingWithQuote> holdings_;

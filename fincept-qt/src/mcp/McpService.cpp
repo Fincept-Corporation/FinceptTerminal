@@ -217,21 +217,21 @@ QJsonArray McpService::format_tools_for_openai() {
 //
 // Rationale: when Tool RAG is active we send only this 6-tool prefix to the
 // LLM each turn (~3 KB of schema vs ~25 KB previously). Everything else is
-// discoverable via tool.list. Anthropic's recommended band is 3-5 always-on
+// discoverable via tool_list. Anthropic's recommended band is 3-5 always-on
 // tools — we go to 6 to keep navigation working without a search round-trip.
 //
 // Picked because they're (1) high-frequency, (2) safe (no destructive ops),
 // (3) needed before a search would even make sense:
-//   tool.list           — entry point to discover everything else
-//   tool.describe       — fetch full schema for a discovered tool
+//   tool_list           — entry point to discover everything else
+//   tool_describe       — fetch full schema for a discovered tool
 //   navigate_to_tab     — UI navigation is the LLM's primary side-effect
 //   list_tabs           — what tabs exist?
 //   get_current_tab     — where is the user?
 //   get_auth_status     — guest vs signed-in changes valid actions
 static const QSet<QString>& tier_0_tool_names() {
     static const QSet<QString> kTier0 = {
-        "tool.list",
-        "tool.describe",
+        "tool_list",
+        "tool_describe",
         "navigate_to_tab",
         "list_tabs",
         "get_current_tab",
@@ -249,7 +249,7 @@ static const QSet<QString>& tier_0_tool_names() {
 //
 // Default = TRUE.
 //
-// Rationale: Tool RAG (BM25 retrieval over the catalog via tool.list) lifts
+// Rationale: Tool RAG (BM25 retrieval over the catalog via tool_list) lifts
 // tool-pick accuracy from ~49 → ~74% on Opus 4-class models per Anthropic's
 // published numbers, and from ~80 → ~88% on 4.5-class. Sending only ~6
 // Tier-0 tools per turn (vs. previously ~50) reduces prompt tokens by ~85%.
@@ -304,7 +304,7 @@ QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter) {
     QJsonArray result;
     for (const auto& tool : tools) {
         // Encode tool name for the wire so dotted internal names like
-        // `tool.list` become `tool-dot-list` — Kimi / OpenAI / Groq reject
+        // `tool.list` becomes `tool-dot-list` — Kimi / OpenAI / Groq reject
         // dots in function names. parse_openai_function_name reverses this
         // when the model invokes the tool.
         QString fn_name = tool.server_id + "__" + McpProvider::encode_tool_name_for_wire(tool.name);

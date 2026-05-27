@@ -5,7 +5,7 @@
 // the broader "Tool RAG" literature (Red Hat, IBM, RAG-MCP arXiv 2025/26):
 // once a tool catalog exceeds ~30-50 tools, sending all definitions to the
 // LLM each turn collapses tool-pick accuracy. The fix is on-demand retrieval:
-// expose ONE meta-tool ("tool.list") that semantically searches the catalog
+// expose ONE meta-tool ("tool_list") that semantically searches the catalog
 // and returns the top-K most-relevant tools as references, then the LLM
 // fetches the full schema for the one it wants and invokes it.
 //

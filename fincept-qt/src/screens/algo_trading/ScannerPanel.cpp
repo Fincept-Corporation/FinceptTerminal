@@ -1,8 +1,11 @@
 // src/screens/algo_trading/ScannerPanel.cpp
 #include "screens/algo_trading/ScannerPanel.h"
 
+#include "algo_engine/AlgoScanner.h"
+#include "algo_engine/CandleDataFetcher.h"
 #include "core/logging/Logger.h"
 #include "services/algo_trading/AlgoTradingService.h"
+#include "trading/AccountManager.h"
 #include "ui/theme/Theme.h"
 
 #include <QComboBox>
@@ -191,9 +194,11 @@ ScannerPanel::ScannerPanel(QWidget* parent) : QWidget(parent) {
 // ── Service connections ─────────────────────────────────────────────────────
 
 void ScannerPanel::connect_service() {
-    auto& svc = AlgoTradingService::instance();
-    connect(&svc, &AlgoTradingService::scan_result, this, &ScannerPanel::on_scan_result);
-    connect(&svc, &AlgoTradingService::error_occurred, this, &ScannerPanel::on_error);
+    auto& scanner = fincept::algo::AlgoScanner::instance();
+    connect(&scanner, &fincept::algo::AlgoScanner::scan_complete, this, &ScannerPanel::on_scan_result);
+    connect(&scanner, &fincept::algo::AlgoScanner::scan_error, this, [this](const QString& err) {
+        on_error(QStringLiteral("scan"), err);
+    });
 }
 
 // ── Apply preset ────────────────────────────────────────────────────────────
@@ -414,6 +419,41 @@ void ScannerPanel::build_ui() {
     lookback_spin_->setValue(365);
     right_vl->addWidget(lookback_spin_);
 
+    // Data source
+    auto* ds_lbl = new QLabel("DATA SOURCE", right_col);
+    ds_lbl->setStyleSheet(kLabelStyle());
+    right_vl->addWidget(ds_lbl);
+
+    data_source_combo_ = new QComboBox(right_col);
+    data_source_combo_->addItem("Auto (Broker → YFinance)", "Auto");
+    data_source_combo_->addItem("Broker Only", "Broker");
+    data_source_combo_->addItem("YFinance Only", "YFinance");
+    data_source_combo_->setStyleSheet(kComboStyle());
+    data_source_combo_->setFixedHeight(30);
+    right_vl->addWidget(data_source_combo_);
+
+    // Broker account selector (visible when Broker or Auto is selected)
+    auto* acct_lbl = new QLabel("BROKER ACCOUNT", right_col);
+    acct_lbl->setStyleSheet(kLabelStyle());
+    right_vl->addWidget(acct_lbl);
+
+    account_combo_ = new QComboBox(right_col);
+    account_combo_->setStyleSheet(kComboStyle());
+    account_combo_->setFixedHeight(30);
+    account_combo_->addItem("None (use YFinance fallback)", "");
+    auto accounts = fincept::trading::AccountManager::instance().list_accounts();
+    for (const auto& acct : accounts)
+        account_combo_->addItem(
+            QString("%1 (%2)").arg(acct.display_name, acct.broker_id), acct.account_id);
+    right_vl->addWidget(account_combo_);
+
+    connect(data_source_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            right_col, [acct_lbl, this](int idx) {
+                bool show = (idx != 2); // hide account for "YFinance Only"
+                account_combo_->setVisible(show);
+                acct_lbl->setVisible(show);
+            });
+
     right_vl->addStretch();
 
     columns->addWidget(right_col, 1);
@@ -525,8 +565,22 @@ void ScannerPanel::on_scan() {
                                      .arg(fincept::ui::fonts::SMALL)
                                      .arg(kMonoFont()));
 
-    AlgoTradingService::instance().run_scan(conditions, symbols, timeframe_combo_->currentText(),
-                                            lookback_spin_->value(), logic_combo_->currentText());
+    auto source = fincept::algo::data_source_from_string(
+        data_source_combo_->currentData().toString());
+
+    QString broker_id, account_id;
+    if (source != fincept::algo::DataSource::YFinance) {
+        account_id = account_combo_->currentData().toString();
+        if (!account_id.isEmpty()) {
+            auto acct = fincept::trading::AccountManager::instance().get_account(account_id);
+            broker_id = acct.broker_id;
+        }
+    }
+
+    fincept::algo::AlgoScanner::instance().scan(
+        conditions, symbols, timeframe_combo_->currentText(),
+        lookback_spin_->value(), logic_combo_->currentText(),
+        source, broker_id, account_id);
 
     LOG_INFO("AlgoTrading",
              QString("Scan started: %1 conditions, %2 symbols").arg(conditions.size()).arg(symbols.size()));

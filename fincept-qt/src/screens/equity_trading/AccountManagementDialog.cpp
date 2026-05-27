@@ -12,6 +12,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDesktopServices>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -1250,6 +1251,10 @@ void AccountManagementDialog::fyers_exchange_and_store_token_async(const QString
                 creds.refresh_token = result.refresh_token;
                 if (!result.user_id.isEmpty())
                     creds.user_id = result.user_id;
+                // Fyers tokens expire in 24h from issuance
+                QJsonObject extra = QJsonDocument::fromJson(creds.additional_data.toUtf8()).object();
+                extra[QStringLiteral("token_expires_at")] = QDateTime::currentSecsSinceEpoch() + 86400;
+                creds.additional_data = QString::fromUtf8(QJsonDocument(extra).toJson(QJsonDocument::Compact));
                 am.save_credentials(acct, creds);
                 am.set_connection_state(acct, ConnectionState::Connected, {});
                 self->f_status_->setText(QString("Connected as %1").arg(

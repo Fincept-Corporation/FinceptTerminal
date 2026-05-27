@@ -1,4 +1,5 @@
-﻿#include "services/llm/LlmService.h"
+﻿#include "algo_engine/AlgoEngineProducer.h"
+#include "services/llm/LlmService.h"
 #include "app/MonitorPickerDialog.h"
 #include "app/WindowFrame.h"
 #include "app/TerminalShell.h"
@@ -417,6 +418,9 @@ int main(int argc, char* argv[]) {
         // Wallet — `wallet:balance:*`, `market:price:token:*`.
         fincept::wallet::WalletService::instance().ensure_registered_with_hub();
         fincept::wallet::WalletService::instance().restore_from_storage();
+
+        // Algo Engine — `algo:metrics:*`, `algo:trade:*`, `algo:state:*`.
+        fincept::algo::AlgoEngineProducer::instance().ensure_registered_with_hub();
 
         // Fee-discount eligibility producer (paid screens only).
         {

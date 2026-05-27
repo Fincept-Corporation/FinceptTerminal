@@ -148,12 +148,13 @@ bool ToolRetriever::is_stop_word(const QString& token) {
 }
 
 QStringList ToolRetriever::tokenise(const QString& text) {
-    // Same convention as services/news/NewsClusterService.cpp — split on
-    // non-word, lowercase, drop tokens shorter than 2 chars. This catches
-    // CamelCase boundaries via the snake_case + camelCase mix already in
-    // tool names: e.g. "report_apply_template" → ["report","apply","template"].
+    // Split on non-word characters AND underscores, lowercase, drop tokens
+    // shorter than 2 chars. Splitting on underscores is essential because
+    // tool names are snake_case: "report_apply_template" → ["report","apply","template"].
+    // Without this, the entire snake_case name would be one token and
+    // individual-word queries ("apply template") would miss the name-match bonus.
     QStringList out;
-    static const QRegularExpression kSplit("\\W+");
+    static const QRegularExpression kSplit("[\\W_]+");
     const auto raw = text.toLower().split(kSplit, Qt::SkipEmptyParts);
     out.reserve(raw.size());
     for (const auto& w : raw) {
@@ -412,8 +413,8 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
         ToolMatch m;
         m.name = d.name;
         m.category = d.category;
-        // Truncate long descriptions to keep tool.list payload small. Full
-        // schema is a tool.describe() call away.
+        // Truncate long descriptions to keep tool_list payload small. Full
+        // schema is a tool_describe() call away.
         m.description = d.description.left(200);
         if (d.description.size() > 200)
             m.description += QStringLiteral("…");

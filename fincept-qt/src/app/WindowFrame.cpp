@@ -363,7 +363,7 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
 
     // Per-screen tool filter wiring removed (Tool RAG / Tier-0 model).
     // The LLM now sees a 6-tool Tier-0 prefix on every turn and discovers
-    // the rest via tool.list — making per-screen scoping unnecessary and
+    // the rest via tool_list — making per-screen scoping unnecessary and
     // counterproductive (it would prevent the LLM from finding tools the
     // user might want regardless of which screen happens to be active).
 

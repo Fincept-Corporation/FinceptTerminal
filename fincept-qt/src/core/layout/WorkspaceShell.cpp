@@ -193,11 +193,19 @@ int WorkspaceShell::apply(const Workspace& workspace) {
             }
         }
         if (!target) {
-            // Spawn a fresh frame and adopt the persisted WindowId via the
-            // constructor — must happen before setup_docking_mode's default
-            // navigate creates panels that capture frame_uuid(). Without
-            // this, the variant geometry/screen lookups (keyed on
-            // fl.window_id) would miss for every spawned frame.
+            // Before spawning, reuse any existing unbound frame. Common
+            // after PIN unlock: main.cpp created the window with a fresh
+            // UUID that doesn't match the saved workspace's frame UUID.
+            // Without this, apply() spawns a duplicate window.
+            for (auto* f : frames_now) {
+                if (f && !bound.contains(f)) {
+                    target = f;
+                    break;
+                }
+            }
+        }
+        if (!target) {
+            // No existing frame to reuse — genuinely need a new window.
             target = new fincept::WindowFrame(
                 fincept::WindowFrame::next_window_id(),
                 /*parent=*/nullptr,

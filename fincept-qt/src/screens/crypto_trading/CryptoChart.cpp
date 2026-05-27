@@ -27,6 +27,15 @@
 
 #include "screens/crypto_trading/CryptoChart.h"
 
+#include "ui/charts/CandleData.h"
+#include "ui/charts/ChartOverlayManager.h"
+#include "ui/charts/IndicatorPicker.h"
+#include "ui/charts/layers/EmaLayer.h"
+#include "ui/charts/layers/VwapLayer.h"
+#include "ui/charts/layers/BollingerLayer.h"
+#include "ui/charts/layers/SupportResistanceLayer.h"
+#include "ui/charts/layers/PivotLayer.h"
+
 #include "ui/theme/Theme.h"
 
 #include <QCandlestickSeries>
@@ -295,6 +304,45 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
     ohlc_tooltip_->move(12, 12);
 
     setMinimumHeight(280);
+
+    // --- Overlay engine ---
+    overlay_mgr_ = new fincept::ui::ChartOverlayManager(this);
+    overlay_mgr_->set_chart(chart_view_->scene(), chart_);
+
+    connect(chart_, &QChart::plotAreaChanged, this, [this](const QRectF&) {
+        overlay_mgr_->reposition_all();
+    });
+
+    indicator_picker_ = new fincept::ui::IndicatorPicker(overlay_mgr_, this);
+    layout->insertWidget(layout->indexOf(chart_view_), indicator_picker_);
+
+    connect(indicator_picker_, &fincept::ui::IndicatorPicker::indicator_requested,
+            this, [this](const QString& id) {
+        using namespace fincept::ui;
+        OverlayLayer* layer = nullptr;
+        if (id.startsWith("ema_")) {
+            int period = id.mid(4).toInt();
+            if (period <= 0) period = 21;
+            const QColor colors[] = {QColor("#d97706"), QColor("#16a34a"), QColor("#2563eb"), QColor("#dc2626")};
+            int idx = (period == 9) ? 0 : (period == 21) ? 1 : (period == 50) ? 2 : 3;
+            layer = new EmaLayer(period, colors[idx]);
+        } else if (id == "vwap") {
+            layer = new VwapLayer(true);
+        } else if (id.startsWith("bb_")) {
+            layer = new BollingerLayer();
+        } else if (id == "sr_auto") {
+            layer = new SupportResistanceLayer();
+        } else if (id == "pivot_std") {
+            layer = new PivotLayer();
+        }
+        if (layer)
+            overlay_mgr_->add_layer(layer);
+    });
+
+    connect(indicator_picker_, &fincept::ui::IndicatorPicker::indicator_removed,
+            this, [this](const QString& id) {
+        overlay_mgr_->remove_layer(id);
+    });
 }
 
 void CryptoChart::set_active_tf(int idx) {
@@ -317,6 +365,7 @@ QString CryptoChart::current_timeframe() const {
 void CryptoChart::set_candles(const QVector<trading::Candle>& candles) {
     candles_ = candles;
     rebuild_chart();
+    overlay_mgr_->set_candles(fincept::ui::CandleData::from_candles(candles_));
     apply_tf_axis_format();
     update_last_price_marker();
 
@@ -391,6 +440,9 @@ void CryptoChart::append_candle(const trading::Candle& candle) {
     update_axes(cached_min_price_, cached_max_price_, min_time, max_time);
     apply_tf_axis_format();
     update_last_price_marker();
+
+    if (!candles_.isEmpty())
+        overlay_mgr_->append_candle(fincept::ui::CandleData::from(candles_.last()));
 }
 
 void CryptoChart::recompute_bounds() {
@@ -426,6 +478,12 @@ void CryptoChart::update_axes(double min_price, double max_price, qint64 min_tim
     if (min_price >= max_price)
         return;
 
+    double overlay_min = 0, overlay_max = 0;
+    if (overlay_mgr_->overlay_price_range(overlay_min, overlay_max)) {
+        min_price = std::min(min_price, overlay_min);
+        max_price = std::max(max_price, overlay_max);
+    }
+
     const double padding = (max_price - min_price) * 0.06;
     const double p_min = min_price - padding;
     const double p_max = max_price + padding;
@@ -451,6 +509,8 @@ void CryptoChart::update_axes(double min_price, double max_price, qint64 min_tim
         last_min_time_ = min_time;
         last_max_time_ = effective_max;
     }
+
+    overlay_mgr_->reposition_all();
 }
 
 void CryptoChart::apply_tf_axis_format() {

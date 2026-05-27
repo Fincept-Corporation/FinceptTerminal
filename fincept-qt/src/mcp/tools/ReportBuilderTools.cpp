@@ -657,7 +657,7 @@ std::vector<ToolDef> get_report_builder_tools() {
     }
 
     // ── report_list_component_types ─────────────────────────────────────────
-    // Saves the LLM from calling tool.describe for every type variant.
+    // Saves the LLM from calling tool_describe for every type variant.
     {
         ToolDef t;
         t.name = "report_list_component_types";

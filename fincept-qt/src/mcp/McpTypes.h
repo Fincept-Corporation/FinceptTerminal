@@ -308,7 +308,7 @@ struct ToolDef {
 //   • prompt cost shrinks for non-cached providers
 //   • the LLM has fewer distractors when picking a tool
 //   • dangerous categories can be excluded by default and lazy-discovered
-//     via the tool.list / tool.describe meta-tools (Phase 6.2).
+//     via the tool_list / tool_describe meta-tools (Phase 6.2).
 
 struct ToolFilter {
     /// Inclusive — only tools whose category matches one of these are kept.
@@ -375,7 +375,7 @@ struct UnifiedTool {
     QJsonObject input_schema;
     bool is_internal = false;
     QString category; // Phase 6: enables ToolFilter category include/exclude
-    bool is_destructive = false; // Tool RAG / tool.list surfacing — flag mutating tools
+    bool is_destructive = false; // Tool RAG / tool_list surfacing — flag mutating tools
 };
 
 // ============================================================================

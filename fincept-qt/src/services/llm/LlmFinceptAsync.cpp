@@ -35,7 +35,7 @@ namespace { constexpr const char* kLlmFinceptTag = "LlmService"; }
 //
 // Two modes:
 //   • Tool RAG ON + default filter: emit only the Tier-0 tools + explicit
-//     instructions to use tool.list for everything else. Same disclosure
+//     instructions to use tool_list for everything else. Same disclosure
 //     model as structured providers — keeps the catalog small and forces
 //     deliberate discovery.
 //   • Tool RAG OFF or explicit filter: legacy behaviour — list up to 60
@@ -63,7 +63,7 @@ static QString build_tool_catalog_for_prompt(const mcp::ToolFilter& filter) {
         // Mirror McpService::tier_0_tool_names() (kept in sync manually — small
         // list, low churn).
         static const QSet<QString> kTier0 = {
-            "tool.list", "tool.describe", "navigate_to_tab", "list_tabs",
+            "tool_list", "tool_describe", "navigate_to_tab", "list_tabs",
             "get_current_tab", "get_auth_status",
         };
         catalog += "Always-available tools:\n";
@@ -73,8 +73,8 @@ static QString build_tool_catalog_for_prompt(const mcp::ToolFilter& filter) {
             QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
             catalog += "- " + fn_name + ": " + tool.description + "\n";
         }
-        const QString wire_list     = mcp::McpProvider::encode_tool_name_for_wire("tool.list");
-        const QString wire_describe = mcp::McpProvider::encode_tool_name_for_wire("tool.describe");
+        const QString wire_list     = QStringLiteral("tool_list");
+        const QString wire_describe = QStringLiteral("tool_describe");
         catalog += QStringLiteral(
             "\nFor any other capability, call fincept-terminal__%1 with a natural-language "
             "query (e.g. {\"query\": \"draft a research report\"}). It returns the top 5 most "

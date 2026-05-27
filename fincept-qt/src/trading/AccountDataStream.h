@@ -79,6 +79,9 @@ class AccountDataStream : public QObject {
     void token_expired(const QString& account_id);
 
   private:
+    // --- Token expiry check ---
+    bool is_token_expired() const;
+
     // --- Async fetch methods (all follow P8: QPointer + QtConcurrent + QueuedConnection) ---
     void async_fetch_quote();
     void async_fetch_positions();

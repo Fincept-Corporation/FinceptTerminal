@@ -12,6 +12,7 @@
 #include "services/llm/LlmContentExtractors.h"
 #include "services/llm/LlmRequestPolicy.h"
 #include "core/logging/Logger.h"
+#include "mcp/McpProvider.h"
 #include "mcp/McpService.h"
 
 #include <QJsonArray>
@@ -29,7 +30,7 @@ namespace { constexpr const char* kLlmToolLoopTag = "LlmService"; }
 LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& url,
                                      const QMap<QString, QString>& headers) {
     LlmResponse resp;
-    // MiniMax-style models spend 3 rounds per action (tool.list → tool.describe
+    // MiniMax-style models spend 3 rounds per action (tool_list → tool_describe
     // → actual call), so the default 40 gives ~13 real actions — enough for a
     // full report template fill. Below ~12 silently cripples report-builder flows.
     const int MAX_ROUNDS = active_max_tool_rounds();
@@ -80,7 +81,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
 
                 LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP r%1: executing %2 args=%3").arg(round).arg(fname,
                               QString::fromUtf8(QJsonDocument(fa).toJson(QJsonDocument::Compact)).left(200)));
-                // Strip "<server>__" prefix for user-visible label; restore "tool.list" from wire form.
+                // Strip "<server>__" prefix for user-visible label; decode any wire encoding.
                 QString display = fname;
                 int sep = display.indexOf(QStringLiteral("__"));
                 if (sep > 0)
@@ -335,7 +336,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
                 for (auto pit = props.constBegin(); pit != props.constEnd(); ++pit) {
                     QString key = pit.key().toLower();
                     if (key == "query" || key == "sql" || key == "statement") {
-                        QString fn_name = tool.server_id + "__" + tool.name;
+                        QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
                         QJsonObject args;
                         args[pit.key()] = body;
                         calls.push_back({fn_name, args});

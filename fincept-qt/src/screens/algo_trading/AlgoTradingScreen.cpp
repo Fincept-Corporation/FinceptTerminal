@@ -1,6 +1,7 @@
 // src/screens/algo_trading/AlgoTradingScreen.cpp
 #include "screens/algo_trading/AlgoTradingScreen.h"
 
+#include "algo_engine/AlgoEngine.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "screens/algo_trading/DeploymentDashboard.h"
@@ -21,14 +22,13 @@ AlgoTradingScreen::AlgoTradingScreen(QWidget* parent) : QWidget(parent) {
     build_ui();
 
     poll_timer_ = new QTimer(this);
-    poll_timer_->setInterval(5000); // 5s deployment polling
+    poll_timer_->setInterval(5000);
     connect(poll_timer_, &QTimer::timeout, this, [this]() {
-        if (active_tab_ == 3) // Dashboard tab
-            AlgoTradingService::instance().list_deployments();
+        if (active_tab_ == 3)
+            fincept::algo::AlgoEngine::instance().list_deployments();
     });
 
-    // Keep deploy count badge in sync whenever deployments are loaded
-    connect(&AlgoTradingService::instance(), &AlgoTradingService::deployments_loaded, this,
+    connect(&fincept::algo::AlgoEngine::instance(), &fincept::algo::AlgoEngine::deployments_loaded, this,
             [this](const QVector<AlgoDeployment>& deps) {
                 int active = 0;
                 for (const auto& d : deps) {
@@ -177,7 +177,7 @@ void AlgoTradingScreen::on_tab_changed(int index) {
     if (index == 1)
         AlgoTradingService::instance().list_strategies();
     if (index == 3)
-        AlgoTradingService::instance().list_deployments();
+        fincept::algo::AlgoEngine::instance().list_deployments();
 }
 
 void AlgoTradingScreen::update_tab_buttons() {

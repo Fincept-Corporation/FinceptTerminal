@@ -113,6 +113,10 @@ void EquityTradingScreen::on_account_changed(const QString& account_id) {
     order_entry_->set_symbol(selected_symbol_);
     order_entry_->set_exchange(selected_exchange_);
 
+    // Resubscribe hub topics for new focused account
+    if (isVisible())
+        hub_subscribe_streaming();
+
     // Ensure stream is running and configure it. Skip data fetches when the
     // account has no credentials yet — every fetch_* spawns a QtConcurrent
     // thread that bails on an empty api_key check inside the lambda. Firing
@@ -176,6 +180,10 @@ void EquityTradingScreen::switch_symbol(const QString& symbol) {
     ticker_bar_->set_symbol(symbol);
     order_entry_->set_symbol(symbol);
     watchlist_->set_active_symbol(symbol);
+
+    // Resubscribe quote topics so the new symbol gets a hub subscription
+    if (isVisible() && hub_active_)
+        hub_subscribe_streaming();
 
     // Publish to the linked group so other panels (Watchlist, EquityResearch,
     // News, Derivatives, SurfaceAnalytics) follow. `this` as source suppresses

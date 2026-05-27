@@ -1,0 +1,183 @@
+// src/algo_engine/AlgoEngineTypes.h
+#pragma once
+#include <QHash>
+#include <QMetaType>
+#include <QString>
+#include <QVector>
+
+#include <cstdint>
+#include <optional>
+
+namespace fincept::algo {
+
+// ── OHLCV Candle ────────────────────────────────────────────────────────────
+
+struct OhlcvCandle {
+    int64_t open_time = 0;
+    int64_t close_time = 0;
+    double open = 0;
+    double high = 0;
+    double low = 0;
+    double close = 0;
+    double volume = 0;
+    bool is_closed = false;
+};
+
+// ── Timeframe ───────────────────────────────────────────────────────────────
+
+enum class Timeframe { M1, M3, M5, M15, M30, H1, H4, D1 };
+
+inline int timeframe_seconds(Timeframe tf) {
+    switch (tf) {
+    case Timeframe::M1:  return 60;
+    case Timeframe::M3:  return 180;
+    case Timeframe::M5:  return 300;
+    case Timeframe::M15: return 900;
+    case Timeframe::M30: return 1800;
+    case Timeframe::H1:  return 3600;
+    case Timeframe::H4:  return 14400;
+    case Timeframe::D1:  return 86400;
+    }
+    return 60;
+}
+
+inline Timeframe timeframe_from_string(const QString& s) {
+    if (s == "1m")  return Timeframe::M1;
+    if (s == "3m")  return Timeframe::M3;
+    if (s == "5m")  return Timeframe::M5;
+    if (s == "15m") return Timeframe::M15;
+    if (s == "30m") return Timeframe::M30;
+    if (s == "1h")  return Timeframe::H1;
+    if (s == "4h")  return Timeframe::H4;
+    if (s == "1d")  return Timeframe::D1;
+    return Timeframe::M5;
+}
+
+inline QString timeframe_to_string(Timeframe tf) {
+    switch (tf) {
+    case Timeframe::M1:  return QStringLiteral("1m");
+    case Timeframe::M3:  return QStringLiteral("3m");
+    case Timeframe::M5:  return QStringLiteral("5m");
+    case Timeframe::M15: return QStringLiteral("15m");
+    case Timeframe::M30: return QStringLiteral("30m");
+    case Timeframe::H1:  return QStringLiteral("1h");
+    case Timeframe::H4:  return QStringLiteral("4h");
+    case Timeframe::D1:  return QStringLiteral("1d");
+    }
+    return QStringLiteral("5m");
+}
+
+// ── Indicator result ────────────────────────────────────────────────────────
+
+struct IndicatorResult {
+    QHash<QString, double> current;
+    QHash<QString, double> previous;
+    bool valid = false;
+    QString error;
+};
+
+// ── Condition evaluation ────────────────────────────────────────────────────
+
+struct ConditionResult {
+    bool met = false;
+    QString indicator;
+    QString field;
+    double computed_value = 0;
+    double target_value = 0;
+    QString op;
+    QString error;
+};
+
+struct GroupEvalResult {
+    bool triggered = false;
+    QVector<ConditionResult> details;
+    QString logic;
+};
+
+// ── Position ────────────────────────────────────────────────────────────────
+
+enum class PositionSide { None, Long, Short };
+
+inline QString position_side_to_string(PositionSide s) {
+    switch (s) {
+    case PositionSide::Long:  return QStringLiteral("LONG");
+    case PositionSide::Short: return QStringLiteral("SHORT");
+    default: return QStringLiteral("NONE");
+    }
+}
+
+struct AlgoPosition {
+    PositionSide side = PositionSide::None;
+    double quantity = 0;
+    double entry_price = 0;
+    int64_t entry_time = 0;
+    double unrealized_pnl = 0;
+    double highest_since_entry = 0;
+    double lowest_since_entry = 0;
+};
+
+// ── Risk ────────────────────────────────────────────────────────────────────
+
+struct RiskState {
+    double daily_pnl = 0;
+    double max_drawdown = 0;
+    double peak_equity = 0;
+    bool paused_by_loss_limit = false;
+    int64_t day_start_epoch = 0;
+};
+
+// ── Trade record ────────────────────────────────────────────────────────────
+
+struct AlgoTradeRecord {
+    QString id;
+    QString deployment_id;
+    QString symbol;
+    QString side;
+    double quantity = 0;
+    double price = 0;
+    double pnl = 0;
+    QString reason;
+    int64_t timestamp = 0;
+    QString broker_order_id;
+    int64_t latency_ms = 0;
+};
+
+// ── Metrics ─────────────────────────────────────────────────────────────────
+
+struct AlgoMetrics {
+    double total_pnl = 0;
+    double unrealized_pnl = 0;
+    int total_trades = 0;
+    int winning_trades = 0;
+    int losing_trades = 0;
+    double win_rate = 0;
+    double max_drawdown = 0;
+    double current_price = 0;
+    double current_position_qty = 0;
+    QString current_position_side;
+    double current_position_entry = 0;
+    int64_t last_signal_time = 0;
+    int64_t last_trade_time = 0;
+};
+
+// ── Order signal ────────────────────────────────────────────────────────────
+
+struct AlgoOrderSignal {
+    QString deployment_id;
+    QString account_id;
+    QString symbol;
+    QString exchange;
+    QString product_type;
+    QString side;
+    double quantity = 0;
+    QString order_type = "MARKET";
+    double price = 0;
+    double trigger_price = 0;
+    QString reason;
+};
+
+} // namespace fincept::algo
+
+Q_DECLARE_METATYPE(fincept::algo::AlgoMetrics)
+Q_DECLARE_METATYPE(fincept::algo::AlgoTradeRecord)
+Q_DECLARE_METATYPE(fincept::algo::OhlcvCandle)

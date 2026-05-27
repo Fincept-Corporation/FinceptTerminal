@@ -406,6 +406,12 @@ if(Qt6TextToSpeech_FOUND)
     set(HAS_TTS TRUE)
 endif()
 
+# Optional: WebEngineWidgets + WebChannel (KLineChart / JS-based charting)
+find_package(Qt6 ${_FINCEPT_QT_VER_ARGS} QUIET COMPONENTS WebEngineWidgets WebChannel)
+if(Qt6WebEngineWidgets_FOUND AND Qt6WebChannel_FOUND)
+    set(HAS_WEBENGINE TRUE)
+endif()
+
 # Optional: WaylandClient — required to deploy Qt Wayland QPA plugin on Linux.
 # Without this plugin, apps fall back to XWayland (often visually broken on
 # fractional-scale Fedora/Ubuntu sessions) or fail outright on pure-Wayland
@@ -971,6 +977,7 @@ set(TRADING_SOURCES
     src/trading/brokers/shoonya/ShoonyaBroker.cpp
     # Global brokers
     src/trading/brokers/alpaca/AlpacaBroker.cpp
+    src/trading/brokers/alpaca/AlpacaWebSocket.cpp
     src/trading/brokers/ibkr/IBKRBroker.cpp
     src/trading/brokers/tradier/TradierBroker.cpp
     src/trading/brokers/saxo/SaxoBankBroker.cpp
@@ -983,6 +990,20 @@ set(TRADING_SOURCES
     src/trading/instruments/GrowwInstrumentParser.cpp
     src/trading/instruments/InstrumentService.cpp
     src/trading/instruments/SymbolResolver.cpp
+)
+
+# Algo Engine (native C++ trading engine — replaces Python algo runner)
+set(ALGO_ENGINE_SOURCES
+    src/algo_engine/AlgoEngineTypes.cpp
+    src/algo_engine/CandleAggregator.cpp
+    src/algo_engine/IndicatorEngine.cpp
+    src/algo_engine/ConditionEvaluator.cpp
+    src/algo_engine/PositionManager.cpp
+    src/algo_engine/DeploymentRunner.cpp
+    src/algo_engine/AlgoEngine.cpp
+    src/algo_engine/AlgoEngineProducer.cpp
+    src/algo_engine/AlgoScanner.cpp
+    src/algo_engine/CandleDataFetcher.cpp
 )
 
 # Services
@@ -1184,6 +1205,19 @@ set(UI_SOURCES
     src/ui/widgets/LanguageSwitcher.cpp
     src/ui/tables/DataTable.cpp
     src/ui/charts/ChartFactory.cpp
+    src/ui/charts/ChartIndicators.cpp
+    src/ui/charts/OverlayLayer.cpp
+    src/ui/charts/SeriesLayer.cpp
+    src/ui/charts/HorizontalLineLayer.cpp
+    src/ui/charts/ChartOverlayManager.cpp
+    src/ui/charts/IndicatorPicker.cpp
+    src/ui/charts/IndicatorParamDialog.cpp
+    src/ui/charts/layers/EmaLayer.cpp
+    src/ui/charts/layers/VwapLayer.cpp
+    src/ui/charts/layers/BollingerLayer.cpp
+    src/ui/charts/layers/SupportResistanceLayer.cpp
+    src/ui/charts/layers/PivotLayer.cpp
+    src/ui/charts/KLineChartWidget.cpp
     src/ui/navigation/NavigationBar.cpp
     src/ui/navigation/FKeyBar.cpp
     src/ui/navigation/StatusBar.cpp
@@ -1210,6 +1244,13 @@ set(UI_SOURCES
     src/ui/widgets/NotifToast.cpp
     src/ui/widgets/NotifBell.cpp
     src/ui/widgets/NotifPanel.cpp
+
+    # Algo Trading visual strategy builder widgets
+    src/ui/widgets/algo/ConditionBlock.cpp
+    src/ui/widgets/algo/LogicConnectorWidget.cpp
+    src/ui/widgets/algo/ConditionSection.cpp
+    src/ui/widgets/algo/RiskManagementPanel.cpp
+    src/ui/widgets/algo/SymbolSearchCombo.cpp
 )
 
 # Screens
@@ -1514,6 +1555,7 @@ set(SCREEN_SOURCES
     src/screens/algo_trading/StrategyListPanel.cpp
     src/screens/algo_trading/ScannerPanel.cpp
     src/screens/algo_trading/DeploymentDashboard.cpp
+    src/screens/algo_trading/AlgoDeployDialog.cpp
 
     # Data Mapping (partial-class split; see DataMappingScreen.cpp header).
     src/screens/data_mapping/DataMappingScreen.cpp
@@ -1773,6 +1815,7 @@ set_source_files_properties(
     src/screens/algo_trading/ScannerPanel.cpp
     src/screens/algo_trading/StrategyBuilderPanel.cpp
     src/screens/algo_trading/StrategyListPanel.cpp
+    src/screens/algo_trading/AlgoDeployDialog.cpp
     src/screens/alpha_arena/AlphaArenaScreen.cpp
     src/screens/alpha_arena/panels/LeaderboardPanel.cpp
     src/screens/alpha_arena/panels/ModelChatPanel.cpp
@@ -2189,6 +2232,7 @@ set_source_files_properties(
     src/trading/brokers/motilal/MotilalBroker.cpp
     src/trading/brokers/shoonya/ShoonyaBroker.cpp
     src/trading/brokers/alpaca/AlpacaBroker.cpp
+    src/trading/brokers/alpaca/AlpacaWebSocket.cpp
     src/trading/brokers/ibkr/IBKRBroker.cpp
     src/trading/brokers/tradier/TradierBroker.cpp
     src/trading/brokers/saxo/SaxoBankBroker.cpp
@@ -2309,6 +2353,7 @@ set_source_files_properties(
     src/trading/brokers/motilal/MotilalBroker.cpp
     src/trading/brokers/shoonya/ShoonyaBroker.cpp
     src/trading/brokers/alpaca/AlpacaBroker.cpp
+    src/trading/brokers/alpaca/AlpacaWebSocket.cpp
     src/trading/brokers/ibkr/IBKRBroker.cpp
     src/trading/brokers/tradier/TradierBroker.cpp
     src/trading/brokers/saxo/SaxoBankBroker.cpp
@@ -2384,6 +2429,7 @@ add_executable(FinceptTerminal ${_FINCEPT_EXE_FLAGS}
     ${AI_CHAT_SCREEN_SOURCES}
     ${MCP_SOURCES}
     ${TRADING_SOURCES}
+    ${ALGO_ENGINE_SOURCES}
     ${SERVICE_SOURCES}
     ${UI_SOURCES}
     ${SCREEN_SOURCES}
@@ -2803,6 +2849,11 @@ if(HAS_TTS)
     target_compile_definitions(FinceptTerminal PRIVATE HAS_QT_TTS)
 endif()
 
+if(HAS_WEBENGINE)
+    target_link_libraries(FinceptTerminal PRIVATE Qt6::WebEngineWidgets Qt6::WebChannel)
+    target_compile_definitions(FinceptTerminal PRIVATE HAS_QT_WEBENGINE)
+endif()
+
 # ── Copy qgeoview DLL next to the exe so it's found at runtime ────────────────
 if(WIN32)
     add_custom_command(TARGET FinceptTerminal POST_BUILD
@@ -2908,6 +2959,16 @@ add_custom_command(TARGET FinceptTerminal POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/resources/wallet/vendor"
         "$<TARGET_FILE_DIR:FinceptTerminal>/resources/wallet/vendor"
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:FinceptTerminal>/resources/charts"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/charts/klinechart.html"
+        "$<TARGET_FILE_DIR:FinceptTerminal>/resources/charts/klinechart.html"
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:FinceptTerminal>/resources/charts/vendor"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/charts/vendor"
+        "$<TARGET_FILE_DIR:FinceptTerminal>/resources/charts/vendor"
     COMMENT "Copying requirements files to build output..."
 )
 

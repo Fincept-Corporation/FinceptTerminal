@@ -1,8 +1,10 @@
 // src/screens/algo_trading/DeploymentDashboard.cpp
 #include "screens/algo_trading/DeploymentDashboard.h"
 
+#include "algo_engine/AlgoEngine.h"
 #include "core/logging/Logger.h"
 #include "services/algo_trading/AlgoTradingService.h"
+#include "trading/BrokerRegistry.h"
 #include "ui/theme/Theme.h"
 
 #include <QFrame>
@@ -29,11 +31,30 @@ inline QString kSectionLabel() {
         .arg(kMonoFont());
 }
 
+inline QString currency_symbol(const QString& broker_id) {
+    if (broker_id.isEmpty())
+        return QStringLiteral("$");
+    auto* broker = fincept::trading::BrokerRegistry::instance().get(broker_id);
+    if (!broker)
+        return QStringLiteral("$");
+    const auto currency = broker->profile().currency;
+    if (currency == "INR")
+        return QStringLiteral("₹");
+    if (currency == "EUR")
+        return QStringLiteral("€");
+    if (currency == "GBP")
+        return QStringLiteral("£");
+    if (currency == "JPY")
+        return QStringLiteral("¥");
+    return QStringLiteral("$");
+}
+
 } // namespace
 
 namespace fincept::screens {
 
 using namespace fincept::services::algo;
+namespace algo_ns = fincept::algo;
 
 // ── Constructor ─────────────────────────────────────────────────────────────
 
@@ -46,12 +67,16 @@ DeploymentDashboard::DeploymentDashboard(QWidget* parent) : QWidget(parent) {
 // ── Service connections ─────────────────────────────────────────────────────
 
 void DeploymentDashboard::connect_service() {
-    auto& svc = AlgoTradingService::instance();
-    connect(&svc, &AlgoTradingService::deployments_loaded, this, &DeploymentDashboard::on_deployments_loaded);
-    connect(&svc, &AlgoTradingService::deployment_stopped, this, [](const QString& id) {
+    auto& engine = algo_ns::AlgoEngine::instance();
+    connect(&engine, &algo_ns::AlgoEngine::deployments_loaded, this, &DeploymentDashboard::on_deployments_loaded);
+    connect(&engine, &algo_ns::AlgoEngine::deployment_stopped, this, [](const QString& id) {
         LOG_INFO("AlgoTrading", QString("Deployment stopped: %1").arg(id));
-        AlgoTradingService::instance().list_deployments();
+        algo_ns::AlgoEngine::instance().list_deployments();
     });
+    connect(&engine, &algo_ns::AlgoEngine::error_occurred, this, &DeploymentDashboard::on_error);
+
+    // Also connect to legacy service for QC deployments
+    auto& svc = AlgoTradingService::instance();
     connect(&svc, &AlgoTradingService::error_occurred, this, &DeploymentDashboard::on_error);
 }
 
@@ -140,6 +165,18 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
                                   .arg(is_paper ? "22,163,74" : "217,119,6"));
     top->addWidget(mode_badge);
 
+    // Entry side badge
+    bool is_sell = (d.entry_side == "SELL");
+    auto* side_badge = new QLabel(d.entry_side.isEmpty() ? "BUY" : d.entry_side, card);
+    side_badge->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; %3"
+                                      " padding: 2px 6px; background: rgba(%4,0.08);"
+                                      " border: 1px solid rgba(%4,0.25);")
+                                  .arg(is_sell ? fincept::ui::colors::NEGATIVE() : fincept::ui::colors::POSITIVE())
+                                  .arg(fincept::ui::fonts::TINY)
+                                  .arg(kMonoFont())
+                                  .arg(is_sell ? "220,38,38" : "22,163,74"));
+    top->addWidget(side_badge);
+
     top->addStretch();
 
     // Status badge with dot prefix
@@ -189,9 +226,16 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
 
     // P&L — larger font to match Quant Lab KPI style
     double total_pnl = d.total_pnl + d.unrealized_pnl;
-    add_metric("P&L", QString("%1$%2").arg(total_pnl >= 0 ? "+" : "-").arg(std::abs(total_pnl), 0, 'f', 2),
+    const auto cs = currency_symbol(d.broker_id);
+    add_metric("P&L", QString("%1%2%3").arg(total_pnl >= 0 ? "+" : "-", cs).arg(std::abs(total_pnl), 0, 'f', 2),
                total_pnl >= 0 ? fincept::ui::colors::POSITIVE : fincept::ui::colors::NEGATIVE,
                fincept::ui::fonts::TITLE);
+
+    // Current price
+    if (d.current_price > 0) {
+        add_metric("LTP", QString("%1%2").arg(cs).arg(d.current_price, 0, 'f', 2),
+                   fincept::ui::colors::CYAN);
+    }
 
     // Win Rate
     add_metric("WIN RATE", QString("%1%").arg(d.win_rate, 0, 'f', 1), fincept::ui::colors::TEXT_PRIMARY);
@@ -257,10 +301,24 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
                                     .arg(fincept::ui::fonts::TINY)
                                     .arg(kMonoFont()));
         connect(stop_btn, &QPushButton::clicked, card, [dep_id = d.id]() {
-            AlgoTradingService::instance().stop_deployment(dep_id);
+            algo_ns::AlgoEngine::instance().stop_deployment(dep_id);
             LOG_INFO("AlgoTrading", QString("Stop requested: %1").arg(dep_id));
         });
         btn_row->addWidget(stop_btn);
+    } else {
+        auto* remove_btn = new QPushButton("REMOVE", card);
+        remove_btn->setCursor(Qt::PointingHandCursor);
+        remove_btn->setFixedHeight(26);
+        remove_btn->setStyleSheet(QString("QPushButton { background: transparent; color: %1; border: 1px solid %1;"
+                                          " font-size: %2px; font-weight: 700; %3 padding: 2px 16px; }"
+                                          "QPushButton:hover { background: rgba(120,120,120,0.1); }")
+                                      .arg(fincept::ui::colors::TEXT_TERTIARY())
+                                      .arg(fincept::ui::fonts::TINY)
+                                      .arg(kMonoFont()));
+        connect(remove_btn, &QPushButton::clicked, card, [dep_id = d.id]() {
+            algo_ns::AlgoEngine::instance().stop_deployment(dep_id);
+        });
+        btn_row->addWidget(remove_btn);
     }
 
     vl->addLayout(btn_row);
@@ -295,7 +353,8 @@ void DeploymentDashboard::update_summary(const QVector<AlgoDeployment>& deployme
         active_count_->setText(QString::number(active));
 
     if (total_pnl_) {
-        total_pnl_->setText(QString("%1$%2").arg(pnl_sum >= 0 ? "+" : "-").arg(std::abs(pnl_sum), 0, 'f', 2));
+        QString sum_cs = deployments.isEmpty() ? QStringLiteral("$") : currency_symbol(deployments.first().broker_id);
+        total_pnl_->setText(QString("%1%2%3").arg(pnl_sum >= 0 ? "+" : "-", sum_cs).arg(std::abs(pnl_sum), 0, 'f', 2));
         total_pnl_->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; %3"
                                           " background: transparent; border: none;")
                                       .arg(pnl_sum >= 0 ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE())
@@ -339,7 +398,7 @@ void DeploymentDashboard::build_ui() {
 
     summary_row->addWidget(
         build_stat_card("ACTIVE DEPLOYMENTS", "0", fincept::ui::colors::CYAN, &active_count_, content));
-    summary_row->addWidget(build_stat_card("TOTAL P&L", "$0.00", fincept::ui::colors::POSITIVE, &total_pnl_, content));
+    summary_row->addWidget(build_stat_card("TOTAL P&L", "0.00", fincept::ui::colors::POSITIVE, &total_pnl_, content));
     summary_row->addWidget(
         build_stat_card("TOTAL TRADES", "0", fincept::ui::colors::TEXT_PRIMARY, &total_trades_, content));
     summary_row->addWidget(
@@ -395,7 +454,7 @@ void DeploymentDashboard::build_ui() {
             .arg(fincept::ui::fonts::TINY)
             .arg(kMonoFont())
             .arg(fincept::ui::colors::BG_HOVER(), fincept::ui::colors::TEXT_PRIMARY()));
-    connect(refresh_btn, &QPushButton::clicked, this, []() { AlgoTradingService::instance().list_deployments(); });
+    connect(refresh_btn, &QPushButton::clicked, this, []() { algo_ns::AlgoEngine::instance().list_deployments(); });
     control_bar->addWidget(refresh_btn);
 
     control_bar->addStretch();
@@ -412,7 +471,7 @@ void DeploymentDashboard::build_ui() {
             .arg(kMonoFont())
             .arg(fincept::ui::colors::TEXT_PRIMARY()));
     connect(stop_all_btn, &QPushButton::clicked, this, []() {
-        AlgoTradingService::instance().stop_all_deployments();
+        algo_ns::AlgoEngine::instance().stop_all();
         LOG_INFO("AlgoTrading", "Stop all deployments requested");
     });
     control_bar->addWidget(stop_all_btn);

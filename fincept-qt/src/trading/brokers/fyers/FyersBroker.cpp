@@ -408,7 +408,7 @@ ApiResponse<QVector<BrokerQuote>> FyersBroker::get_quotes(const BrokerCredential
             q.change_pct = v.value("chp").toDouble();
             q.bid = v.value("bid").toDouble();
             q.ask = v.value("ask").toDouble();
-            q.timestamp = v.value("tt").toVariant().toLongLong();
+            q.timestamp = v.value("tt").toVariant().toLongLong() * 1000;
             q.oi = v.value("oi").toVariant().toLongLong();
             q.oi_change_pct = v.value("oichp").toDouble();
             all_quotes.append(q);
@@ -450,7 +450,8 @@ ApiResponse<QVector<BrokerCandle>> FyersBroker::get_history(const BrokerCredenti
         if (c.size() < 6)
             continue;
         BrokerCandle candle;
-        candle.timestamp = c[0].toVariant().toLongLong();
+        // Fyers returns epoch in seconds; internal convention is milliseconds.
+        candle.timestamp = c[0].toVariant().toLongLong() * 1000;
         candle.open = c[1].toDouble();
         candle.high = c[2].toDouble();
         candle.low = c[3].toDouble();

@@ -35,6 +35,7 @@ namespace fincept::screens::equity {
 
 EquityOrderBook::EquityOrderBook(QWidget* parent) : QWidget(parent) {
     setObjectName("eqOrderBook");
+    setMinimumHeight(HEADER_H + ROW_H * 11 + SPREAD_H); // header + 5 asks + header row + 5 bids + spread
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this]() { update(); });
 
     auto* layout = new QVBoxLayout(this);
@@ -65,7 +66,7 @@ EquityOrderBook::EquityOrderBook(QWidget* parent) : QWidget(parent) {
     canvas_ = new QWidget(this);
     canvas_->setObjectName("eqObCanvas");
     canvas_->setAttribute(Qt::WA_TransparentForMouseEvents);
-    canvas_->setMinimumHeight(100);
+    canvas_->setMinimumHeight(ROW_H * 10 + ROW_H); // 5 asks + 5 bids + header row
     layout->addWidget(canvas_, 1);
     layout->addWidget(spread_label_);
 

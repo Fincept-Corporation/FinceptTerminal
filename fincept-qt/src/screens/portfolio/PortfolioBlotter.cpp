@@ -4,10 +4,12 @@
 #include "screens/portfolio/PortfolioSparkline.h"
 #include "services/markets/MarketDataService.h"
 #include "storage/repositories/SettingsRepository.h"
+#include "trading/AccountManager.h"
+#include "trading/BrokerTopic.h"
 #include "ui/theme/Theme.h"
 
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 
 #include <QAction>
 #include <QEvent>
@@ -325,6 +327,67 @@ void PortfolioBlotter::hub_unsubscribe_all() {
         return;
     datahub::DataHub::instance().unsubscribe(this);
     hub_active_ = false;
+}
+
+void PortfolioBlotter::hub_resubscribe_broker_quotes(const QString& broker_account_id) {
+    if (broker_account_id.isEmpty() || holdings_.isEmpty())
+        return;
+    auto account = trading::AccountManager::instance().get_account(broker_account_id);
+    if (account.broker_id.isEmpty() || account.state != trading::ConnectionState::Connected)
+        return;
+
+    auto& hub = datahub::DataHub::instance();
+    const QString bid = account.broker_id;
+    const QString aid = broker_account_id;
+
+    for (const auto& h : holdings_) {
+        // Indian stocks in yfinance format end with .NS or .BO
+        QString broker_sym;
+        if (h.symbol.endsWith(QStringLiteral(".NS")) || h.symbol.endsWith(QStringLiteral(".BO")))
+            broker_sym = h.symbol.left(h.symbol.length() - 3);
+        else
+            continue; // not an Indian stock — skip broker subscription
+
+        const QString topic = trading::broker_topic(bid, aid, QStringLiteral("quote"), broker_sym);
+        const QString yf_sym = h.symbol;
+        hub.subscribe(this, topic, [this, yf_sym](const QVariant& v) {
+            if (!v.canConvert<trading::BrokerQuote>())
+                return;
+            const auto quote = v.value<trading::BrokerQuote>();
+            update_row_price(yf_sym, quote.ltp, quote.change_pct);
+        });
+    }
+}
+
+void PortfolioBlotter::update_row_price(const QString& symbol, double ltp, double change_pct) {
+    for (int r = 0; r < table_->rowCount(); ++r) {
+        auto* item = table_->item(r, 0);
+        if (!item || item->data(Qt::UserRole).toString() != symbol)
+            continue;
+        // Column layout: SYMBOL(0), QTY(1), AVG(2), LAST(3), MKT VAL(4), COST(5), P&L(6), P&L%(7), CHG%(8), SPARKLINE(9), WT%(10)
+        if (auto* last_item = table_->item(r, 3))
+            last_item->setText(format_value(ltp));
+        // Recalculate market value & P&L from holdings data
+        const int idx = r + (current_page_ - 1) * page_size_;
+        auto view = visible_view();
+        if (idx >= 0 && idx < view.size()) {
+            auto& h = view[idx];
+            double mkt_val = ltp * h.quantity;
+            double pnl = mkt_val - h.cost_basis;
+            double pnl_pct = h.cost_basis > 0 ? (pnl / h.cost_basis) * 100.0 : 0.0;
+            if (auto* mv = table_->item(r, 4))
+                mv->setText(format_value(mkt_val));
+            if (auto* pnl_item = table_->item(r, 6))
+                pnl_item->setText(format_value(pnl));
+            if (auto* pnl_pct_item = table_->item(r, 7))
+                pnl_pct_item->setText(QString("%1%").arg(pnl_pct, 0, 'f', 2));
+        }
+        if (auto* chg = table_->item(r, 8)) {
+            chg->setText(QString("%1%").arg(change_pct, 0, 'f', 2));
+            chg->setForeground(QColor(change_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+        }
+        break;
+    }
 }
 
 

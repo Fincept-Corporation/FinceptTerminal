@@ -6,6 +6,7 @@
 
 #include <QMutex>
 #include <QThread>
+#include <QTimer>
 
 #include <atomic>
 #include <optional>
@@ -42,11 +43,6 @@ class UnifiedTrading : public QObject {
     };
     QVector<BroadcastResult> broadcast_order(const QStringList& account_ids, const UnifiedOrder& order);
 
-    // Order bridge for algo trading
-    void start_order_bridge();
-    void stop_order_bridge();
-    bool is_bridge_running() const;
-
     UnifiedTrading(const UnifiedTrading&) = delete;
     UnifiedTrading& operator=(const UnifiedTrading&) = delete;
 
@@ -62,9 +58,6 @@ class UnifiedTrading : public QObject {
 
     std::optional<TradingSession> session_;
     mutable QMutex mutex_;
-
-    // Order bridge
-    std::atomic<bool> bridge_running_{false};
 };
 
 } // namespace fincept::trading

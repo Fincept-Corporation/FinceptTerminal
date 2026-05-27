@@ -8,6 +8,8 @@
 #include "trading/PaperTrading.h"
 
 #include <QDateTime>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMutexLocker>
 #include <QUuid>
 
@@ -46,13 +48,28 @@ void AccountManager::load_from_db() {
     LOG_INFO("AccountManager", QString("Loaded %1 broker accounts from DB").arg(accounts_.size()));
 
     // Restore connection state from persisted credentials.
-    // If an account has a saved access_token, mark it as Connected (optimistic).
-    // The first API call will detect token expiry and update the state.
+    // Check token_expires_at in additional_data — mark TokenExpired if stale.
     auto& secure = SecureStorage::instance();
     for (auto it = accounts_.begin(); it != accounts_.end(); ++it) {
         auto token_r = secure.retrieve(acct_key(it->account_id, "access_token"));
-        if (token_r.is_ok() && !token_r.value().isEmpty())
-            it->state = ConnectionState::Connected;
+        if (!token_r.is_ok() || token_r.value().isEmpty())
+            continue;
+        auto extra_r = secure.retrieve(acct_key(it->account_id, "additional_data"));
+        qint64 expires_at = 0;
+        if (extra_r.is_ok() && !extra_r.value().isEmpty()) {
+            auto doc = QJsonDocument::fromJson(extra_r.value().toUtf8());
+            expires_at = static_cast<qint64>(doc.object().value("token_expires_at").toDouble(0));
+        }
+        // Fyers tokens expire in 24h — if no expiry stored, assume expired
+        if (expires_at > 0 && expires_at <= QDateTime::currentSecsSinceEpoch()) {
+            it->state = ConnectionState::TokenExpired;
+            continue;
+        }
+        if (expires_at == 0 && it->broker_id == QStringLiteral("fyers")) {
+            it->state = ConnectionState::TokenExpired;
+            continue;
+        }
+        it->state = ConnectionState::Connected;
     }
 }
 

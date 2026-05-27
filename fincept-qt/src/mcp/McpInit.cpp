@@ -181,7 +181,7 @@ void initialize_all_tools() {
     // surface-analytics — 35-surface capability catalog + Databento fetches
     provider.register_tools(tools::get_surface_analytics_tools());
 
-    // Phase 6: meta tools — tool.list, tool.describe, mcp.health.
+    // Phase 6: meta tools — tool_list, tool_describe, mcp_health.
     // Always exposed so the LLM can lazy-discover specialised tools.
     provider.register_tools(tools::get_meta_tools());
 

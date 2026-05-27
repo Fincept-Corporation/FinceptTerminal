@@ -9,6 +9,7 @@
 #include "trading/BrokerAccount.h"
 #include "trading/TradingTypes.h"
 
+#include <QHash>
 #include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -68,13 +69,7 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void refresh_candles();
     void update_clock();
 
-    // DataStreamManager signal handlers
-    void on_stream_quote_updated(const QString& account_id, const QString& symbol, const trading::BrokerQuote& quote);
-    void on_stream_watchlist_updated(const QString& account_id, const QVector<trading::BrokerQuote>& quotes);
-    void on_stream_positions_updated(const QString& account_id, const QVector<trading::BrokerPosition>& positions);
-    void on_stream_holdings_updated(const QString& account_id, const QVector<trading::BrokerHolding>& holdings);
-    void on_stream_orders_updated(const QString& account_id, const QVector<trading::BrokerOrderInfo>& orders);
-    void on_stream_funds_updated(const QString& account_id, const trading::BrokerFunds& funds);
+    // DataStreamManager signal handlers (on-demand / one-shot — kept as legacy signals)
     void on_stream_candles_fetched(const QString& account_id, const QVector<trading::BrokerCandle>& candles);
     void on_stream_orderbook_fetched(const QString& account_id,
                                      const QVector<QPair<double, double>>& bids,
@@ -96,6 +91,12 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void update_account_menu();
     void update_connection_status();
     void async_modify_order(const QString& order_id, double qty, double price);
+
+    // DataHub subscription helpers (D4 migration)
+    void hub_subscribe_streaming();
+    void hub_unsubscribe_all();
+    void hub_subscribe_quotes();
+    QString broker_id_for_focused() const;
 
     // ── Command bar widgets ──
     QPushButton* account_btn_ = nullptr;  // shows focused account name
@@ -134,6 +135,8 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     double current_price_ = 0.0; // last known LTP for selected symbol
 
     bool initialized_ = false;
+    bool hub_active_ = false;
+    QHash<QString, trading::BrokerQuote> watchlist_quote_cache_;
 
     // Symbol group link — SymbolGroup::None when unlinked.
     SymbolGroup link_group_ = SymbolGroup::None;
