@@ -488,6 +488,10 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         refresh_btn->setObjectName("datasource_connection_refresh");
         refresh_btn->setFixedSize(24, 24);
         refresh_btn->setToolTip("Refresh connection list");
+        refresh_btn->setStyleSheet(QString("QPushButton { background:%1; color:%2;"
+                                           " border:1px solid %1; font-size:13px; }"
+                                           "QPushButton:hover { background:%3; }")
+                                       .arg(ui::colors::BORDER_MED(), ui::colors::AMBER(), ui::colors::TEXT_DIM()));
         rl->addWidget(refresh_btn);
 
         layout->addWidget(row);
