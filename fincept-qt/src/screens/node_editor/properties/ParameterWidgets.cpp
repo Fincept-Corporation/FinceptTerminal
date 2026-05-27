@@ -13,6 +13,8 @@
 #include <QHBoxLayout>
 #include <QJsonDocument>
 #include <QPushButton>
+#include <QPointer>
+#include <QtConcurrent/QtConcurrent>
 
 namespace fincept::workflow {
 
@@ -431,44 +433,71 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
 
         QObject::connect(refresh_btn, &QPushButton::clicked, container, [populate_tools]() { populate_tools(); });
     } else if (param.type == "datasource_connection_select") {
+        auto* row = new QWidget(parent);
+        auto* rl = new QHBoxLayout(row);
+        rl->setContentsMargins(0, 0, 0, 0);
+        rl->setSpacing(4);
+
         auto* combo = new QComboBox;
+        combo->setObjectName("datasource_connection_select");
         combo->setMaximumWidth(260);
         combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        combo->setStyleSheet(
-            QString("QComboBox { %1 }"
-                    "QComboBox::drop-down { background:%2; border:1px solid %2; width:18px; }"
-                    "QComboBox QAbstractItemView { background:%3; color:%4;"
-                    "  border:1px solid %2; selection-background-color:%5;"
-                    "  font-family:Consolas; }")
-                .arg(input_style(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER(),
-                     ui::colors::TEXT_PRIMARY(), ui::colors::AMBER()));
-
-        combo->addItem("— select connection —", QString());
 
         // Get the connector ID from param placeholder
         QString provider = param.placeholder;
 
-        // Load all saved connections of this provider type
-        auto res = DataSourceRepository::instance().list_all();
-        if (res.is_ok()) {
-            for (const auto& ds : res.value()) {
-                if (ds.provider == provider && ds.enabled) {
-                    QString display = ds.display_name + "  [" + ds.alias + "]";
-                    combo->addItem(display, ds.id);
-                }
-            }
-        }
+        QPointer<QComboBox> p_combo(combo);
+        auto populate_connections = [p_combo, provider, current_value]() {
+            if (!p_combo) return;
+            p_combo->clear();
+            p_combo->addItem("Loading connections...", QString());
 
-        QString saved = current_value.toString();
-        int idx = combo->findData(saved);
-        if (idx >= 0) {
-            combo->setCurrentIndex(idx);
-        }
+            // Load all saved connections of this provider type asynchronously
+            (void)QtConcurrent::run([p_combo, provider, current_value]() {
+                auto res = DataSourceRepository::instance().list_all();
 
-        layout->addWidget(combo);
+                // Post results back to combo box on the UI thread
+                QMetaObject::invokeMethod(p_combo.data(), [p_combo, provider, current_value, res]() {
+                    if (!p_combo) return;
+
+                    QString saved = p_combo->count() > 0 ? p_combo->currentData().toString() : current_value.toString();
+                    p_combo->clear();
+                    p_combo->addItem("— select connection —", QString());
+
+                    if (res.is_ok()) {
+                        for (const auto& ds : res.value()) {
+                            if (ds.provider == provider && ds.enabled) {
+                                QString display = ds.display_name + "  [" + ds.alias + "]";
+                                p_combo->addItem(display, ds.id);
+                                if (ds.id == saved) {
+                                    p_combo->setCurrentIndex(p_combo->count() - 1);
+                                }
+                            }
+                        }
+                    }
+                }, Qt::QueuedConnection);
+            });
+        };
+
+        // Initial populate
+        populate_connections();
+
+        rl->addWidget(combo, 1);
+
+        auto* refresh_btn = new QPushButton("↻");
+        refresh_btn->setObjectName("datasource_connection_refresh");
+        refresh_btn->setFixedSize(24, 24);
+        refresh_btn->setToolTip("Refresh connection list");
+        rl->addWidget(refresh_btn);
+
+        layout->addWidget(row);
 
         QObject::connect(combo, &QComboBox::currentIndexChanged, container, [key, on_change, combo](int) {
             on_change(key, QJsonValue(combo->currentData().toString()));
+        });
+
+        QObject::connect(refresh_btn, &QPushButton::clicked, container, [populate_connections]() {
+            populate_connections();
         });
     }
 
