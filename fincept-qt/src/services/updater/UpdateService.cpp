@@ -367,7 +367,7 @@ void UpdateService::on_download_reply_finished() {
             return;
         }
         LOG_INFO("UpdateService", QString("Sha256 verified: %1").arg(actual));
-    }else{
+    } else {
         LOG_ERROR("UpdateService",
                 "Manifest missing sha256 — refusing to launch installer");
         show_error(QStringLiteral(
