@@ -46,6 +46,10 @@ PythonWorker::PythonWorker() {
             proc_->kill();
         }
     });
+
+    connect(&PythonRunner::instance(), &PythonRunner::python_ready, this, [this]() {
+        ensure_started();
+    });
 }
 
 PythonWorker::~PythonWorker() {

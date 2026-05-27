@@ -1123,6 +1123,7 @@ set(SERVICE_SOURCES
     src/services/workflow/nodes/SafetyNodes.cpp
     src/services/workflow/nodes/NotificationNodes.cpp
     src/services/workflow/nodes/AgentNodes.cpp
+    src/services/workflow/nodes/DataSourceNodes.cpp
     src/services/workflow/nodes/FileNodes.cpp
     src/services/workflow/nodes/DataFormatNodes.cpp
     src/services/workflow/nodes/IntegrationNodes.cpp
