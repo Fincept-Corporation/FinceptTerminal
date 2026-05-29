@@ -71,6 +71,9 @@ class TradierBroker : public IBroker {
     static bool is_token_expired(const BrokerHttpResponse& resp);
     static QString checked_error(const BrokerHttpResponse& resp, const QString& fallback);
 
+    // --- Margin Calculator --- Tradier has no per-order margin API → fallback estimator.
+    ApiResponse<OrderMargin> get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) override;
+
   protected:
     QMap<QString, QString> auth_headers(const BrokerCredentials& creds) const override;
 

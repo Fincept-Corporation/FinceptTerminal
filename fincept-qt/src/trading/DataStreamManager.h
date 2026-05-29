@@ -9,6 +9,7 @@
 #include <QHash>
 #include <QObject>
 #include <QString>
+#include <QTimer>
 
 #    include "datahub/Producer.h"
 
@@ -64,6 +65,16 @@ class DataStreamManager : public QObject
   private:
     DataStreamManager();
     void wire_stream_signals(AccountDataStream* stream);
+
+    // Session expiry (Phase 3 §19). Indian broker tokens expire at ~3:00 AM IST
+    // daily regardless of activity. This timer fires hourly and, when the IST
+    // clock is in the 3:00–3:59 AM window, proactively marks active live
+    // Indian-broker accounts as ConnectionState::TokenExpired so the UI can
+    // prompt re-auth even if no API call has failed yet. Crypto / international
+    // brokers are exempt (24/7 or different expiry rules).
+    void check_indian_token_expiry();
+    QTimer* expiry_check_timer_ = nullptr;
+    int last_expiry_check_day_ = -1; // QDate::dayOfYear of last proactive sweep
 
     // Slot-style handlers that fan the per-account signals to hub topics.
     // Connected from wire_stream_signals() so every stream publishes.

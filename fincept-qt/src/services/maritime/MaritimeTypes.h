@@ -83,6 +83,7 @@ struct AreaSearchParams {
     double min_lng = 0;
     double max_lng = 0;
     int days_ago = 0;
+    int limit = 0;  // server-side result cap; 0 = no limit (omitted from request)
 };
 
 } // namespace fincept::services::maritime

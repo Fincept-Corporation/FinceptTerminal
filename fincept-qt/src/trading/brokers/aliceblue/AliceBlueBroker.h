@@ -10,6 +10,7 @@ class AliceBlueBroker : public IBroker {
     BrokerId id() const override { return BrokerId::AliceBlue; }
     const char* name() const override { return "AliceBlue"; }
     const char* base_url() const override { return "https://a3.aliceblueonline.com"; }
+    const char* ws_adapter_name() const override { return "aliceblue"; }
 
     BrokerProfile profile() const override {
         return BrokerProfile{

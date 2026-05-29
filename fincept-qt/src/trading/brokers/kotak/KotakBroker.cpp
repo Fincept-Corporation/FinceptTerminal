@@ -745,4 +745,63 @@ ApiResponse<QVector<BrokerCandle>> KotakBroker::get_history(const BrokerCredenti
     return {true, QVector<BrokerCandle>{}, "", ts};
 }
 
+// ============================================================================
+// Pre-trade margin calculator — POST {base_url}/quick/user/check-margin (native)
+// Mirrors OpenAlgo broker/kotak/api/margin_api.py + mapping/margin_data.py.
+// Body: jData=<url-encoded JSON>, single position object with Kotak short keys:
+//   {brkName:"KOTAK", brnchId:"ONLINE", exSeg, prc, prcTp, prod, qty, tok, trnsTp}
+// Response: {stat:"Ok", reqdMrgn, avlMrgn, ordMrgn, ...}
+// Kotak returns total required margin only (no SPAN/Exposure breakdown).
+// ============================================================================
+ApiResponse<OrderMargin> KotakBroker::get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) {
+    int64_t ts = now_ts();
+    auto p = unpack(creds.access_token);
+    if (!p.valid)
+        return {false, std::nullopt, "[TOKEN_EXPIRED] Invalid or missing session token", ts};
+
+    const QString tok = lookup_psymbol(order.symbol, order.exchange, creds.broker_id);
+    if (tok.isEmpty())
+        return {false, std::nullopt, "Token not found for " + order.exchange + ":" + order.symbol, ts};
+
+    QJsonObject jobj;
+    jobj["brkName"] = "KOTAK";
+    jobj["brnchId"] = "ONLINE";
+    jobj["exSeg"] = kotak_exchange(order.exchange);
+    jobj["prc"] = QString::number(order.price, 'f', 2);
+    jobj["prcTp"] = kotak_enum_map().order_type_or(order.order_type, "MKT");
+    jobj["prod"] = kotak_enum_map().product_or(order.product_type, "MIS");
+    jobj["qty"] = QString::number(static_cast<int>(order.quantity));
+    jobj["tok"] = tok;
+    jobj["trnsTp"] = order.side == OrderSide::Buy ? "B" : "S";
+
+    // check-margin uses the v1-era jData=<url-encoded JSON> form wrapper.
+    const QByteArray json = QJsonDocument(jobj).toJson(QJsonDocument::Compact);
+    QMap<QString, QString> form{{"jData", QString::fromUtf8(json)}};
+
+    auto hdrs = auth_headers(creds);
+    auto resp = BrokerHttp::instance().post_form(with_sid("/quick/user/check-margin", p), form, hdrs);
+
+    if (!resp.success)
+        return {false, std::nullopt, checked_error(resp, "Network error"), ts};
+    if (is_token_expired(resp))
+        return {false, std::nullopt, "[TOKEN_EXPIRED]", ts};
+    if (resp.json.value("stat").toString() != "Ok")
+        return {false, std::nullopt, checked_error(resp, "Margin calculation failed"), ts};
+
+    const auto& j = resp.json;
+    OrderMargin m;
+    m.symbol = order.symbol;
+    m.exchange = order.exchange;
+    m.side = order.side == OrderSide::Buy ? "BUY" : "SELL";
+    m.quantity = order.quantity;
+    m.price = order.price;
+    // Kotak returns string-or-number fields; toVariant().toDouble() handles both.
+    m.total = j.value("reqdMrgn").toVariant().toDouble();
+    m.cash = j.value("avlMrgn").toVariant().toDouble();
+    const double notional = order.price * order.quantity;
+    if (m.total > 0.0 && notional > 0.0)
+        m.leverage = notional / m.total;
+    return {true, m, "", ts};
+}
+
 } // namespace fincept::trading

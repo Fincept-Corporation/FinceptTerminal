@@ -17,8 +17,12 @@
 #include "trading/brokers/iifl/IIFLBroker.h"
 #include "trading/brokers/kotak/KotakBroker.h"
 #include "trading/brokers/motilal/MotilalBroker.h"
+#include "trading/brokers/paytm/PaytmBroker.h"
+#include "trading/brokers/samco/SamcoBroker.h"
 #include "trading/brokers/saxo/SaxoBankBroker.h"
 #include "trading/brokers/shoonya/ShoonyaBroker.h"
+#include "trading/brokers/flattrade/FlattradeBroker.h"
+#include "trading/brokers/tradejini/TradejiniBroker.h"
 #include "trading/brokers/tradier/TradierBroker.h"
 #include "trading/brokers/upstox/UpstoxBroker.h"
 #include "trading/brokers/zerodha/ZerodhaBroker.h"
@@ -122,6 +126,10 @@ void BrokerRegistry::register_all() {
     brokers_["iifl"] = std::make_unique<IIFLBroker>();
     brokers_["motilal"] = std::make_unique<MotilalBroker>();
     brokers_["shoonya"] = std::make_unique<ShoonyaBroker>();
+    brokers_["samco"] = std::make_unique<SamcoBroker>();
+    brokers_["flattrade"] = std::make_unique<FlattradeBroker>();
+    brokers_["paytm"] = std::make_unique<PaytmBroker>();
+    brokers_["tradejini"] = std::make_unique<TradejiniBroker>();
 
     // US brokers
     brokers_["alpaca"] = std::make_unique<AlpacaBroker>();

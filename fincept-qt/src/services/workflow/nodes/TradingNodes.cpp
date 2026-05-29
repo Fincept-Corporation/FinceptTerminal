@@ -241,6 +241,135 @@ void register_trading_nodes(NodeRegistry& registry) {
             },
         .execute = nullptr,
     });
+
+    // ── Phase 3 §6: OpenAlgo-parity live trading nodes ─────────────
+    // Definitions only — execution is wired in ServiceBridges.cpp
+    // (wire_trading_bridges) against UnifiedTrading / the active broker.
+
+    // Data: Get Quote — live LTP/bid/ask/volume/OI for a single symbol.
+    registry.register_type({
+        .type_id = "trading.get_quote",
+        .display_name = "Get Quote",
+        .category = "Trading",
+        .description = "Fetch a live broker quote (LTP, bid, ask, volume, OI) for a symbol",
+        .icon_text = "T",
+        .accent_color = "#16a34a",
+        .version = 1,
+        .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
+        .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::MarketData}},
+        .parameters =
+            {
+                {"account_id", "Account ID", "string", "", {}, "Leave blank to use active account for broker"},
+                {"broker", "Broker", "select", "fyers", {"fyers", "zerodha", "alpaca", "ibkr", "upstox", "dhan"}, ""},
+                {"symbol", "Symbol", "string", "", {}, "Ticker symbol", true},
+                {"exchange", "Exchange", "select", "NSE", {"NSE", "BSE", "NFO", "MCX", "CDS", "NASDAQ", "NYSE"}, ""},
+            },
+        .execute = nullptr,
+    });
+
+    // Data: Get Position — quantity/avg_price/pnl for a single symbol.
+    registry.register_type({
+        .type_id = "trading.get_position",
+        .display_name = "Get Position",
+        .category = "Trading",
+        .description = "Fetch the open position (qty, avg price, P&L) for a single symbol",
+        .icon_text = "T",
+        .accent_color = "#16a34a",
+        .version = 1,
+        .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
+        .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::PortfolioData}},
+        .parameters =
+            {
+                {"account_id", "Account ID", "string", "", {}, "Leave blank to use active account for broker"},
+                {"broker", "Broker", "select", "fyers", {"fyers", "zerodha", "alpaca", "ibkr", "upstox", "dhan"}, ""},
+                {"symbol", "Symbol", "string", "", {}, "Ticker symbol", true},
+                {"exchange", "Exchange", "select", "NSE", {"NSE", "BSE", "NFO", "MCX", "CDS", "NASDAQ", "NYSE"}, ""},
+                {"product", "Product", "select", "", {"", "MIS", "CNC", "NRML"}, "Optional product filter"},
+            },
+        .execute = nullptr,
+    });
+
+    // Order: Smart Order — position-aware order (targets a net position size).
+    registry.register_type({
+        .type_id = "trading.smart_order",
+        .display_name = "Smart Order",
+        .category = "Trading",
+        .description = "Position-aware order — buys/sells the delta needed to reach a target position size",
+        .icon_text = "T",
+        .accent_color = "#16a34a",
+        .version = 1,
+        .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
+        .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
+        .parameters =
+            {
+                {"account_id", "Account ID", "string", "", {}, "Leave blank to use active account for broker"},
+                {"broker", "Broker", "select", "fyers", {"fyers", "zerodha", "alpaca", "ibkr", "upstox", "dhan"}, ""},
+                {"symbol", "Symbol", "string", "", {}, "Ticker symbol", true},
+                {"exchange", "Exchange", "select", "NSE", {"NSE", "BSE", "NFO", "MCX", "CDS", "NASDAQ", "NYSE"}, ""},
+                {"position_size", "Position Size", "number", 0, {}, "Target net position (+long / -short / 0=flatten)", true},
+                {"order_type", "Order Type", "select", "market", {"market", "limit"}, ""},
+                {"price", "Limit Price", "number", 0, {}, "Price for limit orders"},
+                {"product", "Product", "select", "intraday", {"delivery", "intraday", "margin", "mtf"}, ""},
+            },
+        .execute = nullptr,
+    });
+
+    // Order: Cancel All — cancel every open order on the account.
+    registry.register_type({
+        .type_id = "trading.cancel_all",
+        .display_name = "Cancel All Orders",
+        .category = "Trading",
+        .description = "Cancel all open orders on the account",
+        .icon_text = "T",
+        .accent_color = "#16a34a",
+        .version = 1,
+        .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
+        .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
+        .parameters =
+            {
+                {"account_id", "Account ID", "string", "", {}, "Leave blank to use active account for broker"},
+                {"broker", "Broker", "select", "fyers", {"fyers", "zerodha", "alpaca", "ibkr", "upstox", "dhan"}, ""},
+            },
+        .execute = nullptr,
+    });
+
+    // Order: Close All — square off every open position on the account.
+    registry.register_type({
+        .type_id = "trading.close_all",
+        .display_name = "Close All Positions",
+        .category = "Trading",
+        .description = "Square off all open positions on the account",
+        .icon_text = "T",
+        .accent_color = "#16a34a",
+        .version = 1,
+        .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
+        .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
+        .parameters =
+            {
+                {"account_id", "Account ID", "string", "", {}, "Leave blank to use active account for broker"},
+                {"broker", "Broker", "select", "fyers", {"fyers", "zerodha", "alpaca", "ibkr", "upstox", "dhan"}, ""},
+            },
+        .execute = nullptr,
+    });
+
+    // Alert: Trading Alert — fire a workflow notification (no outputs).
+    registry.register_type({
+        .type_id = "trading.alert",
+        .display_name = "Trading Alert",
+        .category = "Trading",
+        .description = "Send a trading alert via the notification system or log",
+        .icon_text = "T",
+        .accent_color = "#16a34a",
+        .version = 1,
+        .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
+        .outputs = {},
+        .parameters =
+            {
+                {"message", "Message", "string", "", {}, "Alert message", true},
+                {"channel", "Channel", "select", "notification", {"notification", "log"}, "Where to deliver the alert"},
+            },
+        .execute = nullptr,
+    });
 }
 
 } // namespace fincept::workflow

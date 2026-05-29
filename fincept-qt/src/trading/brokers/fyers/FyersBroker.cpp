@@ -750,4 +750,196 @@ ApiResponse<QJsonObject> FyersBroker::place_multi_order(const BrokerCredentials&
     return {true, resp.json, "", ts};
 }
 
+// ============================================================================
+// Multi-Quote — POST /data-rest/v2/quotes/
+// Body: {"symbols": "NSE:SBIN-EQ,NSE:TCS-EQ"} (comma-separated, max 50)
+// Response: {s:"ok", d:[{s:"ok", n:"NSE:SBIN-EQ", v:{lp, open_price, ...}}, ...]}
+// ============================================================================
+
+ApiResponse<QVector<BrokerQuote>> FyersBroker::get_multi_quotes(
+    const BrokerCredentials& creds,
+    const QVector<QPair<QString, QString>>& symbols) {
+
+    static constexpr int kBatchSize = 50;
+    int64_t ts = now_ts();
+    QVector<BrokerQuote> all_quotes;
+
+    for (int batch_start = 0; batch_start < symbols.size(); batch_start += kBatchSize) {
+        int batch_end = qMin(batch_start + kBatchSize, symbols.size());
+
+        // Build comma-separated Fyers symbol list and reverse map.
+        // If exchange is provided and symbol lacks ':', prepend exchange so
+        // to_fyers_sym sees a fully qualified "EXCH:SYMBOL" and passes it through.
+        // Plain symbols without exchange default to NSE:-EQ via to_fyers_sym.
+        QHash<QString, QPair<QString, QString>> fyers_to_orig;
+        QStringList sym_list;
+        for (int i = batch_start; i < batch_end; ++i) {
+            const auto& [sym, exch] = symbols[i];
+            QString input = sym;
+            if (!sym.contains(':') && !exch.isEmpty()) {
+                // Fyers EQ symbols use -EQ suffix; F&O already have segment in name
+                input = exch + ":" + sym;
+                if (!sym.contains('-'))
+                    input += "-EQ";
+            }
+            const QString fyers_sym = to_fyers_sym(input);
+            sym_list.append(fyers_sym);
+            fyers_to_orig.insert(fyers_sym, symbols[i]);
+        }
+
+        QJsonObject payload;
+        payload["symbols"] = sym_list.join(",");
+
+        auto resp = BrokerHttp::instance().post_json(
+            QString(base_url()) + "/data-rest/v2/quotes/", payload, auth_headers(creds));
+
+        if (!resp.success)
+            return {false, std::nullopt, fyers_check_auth(resp, resp.error), ts};
+        if (resp.json.value("s").toString() != "ok")
+            return {false, std::nullopt, fyers_check_auth(resp, resp.json.value("message").toString("Failed")), ts};
+
+        auto d_arr = resp.json.value("d").toArray();
+        for (const auto& val : d_arr) {
+            auto item = val.toObject();
+            if (item.value("s").toString() != "ok")
+                continue;
+            auto v = item.value("v").toObject();
+            BrokerQuote q;
+            const QString raw_sym = v.value("symbol").toString();
+            if (fyers_to_orig.contains(raw_sym)) {
+                const auto& orig = fyers_to_orig.value(raw_sym);
+                q.symbol = orig.first;
+            } else {
+                q.symbol = from_fyers_sym(raw_sym);
+            }
+            q.ltp = v.value("lp").toDouble();
+            q.open = v.value("open_price").toDouble();
+            q.high = v.value("high_price").toDouble();
+            q.low = v.value("low_price").toDouble();
+            q.close = v.value("prev_close_price").toDouble();
+            q.volume = v.value("volume").toDouble();
+            q.change = v.value("ch").toDouble();
+            q.change_pct = v.value("chp").toDouble();
+            q.bid = v.value("bid").toDouble();
+            q.ask = v.value("ask").toDouble();
+            q.timestamp = v.value("tt").toVariant().toLongLong() * 1000;
+            q.oi = v.value("oi").toVariant().toLongLong();
+            q.oi_change_pct = v.value("oichp").toDouble();
+            all_quotes.append(q);
+        }
+    }
+
+    return {true, all_quotes, "", ts};
+}
+
+// ============================================================================
+// Market Depth — GET /data/depth?symbol=...&ohlcv_flag=1
+// Returns 5-level bid/ask depth. Reuses the same endpoint as
+// get_historical_quotes_single but maps into MarketDepth struct.
+// ============================================================================
+
+ApiResponse<MarketDepth> FyersBroker::get_market_depth(
+    const BrokerCredentials& creds,
+    const QString& symbol, const QString& exchange) {
+
+    Q_UNUSED(exchange);
+    const QString url = QString("%1/data/depth?symbol=%2&ohlcv_flag=1")
+                            .arg(base_url(), to_fyers_sym(symbol));
+    auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
+    int64_t ts = now_ts();
+
+    if (!resp.success)
+        return {false, std::nullopt, fyers_check_auth(resp, resp.error), ts};
+    if (resp.json.value("s").toString() != "ok")
+        return {false, std::nullopt, fyers_check_auth(resp, resp.json.value("message").toString("Failed")), ts};
+
+    // d is a map keyed by symbol: { "NSE:SBIN-EQ": { bids: [...], ask: [...], ... } }
+    const auto d = resp.json.value("d").toObject();
+    if (d.isEmpty())
+        return {false, std::nullopt, "Empty depth response", ts};
+
+    const auto sym_data = d.begin()->toObject();
+
+    MarketDepth md;
+    md.symbol = symbol;
+    md.exchange = exchange.isEmpty() ? exchange_of(d.begin().key()) : exchange;
+    md.ltp = sym_data.value("ltp").toDouble();
+    md.volume = sym_data.value("volume").toDouble();
+    md.oi = sym_data.value("oi").toDouble();
+
+    const auto bids_arr = sym_data.value("bids").toArray();
+    for (const auto& v : bids_arr) {
+        auto lvl = v.toObject();
+        DepthLevel dl;
+        dl.price = lvl.value("price").toDouble();
+        dl.quantity = lvl.value("volume").toInt();
+        dl.orders = lvl.value("ord").toInt();
+        md.bids.append(dl);
+    }
+
+    // Fyers uses "ask" (singular) for sell side
+    const auto asks_arr = sym_data.value("ask").toArray();
+    for (const auto& v : asks_arr) {
+        auto lvl = v.toObject();
+        DepthLevel dl;
+        dl.price = lvl.value("price").toDouble();
+        dl.quantity = lvl.value("volume").toInt();
+        dl.orders = lvl.value("ord").toInt();
+        md.asks.append(dl);
+    }
+
+    return {true, md, "", ts};
+}
+
+// ============================================================================
+// Pre-trade margin calculator — POST /api/v3/multiorder/margin  (native)
+// Mirrors OpenAlgo broker/fyers/api/margin_api.py + mapping/margin_data.py.
+// Payload: {"data":[{symbol, qty, side, type, productType, limitPrice,
+//                    stopLoss, stopPrice, takeProfit}]}
+// Response: {"s":"ok","data":{margin_avail, margin_total, margin_new_order}}
+// Fyers returns total margin only (no SPAN/Exposure breakdown).
+// ============================================================================
+ApiResponse<OrderMargin> FyersBroker::get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) {
+    int64_t ts = now_ts();
+
+    QJsonObject leg{{"symbol", to_fyers_sym(order.symbol)},
+                    {"qty", static_cast<int>(order.quantity)},
+                    {"side", fyers_int_map().side_or(order.side, 1)},
+                    {"type", fyers_int_map().order_type_or(order.order_type, 2)},
+                    {"productType", fyers_str_map().product_or(order.product_type, "INTRADAY")},
+                    {"limitPrice", order.price},
+                    {"stopLoss", 0.0},
+                    {"stopPrice", order.stop_price},
+                    {"takeProfit", 0.0}};
+
+    QJsonObject payload{{"data", QJsonArray{leg}}};
+
+    auto resp = BrokerHttp::instance().post_json(QString(base_url()) + "/api/v3/multiorder/margin", payload,
+                                                 auth_headers(creds));
+    if (!resp.success)
+        return {false, std::nullopt, fyers_check_auth(resp, "Network error"), ts};
+    if (resp.json.value("s").toString() != "ok")
+        return {false, std::nullopt,
+                fyers_check_auth(resp, resp.json.value("message").toString("Margin calculation failed")), ts};
+
+    const auto data = resp.json.value("data").toObject();
+
+    OrderMargin m;
+    m.symbol = order.symbol;
+    m.exchange = order.exchange;
+    m.side = order.side == OrderSide::Buy ? "BUY" : "SELL";
+    m.quantity = order.quantity;
+    m.price = order.price;
+    // margin_new_order = total margin including existing positions (best total estimate).
+    m.total = data.value("margin_new_order").toDouble();
+    if (m.total <= 0.0)
+        m.total = data.value("margin_total").toDouble();
+    m.cash = m.total; // no SPAN/Exposure breakdown from Fyers
+
+    const double notional = order.price * order.quantity;
+    if (m.total > 0.0 && notional > 0.0)
+        m.leverage = notional / m.total;
+    return {true, m, "", ts};
+}
+
 } // namespace fincept::trading

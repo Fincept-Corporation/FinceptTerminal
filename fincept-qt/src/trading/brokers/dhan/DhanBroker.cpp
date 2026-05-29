@@ -560,4 +560,193 @@ ApiResponse<QVector<BrokerCandle>> DhanBroker::get_history(const BrokerCredentia
     return {true, all_candles, "", ts};
 }
 
+// ── Multi-Quote ──────────────────────────────────────────────────────────────
+// POST /v2/marketfeed/ltp — {NSE_EQ: [securityId1, securityId2...]}
+// Groups symbols by exchange segment, max 1000.
+// Response: {"data": {"NSE_EQ": {"12345": {"last_price": 500.0, ohlc: {...}}}}}
+ApiResponse<QVector<BrokerQuote>> DhanBroker::get_multi_quotes(
+    const BrokerCredentials& creds,
+    const QVector<QPair<QString, QString>>& symbols) {
+
+    int64_t ts = now_ts();
+    if (symbols.isEmpty())
+        return {true, QVector<BrokerQuote>{}, "", ts};
+
+    // Group securityIds by exchange segment, keep reverse map
+    QMap<QString, QJsonArray> by_segment;
+    QMap<QString, QPair<QString, QString>> id_to_orig; // "seg:secId" → (symbol, exchange)
+
+    for (const auto& [sym, exch] : symbols) {
+        const QString exchange = exch.isEmpty() ? "NSE" : exch;
+        const QString seg = dhan_exchange(exchange);
+        const QString sec_id = lookup_security_id(sym, exchange, creds.broker_id);
+        if (sec_id.isEmpty())
+            continue;
+        by_segment[seg].append(sec_id);
+        id_to_orig[seg + ":" + sec_id] = {sym, exchange};
+    }
+
+    if (by_segment.isEmpty())
+        return {false, std::nullopt, "No valid security IDs found", ts};
+
+    // Build request body
+    QJsonObject body;
+    for (auto it = by_segment.constBegin(); it != by_segment.constEnd(); ++it)
+        body[it.key()] = it.value();
+
+    auto resp = BrokerHttp::instance().post_json(BASE + "/v2/marketfeed/ltp", body, auth_headers(creds));
+    if (!resp.success || resp.json.value("errorType").toString().length() > 0)
+        return {false, std::nullopt, checked_error(resp, "get_multi_quotes failed"), ts};
+
+    // Parse response
+    QVector<BrokerQuote> quotes;
+    const auto data = resp.json.value("data").toObject();
+    for (auto seg_it = data.constBegin(); seg_it != data.constEnd(); ++seg_it) {
+        const QString seg = seg_it.key();
+        const auto tokens = seg_it.value().toObject();
+        for (auto tok_it = tokens.constBegin(); tok_it != tokens.constEnd(); ++tok_it) {
+            const auto q = tok_it.value().toObject();
+            BrokerQuote quote;
+            const QString lookup_key = seg + ":" + tok_it.key();
+            if (id_to_orig.contains(lookup_key))
+                quote.symbol = id_to_orig.value(lookup_key).first;
+            else
+                quote.symbol = tok_it.key();
+            quote.ltp = q.value("last_price").toDouble();
+            const auto ohlc = q.value("ohlc").toObject();
+            quote.open = ohlc.value("open").toDouble(q.value("open").toDouble());
+            quote.high = ohlc.value("high").toDouble(q.value("high").toDouble());
+            quote.low = ohlc.value("low").toDouble(q.value("low").toDouble());
+            quote.close = ohlc.value("close").toDouble(q.value("close").toDouble());
+            quote.volume = q.value("volume").toDouble();
+            if (quote.close > 0) {
+                quote.change = quote.ltp - quote.close;
+                quote.change_pct = (quote.ltp - quote.close) / quote.close * 100.0;
+            }
+            quote.timestamp = ts;
+            quotes.append(quote);
+        }
+    }
+    return {true, quotes, "", ts};
+}
+
+// ── Market Depth ─────────────────────────────────────────────────────────────
+// POST /v2/marketfeed/ohlc — {NSE_EQ: [securityId]}
+// Returns OHLC + depth data for the requested security.
+// Response: {"data": {"NSE_EQ": {"12345": {last_price, ohlc:{...}, depth:{buy:[...], sell:[...]}}}}}
+ApiResponse<MarketDepth> DhanBroker::get_market_depth(
+    const BrokerCredentials& creds,
+    const QString& symbol, const QString& exchange) {
+
+    int64_t ts = now_ts();
+    const QString exch = exchange.isEmpty() ? "NSE" : exchange;
+    const QString seg = dhan_exchange(exch);
+    const QString sec_id = lookup_security_id(symbol, exch, creds.broker_id);
+    if (sec_id.isEmpty())
+        return {false, std::nullopt, "Security ID not found for " + exch + ":" + symbol, ts};
+
+    QJsonObject body;
+    QJsonArray ids;
+    ids.append(sec_id);
+    body[seg] = ids;
+
+    auto resp = BrokerHttp::instance().post_json(BASE + "/v2/marketfeed/ohlc", body, auth_headers(creds));
+    if (!resp.success || resp.json.value("errorType").toString().length() > 0)
+        return {false, std::nullopt, checked_error(resp, "get_market_depth failed"), ts};
+
+    // Navigate: data → segment → securityId
+    const auto data = resp.json.value("data").toObject();
+    const auto seg_obj = data.value(seg).toObject();
+    const auto entry = seg_obj.value(sec_id).toObject();
+    if (entry.isEmpty())
+        return {false, std::nullopt, "No data returned for " + seg + ":" + sec_id, ts};
+
+    MarketDepth md;
+    md.symbol = symbol;
+    md.exchange = exch;
+    md.ltp = entry.value("last_price").toDouble();
+    md.volume = entry.value("volume").toDouble();
+    md.oi = entry.value("oi").toDouble();
+
+    const auto depth = entry.value("depth").toObject();
+
+    const auto buy_arr = depth.value("buy").toArray();
+    for (const auto& level : buy_arr) {
+        auto lv = level.toObject();
+        DepthLevel dl;
+        dl.price = lv.value("price").toDouble();
+        dl.quantity = lv.value("quantity").toInt();
+        dl.orders = lv.value("orders").toInt();
+        md.bids.append(dl);
+    }
+
+    const auto sell_arr = depth.value("sell").toArray();
+    for (const auto& level : sell_arr) {
+        auto lv = level.toObject();
+        DepthLevel dl;
+        dl.price = lv.value("price").toDouble();
+        dl.quantity = lv.value("quantity").toInt();
+        dl.orders = lv.value("orders").toInt();
+        md.asks.append(dl);
+    }
+
+    return {true, md, "", ts};
+}
+
+// ============================================================================
+// Pre-trade margin calculator — POST /v2/margincalculator  (native, single order)
+// Mirrors OpenAlgo broker/dhan/api/margin_api.py + mapping/margin_data.py.
+// Payload: {dhanClientId, exchangeSegment, transactionType, quantity,
+//           productType, securityId, price, triggerPrice?}
+//   productType for margin: CNC→CNC, NRML→MARGIN, MIS→INTRADAY (matches dhan_enum_map).
+// Response: {totalMargin, spanMargin, exposureMargin, variableMargin, availableBalance,
+//            leverage, brokerage, ...}
+// ============================================================================
+ApiResponse<OrderMargin> DhanBroker::get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) {
+    int64_t ts = now_ts();
+
+    const QString sec_id = lookup_security_id(order.symbol, order.exchange, creds.broker_id);
+    if (sec_id.isEmpty())
+        return {false, std::nullopt, "Security ID not found for " + order.exchange + ":" + order.symbol, ts};
+
+    QJsonObject body;
+    body["dhanClientId"] = creds.api_key;
+    body["exchangeSegment"] = dhan_exchange(order.exchange);
+    body["transactionType"] = order.side == OrderSide::Buy ? "BUY" : "SELL";
+    body["quantity"] = static_cast<int>(order.quantity);
+    body["productType"] = dhan_enum_map().product_or(order.product_type, "INTRADAY");
+    body["securityId"] = sec_id;
+    body["price"] = order.price;
+    if (order.stop_price > 0)
+        body["triggerPrice"] = order.stop_price;
+
+    auto resp = BrokerHttp::instance().post_json(BASE + "/v2/margincalculator", body, auth_headers(creds));
+    if (!resp.success)
+        return {false, std::nullopt, checked_error(resp, "Network error"), ts};
+    if (is_token_expired(resp))
+        return {false, std::nullopt, "[TOKEN_EXPIRED]", ts};
+    if (resp.json.value("errorType").toString().length() > 0 || resp.json.value("status").toString() == "failed")
+        return {false, std::nullopt, checked_error(resp, "Margin calculation failed"), ts};
+
+    const auto& j = resp.json;
+    OrderMargin m;
+    m.symbol = order.symbol;
+    m.exchange = order.exchange;
+    m.side = order.side == OrderSide::Buy ? "BUY" : "SELL";
+    m.quantity = order.quantity;
+    m.price = order.price;
+    m.total = j.value("totalMargin").toDouble();
+    m.var_margin = j.value("spanMargin").toDouble();      // SPAN
+    m.elm = j.value("exposureMargin").toDouble();         // Exposure
+    m.additional = j.value("variableMargin").toDouble();  // VAR / variable margin
+    m.cash = j.value("availableBalance").toDouble();
+    m.leverage = j.value("leverage").toDouble();
+    if (m.leverage <= 0.0) {
+        const double notional = order.price * order.quantity;
+        if (m.total > 0.0 && notional > 0.0)
+            m.leverage = notional / m.total;
+    }
+    return {true, m, "", ts};
+}
+
 } // namespace fincept::trading

@@ -376,6 +376,7 @@ QMenu* ToolBar::build_navigate_menu() {
 
     auto* trd = add_sub(tr("Trading & Portfolio"));
     nav(trd, tr("Equity Trading"), "equity_trading");
+    nav(trd, tr("Action Center"), "action_center");
     nav(trd, tr("Alpha Arena"), "alpha_arena");
     nav(trd, tr("Prediction Markets"), "polymarket");
     nav(trd, tr("Derivatives"), "derivatives");

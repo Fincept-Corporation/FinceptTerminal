@@ -704,6 +704,193 @@ ApiResponse<QVector<BrokerQuote>> AngelOneBroker::get_quotes(const BrokerCredent
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// get_multi_quotes — batch quote with explicit exchange per symbol
+// AngelOne quote endpoint accepts exchangeTokens grouped by exchange.
+// Max 50 tokens per request; split into batches if needed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+ApiResponse<QVector<BrokerQuote>> AngelOneBroker::get_multi_quotes(
+    const BrokerCredentials& creds,
+    const QVector<QPair<QString, QString>>& symbols) {
+    int64_t ts = QDateTime::currentSecsSinceEpoch();
+
+    // Resolve all tokens and group by exchange
+    struct TokenEntry {
+        QString exchange;
+        QString token;
+        QString original_symbol;
+    };
+    QVector<TokenEntry> entries;
+    entries.reserve(symbols.size());
+
+    for (const auto& [sym, exch] : symbols) {
+        QString exchange = exch.isEmpty() ? QStringLiteral("NSE") : exch;
+        QString token = lookup_token(sym, exchange);
+        if (token.isEmpty()) {
+            LOG_WARN(TAG_AO, QString("get_multi_quotes: token not found for %1:%2, skipping").arg(exchange, sym));
+            continue;
+        }
+        entries.append({exchange, token, sym});
+    }
+
+    if (entries.isEmpty())
+        return {false, std::nullopt, "No valid symbol tokens found", ts};
+
+    QVector<BrokerQuote> all_quotes;
+    const auto headers = auth_headers(creds);
+
+    // Batch in groups of 50 (AngelOne API limit)
+    static constexpr int BATCH_SIZE = 50;
+    for (int offset = 0; offset < entries.size(); offset += BATCH_SIZE) {
+        int end = qMin(offset + BATCH_SIZE, entries.size());
+
+        // Group this batch by exchange
+        QMap<QString, QJsonArray> by_exchange;
+        for (int i = offset; i < end; ++i)
+            by_exchange[entries[i].exchange].append(entries[i].token);
+
+        QJsonObject exchange_tokens;
+        for (auto it = by_exchange.constBegin(); it != by_exchange.constEnd(); ++it)
+            exchange_tokens[it.key()] = it.value();
+
+        QJsonObject payload{
+            {"mode", "FULL"},
+            {"exchangeTokens", exchange_tokens},
+        };
+
+        auto resp = BrokerHttp::instance().post_json(
+            BASE_AO + "/rest/secure/angelbroking/market/v1/quote", payload, headers);
+
+        if (!resp.success || !resp.json.value("status").toBool()) {
+            QString err = checked_error(resp, "get_multi_quotes batch failed");
+            LOG_ERROR(TAG_AO, err);
+            // If first batch fails, return error; otherwise return partial results
+            if (all_quotes.isEmpty())
+                return {false, std::nullopt, err, ts};
+            break;
+        }
+
+        auto fetched = resp.json.value("data").toObject().value("fetched").toArray();
+        for (const auto& v : fetched) {
+            auto q = v.toObject();
+            BrokerQuote quote;
+            // Strip -EQ/-BE suffix so symbol matches caller's input
+            {
+                QString sym = q.value("tradingSymbol").toString();
+                int dash = sym.lastIndexOf('-');
+                if (dash > 0)
+                    sym = sym.left(dash);
+                quote.symbol = sym;
+            }
+            quote.ltp = q.value("ltp").toDouble();
+            quote.open = q.value("open").toDouble();
+            quote.high = q.value("high").toDouble();
+            quote.low = q.value("low").toDouble();
+            quote.close = q.value("close").toDouble();
+            quote.volume = q.value("tradeVolume").toDouble();
+            quote.change = q.value("netChange").toDouble();
+            quote.change_pct = q.value("percentChange").toDouble();
+            // bid/ask from depth
+            auto depth = q.value("depth").toObject();
+            auto buy_arr = depth.value("buy").toArray();
+            auto sell_arr = depth.value("sell").toArray();
+            for (const auto& b : buy_arr) {
+                auto obj = b.toObject();
+                double p = obj.value("price").toDouble();
+                if (p > 0) {
+                    quote.bid = p;
+                    quote.bid_size = obj.value("quantity").toDouble();
+                    break;
+                }
+            }
+            for (const auto& s : sell_arr) {
+                auto obj = s.toObject();
+                double p = obj.value("price").toDouble();
+                if (p > 0) {
+                    quote.ask = p;
+                    quote.ask_size = obj.value("quantity").toDouble();
+                    break;
+                }
+            }
+            quote.timestamp = ts;
+            all_quotes.append(quote);
+        }
+    }
+
+    return {true, all_quotes, "", ts};
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// get_market_depth — Level 2 bid/ask via FULL quote mode
+// AngelOne returns best5BuyData / best5SellData + totalBuyQty / totalSellQty
+// ─────────────────────────────────────────────────────────────────────────────
+
+ApiResponse<MarketDepth> AngelOneBroker::get_market_depth(
+    const BrokerCredentials& creds,
+    const QString& symbol, const QString& exchange) {
+    int64_t ts = QDateTime::currentSecsSinceEpoch();
+
+    QString exch = exchange.isEmpty() ? QStringLiteral("NSE") : exchange;
+    QString token = lookup_token(symbol, exch);
+    if (token.isEmpty())
+        return {false, std::nullopt, "Symbol token not found for depth: " + exch + ":" + symbol, ts};
+
+    QJsonObject exchange_tokens;
+    exchange_tokens[exch] = QJsonArray{token};
+
+    QJsonObject payload{
+        {"mode", "FULL"},
+        {"exchangeTokens", exchange_tokens},
+    };
+
+    auto resp = BrokerHttp::instance().post_json(
+        BASE_AO + "/rest/secure/angelbroking/market/v1/quote", payload, auth_headers(creds));
+
+    if (!resp.success || !resp.json.value("status").toBool())
+        return {false, std::nullopt, checked_error(resp, "get_market_depth failed"), ts};
+
+    auto fetched = resp.json.value("data").toObject().value("fetched").toArray();
+    if (fetched.isEmpty())
+        return {false, std::nullopt, "No data returned for depth: " + exch + ":" + symbol, ts};
+
+    auto q = fetched[0].toObject();
+    MarketDepth md;
+    md.symbol = symbol;
+    md.exchange = exch;
+    md.ltp = q.value("ltp").toDouble();
+    md.volume = q.value("tradeVolume").toDouble();
+
+    // Parse depth arrays — AngelOne returns best5BuyData / best5SellData
+    // Each entry: { price, quantity, orders }
+    auto depth = q.value("depth").toObject();
+    auto buy_arr = depth.value("buy").toArray();
+    auto sell_arr = depth.value("sell").toArray();
+
+    // Also check for totalBuyQty / totalSellQty at top level
+    // (used for aggregate display; individual levels come from depth arrays)
+
+    for (const auto& b : buy_arr) {
+        auto obj = b.toObject();
+        DepthLevel level;
+        level.price = obj.value("price").toDouble();
+        level.quantity = static_cast<int>(obj.value("quantity").toDouble());
+        level.orders = static_cast<int>(obj.value("orders").toDouble());
+        md.bids.append(level);
+    }
+
+    for (const auto& s : sell_arr) {
+        auto obj = s.toObject();
+        DepthLevel level;
+        level.price = obj.value("price").toDouble();
+        level.quantity = static_cast<int>(obj.value("quantity").toDouble());
+        level.orders = static_cast<int>(obj.value("orders").toDouble());
+        md.asks.append(level);
+    }
+
+    return {true, md, "", ts};
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Get History (OHLCV candles)
 // resolution: "1m","3m","5m","10m","15m","30m","1h","1d"
 // ─────────────────────────────────────────────────────────────────────────────

@@ -5,8 +5,18 @@
 #include "trading/BrokerRegistry.h"
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
+#include "trading/instruments/InstrumentService.h"
 #include "trading/brokers/alpaca/AlpacaWebSocket.h"
+#include "trading/websocket/AliceBlueWebSocket.h"
+#include "trading/websocket/BrokerWebSocketBase.h"
+#include "trading/websocket/DhanWebSocket.h"
+#include "trading/websocket/FivePaisaWebSocket.h"
 #include "trading/websocket/FyersWebSocket.h"
+#include "trading/websocket/IIFLWebSocket.h"
+#include "trading/websocket/KotakWebSocket.h"
+#include "trading/websocket/MotilalPoller.h"
+#include "trading/websocket/ShoonyaWebSocket.h"
+#include "trading/websocket/UpstoxWebSocket.h"
 
 #include <QDate>
 #include <QDateTime>
@@ -150,6 +160,28 @@ bool AccountDataStream::is_token_expired() const {
     return expires_at > 0 && expires_at <= QDateTime::currentSecsSinceEpoch();
 }
 
+bool AccountDataStream::check_token_expiry(const QString& error) {
+    // All brokers prefix expired-session errors with "[TOKEN_EXPIRED]"
+    // (originated by ZerodhaBroker; generalized here so every broker benefits).
+    if (!error.startsWith("[TOKEN_EXPIRED]"))
+        return false;
+
+    // May be called from a QtConcurrent worker — AccountManager mutates state
+    // and we emit a signal, so marshal to the thread that owns this object.
+    QPointer<AccountDataStream> self = this;
+    QMetaObject::invokeMethod(this, [self]() {
+        if (!self)
+            return;
+        AccountManager::instance().set_connection_state(
+            self->account_id_, ConnectionState::TokenExpired,
+            QStringLiteral("Broker session token expired"));
+        LOG_WARN(ADS_TAG, QString("Token expired for account %1 (%2)")
+                              .arg(self->account_id_, self->broker_id_));
+        emit self->token_expired(self->account_id_);
+    }, Qt::QueuedConnection);
+    return true;
+}
+
 void AccountDataStream::on_quote_timer() {
     if (is_token_expired()) {
         emit token_expired(account_id_);
@@ -214,10 +246,8 @@ void AccountDataStream::async_fetch_quote() {
         auto result = broker->get_quotes(creds, {symbol});
         if (self) self->quote_fetching_ = false;
         if (!result.success || !result.data || result.data->isEmpty()) {
-            if (result.error.startsWith("[TOKEN_EXPIRED]") && self)
-                QMetaObject::invokeMethod(self, [self]() {
-                    if (self) emit self->token_expired(self->account_id_);
-                }, Qt::QueuedConnection);
+            if (self)
+                self->check_token_expiry(result.error);
             return;
         }
         const auto quote = result.data->first();
@@ -242,10 +272,8 @@ void AccountDataStream::async_fetch_positions() {
         if (!broker) return;
         auto result = broker->get_positions(creds);
         if (!result.success || !result.data) {
-            if (result.error.startsWith("[TOKEN_EXPIRED]") && self)
-                QMetaObject::invokeMethod(self, [self]() {
-                    if (self) emit self->token_expired(self->account_id_);
-                }, Qt::QueuedConnection);
+            if (self)
+                self->check_token_expiry(result.error);
             return;
         }
         QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
@@ -269,10 +297,8 @@ void AccountDataStream::async_fetch_holdings() {
         if (!broker) return;
         auto result = broker->get_holdings(creds);
         if (!result.success || !result.data) {
-            if (result.error.startsWith("[TOKEN_EXPIRED]") && self)
-                QMetaObject::invokeMethod(self, [self]() {
-                    if (self) emit self->token_expired(self->account_id_);
-                }, Qt::QueuedConnection);
+            if (self)
+                self->check_token_expiry(result.error);
             return;
         }
         QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
@@ -296,10 +322,8 @@ void AccountDataStream::async_fetch_orders() {
         if (!broker) return;
         auto result = broker->get_orders(creds);
         if (!result.success || !result.data) {
-            if (result.error.startsWith("[TOKEN_EXPIRED]") && self)
-                QMetaObject::invokeMethod(self, [self]() {
-                    if (self) emit self->token_expired(self->account_id_);
-                }, Qt::QueuedConnection);
+            if (self)
+                self->check_token_expiry(result.error);
             return;
         }
         QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
@@ -323,10 +347,8 @@ void AccountDataStream::async_fetch_funds() {
         if (!broker) return;
         auto result = broker->get_funds(creds);
         if (!result.success || !result.data) {
-            if (result.error.startsWith("[TOKEN_EXPIRED]") && self)
-                QMetaObject::invokeMethod(self, [self]() {
-                    if (self) emit self->token_expired(self->account_id_);
-                }, Qt::QueuedConnection);
+            if (self)
+                self->check_token_expiry(result.error);
             return;
         }
         QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
@@ -352,7 +374,11 @@ void AccountDataStream::async_fetch_watchlist_quotes() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) return;
         auto result = broker->get_quotes(creds, symbols.toVector());
-        if (!result.success || !result.data) return;
+        if (!result.success || !result.data) {
+            if (self)
+                self->check_token_expiry(result.error);
+            return;
+        }
         QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
             if (!self) return;
             for (const auto& q : data)
@@ -402,10 +428,8 @@ void AccountDataStream::fetch_candles(const QString& symbol, const QString& time
         auto result = broker->get_history(creds, symbol, timeframe, from_dt, to_dt);
         if (self) self->candles_fetching_ = false;
         if (!result.success || !result.data) {
-            if (result.error.startsWith("[TOKEN_EXPIRED]") && self)
-                QMetaObject::invokeMethod(self, [self]() {
-                    if (self) emit self->token_expired(self->account_id_);
-                }, Qt::QueuedConnection);
+            if (self)
+                self->check_token_expiry(result.error);
             return;
         }
         QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
@@ -584,6 +608,38 @@ void AccountDataStream::fetch_clock() {
 
 // ── WebSocket ───────────────────────────────────────────────────────────────
 
+void AccountDataStream::wire_base_ws(BrokerWebSocketBase* ws) {
+    connect(ws, &BrokerWebSocketBase::tick_received, this, [this](const BrokerQuote& q) {
+        ++ws_tick_count_;
+        quote_cache_[q.symbol] = q;
+        emit quote_updated(account_id_, q.symbol, q);
+    });
+    connect(ws, &BrokerWebSocketBase::depth_received, this, [this](const MarketDepth& d) {
+        if (d.bids.isEmpty() && d.asks.isEmpty())
+            return;
+        QVector<QPair<double, double>> bids, asks;
+        for (const auto& b : d.bids)
+            bids.append({b.price, static_cast<double>(b.quantity)});
+        for (const auto& a : d.asks)
+            asks.append({a.price, static_cast<double>(a.quantity)});
+        const double best_bid = bids.isEmpty() ? 0 : bids.first().first;
+        const double best_ask = asks.isEmpty() ? 0 : asks.first().first;
+        const double spread = (best_bid > 0 && best_ask > 0) ? best_ask - best_bid : 0;
+        const double spread_pct = best_bid > 0 ? spread / best_bid * 100.0 : 0;
+        emit orderbook_fetched(account_id_, bids, asks, spread, spread_pct, {}, {});
+    });
+    connect(ws, &BrokerWebSocketBase::connected, this, [this]() {
+        emit connection_state_changed(account_id_, ConnectionState::Connected);
+    });
+    connect(ws, &BrokerWebSocketBase::disconnected, this, [this]() {
+        emit connection_state_changed(account_id_, ConnectionState::Disconnected);
+    });
+    connect(ws, &BrokerWebSocketBase::error_occurred, this, [this](const QString& e) {
+        LOG_ERROR(ADS_TAG, QString("WS error: %1").arg(e));
+        check_token_expiry(e);
+    });
+}
+
 void AccountDataStream::ws_init() {
     if (broker_id_ == "fyers") {
         auto creds = AccountManager::instance().load_credentials(account_id_);
@@ -650,6 +706,7 @@ void AccountDataStream::ws_init() {
 
         connect(fws, &FyersWebSocket::error_occurred, this, [this](const QString& err) {
             LOG_ERROR(ADS_TAG, QString("Fyers WS error: %1").arg(err));
+            check_token_expiry(err);
         });
 
         fws->open();
@@ -716,6 +773,7 @@ void AccountDataStream::ws_init() {
 
         connect(aws, &AlpacaWebSocket::error_occurred, this, [this](const QString& err) {
             LOG_ERROR(ADS_TAG, QString("Alpaca WS error: %1").arg(err));
+            check_token_expiry(err);
         });
 
         connect(aws, &AlpacaWebSocket::market_closed, this, [this]() {
@@ -723,6 +781,213 @@ void AccountDataStream::ws_init() {
         });
 
         aws->open();
+        return;
+    }
+
+    // ── Phase 2 broker WebSocket adapters (shared BrokerWebSocketBase) ─────────
+    // Helper: collect the current selected + watchlist symbols (deduped).
+    auto current_symbols = [this]() {
+        QStringList syms;
+        if (!selected_symbol_.isEmpty())
+            syms.append(selected_symbol_);
+        for (const auto& s : watchlist_symbols_) {
+            if (!syms.contains(s))
+                syms.append(s);
+        }
+        syms.removeDuplicates();
+        return syms;
+    };
+    // Helper: resolve symbols → numeric instrument tokens via InstrumentService
+    // for this broker. Symbols that don't resolve are skipped.
+    auto resolve_tokens = [this](const QStringList& syms) {
+        QVector<qint64> tokens;
+        auto& svc = InstrumentService::instance();
+        for (const auto& s : syms) {
+            const QString exch = (s == selected_symbol_ && !selected_exchange_.isEmpty())
+                                     ? selected_exchange_
+                                     : QStringLiteral("NSE");
+            auto tok = svc.instrument_token(s, exch, broker_id_);
+            if (tok.has_value())
+                tokens.append(*tok);
+        }
+        return tokens;
+    };
+
+    if (broker_id_ == "upstox") {
+        auto creds = AccountManager::instance().load_credentials(account_id_);
+        if (creds.access_token.isEmpty()) {
+            LOG_WARN(ADS_TAG, QString("Upstox WS: missing access_token for %1").arg(account_id_));
+            return;
+        }
+        auto* uws = new UpstoxWebSocket(creds.access_token, this);
+        ws_ = uws;
+        wire_base_ws(uws);
+        connect(uws, &UpstoxWebSocket::connected, this, [this, current_symbols, resolve_tokens]() {
+            LOG_INFO(ADS_TAG, QString("Upstox WS connected for %1").arg(account_id_));
+            if (auto* w = qobject_cast<UpstoxWebSocket*>(ws_))
+                w->subscribe(resolve_tokens(current_symbols()));
+        });
+        uws->open();
+        return;
+    }
+
+    if (broker_id_ == "dhan") {
+        auto creds = AccountManager::instance().load_credentials(account_id_);
+        if (creds.access_token.isEmpty() || creds.api_key.isEmpty()) {
+            LOG_WARN(ADS_TAG, QString("Dhan WS: missing access_token/client_id for %1").arg(account_id_));
+            return;
+        }
+        auto* dws = new DhanWebSocket(creds.access_token, creds.api_key, this);
+        ws_ = dws;
+        wire_base_ws(dws);
+        connect(dws, &DhanWebSocket::connected, this, [this, current_symbols, resolve_tokens]() {
+            LOG_INFO(ADS_TAG, QString("Dhan WS connected for %1").arg(account_id_));
+            if (auto* w = qobject_cast<DhanWebSocket*>(ws_))
+                w->subscribe(resolve_tokens(current_symbols()));
+        });
+        dws->open();
+        return;
+    }
+
+    if (broker_id_ == "kotak") {
+        auto creds = AccountManager::instance().load_credentials(account_id_);
+        const QStringList parts = creds.access_token.split(":::");
+        if (parts.size() < 4) {
+            LOG_WARN(ADS_TAG, QString("Kotak WS: malformed token for %1").arg(account_id_));
+            return;
+        }
+        // Packed: "trading_token:::trading_sid:::base_url:::access_token[:::server_id]"
+        const QString auth_token = parts.value(0);   // JWT → "Authorization"
+        const QString sid = parts.value(1);          // redis session → "Sid"
+        const QString access_tok = parts.value(3);
+        const QString server_id = parts.value(4);
+        if (auth_token.isEmpty() || sid.isEmpty()) {
+            LOG_WARN(ADS_TAG, QString("Kotak WS: missing auth_token/sid for %1").arg(account_id_));
+            return;
+        }
+        auto* kws = new KotakWebSocket(auth_token, sid, server_id, access_tok, this);
+        ws_ = kws;
+        wire_base_ws(kws);
+        connect(kws, &KotakWebSocket::connected, this, [this, current_symbols, resolve_tokens]() {
+            LOG_INFO(ADS_TAG, QString("Kotak WS connected for %1").arg(account_id_));
+            if (auto* w = qobject_cast<KotakWebSocket*>(ws_)) {
+                if (!selected_exchange_.isEmpty())
+                    w->set_default_exchange(selected_exchange_);
+                w->subscribe(resolve_tokens(current_symbols()));
+            }
+        });
+        kws->open();
+        return;
+    }
+
+    if (broker_id_ == "iifl") {
+        auto creds = AccountManager::instance().load_credentials(account_id_);
+        // access_token packed as "trade_token:::feed_token"; feed token is for market data.
+        const QStringList parts = creds.access_token.split(":::");
+        const QString market_token = parts.size() >= 2 ? parts.value(1) : creds.access_token;
+        if (market_token.isEmpty() || creds.user_id.isEmpty()) {
+            LOG_WARN(ADS_TAG, QString("IIFL WS: missing market_token/user_id for %1").arg(account_id_));
+            return;
+        }
+        auto* iws = new IIFLWebSocket(market_token, creds.user_id, this);
+        ws_ = iws;
+        wire_base_ws(iws);
+        connect(iws, &IIFLWebSocket::connected, this, [this, current_symbols, resolve_tokens]() {
+            LOG_INFO(ADS_TAG, QString("IIFL WS connected for %1").arg(account_id_));
+            if (auto* w = qobject_cast<IIFLWebSocket*>(ws_)) {
+                if (!selected_exchange_.isEmpty())
+                    w->set_default_exchange(selected_exchange_);
+                w->subscribe(resolve_tokens(current_symbols()));
+            }
+        });
+        iws->open();
+        return;
+    }
+
+    if (broker_id_ == "fivepaisa") {
+        auto creds = AccountManager::instance().load_credentials(account_id_);
+        // client_code = 3rd ":::" part of ApiKey ("app_key:::user_id:::client_id"),
+        // falling back to user_id when absent.
+        const QStringList key_parts = creds.api_key.split(":::");
+        QString client_code = key_parts.size() >= 3 ? key_parts.value(2) : QString();
+        if (client_code.isEmpty())
+            client_code = creds.user_id;
+        if (creds.access_token.isEmpty() || client_code.isEmpty()) {
+            LOG_WARN(ADS_TAG, QString("5Paisa WS: missing access_token/client_code for %1").arg(account_id_));
+            return;
+        }
+        auto* fws = new FivePaisaWebSocket(creds.access_token, client_code, this);
+        ws_ = fws;
+        wire_base_ws(fws);
+        connect(fws, &FivePaisaWebSocket::connected, this, [this, current_symbols, resolve_tokens]() {
+            LOG_INFO(ADS_TAG, QString("5Paisa WS connected for %1").arg(account_id_));
+            if (auto* w = qobject_cast<FivePaisaWebSocket*>(ws_))
+                w->subscribe(resolve_tokens(current_symbols()));
+        });
+        fws->open();
+        return;
+    }
+
+    if (broker_id_ == "aliceblue") {
+        auto creds = AccountManager::instance().load_credentials(account_id_);
+        // client_id stored in user_id; session JWT in access_token.
+        if (creds.user_id.isEmpty() || creds.access_token.isEmpty()) {
+            LOG_WARN(ADS_TAG, QString("AliceBlue WS: missing client_id/jwt for %1").arg(account_id_));
+            return;
+        }
+        auto* aws = new AliceBlueWebSocket(creds.user_id, creds.access_token, this);
+        ws_ = aws;
+        wire_base_ws(aws);
+        connect(aws, &AliceBlueWebSocket::connected, this, [this, current_symbols, resolve_tokens]() {
+            LOG_INFO(ADS_TAG, QString("AliceBlue WS connected for %1").arg(account_id_));
+            if (auto* w = qobject_cast<AliceBlueWebSocket*>(ws_)) {
+                if (!selected_exchange_.isEmpty())
+                    w->set_default_exchange(selected_exchange_);
+                w->subscribe(resolve_tokens(current_symbols()));
+            }
+        });
+        aws->open();
+        return;
+    }
+
+    if (broker_id_ == "shoonya") {
+        auto creds = AccountManager::instance().load_credentials(account_id_);
+        // user_id = uid/actid; access_token = susertoken (sent verbatim).
+        if (creds.user_id.isEmpty() || creds.access_token.isEmpty()) {
+            LOG_WARN(ADS_TAG, QString("Shoonya WS: missing user_id/susertoken for %1").arg(account_id_));
+            return;
+        }
+        auto* sws = new ShoonyaWebSocket(creds.user_id, creds.user_id, creds.access_token, this);
+        ws_ = sws;
+        wire_base_ws(sws);
+        connect(sws, &ShoonyaWebSocket::connected, this, [this, current_symbols, resolve_tokens]() {
+            LOG_INFO(ADS_TAG, QString("Shoonya WS connected for %1").arg(account_id_));
+            if (auto* w = qobject_cast<ShoonyaWebSocket*>(ws_)) {
+                if (!selected_exchange_.isEmpty())
+                    w->set_default_exchange(selected_exchange_);
+                w->subscribe(resolve_tokens(current_symbols()));
+            }
+        });
+        sws->open();
+        return;
+    }
+
+    if (broker_id_ == "motilal") {
+        auto creds = AccountManager::instance().load_credentials(account_id_);
+        if (creds.api_key.isEmpty()) {
+            LOG_WARN(ADS_TAG, QString("Motilal poller: missing credentials for %1").arg(account_id_));
+            return;
+        }
+        // Motilal has no streaming socket — MotilalPoller polls quotes by symbol.
+        auto* mp = new MotilalPoller(creds, this);
+        ws_ = mp;
+        wire_base_ws(mp);
+        connect(mp, &MotilalPoller::connected, this, [this, current_symbols]() {
+            LOG_INFO(ADS_TAG, QString("Motilal poller started for %1").arg(account_id_));
+            if (auto* w = qobject_cast<MotilalPoller*>(ws_))
+                w->subscribe(current_symbols());
+        });
+        mp->open();
         return;
     }
 
@@ -761,6 +1026,8 @@ bool AccountDataStream::ws_active() const {
         return fws->is_connected() && ws_tick_count_ > 0;
     if (auto* aws = qobject_cast<AlpacaWebSocket*>(ws_))
         return aws->is_connected() && ws_tick_count_ > 0;
+    if (auto* b = qobject_cast<BrokerWebSocketBase*>(ws_))
+        return b->is_connected() && ws_tick_count_ > 0;
     return false;
 }
 
@@ -787,6 +1054,39 @@ void AccountDataStream::ws_resubscribe() {
                 symbols.append(s);
         }
         aws->set_subscriptions(symbols);
+    }
+
+    // Generic Phase 2 adapters (shared BrokerWebSocketBase). Rebuild the symbol
+    // set wholesale: drop existing subscriptions, then subscribe the current set.
+    if (auto* b = qobject_cast<BrokerWebSocketBase*>(ws_)) {
+        QStringList symbols;
+        if (!selected_symbol_.isEmpty())
+            symbols.append(selected_symbol_);
+        for (const auto& s : watchlist_symbols_) {
+            if (!symbols.contains(s))
+                symbols.append(s);
+        }
+        symbols.removeDuplicates();
+
+        // Motilal polls by symbol — feed it the symbol list directly.
+        if (auto* mp = qobject_cast<MotilalPoller*>(ws_)) {
+            mp->subscribe(symbols);
+            return;
+        }
+
+        // Token-based adapters: resolve symbols → instrument tokens.
+        QVector<qint64> tokens;
+        auto& svc = InstrumentService::instance();
+        for (const auto& s : symbols) {
+            const QString exch = (s == selected_symbol_ && !selected_exchange_.isEmpty())
+                                     ? selected_exchange_
+                                     : QStringLiteral("NSE");
+            auto tok = svc.instrument_token(s, exch, broker_id_);
+            if (tok.has_value())
+                tokens.append(*tok);
+        }
+        b->unsubscribe();
+        b->subscribe(tokens);
     }
 }
 

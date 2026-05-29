@@ -23,6 +23,7 @@
 #include "services/portfolio/PortfolioService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "trading/AccountManager.h"
+#include "trading/ActionCenter.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/DataStreamManager.h"
 #include "trading/OrderMatcher.h"
@@ -390,6 +391,22 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
         // Route to live broker via account-aware UnifiedTrading
         // Safety: capture account_id by value at click time (immutable per order lifecycle)
         const QString acct_id = focused_account_id_;
+
+        // Action Center pre-gate (Phase 3 §2): in Semi-Auto mode, queue the
+        // order for manual approval instead of sending it to the broker. The
+        // queue decision lives here in the caller/screen layer — place_order()
+        // itself never consults ActionCenter (no recursion on approval).
+        if (ActionCenter::instance().should_queue(acct_id, "placeorder")) {
+            const QString pending_id = ActionCenter::instance().queue_order(
+                acct_id, "placeorder", ActionCenter::serialize_unified_order(order));
+            if (!pending_id.isEmpty())
+                order_entry_->show_order_status(
+                    QStringLiteral("Order queued for approval in Action Center"), true);
+            else
+                order_entry_->show_order_status(QStringLiteral("Failed to queue order"), false);
+            return;
+        }
+
         QPointer<EquityTradingScreen> self = this;
         auto order_copy = order;
         (void)QtConcurrent::run([self, acct_id, order_copy]() {

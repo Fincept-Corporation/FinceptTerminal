@@ -20,6 +20,7 @@
 #include "mcp/tools/ForumTools.h"
 #include "mcp/tools/GeopoliticsTools.h"
 #include "mcp/tools/GovDataTools.h"
+#include "mcp/tools/LiveTradingTools.h"
 #include "mcp/tools/MAAnalyticsTools.h"
 #include "mcp/tools/MarketsTools.h"
 #include "mcp/tools/McpServersTools.h"
@@ -115,6 +116,9 @@ void initialize_all_tools() {
 
     // paper trading tab
     provider.register_tools(tools::get_paper_trading_tools());
+
+    // live broker trading (order placement/cancel, account state, market data)
+    provider.register_tools(tools::get_live_trading_tools());
 
     // sec edgar (CIK resolution, XBRL financials, filing search)
     provider.register_tools(tools::get_edgar_tools());

@@ -14,6 +14,7 @@ class FivePaisaBroker : public IBroker {
     BrokerId id() const override { return BrokerId::FivePaisa; }
     const char* name() const override { return "5Paisa"; }
     const char* base_url() const override { return "https://Openapi.5paisa.com"; }
+    const char* ws_adapter_name() const override { return "fivepaisa"; }
 
     BrokerProfile profile() const override {
         return BrokerProfile{
@@ -66,6 +67,9 @@ class FivePaisaBroker : public IBroker {
 
     static bool is_token_expired(const BrokerHttpResponse& resp);
     static QString checked_error(const BrokerHttpResponse& resp, const QString& fallback);
+
+    // --- Margin Calculator --- 5Paisa has no per-order margin API → fallback estimator.
+    ApiResponse<OrderMargin> get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) override;
 
   protected:
     QMap<QString, QString> auth_headers(const BrokerCredentials& creds) const override;

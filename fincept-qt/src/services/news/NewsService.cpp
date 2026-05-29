@@ -419,6 +419,29 @@ void NewsService::analyze_article(const QString& url, AnalysisCallback cb) {
         analysis.operational = {ops["level"].toString(), ops["details"].toString()};
         analysis.market = {mkt["level"].toString(), mkt["details"].toString()};
 
+        // Entities — organizations carry ticker/sector/sentiment; locations
+        // carry a country code; people are name-only.
+        auto ent = a["entities"].toObject();
+        for (const auto& v : ent["organizations"].toArray()) {
+            auto o = v.toObject();
+            analysis.organizations.push_back(
+                {o["name"].toString(), o["ticker"].toString(), o["sector"].toString(), o["sentiment"].toDouble()});
+        }
+        for (const auto& v : ent["people"].toArray()) {
+            auto p = v.toObject();
+            analysis.people.push_back({p["name"].toString(), {}, {}, 0});
+        }
+        for (const auto& v : ent["locations"].toArray()) {
+            auto l = v.toObject();
+            analysis.locations.push_back({l["name"].toString(), l["country_code"].toString(), {}, 0});
+        }
+
+        // Content fetch metadata — surfaces publisher-block notices.
+        auto content = data["content"].toObject();
+        analysis.content.headline = content["headline"].toString();
+        analysis.content.word_count = content["word_count"].toInt();
+        analysis.content.fetch_note = content["fetch_note"].toString();
+
         cb(true, analysis);
     }, this);
 }

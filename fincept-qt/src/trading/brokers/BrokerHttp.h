@@ -17,6 +17,7 @@ struct BrokerHttpResponse {
     QJsonObject json;
     QString raw_body;
     QString error;
+    double rtt_ms = 0; // round-trip time of the network wait (ms), set on every return path
 };
 
 class BrokerHttp {

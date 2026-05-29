@@ -4,6 +4,7 @@
 #include "mcp/McpService.h"
 #include "network/http/HttpClient.h"
 #include "python/PythonRunner.h"
+#include "services/notifications/NotificationService.h"
 #include "services/workflow/AuditLogger.h"
 #include "services/workflow/ConfirmationService.h"
 #include "services/workflow/NodeRegistry.h"
@@ -112,6 +113,30 @@ static QString ensure_paper_portfolio() {
         return existing->id;
     auto p = pt_create_portfolio("workflow_default", 1000000.0, "USD");
     return p.id;
+}
+
+// Resolve an account_id for a trading node: prefer the explicit account_id param,
+// otherwise fall back to the first active account for the given broker. Returns
+// empty when neither resolves (caller reports a friendly "no account" error).
+static QString resolve_account_id(const QString& account_id_param, const QString& broker_id) {
+    using namespace fincept::trading;
+    QString aid = account_id_param.trimmed();
+    if (!aid.isEmpty() && AccountManager::instance().has_account(aid))
+        return aid;
+    return find_account_for_broker(broker_id);
+}
+
+// Map a product param string ("MIS"/"CNC"/"NRML" or "intraday"/"delivery"/...) to ProductType.
+static fincept::trading::ProductType parse_product(const QString& p) {
+    using namespace fincept::trading;
+    QString s = p.toLower();
+    if (s == "mis" || s == "intraday")
+        return ProductType::Intraday;
+    if (s == "nrml" || s == "margin")
+        return ProductType::Margin;
+    if (s == "mtf")
+        return ProductType::MTF;
+    return ProductType::Delivery; // "cnc" / "delivery" / default
 }
 
 void wire_trading_bridges(NodeRegistry& registry) {
@@ -905,7 +930,280 @@ void wire_trading_bridges(NodeRegistry& registry) {
         };
     }
 
-    LOG_INFO("ServiceBridges", "Trading bridges wired (11 nodes)");
+    // ── Phase 3 §6: Get Quote ─────────────────────────────────────
+    auto* quote_def = const_cast<NodeTypeDef*>(registry.find("trading.get_quote"));
+    if (quote_def) {
+        quote_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+                                std::function<void(bool, QJsonValue, QString)> cb) {
+            QString account_id_param = params.value("account_id").toString();
+            QString broker = params.value("broker").toString("fyers");
+            QString symbol = params.value("symbol").toString();
+            QString exchange = params.value("exchange").toString("NSE");
+            if (symbol.isEmpty()) {
+                cb(false, {}, "Symbol is required");
+                return;
+            }
+
+            (void)QtConcurrent::run([cb, account_id_param, broker, symbol, exchange]() {
+                QString account_id = resolve_account_id(account_id_param, broker);
+                if (account_id.isEmpty()) {
+                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                    return;
+                }
+
+                QVector<QPair<QString, QString>> syms{{symbol, exchange}};
+                auto resp = UnifiedTrading::instance().get_multi_quotes(account_id, syms);
+                if (!resp.success || !resp.data.has_value() || resp.data->isEmpty()) {
+                    cb(false, {}, resp.error.isEmpty() ? QString("No quote for %1").arg(symbol) : resp.error);
+                    return;
+                }
+
+                const BrokerQuote& q = resp.data->first();
+                QJsonObject out;
+                out["symbol"] = symbol;
+                out["exchange"] = exchange;
+                out["ltp"] = q.ltp;
+                out["bid"] = q.bid;
+                out["ask"] = q.ask;
+                out["volume"] = q.volume;
+                out["oi"] = static_cast<double>(q.oi);
+                out["open"] = q.open;
+                out["high"] = q.high;
+                out["low"] = q.low;
+                out["close"] = q.close;
+                out["change"] = q.change;
+                out["change_pct"] = q.change_pct;
+                cb(true, out, {});
+            });
+        };
+    }
+
+    // ── Phase 3 §6: Get Position (single symbol) ──────────────────
+    auto* single_pos_def = const_cast<NodeTypeDef*>(registry.find("trading.get_position"));
+    if (single_pos_def) {
+        single_pos_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+                                     std::function<void(bool, QJsonValue, QString)> cb) {
+            QString account_id_param = params.value("account_id").toString();
+            QString broker = params.value("broker").toString("fyers");
+            QString symbol = params.value("symbol").toString();
+            QString product = params.value("product").toString();
+            if (symbol.isEmpty()) {
+                cb(false, {}, "Symbol is required");
+                return;
+            }
+
+            (void)QtConcurrent::run([cb, account_id_param, broker, symbol, product]() {
+                QString account_id = resolve_account_id(account_id_param, broker);
+                if (account_id.isEmpty()) {
+                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                    return;
+                }
+
+                auto creds = AccountManager::instance().load_credentials(account_id);
+                auto* ibk = AccountManager::instance().broker_for(account_id);
+                if (!ibk) {
+                    cb(false, {}, "Broker not found in registry");
+                    return;
+                }
+
+                auto result = ibk->get_positions(creds);
+                if (!result.success) {
+                    cb(false, {}, result.error);
+                    return;
+                }
+
+                for (const auto& p : result.data.value()) {
+                    if (!p.symbol.contains(symbol, Qt::CaseInsensitive))
+                        continue;
+                    if (!product.isEmpty() && !p.product_type.contains(product, Qt::CaseInsensitive))
+                        continue;
+                    QJsonObject out;
+                    out["symbol"] = p.symbol;
+                    out["exchange"] = p.exchange;
+                    out["product"] = p.product_type;
+                    out["quantity"] = p.quantity;
+                    out["avg_price"] = p.avg_price;
+                    out["ltp"] = p.ltp;
+                    out["pnl"] = p.pnl;
+                    out["pnl_pct"] = p.pnl_pct;
+                    out["side"] = p.side;
+                    cb(true, out, {});
+                    return;
+                }
+
+                // No matching position — return a flat (zero) position rather than error.
+                QJsonObject out;
+                out["symbol"] = symbol;
+                out["quantity"] = 0.0;
+                out["avg_price"] = 0.0;
+                out["pnl"] = 0.0;
+                cb(true, out, {});
+            });
+        };
+    }
+
+    // ── Phase 3 §6: Smart Order ───────────────────────────────────
+    auto* smart_def = const_cast<NodeTypeDef*>(registry.find("trading.smart_order"));
+    if (smart_def) {
+        smart_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+                                std::function<void(bool, QJsonValue, QString)> cb) {
+            QString account_id_param = params.value("account_id").toString();
+            QString broker = params.value("broker").toString("fyers");
+            QString symbol = params.value("symbol").toString();
+            QString exchange = params.value("exchange").toString("NSE");
+            double position_size = params.value("position_size").toDouble(0);
+            QString order_type_str = params.value("order_type").toString("market");
+            double price = params.value("price").toDouble(0);
+            QString product = params.value("product").toString("intraday");
+            if (symbol.isEmpty()) {
+                cb(false, {}, "Symbol is required");
+                return;
+            }
+
+            (void)QtConcurrent::run([cb, account_id_param, broker, symbol, exchange, position_size, order_type_str,
+                                     price, product]() {
+                QString account_id = resolve_account_id(account_id_param, broker);
+                if (account_id.isEmpty()) {
+                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                    return;
+                }
+
+                SmartOrder so;
+                so.symbol = symbol;
+                so.exchange = exchange;
+                so.position_size = position_size;
+                so.action = position_size >= 0 ? OrderSide::Buy : OrderSide::Sell;
+                so.order_type = (order_type_str == "limit") ? OrderType::Limit : OrderType::Market;
+                so.price = price;
+                so.product_type = parse_product(product);
+
+                auto resp = UnifiedTrading::instance().place_smart_order(account_id, so);
+                if (!resp.success || !resp.data.has_value()) {
+                    cb(false, {}, resp.error.isEmpty() ? "Smart order failed" : resp.error);
+                    return;
+                }
+
+                const SmartOrderResult& r = resp.data.value();
+                QJsonObject out;
+                out["symbol"] = symbol;
+                out["exchange"] = exchange;
+                out["order_id"] = r.order_id;
+                out["action_taken"] = r.action_taken;
+                out["executed_action"] = QString(order_side_str(r.executed_action));
+                out["executed_quantity"] = r.executed_quantity;
+                out["message"] = r.message;
+                out["broker"] = broker;
+                cb(true, out, {});
+            });
+        };
+    }
+
+    // ── Phase 3 §6: Cancel All Orders ─────────────────────────────
+    auto* cancel_all_def = const_cast<NodeTypeDef*>(registry.find("trading.cancel_all"));
+    if (cancel_all_def) {
+        cancel_all_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+                                     std::function<void(bool, QJsonValue, QString)> cb) {
+            QString account_id_param = params.value("account_id").toString();
+            QString broker = params.value("broker").toString("fyers");
+
+            (void)QtConcurrent::run([cb, account_id_param, broker]() {
+                QString account_id = resolve_account_id(account_id_param, broker);
+                if (account_id.isEmpty()) {
+                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                    return;
+                }
+
+                auto resp = UnifiedTrading::instance().cancel_all_orders(account_id);
+                if (!resp.success || !resp.data.has_value()) {
+                    cb(false, {}, resp.error.isEmpty() ? "Cancel all failed" : resp.error);
+                    return;
+                }
+
+                const CancelAllResult& r = resp.data.value();
+                QJsonObject out;
+                out["canceled_count"] = r.canceled_order_ids.size();
+                out["failed_count"] = r.failed.size();
+                out["total_attempted"] = r.total_attempted;
+                QJsonArray ids;
+                for (const auto& id : r.canceled_order_ids)
+                    ids.append(id);
+                out["canceled_ids"] = ids;
+                out["broker"] = broker;
+                cb(true, out, {});
+            });
+        };
+    }
+
+    // ── Phase 3 §6: Close All Positions ───────────────────────────
+    auto* close_all_def = const_cast<NodeTypeDef*>(registry.find("trading.close_all"));
+    if (close_all_def) {
+        close_all_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+                                    std::function<void(bool, QJsonValue, QString)> cb) {
+            QString account_id_param = params.value("account_id").toString();
+            QString broker = params.value("broker").toString("fyers");
+
+            (void)QtConcurrent::run([cb, account_id_param, broker]() {
+                QString account_id = resolve_account_id(account_id_param, broker);
+                if (account_id.isEmpty()) {
+                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                    return;
+                }
+
+                auto resp = UnifiedTrading::instance().close_all_positions(account_id);
+                if (!resp.success || !resp.data.has_value()) {
+                    cb(false, {}, resp.error.isEmpty() ? "Close all failed" : resp.error);
+                    return;
+                }
+
+                const CloseAllResult& r = resp.data.value();
+                QJsonObject out;
+                out["closed_count"] = r.closed_symbols.size();
+                out["failed_count"] = r.failed.size();
+                out["total_positions"] = r.total_positions;
+                QJsonArray syms;
+                for (const auto& s : r.closed_symbols)
+                    syms.append(s);
+                out["closed_symbols"] = syms;
+                out["broker"] = broker;
+                cb(true, out, {});
+            });
+        };
+    }
+
+    // ── Phase 3 §6: Trading Alert ─────────────────────────────────
+    auto* alert_def = const_cast<NodeTypeDef*>(registry.find("trading.alert"));
+    if (alert_def) {
+        alert_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
+                                std::function<void(bool, QJsonValue, QString)> cb) {
+            using namespace fincept::notifications;
+            QString message = params.value("message").toString();
+            QString channel = params.value("channel").toString("notification");
+            if (message.isEmpty() && !inputs.isEmpty() && inputs[0].isObject())
+                message = inputs[0].toObject().value("message").toString();
+            if (message.isEmpty()) {
+                cb(false, {}, "Alert message is required");
+                return;
+            }
+
+            const QJsonValue pass_through = inputs.isEmpty() ? QJsonValue{} : inputs[0];
+
+            if (channel == "log") {
+                LOG_INFO("TradingAlert", message);
+                cb(true, pass_through, {});
+                return;
+            }
+
+            NotificationRequest req;
+            req.title = "Trading Alert";
+            req.message = message;
+            req.level = NotifLevel::Alert;
+            req.trigger = NotifTrigger::WorkflowNode;
+            NotificationService::instance().send(req);
+            cb(true, pass_through, {});
+        };
+    }
+
+    LOG_INFO("ServiceBridges", "Trading bridges wired (17 nodes)");
 }
 
 // ── Agent Bridge ───────────────────────────────────────────────────────

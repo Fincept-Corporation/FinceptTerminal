@@ -11,6 +11,9 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 
+#include <algorithm>
+#include <cmath>
+
 namespace fincept::trading {
 
 QString ZerodhaBroker::kite_login_url(const QString& api_key) {
@@ -605,7 +608,76 @@ static GttOrder parse_gtt(const QJsonObject& o) {
 }
 
 GttPlaceResponse ZerodhaBroker::gtt_place(const BrokerCredentials& creds, const GttOrder& order) {
-    auto resp = BrokerHttp::instance().post_json(QString(base_url()) + "/gtt/triggers", build_gtt_body(order),
+    // ── Market-Price-Protection (MPP) ────────────────────────────────────────
+    // Zerodha's GTT infrastructure sends a regular order when the trigger fires.
+    // If the order_type is MARKET, the execution price is unbounded — a flash
+    // crash or spike can fill at an extreme price far from the trigger level.
+    //
+    // MPP converts Market legs to Limit with a protective buffer:
+    //   buffer = max(5% of LTP, 5 × tick_size)
+    //   BUY  → limit_price = LTP + buffer   (ceiling)
+    //   SELL → limit_price = LTP - buffer   (floor, min 0)
+    //
+    // This gives the order enough room to fill under normal volatility while
+    // capping the worst-case slippage. If the symbol's tick_size is available
+    // from InstrumentService we use it; otherwise we fall back to the NSE
+    // default of 0.05.
+    GttOrder mpp_order = order;
+    bool applied_mpp = false;
+
+    for (auto& trigger : mpp_order.triggers) {
+        if (trigger.order_type != OrderType::Market)
+            continue;
+
+        // Fetch LTP via the quote endpoint
+        double ltp = mpp_order.last_price;
+        if (ltp <= 0.0) {
+            // Try to get a live quote for the symbol
+            QVector<QString> syms = {(mpp_order.exchange.isEmpty() ? "NSE" : mpp_order.exchange) + ":" + mpp_order.symbol};
+            auto quote_resp = get_quotes(creds, syms);
+            if (quote_resp.success && quote_resp.data.has_value() && !quote_resp.data->isEmpty())
+                ltp = quote_resp.data->first().ltp;
+        }
+        if (ltp <= 0.0) {
+            LOG_WARN("Zerodha", QString("GTT MPP: could not determine LTP for %1 — sending Market as-is")
+                                    .arg(mpp_order.symbol));
+            continue;
+        }
+
+        // Determine tick_size from InstrumentService (fall back to 0.05)
+        double tick = 0.05;
+        auto inst = InstrumentService::instance().find(mpp_order.symbol, mpp_order.exchange.isEmpty() ? "NSE" : mpp_order.exchange, "zerodha");
+        if (inst.has_value() && inst->tick_size > 0)
+            tick = inst->tick_size;
+
+        // buffer = max(5% of LTP, 5 × tick_size)
+        const double buffer = std::max(ltp * 0.05, 5.0 * tick);
+
+        // Convert to Limit with protective price
+        trigger.order_type = OrderType::Limit;
+        if (trigger.side == OrderSide::Buy)
+            trigger.limit_price = ltp + buffer;
+        else
+            trigger.limit_price = std::max(0.0, ltp - buffer);
+
+        // Round to tick size
+        if (tick > 0)
+            trigger.limit_price = std::round(trigger.limit_price / tick) * tick;
+
+        applied_mpp = true;
+        LOG_INFO("Zerodha", QString("GTT MPP: %1 %2 Market→Limit @ %3 (LTP=%4, buffer=%5, tick=%6)")
+                                .arg(mpp_order.symbol)
+                                .arg(trigger.side == OrderSide::Buy ? "BUY" : "SELL")
+                                .arg(trigger.limit_price, 0, 'f', 2)
+                                .arg(ltp, 0, 'f', 2)
+                                .arg(buffer, 0, 'f', 2)
+                                .arg(tick, 0, 'f', 4));
+    }
+
+    if (applied_mpp)
+        mpp_order.last_price = mpp_order.last_price > 0 ? mpp_order.last_price : 0;
+
+    auto resp = BrokerHttp::instance().post_json(QString(base_url()) + "/gtt/triggers", build_gtt_body(mpp_order),
                                                  auth_headers(creds));
     if (!resp.success || resp.json.value("status").toString() != "success")
         return {false, "", checked_error(resp, "GTT place failed")};
@@ -648,6 +720,131 @@ ApiResponse<QJsonObject> ZerodhaBroker::gtt_cancel(const BrokerCredentials& cred
     if (!resp.success || resp.json.value("status").toString() != "success")
         return {false, std::nullopt, checked_error(resp, "GTT cancel failed"), ts};
     return {true, resp.json, "", ts};
+}
+
+// ============================================================================
+// Multi-Quote & Market Depth — Zerodha /quote endpoint
+// ============================================================================
+
+ApiResponse<QVector<BrokerQuote>> ZerodhaBroker::get_multi_quotes(
+    const BrokerCredentials& creds,
+    const QVector<QPair<QString, QString>>& symbols) {
+
+    QVector<BrokerQuote> all_quotes;
+    constexpr int kBatchSize = 500;
+
+    for (int start = 0; start < symbols.size(); start += kBatchSize) {
+        int end = std::min<int>(start + kBatchSize, static_cast<int>(symbols.size()));
+
+        // Build query string: ?i=EXCHANGE:SYMBOL&i=...
+        QString query;
+        for (int i = start; i < end; ++i) {
+            const auto& [sym, exch] = symbols[i];
+            // Try InstrumentService for broker-specific symbol; fall back to raw
+            auto br_sym = InstrumentService::instance().to_brsymbol(sym, exch, "zerodha");
+            QString key = (exch.isEmpty() ? "NSE" : exch) + ":" + (br_sym.has_value() ? br_sym.value() : sym);
+            if (!query.isEmpty())
+                query += "&i=";
+            query += key;
+        }
+
+        auto resp = BrokerHttp::instance().get(
+            QString(base_url()) + "/quote?i=" + query, auth_headers(creds));
+        int64_t ts = now_ts();
+
+        if (!resp.success)
+            return {false, std::nullopt, checked_error(resp, resp.error), ts};
+
+        auto data = resp.json.value("data").toObject();
+        for (auto it = data.constBegin(); it != data.constEnd(); ++it) {
+            auto q_obj = it.value().toObject();
+            BrokerQuote q;
+            q.symbol = it.key();
+            q.ltp = q_obj.value("last_price").toDouble();
+            auto ohlc = q_obj.value("ohlc").toObject();
+            q.open = ohlc.value("open").toDouble();
+            q.high = ohlc.value("high").toDouble();
+            q.low = ohlc.value("low").toDouble();
+            q.close = ohlc.value("close").toDouble();
+            q.volume = q_obj.value("volume").toDouble();
+            q.change = q_obj.value("net_change").toDouble();
+            q.change_pct = q.close > 0 ? (q.change / q.close) * 100.0 : 0.0;
+
+            auto depth = q_obj.value("depth").toObject();
+            const auto buy_arr = depth.value("buy").toArray();
+            const auto sell_arr = depth.value("sell").toArray();
+            auto buy0 = buy_arr.isEmpty() ? QJsonObject{} : buy_arr.first().toObject();
+            auto sell0 = sell_arr.isEmpty() ? QJsonObject{} : sell_arr.first().toObject();
+            q.bid = buy0.value("price").toDouble();
+            q.bid_size = buy0.value("quantity").toDouble();
+            q.ask = sell0.value("price").toDouble();
+            q.ask_size = sell0.value("quantity").toDouble();
+
+            q.oi = static_cast<qint64>(q_obj.value("oi").toDouble());
+            const double oi_high = q_obj.value("oi_day_high").toDouble();
+            const double oi_low = q_obj.value("oi_day_low").toDouble();
+            if (oi_high > 0)
+                q.oi_change_pct = ((static_cast<double>(q.oi) - oi_low) / oi_high) * 100.0;
+
+            all_quotes.append(q);
+        }
+    }
+
+    return {true, all_quotes, "", now_ts()};
+}
+
+ApiResponse<MarketDepth> ZerodhaBroker::get_market_depth(
+    const BrokerCredentials& creds,
+    const QString& symbol, const QString& exchange) {
+
+    // Resolve broker-specific symbol
+    auto br_sym = InstrumentService::instance().to_brsymbol(symbol, exchange, "zerodha");
+    QString exch = exchange.isEmpty() ? "NSE" : exchange;
+    QString key = exch + ":" + (br_sym.has_value() ? br_sym.value() : symbol);
+
+    auto resp = BrokerHttp::instance().get(
+        QString(base_url()) + "/quote?i=" + key, auth_headers(creds));
+    int64_t ts = now_ts();
+
+    if (!resp.success)
+        return {false, std::nullopt, checked_error(resp, resp.error), ts};
+
+    auto data = resp.json.value("data").toObject();
+    auto q_obj = data.value(key).toObject();
+    if (q_obj.isEmpty())
+        return {false, std::nullopt, "No data returned for " + key, ts};
+
+    MarketDepth md;
+    md.symbol = symbol;
+    md.exchange = exch;
+    md.ltp = q_obj.value("last_price").toDouble();
+    md.volume = q_obj.value("volume").toDouble();
+    md.oi = q_obj.value("oi").toDouble();
+
+    auto depth = q_obj.value("depth").toObject();
+
+    // Parse 5-level bid/ask depth
+    const auto buy_arr = depth.value("buy").toArray();
+    for (const auto& level : buy_arr) {
+        auto lv = level.toObject();
+        DepthLevel dl;
+        dl.price = lv.value("price").toDouble();
+        dl.quantity = lv.value("quantity").toInt();
+        dl.orders = lv.value("orders").toInt();
+        md.bids.append(dl);
+    }
+
+    const auto sell_arr = depth.value("sell").toArray();
+    for (const auto& level : sell_arr) {
+        auto lv = level.toObject();
+        DepthLevel dl;
+        dl.price = lv.value("price").toDouble();
+        dl.quantity = lv.value("quantity").toInt();
+        dl.orders = lv.value("orders").toInt();
+        md.asks.append(dl);
+    }
+
+    return {true, md, "", ts};
 }
 
 } // namespace fincept::trading

@@ -75,6 +75,24 @@ struct RiskSignal {
     QString details;
 };
 
+/// Named entity surfaced by the /news/analyze endpoint. `kind` is one of
+/// "organization" / "person" / "location"; `detail` carries the secondary
+/// field (ticker for orgs, country_code for locations) when present.
+struct AnalysisEntity {
+    QString name;
+    QString detail;        // ticker (orgs) or country code (locations); may be empty
+    QString sector;        // orgs only
+    double sentiment = 0;  // orgs only
+};
+
+/// Article fetch metadata reported by the analyze endpoint — lets the UI
+/// warn when the publisher blocked content and the analysis is metadata-only.
+struct AnalysisContent {
+    QString headline;
+    int word_count = 0;
+    QString fetch_note; // e.g. "Article content blocked by publisher (HTTP 401)..."
+};
+
 struct NewsAnalysis {
     SentimentAnalysis sentiment;
     MarketImpactData market_impact;
@@ -86,6 +104,10 @@ struct NewsAnalysis {
     RiskSignal geopolitical;
     RiskSignal operational;
     RiskSignal market;
+    QVector<AnalysisEntity> organizations;
+    QVector<AnalysisEntity> people;
+    QVector<AnalysisEntity> locations;
+    AnalysisContent content;
     int credits_used = 0;
     int credits_remaining = 0;
 };

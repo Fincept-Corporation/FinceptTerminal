@@ -37,6 +37,47 @@ struct ProductTypeDef {
     trading::ProductType value;
 };
 
+// ============================================================================
+// estimate_order_margin — shared fallback margin estimator
+// Used by brokers that have no native pre-trade margin API (OpenAlgo's Python
+// raises NotImplementedError for these). Mirrors Phase 3 §5's heuristic:
+//   Intraday   → 20% (≈5x)
+//   Delivery   → 100% (full payment)
+//   Futures    → 10% (≈10x)
+//   Option buy → premium (full)
+//   Option sell→ 15% (SPAN estimate)
+//   default    → 20%
+// ============================================================================
+inline OrderMargin estimate_order_margin(const UnifiedOrder& order) {
+    const double trade_value = order.quantity * order.price;
+    OrderMargin m;
+    m.symbol = order.symbol;
+    m.exchange = order.exchange;
+    m.side = (order.side == OrderSide::Buy) ? "BUY" : "SELL";
+    m.quantity = order.quantity;
+    m.price = order.price;
+
+    const bool is_opt = order.symbol.endsWith("CE") || order.symbol.endsWith("PE");
+    const bool is_fut = order.symbol.contains("FUT");
+
+    if (order.product_type == ProductType::Intraday)
+        m.total = trade_value * 0.20; // ~5x
+    else if (order.product_type == ProductType::Delivery)
+        m.total = trade_value; // full payment
+    else if (is_fut)
+        m.total = trade_value * 0.10; // ~10x
+    else if (is_opt && order.side == OrderSide::Buy)
+        m.total = trade_value; // premium only
+    else if (is_opt)
+        m.total = trade_value * 0.15; // sell SPAN estimate
+    else
+        m.total = trade_value * 0.20;
+
+    m.cash = m.total;
+    m.leverage = (m.total > 0.0) ? trade_value / m.total : 1.0;
+    return m;
+}
+
 struct BrokerProfile {
     // Identity
     QString id;           // e.g. "alpaca"
@@ -275,6 +316,115 @@ class IBroker {
         Q_UNUSED(creds);
         Q_UNUSED(gtt_id);
         return {false, std::nullopt, "GTT not supported for this broker"};
+    }
+
+    // --- Bulk Operations (Phase 1: OpenAlgo bridge) ---
+
+    /// Cancel all open/pending orders. Default: fetch order book, cancel each open order.
+    virtual ApiResponse<CancelAllResult> cancel_all_orders(const BrokerCredentials& creds) {
+        CancelAllResult result;
+        auto orders_resp = get_orders(creds);
+        if (!orders_resp.success)
+            return {false, std::nullopt, orders_resp.error};
+        for (const auto& o : orders_resp.data.value_or(QVector<BrokerOrderInfo>{})) {
+            auto s = o.status.toLower();
+            if (s == "open" || s == "pending" || s == "new" || s == "trigger pending"
+                || s == "trigger_pending" || s == "ordered" || s == "transit"
+                || s == "accepted" || s == "partially_filled" || s == "working") {
+                result.total_attempted++;
+                auto r = cancel_order(creds, o.order_id);
+                if (r.success)
+                    result.canceled_order_ids.append(o.order_id);
+                else
+                    result.failed.append({o.order_id, r.error});
+            }
+        }
+        return {true, result, {}};
+    }
+
+    /// Close all open positions by placing market counter-orders.
+    virtual ApiResponse<CloseAllResult> close_all_positions(const BrokerCredentials& creds) {
+        CloseAllResult result;
+        auto pos_resp = get_positions(creds);
+        if (!pos_resp.success)
+            return {false, std::nullopt, pos_resp.error};
+        for (const auto& p : pos_resp.data.value_or(QVector<BrokerPosition>{})) {
+            if (p.quantity == 0) continue;
+            result.total_positions++;
+            UnifiedOrder counter;
+            counter.symbol = p.symbol;
+            counter.exchange = p.exchange;
+            counter.side = (p.quantity > 0) ? OrderSide::Sell : OrderSide::Buy;
+            counter.quantity = std::abs(p.quantity);
+            counter.order_type = OrderType::Market;
+            auto r = place_order(creds, counter);
+            if (r.success)
+                result.closed_symbols.append(p.symbol);
+            else
+                result.failed.append({p.symbol, r.error});
+        }
+        return {true, result, {}};
+    }
+
+    /// Close a single position by symbol/exchange/product.
+    virtual ApiResponse<OrderPlaceResponse> close_position(
+        const BrokerCredentials& creds,
+        const QString& symbol, const QString& exchange, const QString& product_type)
+    {
+        auto pos_resp = get_positions(creds);
+        if (!pos_resp.success)
+            return {false, std::nullopt, pos_resp.error};
+        for (const auto& p : pos_resp.data.value_or(QVector<BrokerPosition>{})) {
+            if (p.symbol == symbol && p.exchange == exchange
+                && (product_type.isEmpty() || p.product_type == product_type)
+                && p.quantity != 0) {
+                UnifiedOrder counter;
+                counter.symbol = p.symbol;
+                counter.exchange = p.exchange;
+                counter.side = (p.quantity > 0) ? OrderSide::Sell : OrderSide::Buy;
+                counter.quantity = std::abs(p.quantity);
+                counter.order_type = OrderType::Market;
+                auto opr = place_order(creds, counter);
+                if (!opr.success)
+                    return {false, std::nullopt, opr.error};
+                return {true, opr, ""};
+            }
+        }
+        return {false, std::nullopt, "Position not found"};
+    }
+
+    /// Batch quotes for multiple symbols. Default: sequential fallback.
+    virtual ApiResponse<QVector<BrokerQuote>> get_multi_quotes(
+        const BrokerCredentials& creds,
+        const QVector<QPair<QString, QString>>& symbols)
+    {
+        QVector<BrokerQuote> results;
+        for (const auto& [sym, exch] : symbols) {
+            auto r = get_quotes(creds, {sym});
+            if (r.success && r.data.has_value() && !r.data->isEmpty())
+                results.append(r.data->first());
+        }
+        return {true, results, {}};
+    }
+
+    /// Market depth (Level 2 bid/ask). Default: not supported.
+    virtual ApiResponse<MarketDepth> get_market_depth(
+        const BrokerCredentials& creds,
+        const QString& symbol, const QString& exchange)
+    {
+        Q_UNUSED(creds); Q_UNUSED(symbol); Q_UNUSED(exchange);
+        return {false, std::nullopt, "Market depth not supported for this broker"};
+    }
+
+    /// Option chain for an underlying. Default: not supported.
+    virtual ApiResponse<QVector<OptionChainEntry>> get_option_chain(
+        const BrokerCredentials& creds,
+        const QString& underlying, const QString& exchange,
+        const QString& expiry, int strike_count = 0)
+    {
+        Q_UNUSED(creds); Q_UNUSED(underlying); Q_UNUSED(exchange);
+        Q_UNUSED(expiry); Q_UNUSED(strike_count);
+        return {false, std::nullopt, "Option chain not supported for this broker"};
     }
 
     // --- WebSocket streaming ---

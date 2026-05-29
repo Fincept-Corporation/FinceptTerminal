@@ -2,6 +2,7 @@
 // Equity Order Entry — BUY/SELL form configurable per broker profile
 
 #include "trading/BrokerInterface.h"
+#include "trading/OptionsStrategyBuilder.h"
 #include "trading/TradingTypes.h"
 
 #include <QComboBox>
@@ -34,14 +35,20 @@ class EquityOrderEntry : public QWidget {
   signals:
     void order_submitted(const trading::UnifiedOrder& order);
     void broadcast_requested(const trading::UnifiedOrder& order);
+    void strategy_order_submitted(const trading::BasketOrderRequest& basket);
 
   private slots:
     void on_submit();
+    void on_place_strategy();
 
   private:
     void update_cost_preview();
     void set_buy_side(bool is_buy);
     void set_order_type(int idx);
+
+    // Options strategy helpers
+    bool build_strategy(trading::OptionsStrategy& out) const; // returns false when strategy == None or inputs invalid
+    void refresh_strategy_preview();
 
     // Side tabs
     QPushButton* buy_tab_ = nullptr;
@@ -70,6 +77,17 @@ class EquityOrderEntry : public QWidget {
     QPushButton* broadcast_btn_ = nullptr;
     QWidget* advanced_section_ = nullptr;
     QPushButton* advanced_toggle_ = nullptr;
+
+    // Options strategy section (collapsible, like advanced_section_)
+    QPushButton* strategy_toggle_ = nullptr;
+    QWidget* strategy_section_ = nullptr;
+    QComboBox* strategy_combo_ = nullptr;
+    QLineEdit* strat_strike_edit_ = nullptr; // ATM strike
+    QLineEdit* strat_expiry_edit_ = nullptr; // YYYY-MM-DD
+    QLineEdit* strat_lot_edit_ = nullptr;    // lot size (default 1)
+    QLineEdit* strat_width_edit_ = nullptr;  // width for strangle/condor/spreads
+    QLabel* strategy_preview_ = nullptr;
+    QPushButton* place_strategy_btn_ = nullptr;
 
     // Labels
     QLabel* balance_label_ = nullptr;

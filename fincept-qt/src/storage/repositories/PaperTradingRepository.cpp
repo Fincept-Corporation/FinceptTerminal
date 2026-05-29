@@ -255,6 +255,36 @@ Result<void> PaperTradingRepository::delete_all_positions(const QString& portfol
     return exec_write("DELETE FROM pt_positions WHERE portfolio_id = ?", {portfolio_id});
 }
 
+// ── Margin Blocks (Phase 3 §4) ───────────────────────────────────────────────
+
+Result<void> PaperTradingRepository::insert_margin_block(const QString& id, const QString& portfolio_id,
+                                                         const QString& order_id, const QString& symbol,
+                                                         double blocked_amount) {
+    // order_id is UNIQUE; use INSERT OR REPLACE so a re-block on the same order
+    // overwrites rather than failing on the unique constraint.
+    return exec_write("INSERT OR REPLACE INTO pt_margin_blocks "
+                      "(id, portfolio_id, order_id, symbol, blocked_amount) VALUES (?, ?, ?, ?, ?)",
+                      {id, portfolio_id, order_id, symbol, blocked_amount});
+}
+
+double PaperTradingRepository::get_margin_block(const QString& order_id) {
+    auto r = db().execute("SELECT blocked_amount FROM pt_margin_blocks WHERE order_id = ?", {order_id});
+    if (r.is_err())
+        return 0.0;
+    auto& q = r.value();
+    if (!q.next())
+        return 0.0;
+    return q.value(0).toDouble();
+}
+
+Result<void> PaperTradingRepository::delete_margin_block(const QString& order_id) {
+    return exec_write("DELETE FROM pt_margin_blocks WHERE order_id = ?", {order_id});
+}
+
+Result<void> PaperTradingRepository::delete_all_margin_blocks(const QString& portfolio_id) {
+    return exec_write("DELETE FROM pt_margin_blocks WHERE portfolio_id = ?", {portfolio_id});
+}
+
 // ── Trades ───────────────────────────────────────────────────────────────────
 
 Result<void> PaperTradingRepository::insert_trade(const PtTrade& t) {

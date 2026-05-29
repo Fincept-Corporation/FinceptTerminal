@@ -10,6 +10,7 @@ class DhanBroker : public IBroker {
     BrokerId id() const override { return BrokerId::Dhan; }
     const char* name() const override { return "Dhan"; }
     const char* base_url() const override { return "https://api.dhan.co"; }
+    const char* ws_adapter_name() const override { return "dhan"; }
 
     BrokerProfile profile() const override {
         return BrokerProfile{
@@ -58,6 +59,18 @@ class DhanBroker : public IBroker {
     ApiResponse<QVector<BrokerCandle>> get_history(const BrokerCredentials& creds, const QString& symbol,
                                                    const QString& resolution, const QString& from_date,
                                                    const QString& to_date) override;
+
+    // --- Multi-quote & Market Depth ---
+    ApiResponse<QVector<BrokerQuote>> get_multi_quotes(
+        const BrokerCredentials& creds,
+        const QVector<QPair<QString, QString>>& symbols) override;
+
+    ApiResponse<MarketDepth> get_market_depth(
+        const BrokerCredentials& creds,
+        const QString& symbol, const QString& exchange) override;
+
+    // --- Margin Calculator --- POST /v2/margincalculator (native, single order)
+    ApiResponse<OrderMargin> get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) override;
 
     static bool is_token_expired(const BrokerHttpResponse& resp);
     static QString checked_error(const BrokerHttpResponse& resp, const QString& fallback);

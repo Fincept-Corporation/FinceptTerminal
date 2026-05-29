@@ -64,6 +64,16 @@ class GrowwBroker : public IBroker {
                                                    const QString& resolution, const QString& from_date,
                                                    const QString& to_date) override;
 
+    // Batch multi-quotes — uses /v1/live-data/ltp + /v1/live-data/ohlc (max 50 per call)
+    ApiResponse<QVector<BrokerQuote>> get_multi_quotes(
+        const BrokerCredentials& creds,
+        const QVector<QPair<QString, QString>>& symbols) override;
+
+    // Market depth — GET /v1/live-data/quote includes bid/ask depth for single symbol
+    ApiResponse<MarketDepth> get_market_depth(
+        const BrokerCredentials& creds,
+        const QString& symbol, const QString& exchange) override;
+
     // Pre-trade margin calculator — POST /v1/margins/detail/orders?segment=...
     ApiResponse<OrderMargin> get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) override;
     ApiResponse<BasketMargin> get_basket_margins(const BrokerCredentials& creds,

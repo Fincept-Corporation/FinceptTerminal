@@ -673,4 +673,15 @@ ApiResponse<QJsonObject> MotilalBroker::get_master_contract(const BrokerCredenti
     return {true, out, "", ts};
 }
 
+// ============================================================================
+// Pre-trade margin calculator — fallback estimator.
+// Motilal Oswal has no margin calculator API (OpenAlgo's
+// broker/motilal/api/margin_api.py raises NotImplementedError), so we use the
+// shared heuristic estimator (BrokerInterface.h::estimate_order_margin).
+// ============================================================================
+ApiResponse<OrderMargin> MotilalBroker::get_order_margins(const BrokerCredentials& /*creds*/,
+                                                          const UnifiedOrder& order) {
+    return {true, estimate_order_margin(order), "", now_ts()};
+}
+
 } // namespace fincept::trading

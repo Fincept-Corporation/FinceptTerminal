@@ -961,4 +961,173 @@ ApiResponse<QVector<BrokerMetaEntry>> AlpacaBroker::get_exchange_codes(const Bro
     return {true, result, "", ts};
 }
 
+// ─── Bulk Operations (native Alpaca endpoints) ─────────────────────────────
+
+// DELETE /v2/orders — cancels ALL open orders in one call.
+// Returns HTTP 207 with an array of { id, status, body } results.
+ApiResponse<CancelAllResult> AlpacaBroker::cancel_all_orders(const BrokerCredentials& creds) {
+    auto resp = BrokerHttp::instance().del(trading_url(creds) + "/v2/orders", auth_headers(creds));
+    int64_t ts = now_ts();
+
+    // Alpaca returns 207 with an array body even on success.
+    // BrokerHttp may mark 207 as success=false since it's not 200, so parse raw_body directly.
+    QJsonParseError err;
+    auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError && !resp.success) {
+        LOG_ERROR("AlpacaBroker", QString("cancel_all_orders failed: %1 | body: %2").arg(resp.error, resp.raw_body));
+        return {false, std::nullopt, resp.error.isEmpty() ? resp.raw_body : resp.error, ts};
+    }
+
+    CancelAllResult result;
+    if (doc.isArray()) {
+        for (const auto& v : doc.array()) {
+            auto item = v.toObject();
+            QString order_id = item.value("id").toString();
+            int status = item.value("status").toInt();
+            result.total_attempted++;
+            if (status == 200) {
+                result.canceled_order_ids.append(order_id);
+            } else {
+                auto body_obj = item.value("body").toObject();
+                QString msg = body_obj.value("message").toString();
+                if (msg.isEmpty())
+                    msg = QString("HTTP %1").arg(status);
+                result.failed.append({order_id, msg});
+            }
+        }
+    }
+    // An empty array is valid — means there were no open orders.
+    LOG_INFO("AlpacaBroker", QString("cancel_all_orders: %1 attempted, %2 canceled, %3 failed")
+                                 .arg(result.total_attempted)
+                                 .arg(result.canceled_order_ids.size())
+                                 .arg(result.failed.size()));
+    return {true, result, "", ts};
+}
+
+// DELETE /v2/positions — liquidates ALL open positions in one call.
+// Returns an array of close-order objects (one per position).
+ApiResponse<CloseAllResult> AlpacaBroker::close_all_positions(const BrokerCredentials& creds) {
+    auto resp = BrokerHttp::instance().del(trading_url(creds) + "/v2/positions", auth_headers(creds));
+    int64_t ts = now_ts();
+
+    QJsonParseError err;
+    auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError && !resp.success) {
+        LOG_ERROR("AlpacaBroker", QString("close_all_positions failed: %1 | body: %2").arg(resp.error, resp.raw_body));
+        return {false, std::nullopt, resp.error.isEmpty() ? resp.raw_body : resp.error, ts};
+    }
+
+    CloseAllResult result;
+    if (doc.isArray()) {
+        for (const auto& v : doc.array()) {
+            auto item = v.toObject();
+            QString symbol = item.value("symbol").toString();
+            int status = item.value("status").toInt();
+            result.total_positions++;
+            if (status == 200) {
+                result.closed_symbols.append(symbol);
+            } else {
+                // For positions, the body contains the close order or error info
+                auto body_obj = item.value("body").toObject();
+                QString msg = body_obj.value("message").toString();
+                if (msg.isEmpty())
+                    msg = QString("HTTP %1").arg(status);
+                result.failed.append({symbol, msg});
+            }
+        }
+    }
+    LOG_INFO("AlpacaBroker", QString("close_all_positions: %1 positions, %2 closed, %3 failed")
+                                 .arg(result.total_positions)
+                                 .arg(result.closed_symbols.size())
+                                 .arg(result.failed.size()));
+    return {true, result, "", ts};
+}
+
+// GET /v2/stocks/snapshots?symbols=SYM1,SYM2 — batch multi-quotes via snapshots.
+// Alpaca's data endpoint supports up to 100 symbols per request.
+// Uses data_url() (not trading_url) for market data.
+ApiResponse<QVector<BrokerQuote>> AlpacaBroker::get_multi_quotes(
+    const BrokerCredentials& creds,
+    const QVector<QPair<QString, QString>>& symbols) {
+    if (symbols.isEmpty())
+        return {false, std::nullopt, "No symbols", now_ts()};
+
+    QVector<BrokerQuote> all_quotes;
+    QMap<QString, QString> data_headers = alpaca_data_headers(creds);
+
+    // Chunk into batches of 100 (Alpaca limit)
+    constexpr int BATCH = 100;
+    for (int start = 0; start < symbols.size(); start += BATCH) {
+        const int end = std::min<int>(start + BATCH, symbols.size());
+        QStringList sym_list;
+        sym_list.reserve(end - start);
+        for (int i = start; i < end; ++i)
+            sym_list.append(symbols[i].first);
+
+        const QString url = data_url() + "/v2/stocks/snapshots?symbols=" + sym_list.join(",") + "&feed=iex";
+        auto resp = BrokerHttp::instance().get(url, data_headers);
+        int64_t ts = now_ts();
+        if (!resp.success) {
+            LOG_ERROR("AlpacaBroker",
+                      QString("get_multi_quotes batch failed: %1 | body: %2").arg(resp.error, resp.raw_body));
+            continue; // best-effort — partial batches still return what succeeded
+        }
+
+        QJsonParseError err;
+        auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
+        if (err.error != QJsonParseError::NoError)
+            continue;
+
+        auto snap_obj = doc.object();
+        for (int i = start; i < end; ++i) {
+            const QString& sym = symbols[i].first;
+            auto s = snap_obj.value(sym).toObject();
+            if (s.isEmpty())
+                continue;
+            auto daily = s.value("dailyBar").toObject();
+            auto prev = s.value("prevDailyBar").toObject();
+            auto latest_trade = s.value("latestTrade").toObject();
+            auto latest_quote = s.value("latestQuote").toObject();
+
+            BrokerQuote q;
+            q.symbol = sym;
+            q.ltp = latest_trade.value("p").toDouble();
+            q.bid = latest_quote.value("bp").toDouble();
+            q.ask = latest_quote.value("ap").toDouble();
+            q.bid_size = latest_quote.value("bs").toDouble();
+            q.ask_size = latest_quote.value("as").toDouble();
+            q.open = daily.value("o").toDouble();
+            q.high = daily.value("h").toDouble();
+            q.low = daily.value("l").toDouble();
+            q.close = daily.value("c").toDouble();
+            q.volume = daily.value("v").toDouble();
+
+            if (q.ltp <= 0 && q.bid > 0 && q.ask > 0)
+                q.ltp = (q.bid + q.ask) / 2.0;
+
+            double prev_close = prev.value("c").toDouble();
+            if (prev_close > 0 && q.ltp > 0) {
+                q.change = q.ltp - prev_close;
+                q.change_pct = (q.change / prev_close) * 100.0;
+            }
+            q.timestamp = ts;
+            all_quotes.append(q);
+        }
+    }
+
+    return {true, all_quotes, "", now_ts()};
+}
+
+// ============================================================================
+// Pre-trade margin calculator — fallback estimator.
+// Alpaca exposes no per-order margin endpoint (margin lives on the account
+// object), so we use the shared heuristic estimator
+// (BrokerInterface.h::estimate_order_margin). Equity symbols fall into the
+// Intraday/Delivery buckets (≈20% / full).
+// ============================================================================
+ApiResponse<OrderMargin> AlpacaBroker::get_order_margins(const BrokerCredentials& /*creds*/,
+                                                         const UnifiedOrder& order) {
+    return {true, estimate_order_margin(order), "", now_ts()};
+}
+
 } // namespace fincept::trading

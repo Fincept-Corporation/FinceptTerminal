@@ -5,6 +5,7 @@
 #include "screens/dashboard/widgets/CommoditiesWidget.h"
 #include "screens/dashboard/widgets/CryptoTickerWidget.h"
 #include "screens/dashboard/widgets/CryptoWidget.h"
+#include "screens/dashboard/widgets/DashboardCandleWidget.h"
 #include "screens/dashboard/widgets/EconomicCalendarWidget.h"
 #include "screens/dashboard/widgets/ForexWidget.h"
 #include "screens/dashboard/widgets/GeopoliticsEventsWidget.h"
@@ -83,6 +84,9 @@ WidgetRegistry::WidgetRegistry() {
                          const QString sym = cfg.value("symbol").toString("AAPL");
                          return new widgets::StockQuoteWidget(sym);
                      }});
+
+    register_widget({"candle_chart", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Candle Chart"), QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Research"), QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Candlestick chart for a single ticker — set symbol via gear icon"), 5, 5, 3, 4,
+                     [](const QJsonObject& cfg) { return new widgets::DashboardCandleWidget(cfg); }});
 
     register_widget({"screener", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Stock Screener"), QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Research"), QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Filter stocks by fundamentals and technicals"), 6, 5, 3,
                      4, [](const QJsonObject&) { return new widgets::ScreenerWidget; }});

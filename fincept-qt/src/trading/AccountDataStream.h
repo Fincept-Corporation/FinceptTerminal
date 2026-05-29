@@ -82,6 +82,14 @@ class AccountDataStream : public QObject {
     // --- Token expiry check ---
     bool is_token_expired() const;
 
+    // Inspect a broker error string for the "[TOKEN_EXPIRED]" prefix that all
+    // brokers use to signal an expired/invalid session. When detected, marks
+    // the account ConnectionState::TokenExpired via AccountManager and emits
+    // token_expired(). Safe to call from any thread — marshals to the main
+    // thread before touching AccountManager / emitting signals. No-op if the
+    // error does not indicate token expiry. Returns true if expiry was handled.
+    bool check_token_expiry(const QString& error);
+
     // --- Async fetch methods (all follow P8: QPointer + QtConcurrent + QueuedConnection) ---
     void async_fetch_quote();
     void async_fetch_positions();
@@ -100,6 +108,9 @@ class AccountDataStream : public QObject {
     void ws_teardown();
     bool ws_active() const;
     void ws_resubscribe();
+    // Wire the common BrokerWebSocketBase signals (tick/depth/connect/error) into
+    // this stream. Used by all Phase 2 adapters that share BrokerWebSocketBase.
+    void wire_base_ws(class BrokerWebSocketBase* ws);
 
     // --- State ---
     QString account_id_;

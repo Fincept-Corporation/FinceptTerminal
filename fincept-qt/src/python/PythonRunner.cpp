@@ -109,7 +109,25 @@ static bool route_yfinance_to_daemon(const QStringList& args,
             }
             PythonResult r;
             r.success = true;
-            r.output = QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact));
+            // PythonWorker wraps non-object results (e.g. the bare JSON array
+            // that historical_period/historical/batch_sparklines return) under
+            // "_value" so its object-callback API always hands back an object.
+            // The string-output path callers (e.g. EquityResearchService) expect
+            // the same raw JSON the subprocess path prints — a bare array, not a
+            // {"_value":[...]} wrapper. Unwrap so both paths are byte-identical.
+            if (result.size() == 1 && result.contains(QLatin1String("_value"))) {
+                const QJsonValue v = result.value(QLatin1String("_value"));
+                QJsonDocument doc;
+                if (v.isArray())
+                    doc.setArray(v.toArray());
+                else if (v.isObject())
+                    doc.setObject(v.toObject());
+                else
+                    doc = QJsonDocument::fromVariant(v.toVariant());
+                r.output = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+            } else {
+                r.output = QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact));
+            }
             r.exit_code = 0;
             cb(r);
         });

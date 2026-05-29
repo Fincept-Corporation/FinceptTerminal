@@ -10,6 +10,7 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "services/maritime/GeocodingService.h"
 #include "services/maritime/MaritimeService.h"
 #include "services/maritime/PortsCatalog.h"
 #include "ui/theme/Theme.h"
@@ -108,6 +109,56 @@ QWidget* MaritimeScreen::build_left_panel() {
     load_btn->setStyleSheet(btn_outline_ss());
     connect(load_btn, &QPushButton::clicked, this, &MaritimeScreen::on_load_vessels);
     vl->addWidget(load_btn);
+
+    // ── Draw-on-map toolbar ─────────────────────────────────────────────────
+    //
+    // Square / Circle draw tools + Clear. The user can drop multiple shapes;
+    // each finalized shape triggers on_shapes_changed which loads the union
+    // bbox and filters returned vessels to those inside any drawn shape.
+    auto* draw_title = new QLabel("DRAW AREA ON MAP", panel);
+    draw_title->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2; letter-spacing:1px;")
+                                  .arg(ui::colors::AMBER())
+                                  .arg(ui::fonts::DATA_FAMILY));
+    vl->addWidget(draw_title);
+
+    auto* draw_row = new QHBoxLayout;
+    draw_row->setSpacing(6);
+    auto* sq_btn = new QPushButton("◻ SQUARE", panel);
+    auto* ci_btn = new QPushButton("◯ CIRCLE", panel);
+    auto* clr_btn = new QPushButton("✕ CLEAR", panel);
+    for (auto* b : {sq_btn, ci_btn, clr_btn}) {
+        b->setCursor(Qt::PointingHandCursor);
+        b->setStyleSheet(btn_outline_ss());
+    }
+    sq_btn->setCheckable(true);
+    ci_btn->setCheckable(true);
+    draw_row->addWidget(sq_btn);
+    draw_row->addWidget(ci_btn);
+    draw_row->addWidget(clr_btn);
+    vl->addLayout(draw_row);
+
+    // Square / Circle are mutually exclusive toggles; toggling one off (or the
+    // other on) returns the map to normal pan/zoom or switches tool.
+    connect(sq_btn, &QPushButton::toggled, this, [this, ci_btn](bool on) {
+        if (!map_widget_) return;
+        if (on) ci_btn->setChecked(false);
+        map_widget_->set_draw_mode(on ? fincept::ui::MapDrawMode::Rectangle
+                                      : fincept::ui::MapDrawMode::None);
+    });
+    connect(ci_btn, &QPushButton::toggled, this, [this, sq_btn](bool on) {
+        if (!map_widget_) return;
+        if (on) sq_btn->setChecked(false);
+        map_widget_->set_draw_mode(on ? fincept::ui::MapDrawMode::Circle
+                                      : fincept::ui::MapDrawMode::None);
+    });
+    connect(clr_btn, &QPushButton::clicked, this, [this, sq_btn, ci_btn]() {
+        sq_btn->setChecked(false);
+        ci_btn->setChecked(false);
+        if (map_widget_) {
+            map_widget_->set_draw_mode(fincept::ui::MapDrawMode::None);
+            map_widget_->clear_shapes();
+        }
+    });
 
     auto* intel_title = new QLabel("INTELLIGENCE", panel);
     intel_title->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2; letter-spacing:1px;")
@@ -214,6 +265,11 @@ QWidget* MaritimeScreen::build_center_panel() {
     // Overlay sits on top of the map and follows its size; it consumes mouse
     // events while visible so the user can't pan a half-loaded map.
     map_loader_ = new fincept::ui::LoadingOverlay(map_widget_);
+
+    // Drawn-shape changes → load vessels for the union bbox and filter to
+    // those inside the shapes.
+    connect(map_widget_, &fincept::ui::WorldMapWidget::shapes_changed, this,
+            &MaritimeScreen::on_shapes_changed);
 
     // Pin click → populate the right-panel SELECTED VESSEL card with the
     // record we cached in update_map. Clicks during a stale map (cached set
@@ -355,22 +411,88 @@ QWidget* MaritimeScreen::build_right_panel() {
     search_result_label_->setVisible(false);
     vl->addWidget(search_result_label_);
 
-    // ── Area Search ────────────────────────────────────────────────────────
+    // ── Place Search ──────────────────────────────────────────────────────
+    //
+    // Primary area-input: type a place name, hit Search, pick a suggestion.
+    // The selected result's bounding box fills the AREA SEARCH spinners and
+    // immediately loads vessels in that area — no manual lat/long needed.
+    // Geocoding via OpenStreetMap Nominatim (GeocodingService).
     vl->addSpacing(8);
-    auto* area_title = new QLabel("AREA SEARCH", content);
-    area_title->setStyleSheet(section_label_ss());
-    vl->addWidget(area_title);
+    auto* place_title = new QLabel("PLACE SEARCH", content);
+    place_title->setStyleSheet(section_label_ss());
+    vl->addWidget(place_title);
+
+    auto* place_lbl = new QLabel("PLACE NAME", content);
+    place_lbl->setStyleSheet(tiny_label_ss());
+    vl->addWidget(place_lbl);
+
+    place_query_edit_ = new QLineEdit(content);
+    place_query_edit_->setPlaceholderText("e.g. Strait of Malacca");
+    place_query_edit_->setStyleSheet(input_ss());
+    auto run_place_search = [this]() {
+        const QString q = place_query_edit_->text().trimmed();
+        if (q.isEmpty()) return;
+        if (place_status_) place_status_->setText("Searching…");
+        services::maritime::GeocodingService::instance().search(q);
+    };
+    connect(place_query_edit_, &QLineEdit::returnPressed, this, run_place_search);
+    vl->addWidget(place_query_edit_);
+
+    auto* place_btn = new QPushButton("SEARCH PLACES", content);
+    place_btn->setCursor(Qt::PointingHandCursor);
+    place_btn->setStyleSheet(btn_primary_ss());
+    connect(place_btn, &QPushButton::clicked, this, run_place_search);
+    vl->addWidget(place_btn);
+
+    place_status_ = new QLabel(content);
+    place_status_->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2;")
+                                     .arg(ui::colors::TEXT_TERTIARY())
+                                     .arg(ui::fonts::DATA_FAMILY));
+    vl->addWidget(place_status_);
+
+    place_table_ = new QTableWidget(content);
+    place_table_->setColumnCount(2);
+    place_table_->setHorizontalHeaderLabels({"Place", "Type"});
+    place_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    place_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    place_table_->setSelectionMode(QAbstractItemView::SingleSelection);
+    place_table_->verticalHeader()->setVisible(false);
+    place_table_->horizontalHeader()->setStretchLastSection(true);
+    place_table_->setMinimumHeight(120);
+    place_table_->setStyleSheet(table_ss());
+    // Click a suggestion → fill bbox + load vessels in that area.
+    connect(place_table_, &QTableWidget::currentCellChanged, this,
+            [this](int row, int, int, int) {
+        if (row < 0 || row >= place_results_.size()) return;
+        const auto& p = place_results_[row];
+        run_area_search(p.min_lat, p.max_lat, p.min_lng, p.max_lng);
+    });
+    vl->addWidget(place_table_);
+
+    // ── Area Search (Advanced — raw lat/long) ───────────────────────────────
+    vl->addSpacing(8);
+    auto* area_toggle = new QPushButton("▸ ADVANCED: RAW BBOX", content);
+    area_toggle->setCursor(Qt::PointingHandCursor);
+    area_toggle->setCheckable(true);
+    area_toggle->setStyleSheet(btn_outline_ss());
+    vl->addWidget(area_toggle);
+
+    advanced_area_box_ = new QWidget(content);
+    advanced_area_box_->setVisible(false);
+    auto* area_vl = new QVBoxLayout(advanced_area_box_);
+    area_vl->setContentsMargins(0, 4, 0, 0);
+    area_vl->setSpacing(8);
 
     auto make_coord = [&](const QString& label, double def_val) {
-        auto* lbl = new QLabel(label, content);
+        auto* lbl = new QLabel(label, advanced_area_box_);
         lbl->setStyleSheet(tiny_label_ss());
-        vl->addWidget(lbl);
-        auto* spin = new QDoubleSpinBox(content);
+        area_vl->addWidget(lbl);
+        auto* spin = new QDoubleSpinBox(advanced_area_box_);
         spin->setRange(-180, 180);
         spin->setDecimals(4);
         spin->setValue(def_val);
         spin->setStyleSheet(input_ss());
-        vl->addWidget(spin);
+        area_vl->addWidget(spin);
         return spin;
     };
 
@@ -381,21 +503,21 @@ QWidget* MaritimeScreen::build_right_panel() {
     area_min_lng_ = make_coord("MIN LONGITUDE", 0.0);
     area_max_lng_ = make_coord("MAX LONGITUDE", 0.0);
 
-    auto* area_btn = new QPushButton("SEARCH AREA", content);
+    auto* area_btn = new QPushButton("SEARCH AREA", advanced_area_box_);
     area_btn->setCursor(Qt::PointingHandCursor);
     area_btn->setStyleSheet(btn_primary_ss());
     connect(area_btn, &QPushButton::clicked, this, [this]() {
-        AreaSearchParams params;
-        params.min_lat = area_min_lat_->value();
-        params.max_lat = area_max_lat_->value();
-        params.min_lng = area_min_lng_->value();
-        params.max_lng = area_max_lng_->value();
-        set_status("SEARCHING...", ui::colors::WARNING);
-        pending_global_sample_ = false;
-        show_map_loading(QStringLiteral("SEARCHING AREA"));
-        MaritimeService::instance().search_vessels_by_area(params);
+        run_area_search(area_min_lat_->value(), area_max_lat_->value(),
+                        area_min_lng_->value(), area_max_lng_->value());
     });
-    vl->addWidget(area_btn);
+    area_vl->addWidget(area_btn);
+
+    connect(area_toggle, &QPushButton::toggled, this, [this, area_toggle](bool on) {
+        advanced_area_box_->setVisible(on);
+        area_toggle->setText(on ? "▾ ADVANCED: RAW BBOX" : "▸ ADVANCED: RAW BBOX");
+    });
+
+    vl->addWidget(advanced_area_box_);
 
     // ── Ports Search ────────────────────────────────────────────────────────
     //

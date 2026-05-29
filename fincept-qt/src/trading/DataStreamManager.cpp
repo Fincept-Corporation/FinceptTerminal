@@ -7,20 +7,75 @@
 #    include "datahub/DataHubMetaTypes.h"
 #    include "trading/BrokerTopic.h"
 
+#include <QDateTime>
+#include <QSet>
 #include <QVariant>
 
 namespace fincept::trading {
 
 namespace {
 constexpr const char* DSM_TAG = "DataStreamManager";
+
+// Brokers whose tokens expire daily at ~3:00 AM IST. Crypto and international
+// brokers (alpaca, ibkr, tradier, saxo) are intentionally excluded.
+const QSet<QString>& indian_brokers() {
+    static const QSet<QString> kSet = {
+        "zerodha", "angelone", "upstox", "fyers", "dhan", "groww",
+        "kotak", "iifl", "fivepaisa", "aliceblue", "shoonya", "motilal"};
+    return kSet;
 }
+
+// Hourly cadence is enough to catch the 3:00 AM IST window without polling
+// the clock aggressively.
+constexpr int DSM_EXPIRY_CHECK_MS = 60 * 60 * 1000;
+} // namespace
 
 DataStreamManager& DataStreamManager::instance() {
     static DataStreamManager s;
     return s;
 }
 
-DataStreamManager::DataStreamManager() = default;
+DataStreamManager::DataStreamManager() {
+    // Daily IST token-expiry sweep (Phase 3 §19). This is an infrastructure
+    // cadence timer on a long-lived service singleton (like the DataHub
+    // scheduler), not a visibility-driven widget timer, so it runs continuously.
+    expiry_check_timer_ = new QTimer(this);
+    expiry_check_timer_->setInterval(DSM_EXPIRY_CHECK_MS);
+    connect(expiry_check_timer_, &QTimer::timeout, this,
+            &DataStreamManager::check_indian_token_expiry);
+    expiry_check_timer_->start();
+}
+
+void DataStreamManager::check_indian_token_expiry() {
+    // Convert now → IST (UTC+5:30) without needing tz data.
+    const QDateTime ist =
+        QDateTime::currentDateTimeUtc().addSecs(5 * 3600 + 30 * 60);
+    const int hour = ist.time().hour();
+    const int doy = ist.date().dayOfYear();
+
+    // Only act inside the 3:00–3:59 AM IST window, and at most once per IST day.
+    if (hour != 3 || doy == last_expiry_check_day_)
+        return;
+    last_expiry_check_day_ = doy;
+
+    auto& am = AccountManager::instance();
+    const auto accounts = am.list_accounts();
+    int marked = 0;
+    for (const auto& acct : accounts) {
+        if (!acct.is_active || acct.trading_mode != "live")
+            continue;
+        if (!indian_brokers().contains(acct.broker_id))
+            continue;
+        if (am.connection_state(acct.account_id) == ConnectionState::TokenExpired)
+            continue;
+        am.set_connection_state(acct.account_id, ConnectionState::TokenExpired,
+                                QStringLiteral("Daily 3:00 AM IST session expiry"));
+        ++marked;
+    }
+    if (marked > 0)
+        LOG_INFO(DSM_TAG, QString("3:00 AM IST sweep: marked %1 Indian account(s) "
+                                  "TokenExpired").arg(marked));
+}
 
 // ── Stream lifecycle ────────────────────────────────────────────────────────
 

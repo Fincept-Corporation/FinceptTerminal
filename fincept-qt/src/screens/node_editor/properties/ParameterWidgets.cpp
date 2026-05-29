@@ -16,6 +16,8 @@
 #include <QPointer>
 #include <QtConcurrent/QtConcurrent>
 
+#include <memory>
+
 namespace fincept::workflow {
 
 static QString input_style() {
@@ -454,7 +456,7 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
 
             // Load all saved connections of this provider type asynchronously
             (void)QtConcurrent::run([p_combo, provider, current_value]() {
-                auto res = DataSourceRepository::instance().list_all();
+                auto res = std::make_shared<Result<QVector<DataSource>>>(DataSourceRepository::instance().list_all());
 
                 // Post results back to combo box on the UI thread
                 QMetaObject::invokeMethod(p_combo.data(), [p_combo, provider, current_value, res]() {
@@ -464,8 +466,8 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
                     p_combo->clear();
                     p_combo->addItem("— select connection —", QString());
 
-                    if (res.is_ok()) {
-                        for (const auto& ds : res.value()) {
+                    if (res->is_ok()) {
+                        for (const auto& ds : res->value()) {
                             if (ds.provider == provider && ds.enabled) {
                                 QString display = ds.display_name + "  [" + ds.alias + "]";
                                 p_combo->addItem(display, ds.id);
@@ -488,10 +490,6 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         refresh_btn->setObjectName("datasource_connection_refresh");
         refresh_btn->setFixedSize(24, 24);
         refresh_btn->setToolTip("Refresh connection list");
-        refresh_btn->setStyleSheet(QString("QPushButton { background:%1; color:%2;"
-                                           " border:1px solid %1; font-size:13px; }"
-                                           "QPushButton:hover { background:%3; }")
-                                       .arg(ui::colors::BORDER_MED(), ui::colors::AMBER(), ui::colors::TEXT_DIM()));
         rl->addWidget(refresh_btn);
 
         layout->addWidget(row);

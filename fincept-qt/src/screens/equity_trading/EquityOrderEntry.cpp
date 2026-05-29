@@ -4,6 +4,7 @@
 #include "core/logging/Logger.h"
 #include "screens/equity_trading/EquityTypes.h"
 #include "trading/BrokerRegistry.h"
+#include "trading/OptionsStrategyBuilder.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
@@ -205,6 +206,101 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
         advanced_section_->setVisible(show);
         advanced_toggle_->setText(show ? "- ADVANCED" : "+ ADVANCED");
     });
+
+    // ---- Options Strategy section (collapsible, mirrors advanced_section_) ----
+    strategy_toggle_ = new QPushButton("+ OPTIONS STRATEGY");
+    strategy_toggle_->setObjectName("eqAdvToggle");
+    strategy_toggle_->setCursor(Qt::PointingHandCursor);
+    strategy_toggle_->setFixedHeight(18);
+    form->addWidget(strategy_toggle_);
+
+    strategy_section_ = new QWidget(this);
+    strategy_section_->setVisible(false);
+    auto* strat_layout = new QVBoxLayout(strategy_section_);
+    strat_layout->setContentsMargins(0, 0, 0, 0);
+    strat_layout->setSpacing(4);
+
+    auto* strat_lbl = new QLabel("STRATEGY");
+    strat_lbl->setObjectName("eqOeLabel");
+    strat_layout->addWidget(strat_lbl);
+
+    strategy_combo_ = new QComboBox;
+    strategy_combo_->setObjectName("eqOeCombo");
+    strategy_combo_->addItems({"None", "Long Straddle", "Short Straddle", "Long Strangle", "Iron Condor",
+                               "Bull Call Spread", "Bear Put Spread"});
+    strategy_combo_->setFixedHeight(26);
+    strat_layout->addWidget(strategy_combo_);
+
+    auto* strat_strike_lbl = new QLabel("ATM STRIKE");
+    strat_strike_lbl->setObjectName("eqOeLabel");
+    strat_layout->addWidget(strat_strike_lbl);
+    strat_strike_edit_ = new QLineEdit;
+    strat_strike_edit_->setObjectName("eqOeInput");
+    strat_strike_edit_->setPlaceholderText("e.g. 22500");
+    strat_strike_edit_->setFixedHeight(26);
+    strat_layout->addWidget(strat_strike_edit_);
+
+    auto* strat_expiry_lbl = new QLabel("EXPIRY (YYYY-MM-DD)");
+    strat_expiry_lbl->setObjectName("eqOeLabel");
+    strat_layout->addWidget(strat_expiry_lbl);
+    strat_expiry_edit_ = new QLineEdit;
+    strat_expiry_edit_->setObjectName("eqOeInput");
+    strat_expiry_edit_->setPlaceholderText("2025-03-28");
+    strat_expiry_edit_->setFixedHeight(26);
+    strat_layout->addWidget(strat_expiry_edit_);
+
+    auto* strat_lot_lbl = new QLabel("LOT SIZE");
+    strat_lot_lbl->setObjectName("eqOeLabel");
+    strat_layout->addWidget(strat_lot_lbl);
+    strat_lot_edit_ = new QLineEdit;
+    strat_lot_edit_->setObjectName("eqOeInput");
+    strat_lot_edit_->setText("1");
+    strat_lot_edit_->setPlaceholderText("1");
+    strat_lot_edit_->setFixedHeight(26);
+    strat_layout->addWidget(strat_lot_edit_);
+
+    auto* strat_width_lbl = new QLabel("WIDTH (strangle / condor / spreads)");
+    strat_width_lbl->setObjectName("eqOeLabel");
+    strat_layout->addWidget(strat_width_lbl);
+    strat_width_edit_ = new QLineEdit;
+    strat_width_edit_->setObjectName("eqOeInput");
+    strat_width_edit_->setPlaceholderText("e.g. 200");
+    strat_width_edit_->setFixedHeight(26);
+    strat_layout->addWidget(strat_width_edit_);
+
+    auto* preview_lbl = new QLabel("LEGS");
+    preview_lbl->setObjectName("eqOeLabel");
+    strat_layout->addWidget(preview_lbl);
+
+    strategy_preview_ = new QLabel("Select a strategy");
+    strategy_preview_->setObjectName("eqOeBrokerage");
+    strategy_preview_->setStyleSheet(QString("color: %1; font-size: 10px;").arg(colors::TEXT_TERTIARY()));
+    strategy_preview_->setWordWrap(true);
+    strategy_preview_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    strat_layout->addWidget(strategy_preview_);
+
+    place_strategy_btn_ = new QPushButton("PLACE STRATEGY");
+    place_strategy_btn_->setObjectName("eqBuySubmit");
+    place_strategy_btn_->setFixedHeight(30);
+    place_strategy_btn_->setCursor(Qt::PointingHandCursor);
+    connect(place_strategy_btn_, &QPushButton::clicked, this, &EquityOrderEntry::on_place_strategy);
+    strat_layout->addWidget(place_strategy_btn_);
+
+    form->addWidget(strategy_section_);
+
+    connect(strategy_toggle_, &QPushButton::clicked, this, [this]() {
+        const bool show = !strategy_section_->isVisible();
+        strategy_section_->setVisible(show);
+        strategy_toggle_->setText(show ? "- OPTIONS STRATEGY" : "+ OPTIONS STRATEGY");
+    });
+
+    // Recompute preview whenever the strategy or any input changes
+    connect(strategy_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this]() { refresh_strategy_preview(); });
+    connect(strat_strike_edit_, &QLineEdit::textChanged, this, [this]() { refresh_strategy_preview(); });
+    connect(strat_expiry_edit_, &QLineEdit::textChanged, this, [this]() { refresh_strategy_preview(); });
+    connect(strat_lot_edit_, &QLineEdit::textChanged, this, [this]() { refresh_strategy_preview(); });
+    connect(strat_width_edit_, &QLineEdit::textChanged, this, [this]() { refresh_strategy_preview(); });
 
     // Cost preview
     cost_label_ = new QLabel("Est: --");
@@ -508,6 +604,119 @@ void EquityOrderEntry::fetch_margin_async() {
             },
             Qt::QueuedConnection);
     });
+}
+
+bool EquityOrderEntry::build_strategy(trading::OptionsStrategy& out) const {
+    const int idx = strategy_combo_ ? strategy_combo_->currentIndex() : 0;
+    if (idx <= 0) // "None"
+        return false;
+
+    const QString underlying = current_symbol_;
+    const QString expiry = strat_expiry_edit_->text().trimmed();
+    const double atm = strat_strike_edit_->text().toDouble();
+    double lot = strat_lot_edit_->text().toDouble();
+    if (lot <= 0)
+        lot = 1;
+    const double width = strat_width_edit_->text().toDouble();
+
+    if (expiry.isEmpty() || atm <= 0)
+        return false;
+
+    using B = trading::OptionsStrategyBuilder;
+    using Side = trading::OrderSide;
+
+    switch (idx) {
+        case 1: // Long Straddle
+            out = B::straddle(underlying, expiry, atm, lot, Side::Buy);
+            return true;
+        case 2: // Short Straddle
+            out = B::straddle(underlying, expiry, atm, lot, Side::Sell);
+            return true;
+        case 3: // Long Strangle
+            if (width <= 0)
+                return false;
+            out = B::strangle(underlying, expiry, atm, width, lot, Side::Buy);
+            return true;
+        case 4: // Iron Condor — near_width = width, far_width = 2 * width
+            if (width <= 0)
+                return false;
+            out = B::iron_condor(underlying, expiry, atm, width, width * 2.0, lot);
+            return true;
+        case 5: // Bull Call Spread — buy ATM CE, sell (ATM + width) CE
+            if (width <= 0)
+                return false;
+            out = B::bull_call_spread(underlying, expiry, atm, atm + width, lot);
+            return true;
+        case 6: // Bear Put Spread — buy ATM PE, sell (ATM - width) PE
+            if (width <= 0)
+                return false;
+            out = B::bear_put_spread(underlying, expiry, atm, atm - width, lot);
+            return true;
+        default:
+            return false;
+    }
+}
+
+void EquityOrderEntry::refresh_strategy_preview() {
+    if (!strategy_preview_)
+        return;
+
+    const int idx = strategy_combo_ ? strategy_combo_->currentIndex() : 0;
+    if (idx <= 0) {
+        strategy_preview_->setText("Select a strategy");
+        return;
+    }
+
+    trading::OptionsStrategy strat;
+    if (!build_strategy(strat)) {
+        strategy_preview_->setText("Enter expiry, ATM strike (and width where required).");
+        return;
+    }
+
+    QStringList lines;
+    if (!strat.name.isEmpty())
+        lines << strat.name;
+    for (const auto& leg : strat.legs) {
+        // SIDE qty SYMBOL @strike type
+        lines << QString("%1 %2 %3 @%4 %5")
+                     .arg(QString(trading::order_side_str(leg.side)).toUpper())
+                     .arg(leg.quantity, 0, 'f', 0)
+                     .arg(leg.symbol)
+                     .arg(leg.strike, 0, 'f', 0)
+                     .arg(leg.option_type);
+    }
+
+    QStringList metrics;
+    if (strat.max_profit != 0.0)
+        metrics << QString("Max P: %1").arg(strat.max_profit, 0, 'f', 2);
+    if (strat.max_loss != 0.0)
+        metrics << QString("Max L: %1").arg(strat.max_loss, 0, 'f', 2);
+    if (strat.breakeven_lower != 0.0)
+        metrics << QString("BE-: %1").arg(strat.breakeven_lower, 0, 'f', 2);
+    if (strat.breakeven_upper != 0.0)
+        metrics << QString("BE+: %1").arg(strat.breakeven_upper, 0, 'f', 2);
+    if (!metrics.isEmpty())
+        lines << metrics.join("  ");
+
+    strategy_preview_->setText(lines.join("\n"));
+}
+
+void EquityOrderEntry::on_place_strategy() {
+    trading::OptionsStrategy strat;
+    if (!build_strategy(strat)) {
+        status_label_->setText("Select a strategy and enter valid expiry / strike / width");
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
+        return;
+    }
+
+    // Product type from profile-driven combo (same mapping as on_submit)
+    trading::ProductType product = trading::ProductType::Intraday;
+    const int prod_idx = product_combo_->currentIndex();
+    if (!product_types_.isEmpty() && prod_idx >= 0 && prod_idx < product_types_.size())
+        product = product_types_[prod_idx].value;
+
+    trading::BasketOrderRequest basket = trading::OptionsStrategyBuilder::to_basket_order(strat, product);
+    emit strategy_order_submitted(basket);
 }
 
 } // namespace fincept::screens::equity

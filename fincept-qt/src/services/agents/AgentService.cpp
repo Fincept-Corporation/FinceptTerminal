@@ -328,12 +328,16 @@ void AgentService::run_python_light(const QString& action, const QJsonObject& pa
                 on_result(false, QJsonObject{{"error", pr.error}});
                 return;
             }
+            LOG_INFO("AgentService", QString("%1: raw output length=%2, first 300 chars: %3")
+                .arg(action).arg(pr.output.size()).arg(pr.output.left(300)));
             QJsonDocument doc = QJsonDocument::fromJson(pr.output.toUtf8());
             if (doc.isNull()) {
                 LOG_ERROR("AgentService", QString("%1: invalid JSON response").arg(action));
                 on_result(false, QJsonObject{{"error", "Invalid JSON response from Python"}});
                 return;
             }
+            LOG_INFO("AgentService", QString("%1: parsed JSON keys: %2")
+                .arg(action, QStringList(doc.object().keys()).join(", ")));
             on_result(true, doc.object());
         });
 }

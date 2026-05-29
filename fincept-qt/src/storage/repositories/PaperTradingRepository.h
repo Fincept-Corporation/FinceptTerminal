@@ -40,6 +40,17 @@ class PaperTradingRepository : public BaseRepository<trading::PtPortfolio> {
     Result<void> delete_position(const QString& id);
     Result<void> delete_all_positions(const QString& portfolio_id);
 
+    // ── Margin Blocks (Phase 3 §4) ──────────────────────────────────────────
+    // Tracks margin blocked from available balance per order, so the exact
+    // amount can be released on fill/cancel. Backed by the existing
+    // pt_margin_blocks table (created in v001_initial). order_id is UNIQUE.
+    Result<void> insert_margin_block(const QString& id, const QString& portfolio_id, const QString& order_id,
+                                     const QString& symbol, double blocked_amount);
+    /// Returns the blocked amount for an order, or 0.0 if none recorded.
+    double get_margin_block(const QString& order_id);
+    Result<void> delete_margin_block(const QString& order_id);
+    Result<void> delete_all_margin_blocks(const QString& portfolio_id);
+
     // ── Trades ───────────────────────────────────────────────────────────────
     Result<void> insert_trade(const trading::PtTrade& t);
     Result<QVector<trading::PtTrade>> get_trades(const QString& portfolio_id, int64_t limit = 100);

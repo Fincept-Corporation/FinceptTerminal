@@ -4,6 +4,7 @@
 
 #include "core/logging/Logger.h"
 
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -149,16 +150,22 @@ BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url
         return {false, 0, {}, "", "Failed to create network request"};
     }
 
-    // Block until finished (with timeout)
+    // Block until finished (with timeout). Measure the actual network round-trip
+    // by bracketing only the event-loop wait — this excludes request setup and
+    // JSON parsing so rtt_ms is comparable to what Postman/Bruno report.
     QEventLoop loop;
     QTimer timer;
     timer.setSingleShot(true);
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
     QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+    QElapsedTimer rtt;
+    rtt.start();
     timer.start(timeout_ms_);
     loop.exec();
+    const double elapsed_ms = static_cast<double>(rtt.nsecsElapsed()) / 1e6;
 
     BrokerHttpResponse result;
+    result.rtt_ms = elapsed_ms;
 
     if (timer.isActive()) {
         timer.stop();
@@ -166,7 +173,10 @@ BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url
         // Timeout
         reply->abort();
         reply->deleteLater();
-        return {false, 0, {}, "", "Request timed out"};
+        BrokerHttpResponse timeout_result;
+        timeout_result.error = "Request timed out";
+        timeout_result.rtt_ms = elapsed_ms;
+        return timeout_result;
     }
 
     result.status_code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();

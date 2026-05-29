@@ -1,6 +1,7 @@
 // src/screens/maritime/MaritimeScreen.h
 #pragma once
 #include "screens/common/IStatefulScreen.h"
+#include "services/maritime/GeocodingTypes.h"
 #include "services/maritime/MaritimePortTypes.h"
 #include "services/maritime/MaritimeTypes.h"
 #include "ui/theme/Theme.h"
@@ -52,6 +53,8 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     void on_route_selected(int row);
     void on_ports_found(QVector<services::maritime::PortRecord> ports, QString context);
     void on_ports_error(const QString& context, const QString& message);
+    void on_places_found(QVector<services::maritime::GeoPlace> places, QString context);
+    void on_places_error(const QString& context, const QString& message);
 
   private:
     void build_ui();
@@ -72,6 +75,17 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     /// so the map fans out instead of clustering on whatever bbox the user
     /// last typed.
     void load_global_sample();
+    /// Fill the area-search spinners from a bbox and issue a vessel
+    /// area-search for it. Shared by the place-search selection, the raw
+    /// bbox button, and (later) the map-draw tool so they all funnel through
+    /// one path.
+    void run_area_search(double min_lat, double max_lat, double min_lng, double max_lng,
+                         bool filter_to_shapes = false);
+    /// Called when the user finalizes / clears drawn shapes on the map.
+    /// Computes the union bbox of all shapes and loads vessels for it;
+    /// on_vessels_loaded then filters the result to vessels actually inside
+    /// any drawn shape. No shapes left = no-op.
+    void on_shapes_changed();
     void show_map_loading(const QString& msg);
     void hide_map_loading();
 
@@ -110,7 +124,17 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     QLabel* sr_from_ = nullptr;
     QLabel* sr_to_ = nullptr;
 
-    // Right panel - area search
+    // Right panel - place search (Nominatim geocoder). Primary area-input UX:
+    // user types a place name, picks a suggestion, its bbox fills the spinners
+    // and triggers a vessel area-search.
+    QLineEdit*    place_query_edit_ = nullptr;
+    QTableWidget* place_table_      = nullptr;
+    QLabel*       place_status_     = nullptr;
+    QVector<services::maritime::GeoPlace> place_results_;
+
+    // Right panel - area search (raw lat/long). Kept behind an "Advanced"
+    // expander; place search / map-draw are the primary inputs now.
+    QWidget*        advanced_area_box_ = nullptr;
     QDoubleSpinBox* area_min_lat_ = nullptr;
     QDoubleSpinBox* area_max_lat_ = nullptr;
     QDoubleSpinBox* area_min_lng_ = nullptr;
@@ -141,6 +165,9 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     /// Set by load_global_sample(); consumed by on_vessels_loaded so that
     /// the next batch is spatially downsampled to ~200 globally-spread pins.
     bool pending_global_sample_ = false;
+    /// Set by on_shapes_changed(); consumed by on_vessels_loaded so the next
+    /// batch is filtered to vessels lying inside the user's drawn shapes.
+    bool filter_to_shapes_ = false;
 
     // Data
     QVector<services::maritime::TradeRoute> routes_;

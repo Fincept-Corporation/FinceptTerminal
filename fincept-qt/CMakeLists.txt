@@ -682,6 +682,7 @@ set(CORE_SOURCES
     src/core/config/ProfileManager.cpp
     src/core/logging/Logger.cpp
     src/core/events/EventBus.cpp
+    src/core/HealthMonitor.cpp
     src/core/layout/LayoutTypes.cpp
     src/core/layout/LayoutCatalog.cpp
     src/core/layout/LayoutTemplates.cpp
@@ -840,6 +841,12 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v029_secure_credentials.cpp
     src/storage/sqlite/migrations/v030_max_tool_rounds.cpp
     src/storage/sqlite/migrations/v031_rss_feeds.cpp
+    src/storage/sqlite/migrations/v032_pending_orders.cpp
+    src/storage/sqlite/migrations/v033_historify.cpp
+    src/storage/sqlite/migrations/v034_strategy_portfolio.cpp
+
+    # Historical OHLCV data store (Historify, Phase 3 §13)
+    src/storage/HistoricalDataStore.cpp
 )
 
 # Python runner
@@ -898,6 +905,7 @@ set(MCP_SOURCES
     src/mcp/tools/PortfolioTools.cpp
     src/mcp/tools/CryptoTradingTools.cpp
     src/mcp/tools/PaperTradingTools.cpp
+    src/mcp/tools/LiveTradingTools.cpp
     src/mcp/tools/EdgarTools.cpp
     src/mcp/tools/MAAnalyticsTools.cpp
     src/mcp/tools/AltInvestmentsTools.cpp
@@ -938,6 +946,15 @@ set(TRADING_SOURCES
     src/trading/OrderMatcher.cpp
     src/trading/BrokerRegistry.cpp
     src/trading/UnifiedTrading.cpp
+    src/trading/SmartOrderEngine.cpp
+    src/trading/RateLimiter.cpp
+    src/trading/ActionCenter.cpp
+    src/trading/OptionsStrategyBuilder.cpp
+    src/trading/StrategyPortfolio.cpp
+    src/trading/WebhookListener.cpp
+    src/trading/OrderValidator.cpp
+    src/trading/LatencyTracker.cpp
+    src/trading/TradingNotificationBridge.cpp
     src/trading/AccountManager.cpp
     src/trading/AccountDataStream.cpp
     src/trading/DataStreamManager.cpp
@@ -959,6 +976,17 @@ set(TRADING_SOURCES
     src/trading/websocket/ZerodhaWebSocket.cpp
     src/trading/websocket/AngelOneWebSocket.cpp
     src/trading/websocket/FyersWebSocket.cpp
+    # Phase 2 broker WebSocket adapters (shared base + per-broker)
+    src/trading/websocket/BrokerWebSocketBase.cpp
+    src/trading/websocket/NorenWebSocket.cpp
+    src/trading/websocket/AliceBlueWebSocket.cpp
+    src/trading/websocket/ShoonyaWebSocket.cpp
+    src/trading/websocket/FivePaisaWebSocket.cpp
+    src/trading/websocket/MotilalPoller.cpp
+    src/trading/websocket/DhanWebSocket.cpp
+    src/trading/websocket/UpstoxWebSocket.cpp
+    src/trading/websocket/KotakWebSocket.cpp
+    src/trading/websocket/IIFLWebSocket.cpp
     # Indian brokers
     src/trading/brokers/zerodha/ZerodhaBroker.cpp
     src/trading/brokers/zerodha/Totp.cpp
@@ -975,6 +1003,10 @@ set(TRADING_SOURCES
     src/trading/brokers/iifl/IIFLBroker.cpp
     src/trading/brokers/motilal/MotilalBroker.cpp
     src/trading/brokers/shoonya/ShoonyaBroker.cpp
+    src/trading/brokers/samco/SamcoBroker.cpp
+    src/trading/brokers/flattrade/FlattradeBroker.cpp
+    src/trading/brokers/paytm/PaytmBroker.cpp
+    src/trading/brokers/tradejini/TradejiniBroker.cpp
     # Global brokers
     src/trading/brokers/alpaca/AlpacaBroker.cpp
     src/trading/brokers/alpaca/AlpacaWebSocket.cpp
@@ -1056,6 +1088,7 @@ set(SERVICE_SOURCES
     src/services/geopolitics/GeopoliticsService.cpp
     src/services/maritime/MaritimeService.cpp
     src/services/maritime/PortsCatalog.cpp
+    src/services/maritime/GeocodingService.cpp
     src/services/ai_quant_lab/AIQuantLabService.cpp
     src/services/backtesting/BacktestingService.cpp
     src/services/algo_trading/AlgoTradingService.cpp
@@ -1336,6 +1369,7 @@ set(SCREEN_SOURCES
     src/screens/dashboard/widgets/NewsWidget.cpp
     src/screens/dashboard/widgets/SectorHeatmapWidget.cpp
     src/screens/dashboard/widgets/StockQuoteWidget.cpp
+    src/screens/dashboard/widgets/DashboardCandleWidget.cpp
     src/screens/dashboard/widgets/WatchlistWidget.cpp
     src/screens/dashboard/widgets/PerformanceWidget.cpp
     src/screens/dashboard/widgets/MarketSentimentWidget.cpp
@@ -1413,6 +1447,8 @@ set(SCREEN_SOURCES
     src/screens/equity_trading/EquityBottomPanel.cpp
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
+    # Action Center — semi-auto order approval (Phase 3 §2).
+    src/screens/action_center/ActionCenterScreen.cpp
     # DataSourcesScreen split; see DataSourcesScreen.cpp header.
     src/screens/data_sources/DataSourcesScreen.cpp
     src/screens/data_sources/DataSourcesScreen_Layout.cpp
@@ -1865,6 +1901,8 @@ set_source_files_properties(
     src/screens/equity_trading/EquityBottomPanel.cpp
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
+    # Action Center — semi-auto order approval (Phase 3 §2).
+    src/screens/action_center/ActionCenterScreen.cpp
     # DataSourcesScreen split; see DataSourcesScreen.cpp header.
     src/screens/data_sources/DataSourcesScreen.cpp
     src/screens/data_sources/DataSourcesScreen_Layout.cpp
@@ -2194,6 +2232,9 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v029_secure_credentials.cpp
     src/storage/sqlite/migrations/v030_max_tool_rounds.cpp
     src/storage/sqlite/migrations/v031_rss_feeds.cpp
+    src/storage/sqlite/migrations/v032_pending_orders.cpp
+    src/storage/sqlite/migrations/v033_historify.cpp
+    src/storage/sqlite/migrations/v034_strategy_portfolio.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
@@ -2232,6 +2273,10 @@ set_source_files_properties(
     src/trading/brokers/iifl/IIFLBroker.cpp
     src/trading/brokers/motilal/MotilalBroker.cpp
     src/trading/brokers/shoonya/ShoonyaBroker.cpp
+    src/trading/brokers/samco/SamcoBroker.cpp
+    src/trading/brokers/flattrade/FlattradeBroker.cpp
+    src/trading/brokers/paytm/PaytmBroker.cpp
+    src/trading/brokers/tradejini/TradejiniBroker.cpp
     src/trading/brokers/alpaca/AlpacaBroker.cpp
     src/trading/brokers/alpaca/AlpacaWebSocket.cpp
     src/trading/brokers/ibkr/IBKRBroker.cpp
@@ -2302,6 +2347,7 @@ set_source_files_properties(
     src/mcp/tools/PortfolioTools.cpp
     src/mcp/tools/CryptoTradingTools.cpp
     src/mcp/tools/PaperTradingTools.cpp
+    src/mcp/tools/LiveTradingTools.cpp
     src/mcp/tools/EdgarTools.cpp
     src/mcp/tools/MAAnalyticsTools.cpp
     src/mcp/tools/AltInvestmentsTools.cpp
@@ -2353,6 +2399,10 @@ set_source_files_properties(
     src/trading/brokers/iifl/IIFLBroker.cpp
     src/trading/brokers/motilal/MotilalBroker.cpp
     src/trading/brokers/shoonya/ShoonyaBroker.cpp
+    src/trading/brokers/samco/SamcoBroker.cpp
+    src/trading/brokers/flattrade/FlattradeBroker.cpp
+    src/trading/brokers/paytm/PaytmBroker.cpp
+    src/trading/brokers/tradejini/TradejiniBroker.cpp
     src/trading/brokers/alpaca/AlpacaBroker.cpp
     src/trading/brokers/alpaca/AlpacaWebSocket.cpp
     src/trading/brokers/ibkr/IBKRBroker.cpp
@@ -2361,6 +2411,26 @@ set_source_files_properties(
     src/trading/websocket/ZerodhaWebSocket.cpp
     src/trading/websocket/AngelOneWebSocket.cpp
     src/trading/websocket/FyersWebSocket.cpp
+    # Phase 2 broker WebSocket adapters — each defines file-scope kWsUrl /
+    # anonymous-namespace helpers; keep out of unity to avoid ODR clashes
+    src/trading/websocket/BrokerWebSocketBase.cpp
+    src/trading/websocket/NorenWebSocket.cpp
+    src/trading/websocket/AliceBlueWebSocket.cpp
+    src/trading/websocket/ShoonyaWebSocket.cpp
+    src/trading/websocket/FivePaisaWebSocket.cpp
+    src/trading/websocket/MotilalPoller.cpp
+    src/trading/websocket/DhanWebSocket.cpp
+    src/trading/websocket/UpstoxWebSocket.cpp
+    src/trading/websocket/KotakWebSocket.cpp
+    src/trading/websocket/IIFLWebSocket.cpp
+    # Phase 3 trading services — file-scope kLog / anonymous-namespace helpers
+    src/trading/ActionCenter.cpp
+    src/trading/StrategyPortfolio.cpp
+    src/trading/OptionsStrategyBuilder.cpp
+    src/trading/WebhookListener.cpp
+    # Phase 3 storage/core — file-scope kLog / anonymous-namespace helpers
+    src/storage/HistoricalDataStore.cpp
+    src/core/HealthMonitor.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
@@ -2918,17 +2988,24 @@ if(WIN32)
 endif()
 
 # ── Copy Python scripts to build output ──────────────────────────────────────
-# POST_BUILD drags the whole scripts/ tree over. Afterwards we prune junk
-# that must never ship — backup folders (agents.deleted.*), test caches,
-# local SQLite databases — because on macOS anything unexpected in the
-# .app bundle makes codesign reject it ("bundle format unrecognized").
+# Syncs the scripts/ tree into the build output, then prunes junk that must
+# never ship — backup folders (agents.deleted.*), test caches, local SQLite
+# databases — because on macOS anything unexpected in the .app bundle makes
+# codesign reject it ("bundle format unrecognized").
+#
+# This is delegated to sync_scripts.cmake, which is STAMP-GUARDED: it skips the
+# whole copy+prune when nothing under scripts/ changed since the last sync. The
+# previous version did an unconditional copy_directory of 4000+ files on every
+# link, taxing every one-line C++ change with a multi-minute scripts re-copy.
 add_custom_command(TARGET FinceptTerminal POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_CURRENT_SOURCE_DIR}/scripts"
-        "$<TARGET_FILE_DIR:FinceptTerminal>/scripts"
-    COMMAND ${CMAKE_COMMAND} -DSCRIPTS_DIR=$<TARGET_FILE_DIR:FinceptTerminal>/scripts
-            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/prune_scripts_junk.cmake"
-    COMMENT "Copying Python scripts to build output + pruning junk..."
+    COMMAND ${CMAKE_COMMAND}
+            -DSRC_DIR=${CMAKE_CURRENT_SOURCE_DIR}/scripts
+            -DDST_DIR=$<TARGET_FILE_DIR:FinceptTerminal>/scripts
+            -DSTAMP_FILE=${CMAKE_CURRENT_BINARY_DIR}/scripts_sync.stamp
+            -DPRUNE_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/cmake/prune_scripts_junk.cmake
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/sync_scripts.cmake"
+    COMMENT "Syncing Python scripts to build output (skips when unchanged)..."
+    VERBATIM
 )
 
 # ── Copy requirements files to build output ──────────────────────────────────

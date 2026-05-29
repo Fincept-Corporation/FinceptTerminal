@@ -10,6 +10,7 @@ class KotakBroker : public IBroker {
     BrokerId id() const override { return BrokerId::Kotak; }
     const char* name() const override { return "Kotak"; }
     const char* base_url() const override { return "https://mis.kotaksecurities.com"; }
+    const char* ws_adapter_name() const override { return "kotak"; }
 
     BrokerProfile profile() const override {
         return BrokerProfile{
@@ -60,6 +61,9 @@ class KotakBroker : public IBroker {
     ApiResponse<QVector<BrokerCandle>> get_history(const BrokerCredentials& creds, const QString& symbol,
                                                    const QString& resolution, const QString& from_date,
                                                    const QString& to_date) override;
+
+    // --- Margin Calculator --- POST {base_url}/quick/user/check-margin (native, single order)
+    ApiResponse<OrderMargin> get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) override;
 
     static bool is_token_expired(const BrokerHttpResponse& resp);
     static QString checked_error(const BrokerHttpResponse& resp, const QString& fallback);

@@ -687,4 +687,15 @@ ApiResponse<QVector<BrokerCandle>> FivePaisaBroker::get_history(const BrokerCred
     return {true, result, "", ts};
 }
 
+// ============================================================================
+// Pre-trade margin calculator — fallback estimator.
+// 5Paisa has no position-specific margin calculator API (OpenAlgo's
+// broker/fivepaisa/api/margin_api.py raises NotImplementedError), so we use the
+// shared heuristic estimator (BrokerInterface.h::estimate_order_margin).
+// ============================================================================
+ApiResponse<OrderMargin> FivePaisaBroker::get_order_margins(const BrokerCredentials& /*creds*/,
+                                                            const UnifiedOrder& order) {
+    return {true, estimate_order_margin(order), "", now_ts()};
+}
+
 } // namespace fincept::trading

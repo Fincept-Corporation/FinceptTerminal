@@ -28,6 +28,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonObject>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QVBoxLayout>
@@ -221,8 +222,46 @@ void CryptoBottomPanel::setup_positions_tab() {
         {"P&L",    ColMode::Numeric, 11, 0, Qt::AlignRight | Qt::AlignVCenter},
         {"Lev",    ColMode::Compact},
     });
-    auto* host = wrap_with_empty_state(positions_table_, positions_stack_, "No open positions.");
-    tabs_->addTab(host, "POSITIONS");
+
+    // Wrap table + action bar in a container
+    auto* container = new QWidget;
+    auto* vlay = new QVBoxLayout(container);
+    vlay->setContentsMargins(0, 0, 0, 0);
+    vlay->setSpacing(0);
+
+    // Action bar with Square Off All button
+    auto* action_bar = new QWidget;
+    action_bar->setObjectName("cryptoPositionsActionBar");
+    auto* bar_layout = new QHBoxLayout(action_bar);
+    bar_layout->setContentsMargins(10, 3, 10, 3);
+    bar_layout->setSpacing(8);
+    bar_layout->addStretch(1);
+
+    close_all_btn_ = new QPushButton("SQUARE OFF ALL");
+    close_all_btn_->setObjectName("cryptoCloseAllBtn");
+    close_all_btn_->setCursor(Qt::PointingHandCursor);
+    close_all_btn_->setStyleSheet(
+        QString("QPushButton{background:rgba(220,38,38,0.12);color:%1;border:1px solid %2;"
+                "padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:0.5px;border-radius:2px;}"
+                "QPushButton:hover{background:rgba(220,38,38,0.25);}")
+            .arg(colors::NEGATIVE(), colors::NEGATIVE_DIM()));
+    connect(close_all_btn_, &QPushButton::clicked, this, [this]() {
+        if (account_id_.isEmpty())
+            return;
+        auto answer = QMessageBox::warning(this, "Square Off All Positions",
+                                           "This will close ALL open positions.\n\nAre you sure?",
+                                           QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (answer != QMessageBox::Yes)
+            return;
+        emit close_all_positions_requested(account_id_);
+    });
+    bar_layout->addWidget(close_all_btn_);
+    vlay->addWidget(action_bar);
+
+    auto* stack_host = wrap_with_empty_state(positions_table_, positions_stack_, "No open positions.");
+    vlay->addWidget(stack_host, 1);
+
+    tabs_->addTab(container, "POSITIONS");
 }
 
 void CryptoBottomPanel::setup_orders_tab() {
@@ -235,8 +274,46 @@ void CryptoBottomPanel::setup_orders_tab() {
         {"Status", ColMode::Compact},
         {"",       ColMode::Action,  0, 36}, // cancel button column
     });
-    auto* host = wrap_with_empty_state(orders_table_, orders_stack_, "No active orders.");
-    tabs_->addTab(host, "ORDERS");
+
+    // Wrap table + action bar in a container
+    auto* container = new QWidget;
+    auto* vlay = new QVBoxLayout(container);
+    vlay->setContentsMargins(0, 0, 0, 0);
+    vlay->setSpacing(0);
+
+    // Action bar with Cancel All button
+    auto* action_bar = new QWidget;
+    action_bar->setObjectName("cryptoOrdersActionBar");
+    auto* bar_layout = new QHBoxLayout(action_bar);
+    bar_layout->setContentsMargins(10, 3, 10, 3);
+    bar_layout->setSpacing(8);
+    bar_layout->addStretch(1);
+
+    cancel_all_btn_ = new QPushButton("CANCEL ALL ORDERS");
+    cancel_all_btn_->setObjectName("cryptoCancelAllBtn");
+    cancel_all_btn_->setCursor(Qt::PointingHandCursor);
+    cancel_all_btn_->setStyleSheet(
+        QString("QPushButton{background:rgba(217,119,6,0.12);color:%1;border:1px solid %2;"
+                "padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:0.5px;border-radius:2px;}"
+                "QPushButton:hover{background:rgba(217,119,6,0.25);}")
+            .arg(colors::AMBER(), colors::AMBER_DIM()));
+    connect(cancel_all_btn_, &QPushButton::clicked, this, [this]() {
+        if (account_id_.isEmpty())
+            return;
+        auto answer = QMessageBox::warning(this, "Cancel All Orders",
+                                           "This will cancel ALL pending orders.\n\nAre you sure?",
+                                           QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (answer != QMessageBox::Yes)
+            return;
+        emit cancel_all_orders_requested(account_id_);
+    });
+    bar_layout->addWidget(cancel_all_btn_);
+    vlay->addWidget(action_bar);
+
+    auto* stack_host = wrap_with_empty_state(orders_table_, orders_stack_, "No active orders.");
+    vlay->addWidget(stack_host, 1);
+
+    tabs_->addTab(container, "ORDERS");
 }
 
 void CryptoBottomPanel::setup_trades_tab() {
@@ -578,6 +655,10 @@ void CryptoBottomPanel::set_market_info(const MarketInfoData& info) {
 
 void CryptoBottomPanel::set_mode(bool is_paper) {
     is_paper_ = is_paper;
+}
+
+void CryptoBottomPanel::set_account_id(const QString& account_id) {
+    account_id_ = account_id;
 }
 
 void CryptoBottomPanel::set_live_positions(const QJsonArray& positions) {

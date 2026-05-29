@@ -77,11 +77,18 @@ void MaritimeService::search_vessels_by_area(const AreaSearchParams& params) {
     body["max_lng"] = params.max_lng;
     if (params.days_ago > 0)
         body["days_ago"] = params.days_ago;
+    if (params.limit > 0)
+        body["limit"] = params.limit;
 
-    const QString cache_key = QString("maritime:area:%1:%2:%3:%4:%5")
+    const QString cache_key = QString("maritime:area:%1:%2:%3:%4:%5:%6")
                                   .arg(params.min_lat).arg(params.max_lat)
                                   .arg(params.min_lng).arg(params.max_lng)
-                                  .arg(params.days_ago);
+                                  .arg(params.days_ago).arg(params.limit);
+
+    // Client-side safety net: if the API ignores `limit` and returns the full
+    // unbounded set, cap the working set before we parse/sort/re-serialize so
+    // the UI thread never chews through tens of thousands of vessels.
+    const int hard_cap = params.limit > 0 ? params.limit : 0;
     const QVariant cached = fincept::CacheManager::instance().get(cache_key);
     if (!cached.isNull()) {
         const QJsonObject root = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
@@ -100,7 +107,7 @@ void MaritimeService::search_vessels_by_area(const AreaSearchParams& params) {
     QPointer<MaritimeService> self = this;
     HttpClient::instance().post(
         QString(kMarineBase) + "/vessel/area-search", body,
-        [self, cache_key](Result<QJsonDocument> result) {
+        [self, cache_key, hard_cap](Result<QJsonDocument> result) {
             if (!self)
                 return;
             if (!result.is_ok()) {
@@ -111,10 +118,16 @@ void MaritimeService::search_vessels_by_area(const AreaSearchParams& params) {
             const auto data = unwrap(result.value().object());
             const auto vessels_arr = data["vessels"].toArray();
 
+            // Parse at most `hard_cap` vessels (0 = unbounded). Caps the
+            // per-vessel parse + downstream sort/re-serialize work when the
+            // server returns the full unbounded set despite the limit param.
+            const int parse_n = (hard_cap > 0)
+                                    ? std::min<int>(hard_cap, vessels_arr.size())
+                                    : vessels_arr.size();
             VesselsPage page;
-            page.vessels.reserve(vessels_arr.size());
-            for (const auto& v : vessels_arr)
-                page.vessels.append(self->parse_vessel(v.toObject()));
+            page.vessels.reserve(parse_n);
+            for (int i = 0; i < parse_n; ++i)
+                page.vessels.append(self->parse_vessel(vessels_arr[i].toObject()));
 
             // Newest position first — last_pos_updated_at is ISO-8601 so plain
             // string compare gives correct lexicographic ordering.

@@ -39,10 +39,14 @@ class EquityBottomPanel : public QWidget {
 
     void set_mode(bool is_paper);
 
+    void set_account_id(const QString& account_id);
+
   signals:
     void cancel_order_requested(const QString& order_id);
     void modify_order_requested(const QString& order_id, double new_qty, double new_price);
     void import_holdings_requested(const QVector<trading::BrokerHolding>& holdings);
+    void cancel_all_orders_requested(const QString& account_id);
+    void close_all_positions_requested(const QString& account_id);
 
   private:
     void setup_positions_tab();
@@ -87,6 +91,11 @@ class EquityBottomPanel : public QWidget {
     // Stats labels
     QLabel* stat_values_[5] = {};
 
+    // Bulk action buttons
+    class QPushButton* cancel_all_btn_ = nullptr;
+    class QPushButton* close_all_btn_ = nullptr;
+
+    QString account_id_;
     bool is_paper_ = true;
 };
 

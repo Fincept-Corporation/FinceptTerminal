@@ -14,6 +14,19 @@
     },
 
     {
+      "name": "win-dev",
+      "displayName": "Windows Dev (fast incremental)",
+      "description": "Dev build — unity build OFF for fast single-file rebuilds (~10s vs ~2min).",
+      "inherits": "base",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "architecture": { "value": "x64", "strategy": "external" },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_UNITY_BUILD": "OFF"
+      }
+    },
+
+    {
       "name": "win-release",
       "displayName": "Windows Release",
       "description": "Release build for Windows x64. Run from a Visual Studio Developer Command Prompt (or vcvars64.bat) so MSVC, SDK headers, and Ninja are on PATH. Set QT_DIR env var or CMAKE_PREFIX_PATH to your Qt installation.",
@@ -50,6 +63,7 @@
   ],
 
   "buildPresets": [
+    { "name": "win-dev",       "configurePreset": "win-dev"       },
     { "name": "win-release",   "configurePreset": "win-release"   },
     { "name": "linux-release", "configurePreset": "linux-release" },
     { "name": "macos-release", "configurePreset": "macos-release" }

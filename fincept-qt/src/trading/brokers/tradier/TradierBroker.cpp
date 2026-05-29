@@ -578,4 +578,14 @@ ApiResponse<QVector<BrokerCandle>> TradierBroker::get_history(const BrokerCreden
     return {true, candles, "", ts};
 }
 
+// ============================================================================
+// Pre-trade margin calculator — fallback estimator.
+// Tradier exposes no per-order margin endpoint, so we use the shared heuristic
+// estimator (BrokerInterface.h::estimate_order_margin).
+// ============================================================================
+ApiResponse<OrderMargin> TradierBroker::get_order_margins(const BrokerCredentials& /*creds*/,
+                                                          const UnifiedOrder& order) {
+    return {true, estimate_order_margin(order), "", now_ts()};
+}
+
 } // namespace fincept::trading

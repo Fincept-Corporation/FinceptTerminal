@@ -15,6 +15,7 @@ class MotilalBroker : public IBroker {
     BrokerId id() const override { return BrokerId::Motilal; }
     const char* name() const override { return "Motilal"; }
     const char* base_url() const override { return "https://openapi.motilaloswal.com"; }
+    const char* ws_adapter_name() const override { return "motilal"; }
 
     BrokerProfile profile() const override {
         return BrokerProfile{
@@ -71,6 +72,9 @@ class MotilalBroker : public IBroker {
     // Master contract CSV per exchange (NSE/BSE/NFO/MCX/NCDEX) — InstrumentService
     // calls this to seed symbol→scripcode lookups. Result.data["csv"] is the raw body.
     ApiResponse<QJsonObject> get_master_contract(const BrokerCredentials& creds, const QString& exchange);
+
+    // --- Margin Calculator --- Motilal Oswal has no margin calculator API → fallback estimator.
+    ApiResponse<OrderMargin> get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) override;
 
   protected:
     QMap<QString, QString> auth_headers(const BrokerCredentials& creds) const override;

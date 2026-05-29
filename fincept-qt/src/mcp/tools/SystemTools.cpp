@@ -3,6 +3,7 @@
 #include "mcp/tools/SystemTools.h"
 
 #include "auth/AuthManager.h"
+#include "core/HealthMonitor.h"
 #include "core/logging/Logger.h"
 #include "mcp/McpProvider.h"
 #include "python/PythonRunner.h"
@@ -89,6 +90,20 @@ std::vector<ToolDef> get_system_tools() {
                             },
                             {"internal_tools", static_cast<int>(McpProvider::instance().tool_count())},
                             {"python_available", python::PythonRunner::instance().is_available()}});
+        };
+        tools.push_back(std::move(t));
+    }
+
+    // ── system_health_check ────────────────────────────────────────────
+    {
+        ToolDef t;
+        t.name = "system_health_check";
+        t.description = "Run local subsystem health checks (broker connections, "
+                        "WebSocket streams, Python pool, DataHub) and return a "
+                        "snapshot with an overall all_ok flag and per-check details.";
+        t.category = "system";
+        t.handler = [](const QJsonObject&) -> ToolResult {
+            return ToolResult::ok_data(HealthMonitor::instance().check().to_json());
         };
         tools.push_back(std::move(t));
     }

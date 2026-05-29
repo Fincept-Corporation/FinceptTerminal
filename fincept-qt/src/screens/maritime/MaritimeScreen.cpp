@@ -9,6 +9,7 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "services/maritime/GeocodingService.h"
 #include "services/maritime/MaritimeService.h"
 #include "services/maritime/PortsCatalog.h"
 #include "ui/theme/Theme.h"
@@ -101,6 +102,10 @@ void MaritimeScreen::connect_service() {
     auto& ports = PortsCatalog::instance();
     connect(&ports, &PortsCatalog::ports_found, this, &MaritimeScreen::on_ports_found);
     connect(&ports, &PortsCatalog::error_occurred, this, &MaritimeScreen::on_ports_error);
+
+    auto& geo = GeocodingService::instance();
+    connect(&geo, &GeocodingService::places_found, this, &MaritimeScreen::on_places_found);
+    connect(&geo, &GeocodingService::error_occurred, this, &MaritimeScreen::on_places_error);
 }
 
 // ── Theme apply (called on construction + theme_changed) ─────────────────────

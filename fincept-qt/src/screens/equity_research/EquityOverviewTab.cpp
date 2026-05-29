@@ -743,21 +743,6 @@ void EquityOverviewTab::rebuild_chart(const QVector<services::equity::Candle>& c
             obj[QStringLiteral("volume")] = static_cast<double>(c.volume);
             arr.append(obj);
         }
-        {
-            QFile dbg(QCoreApplication::applicationDirPath() + "/kline_debug.txt");
-            if (dbg.open(QIODevice::Append | QIODevice::Text)) {
-                QTextStream ts(&dbg);
-                ts << QDateTime::currentDateTime().toString("HH:mm:ss")
-                   << " rebuild_chart: candles=" << candles.size()
-                   << " json_arr=" << arr.size() << "\n";
-                if (!candles.isEmpty()) {
-                    const auto& f = candles.first();
-                    ts << "  first: ts=" << f.timestamp << " o=" << f.open
-                       << " h=" << f.high << " l=" << f.low
-                       << " c=" << f.close << " v=" << f.volume << "\n";
-                }
-            }
-        }
         kline_chart_->set_candles(arr);
         return;
     }

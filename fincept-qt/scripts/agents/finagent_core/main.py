@@ -9,6 +9,7 @@ Performance notes:
 - Uses optimized agent loader to avoid slow file scanning
 """
 
+import os
 import sys
 import json
 import logging
@@ -174,6 +175,14 @@ def main(args=None):
                 return json.dumps({"success": False, "error": "No payload provided"})
         else:
             payload_str = args[0]
+            if payload_str.startswith("@"):
+                fpath = payload_str[1:]
+                with open(fpath, "r", encoding="utf-8") as f:
+                    payload_str = f.read()
+                try:
+                    os.remove(fpath)
+                except OSError:
+                    pass
 
         payload = json.loads(payload_str)
         action = payload.get("action")

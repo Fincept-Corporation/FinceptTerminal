@@ -50,9 +50,13 @@ class CryptoBottomPanel : public QWidget {
     /// Call at every WS flush tick.
     void update_position_prices(const QHash<QString, double>& last_prices);
 
+    void set_account_id(const QString& account_id);
+
   signals:
     void cancel_order_requested(const QString& order_id);
     void close_position_requested(const QString& symbol);
+    void cancel_all_orders_requested(const QString& account_id);
+    void close_all_positions_requested(const QString& account_id);
 
   private:
     void setup_positions_tab();
@@ -99,10 +103,15 @@ class CryptoBottomPanel : public QWidget {
     QLabel* live_equity_label_ = nullptr;
     QLabel* live_margin_label_ = nullptr;
 
+    // Bulk action buttons
+    class QPushButton* cancel_all_btn_ = nullptr;
+    class QPushButton* close_all_btn_ = nullptr;
+
     // New widgets
     CryptoTimeSales* time_sales_ = nullptr;
     CryptoDepthChart* depth_chart_ = nullptr;
 
+    QString account_id_;
     bool is_paper_ = true;
 };
 

@@ -18,6 +18,7 @@ class ShoonyaBroker : public IBroker {
     BrokerId id() const override { return BrokerId::Shoonya; }
     const char* name() const override { return "Shoonya"; }
     const char* base_url() const override { return "https://api.shoonya.com/NorenWClientTP"; }
+    const char* ws_adapter_name() const override { return "shoonya"; }
 
     BrokerProfile profile() const override {
         return BrokerProfile{

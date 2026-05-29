@@ -38,35 +38,120 @@ using namespace fincept::screens::maritime_internal;
 
 void MaritimeScreen::load_global_sample() {
     // World bbox — the API caps at ±90 lat / ±180 lng, but stays well-behaved
-    // with these slightly inset values. Returns ~45k vessels worldwide today;
-    // the per-cell downsampler in on_vessels_loaded reduces that to ~200 pins
-    // distributed across a 10x10 lat/lng grid so the map fills out instead of
-    // clumping in the busiest shipping lanes.
+    // with these slightly inset values. Worldwide this matches ~45k vessels;
+    // we ask the server for a bounded slice (`limit`) instead of transferring
+    // them all, then the per-cell downsampler in on_vessels_loaded reduces
+    // that to ~100 pins across a 10x10 lat/lng grid so the map fills out
+    // instead of clumping in the busiest shipping lanes.
     AreaSearchParams params;
     params.min_lat = -89.0;
     params.max_lat =  89.0;
     params.min_lng = -179.0;
     params.max_lng =  179.0;
+    // Request more than the 100 we ultimately show so the grid downsampler has
+    // a geographically diverse pool to spread across — the API returns busy
+    // lanes first, so a tight server cap would cluster. ~22x less than 45k.
+    params.limit = 2000;
     set_status("LOADING GLOBAL...", ui::colors::WARNING);
     pending_global_sample_ = true;
+    filter_to_shapes_ = false;  // global view is never shape-filtered
     show_map_loading(QStringLiteral("LOADING GLOBAL VESSELS"));
     MaritimeService::instance().search_vessels_by_area(params);
 }
 
 void MaritimeScreen::on_load_vessels() {
-    AreaSearchParams params;
-    if (area_min_lat_) params.min_lat = area_min_lat_->value();
-    if (area_max_lat_) params.max_lat = area_max_lat_->value();
-    if (area_min_lng_) params.min_lng = area_min_lng_->value();
-    if (area_max_lng_) params.max_lng = area_max_lng_->value();
-    if (params.max_lat <= params.min_lat || params.max_lng <= params.min_lng) {
+    if (!area_min_lat_ || !area_max_lat_ || !area_min_lng_ || !area_max_lng_)
+        return;
+    run_area_search(area_min_lat_->value(), area_max_lat_->value(),
+                    area_min_lng_->value(), area_max_lng_->value());
+}
+
+void MaritimeScreen::run_area_search(double min_lat, double max_lat, double min_lng, double max_lng,
+                                     bool filter_to_shapes) {
+    if (max_lat <= min_lat || max_lng <= min_lng) {
         set_status("INVALID BBOX", ui::colors::WARNING);
         return;
     }
-    set_status("LOADING...", ui::colors::WARNING);
-    pending_global_sample_ = false;  // explicit bbox load — show as-is
-    show_map_loading(QStringLiteral("LOADING VESSELS"));
+    // Filter the next result to drawn shapes only when this search was driven
+    // by the draw tool; place / bbox searches show the whole bbox.
+    filter_to_shapes_ = filter_to_shapes;
+    // Reflect the bbox in the advanced spinners so the user can see / tweak
+    // what a place / draw selection resolved to.
+    if (area_min_lat_) area_min_lat_->setValue(min_lat);
+    if (area_max_lat_) area_max_lat_->setValue(max_lat);
+    if (area_min_lng_) area_min_lng_->setValue(min_lng);
+    if (area_max_lng_) area_max_lng_->setValue(max_lng);
+
+    AreaSearchParams params;
+    params.min_lat = min_lat;
+    params.max_lat = max_lat;
+    params.min_lng = min_lng;
+    params.max_lng = max_lng;
+    // Cap the working set like the global view does — a large place bbox
+    // (e.g. an ocean) can still match thousands of vessels.
+    params.limit = 2000;
+    set_status("SEARCHING...", ui::colors::WARNING);
+    pending_global_sample_ = false;
+    show_map_loading(QStringLiteral("SEARCHING AREA"));
     MaritimeService::instance().search_vessels_by_area(params);
+}
+
+void MaritimeScreen::on_places_found(QVector<services::maritime::GeoPlace> places, QString context) {
+    Q_UNUSED(context);
+    place_results_ = places;
+    if (!place_table_) return;
+
+    place_table_->setSortingEnabled(false);
+    place_table_->setRowCount(places.size());
+    for (int i = 0; i < places.size(); ++i) {
+        const auto& p = places[i];
+        auto* name = new QTableWidgetItem(p.display_name);
+        name->setToolTip(QString("%1\nbbox: %2,%3 → %4,%5")
+                             .arg(p.display_name)
+                             .arg(p.min_lat, 0, 'f', 3).arg(p.min_lng, 0, 'f', 3)
+                             .arg(p.max_lat, 0, 'f', 3).arg(p.max_lng, 0, 'f', 3));
+        place_table_->setItem(i, 0, name);
+        place_table_->setItem(i, 1, new QTableWidgetItem(p.type));
+    }
+    place_table_->setSortingEnabled(true);
+    place_table_->resizeColumnsToContents();
+
+    if (place_status_) {
+        if (places.isEmpty())
+            place_status_->setText("No places found.");
+        else
+            place_status_->setText(QString("%1 result%2 — click a row to load vessels.")
+                                       .arg(places.size())
+                                       .arg(places.size() == 1 ? "" : "s"));
+    }
+}
+
+void MaritimeScreen::on_shapes_changed() {
+    if (!map_widget_) return;
+    const auto& shapes = map_widget_->shapes();
+    if (shapes.isEmpty()) {
+        // All shapes cleared — drop the shape filter. Leave the current
+        // vessel set as-is (don't auto-reload); user can pick another action.
+        filter_to_shapes_ = false;
+        return;
+    }
+    // Union bbox over all drawn shapes (each shape carries its own bbox,
+    // including circles which store their bounding box).
+    double mn_lat =  90.0, mx_lat = -90.0, mn_lng =  180.0, mx_lng = -180.0;
+    for (const auto& s : shapes) {
+        mn_lat = std::min(mn_lat, s.min_lat);
+        mx_lat = std::max(mx_lat, s.max_lat);
+        mn_lng = std::min(mn_lng, s.min_lng);
+        mx_lng = std::max(mx_lng, s.max_lng);
+    }
+    run_area_search(mn_lat, mx_lat, mn_lng, mx_lng, /*filter_to_shapes=*/true);
+}
+
+void MaritimeScreen::on_places_error(const QString& context, const QString& message) {
+    Q_UNUSED(context);
+    LOG_WARN("Maritime", QString("Place search failed: %1").arg(message));
+    if (place_status_)
+        place_status_->setText("Search failed: " + message);
 }
 
 void MaritimeScreen::on_search_vessel() {
@@ -90,7 +175,7 @@ void MaritimeScreen::on_vessels_loaded(VesselsPage page) {
         pending_global_sample_ = false;
         constexpr int kBins = 10;
         constexpr int kPerCell = 2;
-        constexpr int kTargetCount = 200;
+        constexpr int kTargetCount = 100;
         QHash<int, QVector<int>> by_cell;  // cell index → vessel indices
         for (int i = 0; i < page.vessels.size(); ++i) {
             const auto& v = page.vessels[i];
@@ -113,10 +198,30 @@ void MaritimeScreen::on_vessels_loaded(VesselsPage page) {
         page.total_count = picked.size();
     }
 
-    // Render limit — area-search can return 14k+ rows. Pin/render the top
-    // (newest-first) batch to keep the UI responsive; full count still
-    // shown in the status badge.
-    static constexpr int kRenderLimit = 500;
+    // Shape filter — when the user drew areas, the API was queried with the
+    // union bbox; narrow the result to vessels actually inside one of the
+    // drawn shapes (true circle / multi-shape selection). total_count is reset
+    // to the in-shape count so the badge reflects what's shown.
+    if (filter_to_shapes_ && map_widget_ && !map_widget_->shapes().isEmpty()) {
+        const auto& shapes = map_widget_->shapes();
+        QVector<VesselData> in_shape;
+        in_shape.reserve(page.vessels.size());
+        for (const auto& v : page.vessels) {
+            for (const auto& s : shapes) {
+                if (s.contains(v.latitude, v.longitude)) {
+                    in_shape.append(v);
+                    break;
+                }
+            }
+        }
+        page.vessels = in_shape;
+        page.total_count = in_shape.size();
+    }
+
+    // Render limit — area-search can still return a large set for a tight
+    // user bbox. Pin/render the top (newest-first) batch to keep the UI
+    // responsive; full count still shown in the status badge.
+    static constexpr int kRenderLimit = 100;
     const int render_n = qMin(page.vessels.size(), kRenderLimit);
 
     vessels_table_->setSortingEnabled(false);
@@ -294,7 +399,7 @@ void MaritimeScreen::update_intelligence(int vessel_count) {
     if (stat_vessels_)
         stat_vessels_->setText(count_str);
     if (stat_displayed_)
-        stat_displayed_->setText(QString::number(qMin(vessel_count, 500)));
+        stat_displayed_->setText(QString::number(qMin(vessel_count, 100)));
     if (stat_routes_)
         stat_routes_->setText(QString::number(routes_.size()));
 }

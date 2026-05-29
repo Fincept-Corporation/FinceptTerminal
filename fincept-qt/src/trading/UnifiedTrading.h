@@ -9,6 +9,7 @@
 #include <QTimer>
 
 #include <atomic>
+#include <functional>
 #include <optional>
 
 namespace fincept::trading {
@@ -42,6 +43,37 @@ class UnifiedTrading : public QObject {
         UnifiedOrderResponse response;
     };
     QVector<BroadcastResult> broadcast_order(const QStringList& account_ids, const UnifiedOrder& order);
+
+    // --- Phase 1: Bulk operations (OpenAlgo bridge) ---
+    ApiResponse<CancelAllResult> cancel_all_orders(const QString& account_id);
+    ApiResponse<CloseAllResult> close_all_positions(const QString& account_id);
+    ApiResponse<OrderPlaceResponse> close_position(const QString& account_id,
+        const QString& symbol, const QString& exchange, const QString& product_type = {});
+    ApiResponse<SmartOrderResult> place_smart_order(const QString& account_id, const SmartOrder& order);
+    ApiResponse<QVector<BrokerQuote>> get_multi_quotes(const QString& account_id,
+        const QVector<QPair<QString, QString>>& symbols);
+    ApiResponse<MarketDepth> get_market_depth(const QString& account_id,
+        const QString& symbol, const QString& exchange);
+
+    // --- Basket & Split orders ---
+    // Both run asynchronously on a background thread (orders are placed
+    // sequentially in batches/chunks with sleeps between) and deliver their
+    // result back on the caller's thread via the supplied callback.
+    void place_basket_orders(const QString& account_id, const BasketOrderRequest& basket,
+        std::function<void(const BasketOrderResult&)> callback);
+    void place_split_orders(const QString& account_id, const SplitOrderRequest& request,
+        std::function<void(const SplitOrderResult&)> callback);
+
+    // Quantity-freeze-aware placement (Phase 3 §17). If the order quantity is
+    // within the freeze limit for (symbol, exchange) — or no limit is set — this
+    // places a single normal order and delivers a one-element SplitOrderResult.
+    // If it exceeds the limit, it auto-splits into chunks of `freeze_limit` via
+    // place_split_orders. Asynchronous in BOTH cases (background thread +
+    // callback) so callers get a uniform contract regardless of whether a split
+    // actually happened. Use this instead of place_order when you want
+    // transparent freeze handling; use place_order for the strict sync path.
+    void place_order_auto_split(const QString& account_id, const UnifiedOrder& order,
+        std::function<void(const SplitOrderResult&)> callback);
 
     UnifiedTrading(const UnifiedTrading&) = delete;
     UnifiedTrading& operator=(const UnifiedTrading&) = delete;

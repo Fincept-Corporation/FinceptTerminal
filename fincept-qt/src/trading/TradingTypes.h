@@ -17,6 +17,17 @@ namespace fincept::trading {
 // Paper Trading Types
 // ============================================================================
 
+/// Per-product leverage rules for paper-trading margin calculation.
+/// Mirrors OpenAlgo's sandbox leverage config (fund_manager.py::_get_leverage).
+/// All fields have sane defaults so existing portfolios keep working unchanged.
+struct PtLeverageConfig {
+    double equity_mis = 5.0;   // intraday equity (NSE/BSE MIS)
+    double equity_cnc = 1.0;   // delivery equity (NSE/BSE CNC/NRML)
+    double futures = 10.0;     // futures (FUT suffix on NFO/BFO/MCX/CDS)
+    double options_buy = 1.0;  // option buy (premium only)
+    double options_sell = 1.0; // option sell (margin estimate)
+};
+
 struct PtPortfolio {
     QString id;
     QString name;
@@ -28,6 +39,14 @@ struct PtPortfolio {
     double fee_rate = 0.001;
     QString exchange;
     QString created_at;
+
+    // NEW (Phase 3 §4): per-product leverage rules + market-hours enforcement.
+    // These have defaults so existing portfolios (and the existing DB schema,
+    // which has no columns for them) keep working. The leverage config and the
+    // enforce flag are managed by an in-memory per-portfolio config map in
+    // PaperTrading.cpp (see pt_get/set_leverage_config / pt_set_enforce_market_hours).
+    PtLeverageConfig leverage_config{};
+    bool enforce_market_hours = false; // opt-in; FALSE preserves existing behavior
 };
 
 struct PtOrder {
@@ -45,6 +64,20 @@ struct PtOrder {
     bool reduce_only = false;
     QString created_at;
     std::optional<QString> filled_at;
+
+    // NEW (Phase 3 §4): margin blocked from available balance when this order
+    // was placed (released on fill/cancel). Default 0 = no margin blocked
+    // (reduce-only / position-reducing orders, or pre-margin-engine orders).
+    // Persisted via the pt_margin_blocks table, not a pt_orders column, so the
+    // existing pt_orders schema and row mapper are unchanged.
+    double margin_blocked = 0.0;
+
+    // NEW (Phase 3 §4): product type used for leverage selection
+    // ("MIS"/"CNC"/"NRML"); empty = use portfolio default leverage. Not
+    // persisted (transient hint for the margin engine); existing call sites
+    // that don't set it default to the portfolio-level leverage.
+    QString product;
+    QString exchange; // exchange for market-hours / instrument-type detection
 };
 
 struct PtPosition {
@@ -402,6 +435,10 @@ enum class BrokerId {
     IIFL,
     Motilal,
     Shoonya,
+    Samco,
+    Flattrade,
+    Paytm,
+    Tradejini,
     Alpaca,
     IBKR,
     Tradier,
@@ -435,6 +472,14 @@ inline const char* broker_id_str(BrokerId id) {
             return "motilal";
         case BrokerId::Shoonya:
             return "shoonya";
+        case BrokerId::Samco:
+            return "samco";
+        case BrokerId::Flattrade:
+            return "flattrade";
+        case BrokerId::Paytm:
+            return "paytm";
+        case BrokerId::Tradejini:
+            return "tradejini";
         case BrokerId::Alpaca:
             return "alpaca";
         case BrokerId::IBKR:
@@ -474,6 +519,14 @@ inline std::optional<BrokerId> parse_broker_id(const QString& s) {
         return BrokerId::Motilal;
     if (s == "shoonya")
         return BrokerId::Shoonya;
+    if (s == "samco")
+        return BrokerId::Samco;
+    if (s == "flattrade")
+        return BrokerId::Flattrade;
+    if (s == "paytm")
+        return BrokerId::Paytm;
+    if (s == "tradejini")
+        return BrokerId::Tradejini;
     if (s == "alpaca")
         return BrokerId::Alpaca;
     if (s == "ibkr")
@@ -628,6 +681,117 @@ struct UnifiedOrderResponse {
     QString order_id;
     QString message;
     QString mode;
+};
+
+// ---------------------------------------------------------------------------
+// Phase 1: Core trading operations (OpenAlgo bridge)
+// ---------------------------------------------------------------------------
+
+struct CancelAllResult {
+    QStringList canceled_order_ids;
+    QVector<QPair<QString, QString>> failed; // {order_id, error}
+    int total_attempted = 0;
+};
+
+struct CloseAllResult {
+    QStringList closed_symbols;
+    QVector<QPair<QString, QString>> failed; // {symbol, error}
+    int total_positions = 0;
+};
+
+struct SmartOrder {
+    QString symbol;
+    QString exchange;
+    OrderSide action = OrderSide::Buy;
+    double quantity = 0;
+    double position_size = 0; // target position (positive=long, negative=short, 0=flatten)
+    OrderType order_type = OrderType::Market;
+    double price = 0;
+    double trigger_price = 0;
+    ProductType product_type = ProductType::Intraday;
+};
+
+struct SmartOrderResult {
+    bool action_taken = false;
+    QString order_id;
+    OrderSide executed_action = OrderSide::Buy;
+    double executed_quantity = 0;
+    QString message;
+};
+
+struct DepthLevel {
+    double price = 0;
+    int quantity = 0;
+    int orders = 0;
+};
+
+struct MarketDepth {
+    QString symbol;
+    QString exchange;
+    QVector<DepthLevel> bids;
+    QVector<DepthLevel> asks;
+    double ltp = 0;
+    double volume = 0;
+    double oi = 0;
+};
+
+struct OptionChainEntry {
+    double strike_price = 0;
+    QString ce_symbol;
+    BrokerQuote ce_quote;
+    QString pe_symbol;
+    BrokerQuote pe_quote;
+    QString label; // "ATM", "ITM1", "OTM1", etc.
+};
+
+// ============================================================================
+// Synthetic Future (Put-Call Parity)
+// ============================================================================
+
+/// Calculate the synthetic future price from ATM option quotes using put-call
+/// parity: Synthetic_Future = ATM_Call_LTP - ATM_Put_LTP + ATM_Strike.
+/// Useful for deriving the implied fair-value of the underlying from option
+/// premiums when the spot/futures price is stale or unavailable.
+inline double calculate_synthetic_future(double atm_call_ltp, double atm_put_ltp, double atm_strike)
+{
+    return atm_call_ltp - atm_put_ltp + atm_strike;
+}
+
+// ============================================================================
+// Basket & Split Orders
+// ============================================================================
+
+struct BasketOrderRequest {
+    QVector<UnifiedOrder> orders;
+    QString strategy_name;
+    bool pre_fetch_quotes = true;
+};
+
+struct BasketOrderResult {
+    struct OrderResult {
+        QString symbol;
+        QString exchange;
+        bool success = false;
+        QString order_id;
+        QString error;
+    };
+    QVector<OrderResult> results;
+    int successful = 0;
+    int failed = 0;
+    int total = 0;
+};
+
+struct SplitOrderRequest {
+    UnifiedOrder base_order;
+    int split_size = 0;
+    int delay_between_ms = 100;
+};
+
+struct SplitOrderResult {
+    QVector<BasketOrderResult::OrderResult> results;
+    int total_quantity_placed = 0;
+    int chunks_successful = 0;
+    int chunks_failed = 0;
 };
 
 } // namespace fincept::trading

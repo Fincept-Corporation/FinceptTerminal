@@ -39,8 +39,12 @@ void AgentService::discover_agents() {
     {
         const QVariant cv = fincept::CacheManager::instance().get("agents:list");
         if (!cv.isNull()) {
-            LOG_DEBUG("AgentService", "agents: serving from cache");
             const QJsonObject root = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
+            if (root["agents"].toArray().isEmpty()) {
+                fincept::CacheManager::instance().remove("agents:list");
+                LOG_INFO("AgentService", "Discarding empty agents cache — re-discovering");
+            } else {
+            LOG_DEBUG("AgentService", "agents: serving from cache");
             QVector<AgentInfo> agents;
             for (const auto& v : root["agents"].toArray()) {
                 const QJsonObject o = v.toObject();
@@ -63,6 +67,7 @@ void AgentService::discover_agents() {
             }
             emit agents_discovered(agents, categories);
             return;
+            }
         }
     }
 

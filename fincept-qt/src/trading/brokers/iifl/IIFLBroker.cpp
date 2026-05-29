@@ -667,4 +667,14 @@ ApiResponse<QVector<BrokerCandle>> IIFLBroker::get_history(const BrokerCredentia
     return {true, candles, "", ts};
 }
 
+// ============================================================================
+// Pre-trade margin calculator — fallback estimator.
+// IIFL (XTS) has no margin calculator API (OpenAlgo's broker/iifl/api/margin_api.py
+// raises NotImplementedError), so we use the shared heuristic estimator
+// (BrokerInterface.h::estimate_order_margin).
+// ============================================================================
+ApiResponse<OrderMargin> IIFLBroker::get_order_margins(const BrokerCredentials& /*creds*/, const UnifiedOrder& order) {
+    return {true, estimate_order_margin(order), "", now_ts()};
+}
+
 } // namespace fincept::trading

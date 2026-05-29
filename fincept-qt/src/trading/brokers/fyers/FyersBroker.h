@@ -68,6 +68,15 @@ class FyersBroker : public IBroker {
                                                    const QString& resolution, const QString& from_date,
                                                    const QString& to_date) override;
 
+    // --- Multi-quote & Market Depth ---
+    ApiResponse<QVector<BrokerQuote>> get_multi_quotes(
+        const BrokerCredentials& creds,
+        const QVector<QPair<QString, QString>>& symbols) override;
+
+    ApiResponse<MarketDepth> get_market_depth(
+        const BrokerCredentials& creds,
+        const QString& symbol, const QString& exchange) override;
+
     // Market depth — GET /data/depth (5-level bid/ask)
     ApiResponse<QVector<BrokerQuote>> get_historical_quotes_single(const BrokerCredentials& creds,
                                                                     const QString& symbol, const QString& start,
@@ -75,6 +84,9 @@ class FyersBroker : public IBroker {
 
     // Market clock — GET /api/v3/marketStatus.
     ApiResponse<MarketClock> get_clock(const BrokerCredentials& creds) override;
+
+    // --- Margin Calculator --- POST /api/v3/multiorder/margin (native; total only, no SPAN breakdown)
+    ApiResponse<OrderMargin> get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) override;
 
     // GTT — /api/v3/gtt/orders[/sync].
     GttPlaceResponse gtt_place(const BrokerCredentials& creds, const GttOrder& order) override;

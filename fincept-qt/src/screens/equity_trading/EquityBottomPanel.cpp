@@ -9,9 +9,12 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLineEdit>
+#include <QMessageBox>
+#include <QPointer>
 #include <QPushButton>
 #include <QScrollBar>
 #include <QVBoxLayout>
+#include <QtConcurrent>
 
 namespace fincept::screens::equity {
 
@@ -51,6 +54,41 @@ QTableWidgetItem* EquityBottomPanel::ensure_item(QTableWidget* table, int row, i
 // ── Positions Tab ──────────────────────────────────────────────────────────
 
 void EquityBottomPanel::setup_positions_tab() {
+    auto* container = new QWidget;
+    auto* vlay = new QVBoxLayout(container);
+    vlay->setContentsMargins(0, 0, 0, 0);
+    vlay->setSpacing(0);
+
+    // Action bar with Square Off All button
+    auto* action_bar = new QWidget;
+    action_bar->setObjectName("eqPositionsActionBar");
+    action_bar->setStyleSheet(QString("#eqPositionsActionBar{background:%1;border-bottom:1px solid %2;}")
+                                  .arg(fincept::ui::colors::PANEL(), fincept::ui::colors::BORDER()));
+    auto* bar_layout = new QHBoxLayout(action_bar);
+    bar_layout->setContentsMargins(12, 4, 12, 4);
+    bar_layout->setSpacing(8);
+    bar_layout->addStretch(1);
+
+    close_all_btn_ = new QPushButton("SQUARE OFF ALL");
+    close_all_btn_->setCursor(Qt::PointingHandCursor);
+    close_all_btn_->setStyleSheet(
+        QString("QPushButton{background:rgba(220,38,38,0.12);color:%1;border:1px solid %2;"
+                "padding:4px 14px;font-size:11px;font-weight:700;letter-spacing:0.5px;border-radius:2px;}"
+                "QPushButton:hover{background:rgba(220,38,38,0.25);}")
+            .arg(fincept::ui::colors::NEGATIVE(), fincept::ui::colors::NEGATIVE_DIM()));
+    connect(close_all_btn_, &QPushButton::clicked, this, [this]() {
+        if (account_id_.isEmpty())
+            return;
+        auto answer = QMessageBox::warning(this, "Square Off All Positions",
+                                           "This will close ALL open positions.\n\nAre you sure?",
+                                           QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (answer != QMessageBox::Yes)
+            return;
+        emit close_all_positions_requested(account_id_);
+    });
+    bar_layout->addWidget(close_all_btn_);
+    vlay->addWidget(action_bar);
+
     positions_table_ = new QTableWidget;
     positions_table_->setObjectName("eqTable");
     positions_table_->setColumnCount(8);
@@ -62,7 +100,9 @@ void EquityBottomPanel::setup_positions_tab() {
     positions_table_->setShowGrid(false);
     positions_table_->horizontalHeader()->setStretchLastSection(true);
     positions_table_->verticalHeader()->setDefaultSectionSize(22);
-    tabs_->addTab(positions_table_, "POSITIONS");
+    vlay->addWidget(positions_table_, 1);
+
+    tabs_->addTab(container, "POSITIONS");
 }
 
 // ── Holdings Tab ───────────────────────────────────────────────────────────
@@ -150,6 +190,41 @@ void EquityBottomPanel::setup_holdings_tab() {
 // ── Orders Tab ─────────────────────────────────────────────────────────────
 
 void EquityBottomPanel::setup_orders_tab() {
+    auto* container = new QWidget;
+    auto* vlay = new QVBoxLayout(container);
+    vlay->setContentsMargins(0, 0, 0, 0);
+    vlay->setSpacing(0);
+
+    // Action bar with Cancel All button
+    auto* action_bar = new QWidget;
+    action_bar->setObjectName("eqOrdersActionBar");
+    action_bar->setStyleSheet(QString("#eqOrdersActionBar{background:%1;border-bottom:1px solid %2;}")
+                                  .arg(fincept::ui::colors::PANEL(), fincept::ui::colors::BORDER()));
+    auto* bar_layout = new QHBoxLayout(action_bar);
+    bar_layout->setContentsMargins(12, 4, 12, 4);
+    bar_layout->setSpacing(8);
+    bar_layout->addStretch(1);
+
+    cancel_all_btn_ = new QPushButton("CANCEL ALL ORDERS");
+    cancel_all_btn_->setCursor(Qt::PointingHandCursor);
+    cancel_all_btn_->setStyleSheet(
+        QString("QPushButton{background:rgba(217,119,6,0.12);color:%1;border:1px solid %2;"
+                "padding:4px 14px;font-size:11px;font-weight:700;letter-spacing:0.5px;border-radius:2px;}"
+                "QPushButton:hover{background:rgba(217,119,6,0.25);}")
+            .arg(fincept::ui::colors::AMBER(), fincept::ui::colors::AMBER_DIM()));
+    connect(cancel_all_btn_, &QPushButton::clicked, this, [this]() {
+        if (account_id_.isEmpty())
+            return;
+        auto answer = QMessageBox::warning(this, "Cancel All Orders",
+                                           "This will cancel ALL pending orders.\n\nAre you sure?",
+                                           QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (answer != QMessageBox::Yes)
+            return;
+        emit cancel_all_orders_requested(account_id_);
+    });
+    bar_layout->addWidget(cancel_all_btn_);
+    vlay->addWidget(action_bar);
+
     orders_table_ = new QTableWidget;
     orders_table_->setObjectName("eqTable");
     orders_table_->setColumnCount(9);
@@ -161,7 +236,9 @@ void EquityBottomPanel::setup_orders_tab() {
     orders_table_->setShowGrid(false);
     orders_table_->horizontalHeader()->setStretchLastSection(true);
     orders_table_->verticalHeader()->setDefaultSectionSize(22);
-    tabs_->addTab(orders_table_, "ORDERS");
+    vlay->addWidget(orders_table_, 1);
+
+    tabs_->addTab(container, "ORDERS");
 }
 
 // ── Funds Tab ──────────────────────────────────────────────────────────────
@@ -225,6 +302,10 @@ void EquityBottomPanel::setup_stats_tab() {
 
 void EquityBottomPanel::set_mode(bool is_paper) {
     is_paper_ = is_paper;
+}
+
+void EquityBottomPanel::set_account_id(const QString& account_id) {
+    account_id_ = account_id;
 }
 
 void EquityBottomPanel::set_paper_positions(const QVector<trading::PtPosition>& positions) {

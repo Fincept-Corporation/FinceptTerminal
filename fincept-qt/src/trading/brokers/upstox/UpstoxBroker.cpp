@@ -539,4 +539,196 @@ ApiResponse<QVector<BrokerCandle>> UpstoxBroker::get_history(const BrokerCredent
     return {true, all_candles, "", ts};
 }
 
+// ── Multi-Quote ──────────────────────────────────────────────────────────────
+// GET /v2/market-quote/quotes?instrument_key=NSE_EQ|INE002A01018,BSE_EQ|...
+// Full quote endpoint returns last_price, ohlc, volume, net_change, depth.
+// Batches in chunks of 500 (Upstox limit).
+ApiResponse<QVector<BrokerQuote>> UpstoxBroker::get_multi_quotes(
+    const BrokerCredentials& creds,
+    const QVector<QPair<QString, QString>>& symbols) {
+
+    QVector<BrokerQuote> all_quotes;
+    constexpr int kBatchSize = 500;
+
+    for (int start = 0; start < symbols.size(); start += kBatchSize) {
+        int end = std::min<int>(start + kBatchSize, static_cast<int>(symbols.size()));
+
+        QStringList keys;
+        keys.reserve(end - start);
+        for (int i = start; i < end; ++i) {
+            const auto& [sym, exch] = symbols[i];
+            keys.append(instrument_key(sym, exch.isEmpty() ? "NSE" : exch, creds.broker_id));
+        }
+
+        const QString url = "https://api.upstox.com/v2/market-quote/quotes?instrument_key=" + keys.join(",");
+        auto& http = BrokerHttp::instance();
+        auto resp = http.get(url, auth_headers(creds));
+        int64_t ts = now_ts();
+
+        if (!resp.success || resp.json.value("status").toString() != "success")
+            return {false, std::nullopt, checked_error(resp, "get_multi_quotes failed"), ts};
+
+        const auto data = resp.json.value("data").toObject();
+        for (auto it = data.constBegin(); it != data.constEnd(); ++it) {
+            const auto entry = it.value().toObject();
+            const auto ohlc = entry.value("ohlc").toObject();
+
+            BrokerQuote q;
+            q.symbol = entry.value("symbol").toString();
+            if (q.symbol.isEmpty()) {
+                const QString key = it.key();
+                if (key.contains('|'))
+                    q.symbol = key.section('|', 1);
+                else
+                    q.symbol = key;
+            }
+            q.ltp = entry.value("last_price").toDouble();
+            q.open = ohlc.value("open").toDouble();
+            q.high = ohlc.value("high").toDouble();
+            q.low = ohlc.value("low").toDouble();
+            q.close = ohlc.value("close").toDouble();
+            q.volume = entry.value("volume").toDouble();
+            q.change = entry.value("net_change").toDouble();
+            q.change_pct = q.close > 0 ? (q.change / q.close) * 100.0 : 0.0;
+
+            // Best bid/ask from depth
+            const auto depth = entry.value("depth").toObject();
+            const auto buy_arr = depth.value("buy").toArray();
+            const auto sell_arr = depth.value("sell").toArray();
+            if (!buy_arr.isEmpty()) {
+                auto b0 = buy_arr.first().toObject();
+                q.bid = b0.value("price").toDouble();
+                q.bid_size = b0.value("quantity").toDouble();
+            }
+            if (!sell_arr.isEmpty()) {
+                auto s0 = sell_arr.first().toObject();
+                q.ask = s0.value("price").toDouble();
+                q.ask_size = s0.value("quantity").toDouble();
+            }
+
+            q.oi = static_cast<qint64>(entry.value("oi").toDouble());
+            q.timestamp = now_ts();
+            all_quotes.append(q);
+        }
+    }
+
+    return {true, all_quotes, "", now_ts()};
+}
+
+// ── Market Depth ─────────────────────────────────────────────────────────────
+// GET /v2/market-quote/quotes?instrument_key=... — parse the depth field
+// Returns 5 levels of bid/ask with price, quantity, orders.
+ApiResponse<MarketDepth> UpstoxBroker::get_market_depth(
+    const BrokerCredentials& creds,
+    const QString& symbol, const QString& exchange) {
+
+    const QString exch = exchange.isEmpty() ? "NSE" : exchange;
+    const QString ikey = instrument_key(symbol, exch, creds.broker_id);
+    const QString url = "https://api.upstox.com/v2/market-quote/quotes?instrument_key=" + ikey;
+
+    auto& http = BrokerHttp::instance();
+    auto resp = http.get(url, auth_headers(creds));
+    int64_t ts = now_ts();
+
+    if (!resp.success || resp.json.value("status").toString() != "success")
+        return {false, std::nullopt, checked_error(resp, "get_market_depth failed"), ts};
+
+    const auto data = resp.json.value("data").toObject();
+    if (data.isEmpty())
+        return {false, std::nullopt, "No data returned for " + ikey, ts};
+
+    // Take the first (and only) entry
+    const auto entry = data.begin()->toObject();
+
+    MarketDepth md;
+    md.symbol = symbol;
+    md.exchange = exch;
+    md.ltp = entry.value("last_price").toDouble();
+    md.volume = entry.value("volume").toDouble();
+    md.oi = entry.value("oi").toDouble();
+
+    const auto depth = entry.value("depth").toObject();
+
+    const auto buy_arr = depth.value("buy").toArray();
+    for (const auto& level : buy_arr) {
+        auto lv = level.toObject();
+        DepthLevel dl;
+        dl.price = lv.value("price").toDouble();
+        dl.quantity = lv.value("quantity").toInt();
+        dl.orders = lv.value("orders").toInt();
+        md.bids.append(dl);
+    }
+
+    const auto sell_arr = depth.value("sell").toArray();
+    for (const auto& level : sell_arr) {
+        auto lv = level.toObject();
+        DepthLevel dl;
+        dl.price = lv.value("price").toDouble();
+        dl.quantity = lv.value("quantity").toInt();
+        dl.orders = lv.value("orders").toInt();
+        md.asks.append(dl);
+    }
+
+    return {true, md, "", ts};
+}
+
+// ============================================================================
+// Pre-trade margin calculator — POST /v2/charges/margin  (native)
+// Mirrors OpenAlgo broker/upstox/api/margin_api.py + mapping/margin_data.py.
+// Payload: {"instruments":[{instrument_key, quantity, transaction_type,
+//                           product, price?}]}
+// Response: {"status":"success","data":{required_margin, final_margin,
+//            margins:[{span_margin, exposure_margin}, ...]}}
+// ============================================================================
+ApiResponse<OrderMargin> UpstoxBroker::get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) {
+    int64_t ts = now_ts();
+
+    QJsonObject leg;
+    leg["instrument_key"] = instrument_key(order.symbol, order.exchange, creds.broker_id);
+    leg["quantity"] = static_cast<int>(order.quantity);
+    leg["transaction_type"] = order.side == OrderSide::Buy ? "BUY" : "SELL";
+    leg["product"] = upstox_enum_map().product_or(order.product_type, "I");
+    if (order.price > 0)
+        leg["price"] = order.price;
+
+    QJsonObject payload{{"instruments", QJsonArray{leg}}};
+
+    auto resp = BrokerHttp::instance().post_json("https://api.upstox.com/v2/charges/margin", payload,
+                                                 auth_headers(creds));
+    if (!resp.success)
+        return {false, std::nullopt, checked_error(resp, "Network error"), ts};
+    if (is_token_expired(resp))
+        return {false, std::nullopt, "[TOKEN_EXPIRED]", ts};
+    if (resp.json.value("status").toString() != "success")
+        return {false, std::nullopt, checked_error(resp, "Margin calculation failed"), ts};
+
+    const auto data = resp.json.value("data").toObject();
+
+    OrderMargin m;
+    m.symbol = order.symbol;
+    m.exchange = order.exchange;
+    m.side = order.side == OrderSide::Buy ? "BUY" : "SELL";
+    m.quantity = order.quantity;
+    m.price = order.price;
+    m.total = data.value("required_margin").toDouble();
+
+    // Aggregate SPAN / Exposure across instrument breakdown entries.
+    double span = 0.0, exposure = 0.0;
+    for (const auto& v : data.value("margins").toArray()) {
+        const auto mo = v.toObject();
+        span += mo.value("span_margin").toDouble();
+        exposure += mo.value("exposure_margin").toDouble();
+    }
+    m.var_margin = span;       // SPAN (F&O); 0 for cash
+    m.elm = exposure;          // Exposure margin
+    m.cash = m.total - span - exposure;
+    if (m.cash < 0.0)
+        m.cash = 0.0;
+
+    const double notional = order.price * order.quantity;
+    if (m.total > 0.0 && notional > 0.0)
+        m.leverage = notional / m.total;
+    return {true, m, "", ts};
+}
+
 } // namespace fincept::trading

@@ -856,6 +856,116 @@ ApiResponse<QVector<BrokerCandle>> GrowwBroker::get_history(const BrokerCredenti
 }
 
 // ============================================================================
+// Batch multi-quotes — get_multi_quotes
+// Uses the existing batch helpers (fetch_ltp_batch + fetch_ohlc_batch) which
+// call /v1/live-data/ltp and /v1/live-data/ohlc (max 50 per call per segment).
+// ============================================================================
+
+ApiResponse<QVector<BrokerQuote>> GrowwBroker::get_multi_quotes(
+    const BrokerCredentials& creds,
+    const QVector<QPair<QString, QString>>& symbols) {
+    int64_t ts = now_ts();
+
+    if (symbols.isEmpty())
+        return {false, std::nullopt, "No symbols", ts};
+
+    // Convert QPair<symbol,exchange> to SymbolRef, using the exchange from the pair.
+    // Group by segment for batching.
+    QMap<QString, QVector<SymbolRef>> by_segment;
+    for (const auto& [sym, exch] : symbols) {
+        SymbolRef ref;
+        ref.orig = sym;
+        ref.exchange = exch.isEmpty() ? QStringLiteral("NSE") : exch;
+        ref.trading_symbol = sym;
+        // If sym has "NSE:RELIANCE" format, split it
+        const int colon = sym.indexOf(':');
+        if (colon != -1) {
+            ref.exchange = sym.left(colon);
+            ref.trading_symbol = sym.mid(colon + 1);
+        } else if (!exch.isEmpty()) {
+            ref.exchange = exch;
+        }
+        ref.segment = groww_segment(ref.exchange);
+        ref.exchange_symbol = groww_exchange(ref.exchange) + "_" + ref.trading_symbol;
+        by_segment[ref.segment].append(ref);
+    }
+
+    QVector<BrokerQuote> quotes;
+    for (auto it = by_segment.constBegin(); it != by_segment.constEnd(); ++it) {
+        if (!fetch_ltp_batch(creds, it.key(), it.value(), quotes))
+            continue; // best-effort — partial batch still returns what succeeded
+        fetch_ohlc_batch(creds, it.key(), it.value(), quotes);
+    }
+
+    return {true, quotes, "", ts};
+}
+
+// ============================================================================
+// Market depth — GET /v1/live-data/quote includes bid/ask depth
+// The /quote endpoint returns: payload.depth.buy[] and payload.depth.sell[]
+// Each level: { price, quantity, orders }
+// ============================================================================
+
+ApiResponse<MarketDepth> GrowwBroker::get_market_depth(
+    const BrokerCredentials& creds,
+    const QString& symbol, const QString& exchange) {
+    int64_t ts = now_ts();
+    auto hdrs = auth_headers(creds);
+
+    QString exch = exchange.isEmpty() ? QStringLiteral("NSE") : exchange;
+    QString trading_symbol = symbol;
+    const int colon = symbol.indexOf(':');
+    if (colon != -1) {
+        exch = symbol.left(colon);
+        trading_symbol = symbol.mid(colon + 1);
+    }
+
+    QString url = QString("https://api.groww.in/v1/live-data/quote"
+                          "?exchange=%1&segment=%2&trading_symbol=%3")
+                      .arg(groww_exchange(exch), groww_segment(exch), trading_symbol);
+    auto resp = BrokerHttp::instance().get(url, hdrs);
+
+    if (!resp.success)
+        return {false, std::nullopt, checked_error(resp, "Network error"), ts};
+    if (is_token_expired(resp))
+        return {false, std::nullopt, "[TOKEN_EXPIRED]", ts};
+
+    QJsonObject payload = resp.json["payload"].toObject();
+
+    MarketDepth depth;
+    depth.symbol = symbol;
+    depth.exchange = exch;
+    depth.ltp = payload["last_price"].toDouble();
+    depth.volume = payload["volume"].toDouble();
+    depth.oi = payload["oi"].toDouble();
+
+    // Parse depth levels — Groww returns { depth: { buy: [...], sell: [...] } }
+    QJsonObject depth_obj = payload["depth"].toObject();
+    QJsonArray buy_levels = depth_obj["buy"].toArray();
+    QJsonArray sell_levels = depth_obj["sell"].toArray();
+
+    for (const auto& v : buy_levels) {
+        QJsonObject lvl = v.toObject();
+        DepthLevel dl;
+        dl.price = lvl["price"].toDouble();
+        dl.quantity = lvl["quantity"].toInt();
+        dl.orders = lvl["orders"].toInt();
+        depth.bids.append(dl);
+    }
+
+    for (const auto& v : sell_levels) {
+        QJsonObject lvl = v.toObject();
+        DepthLevel dl;
+        dl.price = lvl["price"].toDouble();
+        dl.quantity = lvl["quantity"].toInt();
+        dl.orders = lvl["orders"].toInt();
+        depth.asks.append(dl);
+    }
+
+    return {true, depth, "", ts};
+}
+
+// ============================================================================
 // Pre-trade margin calculator  — POST /v1/margins/detail/orders?segment=...
 // ============================================================================
 
