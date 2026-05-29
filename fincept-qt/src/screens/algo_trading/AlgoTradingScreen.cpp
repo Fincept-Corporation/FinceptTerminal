@@ -95,11 +95,6 @@ QWidget* AlgoTradingScreen::build_top_bar() {
                              .arg(ui::colors::TEXT_PRIMARY()));
     hl->addWidget(title);
 
-    auto* subtitle = new QLabel("strategy builder · backtesting · live deployment", bar);
-    subtitle->setStyleSheet(
-        QString("color:%1; font-size:10px; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
-    hl->addWidget(subtitle);
-
     auto* div = new QWidget(bar);
     div->setFixedSize(1, 20);
     div->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));

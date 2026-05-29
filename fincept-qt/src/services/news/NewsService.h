@@ -16,6 +16,7 @@ class QWebSocket;
 #include <atomic>
 #include <cstdint>
 #include <functional>
+#include <optional>
 
 namespace fincept::services {
 
@@ -163,6 +164,11 @@ class NewsService : public QObject
 
     void fetch_all_news(bool force, ArticlesCallback cb);
     void analyze_article(const QString& url, AnalysisCallback cb);
+
+    /// Load a previously-persisted analysis for an article URL, if one exists.
+    /// Lets the detail panel re-show a prior ANALYZE result on reopen without
+    /// hitting the network. Returns nullopt when nothing is cached.
+    std::optional<NewsAnalysis> cached_analysis(const QString& url);
 
     /// Summarize top N headlines via AI. Cached for 10 min per headline signature.
     void summarize_headlines(const QVector<NewsArticle>& articles, int count, SummaryCallback cb);

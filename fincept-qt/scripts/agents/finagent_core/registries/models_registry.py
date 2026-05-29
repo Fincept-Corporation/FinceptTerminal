@@ -458,6 +458,25 @@ class ModelsRegistry:
                 if v is not None:
                     model_kwargs[k] = v
 
+            # Agno's OpenAI-protocol models default their role_map to
+            # {"system": "developer", ...}, which is ONLY valid for OpenAI's
+            # o-series reasoning models. Standard gpt-* models and every
+            # OpenAI-compatible endpoint (MiniMax, DeepSeek, OpenRouter, Groq,
+            # Together, etc.) reject it with "invalid role: developer". Force the
+            # standard role map for every OpenAI-protocol model except genuine
+            # o-series ids.
+            if "openai" in class_path.lower() and "role_map" not in model_kwargs:
+                _mid = (final_model_id or "").lower()
+                _is_o_series = _mid.startswith(("o1", "o3", "o4"))
+                if not _is_o_series:
+                    model_kwargs["role_map"] = {
+                        "system": "system",
+                        "user": "user",
+                        "assistant": "assistant",
+                        "tool": "tool",
+                        "model": "assistant",
+                    }
+
             model_instance = model_class(**model_kwargs)
             logger.debug(f"Created model: {provider}/{final_model_id}")
 

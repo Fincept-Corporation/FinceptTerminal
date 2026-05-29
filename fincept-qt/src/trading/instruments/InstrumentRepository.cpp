@@ -120,6 +120,8 @@ std::optional<Instrument> InstrumentRepository::find_by_brsymbol(const QString& 
 QVector<Instrument> InstrumentRepository::search(const QString& query, const QString& exchange,
                                                  const QString& broker_id, int limit) const {
     QString pattern = "%" + query.toUpper() + "%";
+    // Exchange is stored upper-case; normalise the filter so "nse" matches. Empty = any.
+    const QString exch = exchange.toUpper();
     QString sql = "SELECT instrument_token, exchange_token, symbol, brsymbol, name, exchange, brexchange, "
                   "expiry, strike, lot_size, instrument_type, tick_size, broker_id "
                   "FROM instruments "
@@ -129,7 +131,7 @@ QVector<Instrument> InstrumentRepository::search(const QString& query, const QSt
                   "ORDER BY CASE instrument_type "
                   "  WHEN 'EQ' THEN 0 WHEN 'INDEX' THEN 1 WHEN 'FUT' THEN 2 ELSE 3 END, symbol "
                   "LIMIT ?";
-    auto r = db().execute(sql, {broker_id, exchange, exchange, pattern, pattern, pattern, limit});
+    auto r = db().execute(sql, {broker_id, exch, exch, pattern, pattern, pattern, limit});
     if (r.is_err())
         return {};
     QVector<Instrument> results;
@@ -166,6 +168,18 @@ int InstrumentRepository::count(const QString& broker_id) const {
         return 0;
     auto& q = r.value();
     return q.next() ? q.value(0).toInt() : 0;
+}
+
+QDateTime InstrumentRepository::last_updated(const QString& broker_id) const {
+    auto r = db().execute("SELECT MAX(updated_at) FROM instruments WHERE broker_id = ?", {broker_id});
+    if (r.is_err())
+        return {};
+    auto& q = r.value();
+    if (!q.next() || q.value(0).isNull())
+        return {};
+    QDateTime dt = QDateTime::fromString(q.value(0).toString(), "yyyy-MM-dd HH:mm:ss");
+    dt.setTimeSpec(Qt::UTC); // updated_at is written as datetime('now') (UTC)
+    return dt;
 }
 
 } // namespace fincept::trading

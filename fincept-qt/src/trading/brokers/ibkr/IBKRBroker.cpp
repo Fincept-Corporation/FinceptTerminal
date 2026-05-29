@@ -5,6 +5,10 @@
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QTimeZone>
+
+#include <algorithm>
+#include <limits>
 
 namespace fincept::trading {
 
@@ -88,7 +92,18 @@ IBKRBroker::HistoryParams IBKRBroker::ibkr_history_params(const QString& resolut
             period = "5y";
     }
 
-    return {bar, period};
+    // Derive startTime from to_date. IBKR anchors the END of the returned window
+    // at startTime (UTC, "YYYYMMDD-HH:mm:ss") and extends backward over `period`.
+    // Use end-of-day UTC so the requested to_date is fully included.
+    // If to_date is empty/invalid, leave start_time empty to preserve the
+    // default "most recent" behavior.
+    QString start_time;
+    if (to.isValid()) {
+        QDateTime end_of_day(to, QTime(23, 59, 59), QTimeZone::UTC);
+        start_time = end_of_day.toString("yyyyMMdd-HH:mm:ss");
+    }
+
+    return {bar, period, start_time};
 }
 
 bool IBKRBroker::is_token_expired(const BrokerHttpResponse& resp) {
@@ -555,39 +570,116 @@ ApiResponse<QVector<BrokerCandle>> IBKRBroker::get_history(const BrokerCredentia
 
     auto params = ibkr_history_params(resolution, from_date, to_date);
 
-    QString url = gw + "/v1/api/iserver/marketdata/history?conid=" + conid + "&period=" + params.period +
-                  "&bar=" + params.bar + "&outsideRth=false";
-
     auto& http = BrokerHttp::instance();
-    auto resp = http.get(url, auth_headers(creds));
+    auto headers = auth_headers(creds);
 
-    if (!resp.success)
-        return {false, std::nullopt, checked_error(resp, "get_history failed"), ts};
+    // Single fetch+parse for one window ending at `start_time` (UTC "YYYYMMDD-HH:mm:ss").
+    // An empty `start_time` preserves the gateway's default "most recent" window.
+    // `ok` distinguishes a transport/gateway failure from a successful empty page.
+    struct PageResult {
+        bool ok = false;
+        QString error;
+        QVector<BrokerCandle> candles;
+    };
+    auto fetch_page = [&](const QString& start_time) -> PageResult {
+        QString url = gw + "/v1/api/iserver/marketdata/history?conid=" + conid + "&period=" + params.period +
+                      "&bar=" + params.bar + "&outsideRth=false";
 
-    QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
-    if (!doc.isObject())
-        return {false, std::nullopt, "get_history: invalid response", ts};
+        // Anchor the END of the returned window at this page's start_time when provided.
+        if (!start_time.isEmpty())
+            url += "&startTime=" + start_time;
 
-    QJsonObject obj = doc.object();
-    if (!obj.value("error").toString().isEmpty())
-        return {false, std::nullopt, obj.value("error").toString(), ts};
+        auto resp = http.get(url, headers);
+        if (!resp.success)
+            return {false, checked_error(resp, "get_history failed"), {}};
 
-    // Response: {data: [{t, o, h, l, c, v}, ...]}
-    QJsonArray arr = obj.value("data").toArray();
-    QVector<BrokerCandle> candles;
-    candles.reserve(arr.size());
+        QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
+        if (!doc.isObject())
+            return {false, "get_history: invalid response", {}};
 
-    for (const QJsonValue& v : arr) {
-        QJsonObject o = v.toObject();
-        BrokerCandle c;
-        // t is epoch milliseconds
-        c.timestamp = static_cast<int64_t>(o.value("t").toDouble());
-        c.open = o.value("o").toDouble();
-        c.high = o.value("h").toDouble();
-        c.low = o.value("l").toDouble();
-        c.close = o.value("c").toDouble();
-        c.volume = static_cast<int64_t>(o.value("v").toDouble());
-        candles.append(c);
+        QJsonObject obj = doc.object();
+        if (!obj.value("error").toString().isEmpty())
+            return {false, obj.value("error").toString(), {}};
+
+        // Response: {data: [{t, o, h, l, c, v}, ...]}
+        QJsonArray arr = obj.value("data").toArray();
+        QVector<BrokerCandle> page;
+        page.reserve(arr.size());
+        for (const QJsonValue& v : arr) {
+            QJsonObject o = v.toObject();
+            BrokerCandle c;
+            // t is epoch milliseconds
+            c.timestamp = static_cast<int64_t>(o.value("t").toDouble());
+            c.open = o.value("o").toDouble();
+            c.high = o.value("h").toDouble();
+            c.low = o.value("l").toDouble();
+            c.close = o.value("c").toDouble();
+            c.volume = static_cast<int64_t>(o.value("v").toDouble());
+            page.append(c);
+        }
+        return {true, "", page};
+    };
+
+    // ---- First request: ends at startTime=to_date, covers `period` (unchanged single-call). ----
+    PageResult first = fetch_page(params.start_time);
+    if (!first.ok)
+        return {false, std::nullopt, first.error, ts};
+
+    QVector<BrokerCandle> candles = first.candles;
+
+    // ---- Backward paging for long fine-grained ranges ----
+    // IBKR returns at most ~1000 bars per request. If the first page is full AND its
+    // oldest bar is still newer than from_date, walk backward by re-anchoring startTime
+    // just before the oldest bar until we reach from_date / run out of data / hit the cap.
+    // Only engage when both dates are valid (otherwise keep single-request behavior).
+    constexpr int kFullPage = 1000;       // page size at/above which more data may exist
+    constexpr int kMaxIterations = 30;    // safety cap on extra requests
+
+    QDate from_d = QDate::fromString(from_date, "yyyy-MM-dd");
+    QDate to_d = QDate::fromString(to_date, "yyyy-MM-dd");
+    if (from_d.isValid() && to_d.isValid()) {
+        // from_date lower bound in epoch milliseconds (start-of-day UTC) to match bar timestamps.
+        const int64_t from_ms =
+            QDateTime(from_d, QTime(0, 0, 0), QTimeZone::UTC).toMSecsSinceEpoch();
+
+        auto oldest_ms = [](const QVector<BrokerCandle>& page) -> int64_t {
+            int64_t m = std::numeric_limits<int64_t>::max();
+            for (const auto& c : page)
+                m = std::min(m, c.timestamp);
+            return m;
+        };
+
+        QVector<BrokerCandle> page = first.candles;
+        int iterations = 0;
+        while (!page.isEmpty() && page.size() >= kFullPage && iterations < kMaxIterations) {
+            int64_t oldest = oldest_ms(page);
+            if (oldest <= from_ms)
+                break; // reached the requested start of the range
+
+            // Re-anchor: end the next window one second before the oldest bar (UTC).
+            QDateTime anchor = QDateTime::fromMSecsSinceEpoch(oldest, QTimeZone::UTC).addSecs(-1);
+            PageResult next = fetch_page(anchor.toString("yyyyMMdd-HH:mm:ss"));
+            if (!next.ok)
+                break; // later-page failure: stop and keep what we collected
+            if (next.candles.isEmpty())
+                break; // no more data
+
+            candles += next.candles;
+            page = next.candles;
+            ++iterations;
+        }
+
+        // Merge: sort ascending, dedupe identical timestamps, drop bars older than from_date.
+        std::sort(candles.begin(), candles.end(),
+                  [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp < b.timestamp; });
+        candles.erase(std::unique(candles.begin(), candles.end(),
+                                  [](const BrokerCandle& a, const BrokerCandle& b) {
+                                      return a.timestamp == b.timestamp;
+                                  }),
+                      candles.end());
+        candles.erase(std::remove_if(candles.begin(), candles.end(),
+                                     [from_ms](const BrokerCandle& c) { return c.timestamp < from_ms; }),
+                      candles.end());
     }
 
     return {true, candles, "", ts};

@@ -8,8 +8,11 @@
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QJsonArray>
+#include <QSet>
 #include <QUrl>
 #include <QUrlQuery>
+
+#include <algorithm>
 
 namespace fincept::trading {
 
@@ -425,7 +428,7 @@ ApiResponse<QVector<BrokerCandle>> FyersBroker::get_history(const BrokerCredenti
     // Map chart timeframes to Fyers resolution codes
     static const QHash<QString, QString> tf_map = {
         {"1m", "1"}, {"5m", "5"}, {"15m", "15"}, {"30m", "30"},
-        {"1h", "60"}, {"1d", "D"}, {"1w", "W"},
+        {"1h", "60"}, {"1d", "D"}, {"1w", "1W"},
     };
     const QString fyers_res = tf_map.value(resolution, resolution);
 
@@ -433,32 +436,102 @@ ApiResponse<QVector<BrokerCandle>> FyersBroker::get_history(const BrokerCredenti
     const QString from = from_date.left(10);
     const QString to = to_date.left(10);
 
-    QString url = QString("%1/data/history?symbol=%2&resolution=%3&date_format=1&range_from=%4&range_to=%5&cont_flag=1")
-                      .arg(base_url(), to_fyers_sym(symbol), fyers_res, from, to);
-
-    auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
     int64_t ts = now_ts();
-    if (!resp.success)
-        return {false, std::nullopt, fyers_check_auth(resp, resp.error), ts};
-    if (resp.json.value("s").toString() != "ok")
-        return {false, std::nullopt, fyers_check_auth(resp, resp.json.value("message").toString("Failed")), ts};
 
-    QVector<BrokerCandle> candles;
-    auto arr = resp.json.value("candles").toArray();
-    for (const auto& v : arr) {
-        auto c = v.toArray();
-        if (c.size() < 6)
-            continue;
-        BrokerCandle candle;
-        // Fyers returns epoch in seconds; internal convention is milliseconds.
-        candle.timestamp = c[0].toVariant().toLongLong() * 1000;
-        candle.open = c[1].toDouble();
-        candle.high = c[2].toDouble();
-        candle.low = c[3].toDouble();
-        candle.close = c[4].toDouble();
-        candle.volume = c[5].toDouble();
-        candles.append(candle);
+    // Fyers /data/history caps the date window per request. Daily/weekly/monthly
+    // resolutions allow up to 366 days; all intraday minute resolutions allow up
+    // to 100 days. Determine the cap from the resolved Fyers resolution code.
+    static const QSet<QString> daily_res = {"D", "1W", "1M"};
+    const int cap_days = daily_res.contains(fyers_res) ? 366 : 100;
+
+    const QString fyers_sym = to_fyers_sym(symbol);
+
+    // Fetch + parse a single window. Returns true on a successful response and
+    // appends parsed candles to `out`; on failure sets `err` and returns false.
+    auto fetch_window = [&](const QString& range_from, const QString& range_to,
+                            QVector<BrokerCandle>& out, QString& err) -> bool {
+        const QString url =
+            QString("%1/data/history?symbol=%2&resolution=%3&date_format=1&range_from=%4&range_to=%5&cont_flag=1")
+                .arg(base_url(), fyers_sym, fyers_res, range_from, range_to);
+
+        auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
+        if (!resp.success) {
+            err = fyers_check_auth(resp, resp.error);
+            return false;
+        }
+        if (resp.json.value("s").toString() != "ok") {
+            err = fyers_check_auth(resp, resp.json.value("message").toString("Failed"));
+            return false;
+        }
+
+        const auto arr = resp.json.value("candles").toArray();
+        for (const auto& v : arr) {
+            auto c = v.toArray();
+            if (c.size() < 6)
+                continue;
+            BrokerCandle candle;
+            // Fyers returns epoch in seconds; internal convention is milliseconds.
+            candle.timestamp = c[0].toVariant().toLongLong() * 1000;
+            candle.open = c[1].toDouble();
+            candle.high = c[2].toDouble();
+            candle.low = c[3].toDouble();
+            candle.close = c[4].toDouble();
+            candle.volume = c[5].toDouble();
+            out.append(candle);
+        }
+        return true;
+    };
+
+    const QDate from_d = QDate::fromString(from, "yyyy-MM-dd");
+    const QDate to_d = QDate::fromString(to, "yyyy-MM-dd");
+
+    // If parsing fails or the range fits in one window, preserve the original
+    // single-request behavior.
+    if (!from_d.isValid() || !to_d.isValid() || from_d.daysTo(to_d) <= cap_days) {
+        QVector<BrokerCandle> candles;
+        QString err;
+        if (!fetch_window(from, to, candles, err))
+            return {false, std::nullopt, err, ts};
+        return {true, candles, "", ts};
     }
+
+    // Range exceeds the cap: chunk into consecutive <=cap-day sub-windows.
+    QVector<BrokerCandle> candles;
+    QDate win_from = from_d;
+    constexpr int kMaxIterations = 60;
+    int iterations = 0;
+    bool first_window = true;
+    while (win_from <= to_d && iterations < kMaxIterations) {
+        ++iterations;
+        QDate win_to = win_from.addDays(cap_days);
+        if (win_to > to_d)
+            win_to = to_d;
+
+        QString err;
+        if (!fetch_window(win_from.toString("yyyy-MM-dd"), win_to.toString("yyyy-MM-dd"), candles, err)) {
+            // First-window failure surfaces the error as before. A later failure
+            // after we already collected data returns the partial result.
+            if (first_window)
+                return {false, std::nullopt, err, ts};
+            LOG_WARN("FyersBroker",
+                     QString("get_history: window fetch failed after partial data (%1); returning %2 candles")
+                         .arg(err).arg(candles.size()));
+            break;
+        }
+        first_window = false;
+        win_from = win_to.addDays(1);
+    }
+
+    // Sort ascending by timestamp and dedupe consecutive duplicate timestamps
+    // (overlapping window boundaries / repeated bars).
+    std::sort(candles.begin(), candles.end(),
+              [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp < b.timestamp; });
+    candles.erase(std::unique(candles.begin(), candles.end(),
+                              [](const BrokerCandle& a, const BrokerCandle& b) {
+                                  return a.timestamp == b.timestamp;
+                              }),
+                  candles.end());
+
     return {true, candles, "", ts};
 }
 

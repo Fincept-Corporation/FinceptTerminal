@@ -51,6 +51,9 @@ class PortfolioOptimizationView : public QWidget {
     void update_frontier(const QJsonArray& frontier_pts);
     void update_strategies(const QJsonObject& comparison);
     void update_compare(const QJsonObject& comparison);
+    void update_risk(const QJsonObject& root);
+    void update_stress();
+    void update_black_litterman(const QJsonObject& root);
 
     QTabWidget* tabs_ = nullptr;
     int optimize_tab_index_ = -1;
@@ -89,11 +92,17 @@ class PortfolioOptimizationView : public QWidget {
     QTableWidget* backtest_metrics_table_ = nullptr;
     QLabel* backtest_status_label_ = nullptr;
     QLabel* risk_title_ = nullptr;
-    QLabel* risk_body_ = nullptr;
+    QLabel* risk_body_ = nullptr; // placeholder (page 0 of risk_stack_)
+    QStackedWidget* risk_stack_ = nullptr;
+    QTableWidget* risk_table_ = nullptr;
     QLabel* stress_title_ = nullptr;
-    QLabel* stress_body_ = nullptr;
+    QLabel* stress_body_ = nullptr; // placeholder (page 0 of stress_stack_)
+    QStackedWidget* stress_stack_ = nullptr;
+    QTableWidget* stress_table_ = nullptr;
     QLabel* bl_title_ = nullptr;
-    QLabel* bl_body_ = nullptr;
+    QLabel* bl_body_ = nullptr; // explanatory note, kept above the B-L table
+    QStackedWidget* bl_stack_ = nullptr;
+    QTableWidget* bl_table_ = nullptr;
 
     // ── FRONTIER tab ──────────────────────────────────────────────────────────
     QStackedWidget* frontier_stack_ = nullptr; // 0=placeholder, 1=chart

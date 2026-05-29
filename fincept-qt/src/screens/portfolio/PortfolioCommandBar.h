@@ -21,7 +21,6 @@ class PortfolioCommandBar : public QWidget {
 
     void set_portfolios(const QVector<portfolio::Portfolio>& portfolios);
     void set_selected_portfolio(const portfolio::Portfolio& p);
-    void set_summary(const portfolio::PortfolioSummary& summary);
     void set_refreshing(bool refreshing);
     void set_detail_view(std::optional<portfolio::DetailView> view);
     void set_has_selection(bool has_selection);

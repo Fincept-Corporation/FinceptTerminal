@@ -156,6 +156,15 @@ void PortfolioScreen::build_ui() {
         blotter_->set_sector_filter(matching);
     });
 
+    // PlanningView "Optimize for this return" → jump to the Optimization sub-tab.
+    connect(detail_wrapper_, &PortfolioDetailWrapper::optimize_requested, this, [this](double /*target*/) {
+        active_detail_ = portfolio::DetailView::Optimization;
+        detail_wrapper_->show_view(portfolio::DetailView::Optimization, current_summary_,
+                                   current_summary_.portfolio.currency);
+        command_bar_->set_detail_view(active_detail_);
+        update_content_state();
+    });
+
     // FFN view
     ffn_view_ = new PortfolioFFNView(this);
     connect(ffn_view_, &PortfolioFFNView::back_requested, this, [this]() {
@@ -668,6 +677,10 @@ QWidget* PortfolioScreen::build_main_view() {
     });
     connect(positions_filter_edit_, &QLineEdit::textChanged, blotter_, &PortfolioBlotter::set_filter);
 
+    // Guarantee the positions table is tall enough to read several rows even on
+    // shorter windows (it still expands to fill the 60% stretch when space
+    // allows). The table itself shows a vertical scrollbar as-needed.
+    blotter_->setMinimumHeight(300);
     blotter_layout->addWidget(blotter_, 1);
 
     root_layout->addWidget(blotter_section, 60); // 60% of vertical space
@@ -676,12 +689,13 @@ QWidget* PortfolioScreen::build_main_view() {
     // Sits at the bottom of the main view, full-width. Defaults open at 140px;
     // user can collapse via the chevron in its header.
     txn_panel_ = new PortfolioTxnPanel;
-    txn_panel_->setFixedHeight(140);
+    txn_panel_->setFixedHeight(240);
     root_layout->addWidget(txn_panel_);
     connect(txn_panel_, &PortfolioTxnPanel::collapse_toggled, this, [this](bool collapsed) {
         // Header is 30px, table content is the rest. When collapsed, shrink
-        // to header height; when expanded, restore to 140px.
-        txn_panel_->setFixedHeight(collapsed ? 30 : 140);
+        // to header height; when expanded, restore to the full height (the
+        // table shows a vertical scrollbar as-needed for longer histories).
+        txn_panel_->setFixedHeight(collapsed ? 30 : 240);
     });
 
     // Order panel is a floating overlay (parented to PortfolioScreen, not in layout)

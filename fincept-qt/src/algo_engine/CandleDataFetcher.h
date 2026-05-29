@@ -8,6 +8,8 @@
 #include <QVector>
 #include <functional>
 
+class QNetworkAccessManager;
+
 namespace fincept::algo {
 
 enum class DataSource { Broker, YFinance, Auto };
@@ -51,11 +53,15 @@ private:
                            const QString& broker_id, const QString& account_id,
                            CandleCallback callback);
 
-    void fetch_from_yfinance(const QStringList& symbols, const QString& timeframe,
-                             int lookback_days, MultiCandleCallback callback);
+    // Native Yahoo Finance fetch (replaces the old Python yfinance fallback).
+    void fetch_from_yahoo(const QStringList& symbols, const QString& timeframe,
+                          int lookback_days, MultiCandleCallback callback);
 
-    static QVector<OhlcvCandle> broker_candles_to_ohlcv(const QVector<fincept::trading::BrokerCandle>& src);
+    static QVector<OhlcvCandle> broker_candles_to_ohlcv(const QVector<fincept::trading::BrokerCandle>& src,
+                                                        const QString& timeframe);
     static QString timeframe_to_broker_resolution(const QString& tf);
+
+    QNetworkAccessManager* yahoo_nam_ = nullptr; // lazy-created, browser UA for Yahoo
 };
 
 } // namespace fincept::algo

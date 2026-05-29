@@ -312,6 +312,8 @@ def main():
         "target return":     "target_return",
         "black_litterman":   "black_litterman",
         "b-l model":         "black_litterman",
+        "b_l_model":         "black_litterman",  # "B-L Model" → lower → replace(-,_)
+        "b-l_model":         "black_litterman",
     }
     raw_method = params.get("method", "max_sharpe").lower().replace("-", "_")
     strategy   = method_map.get(raw_method, raw_method)
@@ -368,6 +370,50 @@ def main():
         except Exception:
             pass
 
+    # ── Risk decomposition for the primary weights ────────────────────────────
+    # Marginal risk contribution MRC = (Σ·w)/σ_p ; risk contribution RC = w·MRC.
+    # Σ RC = σ_p, so RC%/asset = RC/σ_p. Reported as % of total portfolio risk.
+    risk_contributions = {}
+    marginal_risk = {}
+    asset_volatility = {}
+    try:
+        w_p = np.asarray(weights_arr, dtype=float)
+        sigma_p = float(np.sqrt(max(np.dot(w_p, np.dot(cov, w_p)), 0.0)))
+        cov_w = np.dot(cov, w_p)
+        mrc = cov_w / sigma_p if sigma_p > 1e-12 else np.zeros(n)
+        rc = w_p * mrc
+        diag = np.sqrt(np.clip(np.diag(cov), 0.0, None))
+        for i in range(n):
+            sym = available[i]
+            asset_volatility[sym] = float(diag[i])               # annualised vol
+            marginal_risk[sym] = float(mrc[i])
+            risk_contributions[sym] = float(rc[i] / sigma_p * 100.0) if sigma_p > 1e-12 else 0.0
+    except Exception:
+        pass
+
+    # ── Black-Litterman market-implied equilibrium returns ────────────────────
+    # π = δ · Σ · w_market, using the caller's current weights as the market
+    # proxy (falls back to equal weight). Lets the B-L tab show what returns the
+    # market is implicitly pricing in before any investor views are applied.
+    implied_returns = {}
+    try:
+        in_weights = params.get("weights", [])
+        w_mkt = np.zeros(n)
+        if isinstance(in_weights, list) and len(in_weights) == len(symbols):
+            wmap = {symbols[i]: float(in_weights[i]) for i in range(len(symbols))}
+            for i in range(n):
+                w_mkt[i] = wmap.get(available[i], 0.0)
+        if w_mkt.sum() <= 1e-9:
+            w_mkt = np.ones(n) / n
+        else:
+            w_mkt = w_mkt / w_mkt.sum()
+        delta = 2.5  # risk-aversion coefficient
+        pi = delta * np.dot(cov, w_mkt)
+        for i in range(n):
+            implied_returns[available[i]] = float(pi[i])
+    except Exception:
+        pass
+
     output = {
         "weights":                weights_dict,
         "expected_annual_return": primary["return"],
@@ -377,6 +423,10 @@ def main():
         "symbols":                available,
         "frontier":               frontier,
         "comparison":             comparison,
+        "risk_contributions":     risk_contributions,
+        "marginal_risk":          marginal_risk,
+        "asset_volatility":       asset_volatility,
+        "implied_returns":        implied_returns,
     }
 
     print(json.dumps(convert_numpy(output)))

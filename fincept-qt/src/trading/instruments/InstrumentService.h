@@ -26,8 +26,8 @@ namespace fincept::trading {
 ///   auto sym   = InstrumentService::instance().to_brsymbol("NIFTY28MAR24FUT", "NFO", "zerodha");
 ///
 /// Thread safety: refresh() runs on a QtConcurrent worker thread and posts results
-/// back to the UI thread via QMetaObject::invokeMethod. All cache reads are
-/// guarded by a QReadWriteLock (reads concurrent, writes exclusive on refresh).
+/// back to the UI thread via QMetaObject::invokeMethod. All cache reads and writes
+/// are guarded by a single QMutex (mutex_); reads and writes are mutually exclusive.
 class InstrumentService : public QObject {
     Q_OBJECT
   public:
@@ -52,6 +52,11 @@ class InstrumentService : public QObject {
     /// If broker already loaded, callback fires immediately with cached count.
     void load_from_db_async(const QString& broker_id,
                             std::function<void(int)> callback = nullptr);
+
+    /// Synchronous DB load safe to call from a QtConcurrent worker thread.
+    /// Opens a private named QSqlDatabase connection (does NOT touch the shared
+    /// main-thread connection). Blocks until the cache is built. No-op if loaded.
+    void load_from_db_worker(const QString& broker_id);
 
     // ── Lookups (synchronous, in-memory) ─────────────────────────────────────
 
@@ -142,6 +147,7 @@ class InstrumentService : public QObject {
     static QByteArray download_angel_master_json();
     static QByteArray download_groww_csv();
     static QByteArray download_fyers_json();
+    static QByteArray download_dhan_csv();
 };
 
 } // namespace fincept::trading

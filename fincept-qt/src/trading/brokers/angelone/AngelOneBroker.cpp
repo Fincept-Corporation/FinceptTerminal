@@ -14,12 +14,15 @@
 #include "trading/instruments/InstrumentService.h"
 
 #include <QCryptographicHash>
+#include <QDate>
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkInterface>
 #include <QRegularExpression>
+
+#include <algorithm>
 
 namespace fincept::trading {
 
@@ -933,42 +936,141 @@ ApiResponse<QVector<BrokerCandle>> AngelOneBroker::get_history(const BrokerCrede
     if (token.isEmpty())
         return {false, std::nullopt, "Symbol token not found for: " + symbol, ts};
 
-    QJsonObject payload{
-        {"exchange", exchange},  {"symboltoken", token}, {"interval", map_resolution(resolution)},
-        {"fromdate", from_date}, // "YYYY-MM-DD HH:MM"
-        {"todate", to_date},
+    // SmartAPI getCandleData requires fromdate/todate as "yyyy-MM-dd HH:mm".
+    // Pass through if already in that form; otherwise append session open/close
+    // to a bare "yyyy-MM-dd" date so Angel does not reject the request.
+    auto normalize_dt = [](const QString& s, const QString& def) -> QString {
+        if (QDateTime::fromString(s, "yyyy-MM-dd HH:mm").isValid())
+            return s;
+        QDate d = QDate::fromString(s, "yyyy-MM-dd");
+        if (d.isValid())
+            return d.toString("yyyy-MM-dd") + " " + def;
+        return s;
+    };
+    const QString from_norm = normalize_dt(from_date, "09:15");
+    const QString to_norm = normalize_dt(to_date, "15:30");
+
+    const QString interval = map_resolution(resolution);
+
+    // SmartAPI getCandleData caps the number of days per request, by interval.
+    // Larger ranges must be split into consecutive sub-windows and merged.
+    auto cap_days_for_interval = [](const QString& iv) -> int {
+        if (iv == "ONE_MINUTE")
+            return 30;
+        if (iv == "THREE_MINUTE")
+            return 60;
+        if (iv == "FIVE_MINUTE")
+            return 100;
+        if (iv == "TEN_MINUTE")
+            return 100;
+        if (iv == "FIFTEEN_MINUTE")
+            return 200;
+        if (iv == "THIRTY_MINUTE")
+            return 200;
+        if (iv == "ONE_HOUR")
+            return 400;
+        if (iv == "ONE_DAY")
+            return 2000;
+        return 2000;
+    };
+    const int cap_days = cap_days_for_interval(interval);
+
+    // POST + parse a single date window. `ok` reports request success so the
+    // caller can distinguish a first-window failure (hard error) from a later
+    // failure after data has already been collected (partial result).
+    auto fetch_window = [&](const QString& win_from, const QString& win_to, QVector<BrokerCandle>& out,
+                            bool& ok) -> QString {
+        QJsonObject payload{
+            {"exchange", exchange},   {"symboltoken", token}, {"interval", interval},
+            {"fromdate", win_from},   // "YYYY-MM-DD HH:MM"
+            {"todate", win_to},
+        };
+
+        auto resp = BrokerHttp::instance().post_json(BASE_AO + "/rest/secure/angelbroking/historical/v1/getCandleData",
+                                                     payload, auth_headers(creds));
+
+        if (!resp.success || !resp.json.value("status").toBool()) {
+            ok = false;
+            return checked_error(resp, "get_history failed");
+        }
+        ok = true;
+
+        // data is array of [timestamp, open, high, low, close, volume]
+        auto arr = resp.json.value("data").toArray();
+        for (const auto& v : arr) {
+            auto row = v.toArray();
+            if (row.size() < 6)
+                continue;
+            BrokerCandle c;
+            // AngelOne returns ISO 8601: "2025-03-03T00:00:00+05:30"
+            QString dt_str = row[0].toString();
+            QDateTime dt = QDateTime::fromString(dt_str, Qt::ISODate);
+            if (!dt.isValid())
+                dt = QDateTime::fromString(dt_str, "yyyy-MM-dd HH:mm");
+            if (!dt.isValid())
+                dt = QDateTime::fromString(dt_str, "yyyy-MM-ddTHH:mm:ss");
+            c.timestamp = dt.toMSecsSinceEpoch();
+            // AngelOne returns OHLCV as numbers (not strings)
+            c.open = row[1].toDouble();
+            c.high = row[2].toDouble();
+            c.low = row[3].toDouble();
+            c.close = row[4].toDouble();
+            c.volume = row[5].toDouble();
+            out.append(c);
+        }
+        return {};
     };
 
-    auto resp = BrokerHttp::instance().post_json(BASE_AO + "/rest/secure/angelbroking/historical/v1/getCandleData",
-                                                 payload, auth_headers(creds));
+    // Parse the normalized bounds back to QDateTime to measure the span. If
+    // either fails to parse, fall back to the original single-request behavior.
+    const QDateTime from_dt = QDateTime::fromString(from_norm, "yyyy-MM-dd HH:mm");
+    const QDateTime to_dt = QDateTime::fromString(to_norm, "yyyy-MM-dd HH:mm");
+    const bool bounds_ok = from_dt.isValid() && to_dt.isValid() && from_dt <= to_dt;
+    const qint64 span_days = bounds_ok ? from_dt.date().daysTo(to_dt.date()) : 0;
 
-    if (!resp.success || !resp.json.value("status").toBool())
-        return {false, std::nullopt, checked_error(resp, "get_history failed"), ts};
-
-    // data is array of [timestamp, open, high, low, close, volume]
     QVector<BrokerCandle> candles;
-    auto arr = resp.json.value("data").toArray();
-    for (const auto& v : arr) {
-        auto row = v.toArray();
-        if (row.size() < 6)
-            continue;
-        BrokerCandle c;
-        // AngelOne returns ISO 8601: "2025-03-03T00:00:00+05:30"
-        QString dt_str = row[0].toString();
-        QDateTime dt = QDateTime::fromString(dt_str, Qt::ISODate);
-        if (!dt.isValid())
-            dt = QDateTime::fromString(dt_str, "yyyy-MM-dd HH:mm");
-        if (!dt.isValid())
-            dt = QDateTime::fromString(dt_str, "yyyy-MM-ddTHH:mm:ss");
-        c.timestamp = dt.toMSecsSinceEpoch();
-        // AngelOne returns OHLCV as numbers (not strings)
-        c.open = row[1].toDouble();
-        c.high = row[2].toDouble();
-        c.low = row[3].toDouble();
-        c.close = row[4].toDouble();
-        c.volume = row[5].toDouble();
-        candles.append(c);
+
+    if (!bounds_ok || span_days <= cap_days) {
+        // Single request — identical to the original behavior.
+        bool ok = false;
+        QString err = fetch_window(from_norm, to_norm, candles, ok);
+        if (!ok)
+            return {false, std::nullopt, err, ts};
+        return {true, candles, "", ts};
     }
+
+    // Chunked: walk consecutive <=cap-day windows from `from_dt` to `to_dt`.
+    constexpr int MAX_ITERATIONS = 60;
+    QDateTime win_start = from_dt;
+    bool any_data = false;
+    for (int iter = 0; iter < MAX_ITERATIONS && win_start <= to_dt; ++iter) {
+        QDateTime win_end = win_start.addDays(cap_days);
+        if (win_end > to_dt)
+            win_end = to_dt;
+
+        bool ok = false;
+        QString err =
+            fetch_window(win_start.toString("yyyy-MM-dd HH:mm"), win_end.toString("yyyy-MM-dd HH:mm"), candles, ok);
+        if (!ok) {
+            if (!any_data)
+                return {false, std::nullopt, err, ts}; // first-window failure → hard error
+            break;                                     // later failure → return what we have
+        }
+        any_data = true;
+
+        if (win_end >= to_dt)
+            break;
+        // Advance one day past this window's end to avoid re-requesting the boundary day.
+        win_start = win_end.addDays(1);
+    }
+
+    // Sort ascending by timestamp and drop duplicate timestamps from window overlap.
+    std::sort(candles.begin(), candles.end(),
+              [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp < b.timestamp; });
+    candles.erase(std::unique(candles.begin(), candles.end(),
+                              [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp == b.timestamp; }),
+                  candles.end());
+
     return {true, candles, "", ts};
 }
 

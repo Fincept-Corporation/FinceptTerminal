@@ -64,9 +64,14 @@ void PortfolioAnalyticsService::run_ffn(const QStringList& symbols,
 void PortfolioAnalyticsService::run_script(const QString& script,
                                            const QString& args_json,
                                            AnalyticsCallback cb) {
+    // PythonRunner::run() resolves scripts_dir/<name> verbatim — the name must
+    // include the ".py" extension (as e.g. the yfinance_data.py daemon path
+    // does). These analytics callers pass the bare stem, so normalise here;
+    // otherwise the existence check fails with "Script not found".
+    const QString script_file = script.endsWith(QLatin1String(".py")) ? script : script + ".py";
     fincept::python::PythonRunner::instance().run(
-        script, {args_json},
-        [cb = std::move(cb), script](const fincept::python::PythonResult& result) {
+        script_file, {args_json},
+        [cb = std::move(cb), script = script_file](const fincept::python::PythonResult& result) {
             AnalyticsResult out;
             if (!result.success || result.output.trimmed().isEmpty()) {
                 out.error = result.error.isEmpty()

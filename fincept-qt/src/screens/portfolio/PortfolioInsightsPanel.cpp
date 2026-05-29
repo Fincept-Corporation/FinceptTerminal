@@ -4,6 +4,7 @@
 #include "services/llm/LlmService.h"
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
+#include "storage/repositories/SettingsRepository.h"
 #include "ui/markdown/MarkdownRenderer.h"
 #include "ui/theme/Theme.h"
 
@@ -31,6 +32,9 @@ namespace {
 QString fmt_now() {
     return QDateTime::currentDateTime().toString("HH:mm:ss");
 }
+
+// SettingsRepository category under which AI/agent results are persisted.
+constexpr const char* kInsightsCategory = "portfolio_insights";
 
 // Markdown rendering is delegated to ui::MarkdownRenderer — the same path used
 // by AgentChatPanel and AI Chat so portfolio responses look consistent.
@@ -62,7 +66,10 @@ PortfolioInsightsPanel::PortfolioInsightsPanel(QWidget* parent) : QWidget(parent
         header_status_->clear();
         if (r.success && !r.response.isEmpty()) {
             ai_cache_.insert(type, r.response);
-            ai_meta_->setText(tr("Last run %1  •  %2ms").arg(fmt_now()).arg(r.execution_time_ms));
+            const QString meta = tr("Last run %1  •  %2ms").arg(fmt_now()).arg(r.execution_time_ms);
+            ai_meta_cache_.insert(type, meta);
+            ai_meta_->setText(meta);
+            persist_ai_result(type, r.response, meta);
             render_result(ai_content_, r.response);
             QString upper = type.toUpper();
             if (upper == "OPPORTUNITIES")
@@ -118,7 +125,10 @@ PortfolioInsightsPanel::PortfolioInsightsPanel(QWidget* parent) : QWidget(parent
 
                 if (r.success && !final_text.isEmpty()) {
                     agent_cache_.insert(agent_id, final_text);
-                    agent_meta_->setText(tr("Last run %1  •  %2ms").arg(fmt_now()).arg(r.execution_time_ms));
+                    const QString meta = tr("Last run %1  •  %2ms").arg(fmt_now()).arg(r.execution_time_ms);
+                    agent_meta_cache_.insert(agent_id, meta);
+                    agent_meta_->setText(meta);
+                    persist_agent_result(agent_id, final_text, meta);
                     render_result(agent_content_, final_text);
                     agent_run_->setText(tr("RE-RUN AGENT"));
                 } else if (r.success) {
@@ -367,10 +377,19 @@ QWidget* PortfolioInsightsPanel::build_agent_page() {
             return;
         agent_desc_->setText(agent_cb_->currentData(Qt::UserRole + 1).toString());
         QString id = agent_cb_->currentData().toString();
-        if (agent_cache_.contains(id))
+        if (agent_cache_.contains(id)) {
             render_result(agent_content_, agent_cache_.value(id));
-        else
+            if (agent_meta_)
+                agent_meta_->setText(agent_meta_cache_.value(id));
+            if (agent_run_)
+                agent_run_->setText(tr("RE-RUN AGENT"));
+        } else {
             render_empty(agent_content_, tr("Press RUN to analyze your portfolio with this agent."));
+            if (agent_meta_)
+                agent_meta_->clear();
+            if (agent_run_)
+                agent_run_->setText(tr("RUN AGENT"));
+        }
     });
     cl->addWidget(agent_cb_);
 
@@ -407,16 +426,99 @@ QWidget* PortfolioInsightsPanel::build_agent_page() {
 }
 
 void PortfolioInsightsPanel::set_summary(const portfolio::PortfolioSummary& summary) {
-    if (summary.portfolio.id != last_portfolio_id_) {
-        ai_cache_.clear();
-        agent_cache_.clear();
-        if (ai_content_)
-            render_empty(ai_content_, tr("Select an analysis type and press RUN."));
-        if (agent_content_)
-            render_empty(agent_content_, tr("Load a saved agent above and press RUN."));
-        last_portfolio_id_ = summary.portfolio.id;
-    }
     summary_ = summary;
+    // Reload only when the portfolio actually changes (or on first show, when
+    // last_portfolio_id_ is empty — e.g. a freshly-recreated panel after the
+    // user navigated away and back). Same-portfolio re-entry keeps the live
+    // in-memory caches untouched.
+    if (summary.portfolio.id != last_portfolio_id_) {
+        last_portfolio_id_ = summary.portfolio.id;
+        load_persisted_results(summary.portfolio.id); // clears + repopulates caches from disk
+        // Re-render whatever was previously run for this portfolio so switching
+        // away and back (or restarting the app) shows the saved results.
+        set_ai_type(ai_type_);
+        restore_agent_view();
+    }
+}
+
+void PortfolioInsightsPanel::persist_ai_result(const QString& type, const QString& response, const QString& meta) {
+    if (summary_.portfolio.id.isEmpty())
+        return;
+    QJsonObject o;
+    o["r"] = response;
+    o["m"] = meta;
+    SettingsRepository::instance().set(
+        QString("pi.ai.%1.%2").arg(summary_.portfolio.id, type),
+        QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact)), kInsightsCategory);
+}
+
+void PortfolioInsightsPanel::persist_agent_result(const QString& agent_id, const QString& response,
+                                                  const QString& meta) {
+    if (summary_.portfolio.id.isEmpty() || agent_id.isEmpty())
+        return;
+    QJsonObject o;
+    o["r"] = response;
+    o["m"] = meta;
+    SettingsRepository::instance().set(
+        QString("pi.agent.%1.%2").arg(summary_.portfolio.id, agent_id),
+        QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact)), kInsightsCategory);
+}
+
+void PortfolioInsightsPanel::load_persisted_results(const QString& portfolio_id) {
+    ai_cache_.clear();
+    agent_cache_.clear();
+    ai_meta_cache_.clear();
+    agent_meta_cache_.clear();
+    if (portfolio_id.isEmpty())
+        return;
+
+    auto r = SettingsRepository::instance().get_by_category(kInsightsCategory);
+    if (r.is_err())
+        return;
+
+    const QString ai_prefix = QString("pi.ai.%1.").arg(portfolio_id);
+    const QString agent_prefix = QString("pi.agent.%1.").arg(portfolio_id);
+    for (const auto& s : r.value()) {
+        QString resp, meta;
+        QJsonParseError err;
+        const auto doc = QJsonDocument::fromJson(s.value.toUtf8(), &err);
+        if (err.error == QJsonParseError::NoError && doc.isObject()) {
+            resp = doc.object().value("r").toString();
+            meta = doc.object().value("m").toString();
+        } else {
+            resp = s.value; // legacy/plain value
+        }
+        if (resp.isEmpty())
+            continue;
+        if (s.key.startsWith(ai_prefix)) {
+            const QString type = s.key.mid(ai_prefix.size());
+            ai_cache_.insert(type, resp);
+            ai_meta_cache_.insert(type, meta);
+        } else if (s.key.startsWith(agent_prefix)) {
+            const QString aid = s.key.mid(agent_prefix.size());
+            agent_cache_.insert(aid, resp);
+            agent_meta_cache_.insert(aid, meta);
+        }
+    }
+}
+
+void PortfolioInsightsPanel::restore_agent_view() {
+    if (!agent_cb_ || !agent_content_)
+        return;
+    const QString aid = agent_cb_->currentData().toString();
+    if (!aid.isEmpty() && agent_cache_.contains(aid)) {
+        render_result(agent_content_, agent_cache_.value(aid));
+        if (agent_meta_)
+            agent_meta_->setText(agent_meta_cache_.value(aid));
+        if (agent_run_)
+            agent_run_->setText(tr("RE-RUN AGENT"));
+    } else {
+        render_empty(agent_content_, tr("Press RUN to analyze your portfolio with this agent."));
+        if (agent_meta_)
+            agent_meta_->clear();
+        if (agent_run_)
+            agent_run_->setText(tr("RUN AGENT"));
+    }
 }
 
 void PortfolioInsightsPanel::open_tab(Tab tab) {
@@ -463,10 +565,15 @@ void PortfolioInsightsPanel::set_ai_type(const QString& type) {
     ai_run_->setText(ai_cache_.contains(type) ? tr("RE-RUN %1 ANALYSIS").arg(upper)
                                               : tr("RUN %1 ANALYSIS").arg(upper));
 
-    if (ai_cache_.contains(type))
+    if (ai_cache_.contains(type)) {
         render_result(ai_content_, ai_cache_.value(type));
-    else
+        if (ai_meta_)
+            ai_meta_->setText(ai_meta_cache_.value(type));
+    } else {
         render_empty(ai_content_, tr("Press RUN to start this analysis."));
+        if (ai_meta_)
+            ai_meta_->clear();
+    }
 }
 
 void PortfolioInsightsPanel::reload_agents() {

@@ -13,6 +13,7 @@
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
 #include "storage/cache/CacheManager.h"
+#include "storage/repositories/NewsArticleRepository.h"
 
 #    include "datahub/DataHub.h"
 #    include "datahub/DataHubMetaTypes.h"
@@ -370,13 +371,81 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
 
 // ── AI Analysis via Fincept API ─────────────────────────────────────────────
 
+// Parse the `data` object of a /news/analyze response into a NewsAnalysis.
+// Shared by the live request path and the persisted-cache load path so both
+// stay in lockstep.
+static NewsAnalysis parse_analysis_data(const QJsonObject& data) {
+    auto a = data["analysis"].toObject();
+    auto sent = a["sentiment"].toObject();
+    auto mi = a["market_impact"].toObject();
+    auto rs = a["risk_signals"].toObject();
+
+    NewsAnalysis analysis;
+    analysis.sentiment = {sent["score"].toDouble(), sent["intensity"].toDouble(), sent["confidence"].toDouble()};
+    analysis.market_impact = {mi["urgency"].toString(), mi["prediction"].toString()};
+    analysis.summary = a["summary"].toString();
+    analysis.credits_used = data["credits_used"].toInt();
+    analysis.credits_remaining = data["credits_remaining"].toInt();
+
+    for (const auto& v : a["keywords"].toArray())
+        analysis.keywords << v.toString();
+    for (const auto& v : a["topics"].toArray())
+        analysis.topics << v.toString();
+    for (const auto& v : a["key_points"].toArray())
+        analysis.key_points << v.toString();
+
+    auto reg = rs["regulatory"].toObject();
+    auto geo = rs["geopolitical"].toObject();
+    auto ops = rs["operational"].toObject();
+    auto mkt = rs["market"].toObject();
+    analysis.regulatory = {reg["level"].toString(), reg["details"].toString()};
+    analysis.geopolitical = {geo["level"].toString(), geo["details"].toString()};
+    analysis.operational = {ops["level"].toString(), ops["details"].toString()};
+    analysis.market = {mkt["level"].toString(), mkt["details"].toString()};
+
+    // Entities — organizations carry ticker/sector/sentiment; locations
+    // carry a country code; people are name-only.
+    auto ent = a["entities"].toObject();
+    for (const auto& v : ent["organizations"].toArray()) {
+        auto o = v.toObject();
+        analysis.organizations.push_back(
+            {o["name"].toString(), o["ticker"].toString(), o["sector"].toString(), o["sentiment"].toDouble()});
+    }
+    for (const auto& v : ent["people"].toArray()) {
+        auto p = v.toObject();
+        analysis.people.push_back({p["name"].toString(), {}, {}, 0});
+    }
+    for (const auto& v : ent["locations"].toArray()) {
+        auto l = v.toObject();
+        analysis.locations.push_back({l["name"].toString(), l["country_code"].toString(), {}, 0});
+    }
+
+    // Content fetch metadata — surfaces publisher-block notices.
+    auto content = data["content"].toObject();
+    analysis.content.headline = content["headline"].toString();
+    analysis.content.word_count = content["word_count"].toInt();
+    analysis.content.fetch_note = content["fetch_note"].toString();
+
+    return analysis;
+}
+
+std::optional<NewsAnalysis> NewsService::cached_analysis(const QString& url) {
+    auto r = fincept::NewsArticleRepository::instance().load_analysis(url);
+    if (r.is_err() || r.value().isEmpty())
+        return std::nullopt;
+    const QJsonDocument doc = QJsonDocument::fromJson(r.value().toUtf8());
+    if (!doc.isObject())
+        return std::nullopt;
+    return parse_analysis_data(doc.object());
+}
+
 void NewsService::analyze_article(const QString& url, AnalysisCallback cb) {
     QJsonObject body;
     body["url"] = url;
 
     // context = `this` ensures the callback drops if NewsService ever stops
     // being a singleton — today it always outlives the request.
-    HttpClient::instance().post("/news/analyze", body, [this, cb](Result<QJsonDocument> result) {
+    HttpClient::instance().post("/news/analyze", body, [url, cb](Result<QJsonDocument> result) {
         if (result.is_err()) {
             LOG_ERROR("NewsService", "Analysis failed: " + QString::fromStdString(result.error()));
             cb(false, {});
@@ -391,56 +460,15 @@ void NewsService::analyze_article(const QString& url, AnalysisCallback cb) {
         }
 
         auto data = obj["data"].toObject();
-        auto a = data["analysis"].toObject();
-        auto sent = a["sentiment"].toObject();
-        auto mi = a["market_impact"].toObject();
-        auto rs = a["risk_signals"].toObject();
+        NewsAnalysis analysis = parse_analysis_data(data);
 
-        NewsAnalysis analysis;
-        analysis.sentiment = {sent["score"].toDouble(), sent["intensity"].toDouble(), sent["confidence"].toDouble()};
-        analysis.market_impact = {mi["urgency"].toString(), mi["prediction"].toString()};
-        analysis.summary = a["summary"].toString();
-        analysis.credits_used = data["credits_used"].toInt();
-        analysis.credits_remaining = data["credits_remaining"].toInt();
-
-        for (const auto& v : a["keywords"].toArray())
-            analysis.keywords << v.toString();
-        for (const auto& v : a["topics"].toArray())
-            analysis.topics << v.toString();
-        for (const auto& v : a["key_points"].toArray())
-            analysis.key_points << v.toString();
-
-        auto reg = rs["regulatory"].toObject();
-        auto geo = rs["geopolitical"].toObject();
-        auto ops = rs["operational"].toObject();
-        auto mkt = rs["market"].toObject();
-        analysis.regulatory = {reg["level"].toString(), reg["details"].toString()};
-        analysis.geopolitical = {geo["level"].toString(), geo["details"].toString()};
-        analysis.operational = {ops["level"].toString(), ops["details"].toString()};
-        analysis.market = {mkt["level"].toString(), mkt["details"].toString()};
-
-        // Entities — organizations carry ticker/sector/sentiment; locations
-        // carry a country code; people are name-only.
-        auto ent = a["entities"].toObject();
-        for (const auto& v : ent["organizations"].toArray()) {
-            auto o = v.toObject();
-            analysis.organizations.push_back(
-                {o["name"].toString(), o["ticker"].toString(), o["sector"].toString(), o["sentiment"].toDouble()});
-        }
-        for (const auto& v : ent["people"].toArray()) {
-            auto p = v.toObject();
-            analysis.people.push_back({p["name"].toString(), {}, {}, 0});
-        }
-        for (const auto& v : ent["locations"].toArray()) {
-            auto l = v.toObject();
-            analysis.locations.push_back({l["name"].toString(), l["country_code"].toString(), {}, 0});
-        }
-
-        // Content fetch metadata — surfaces publisher-block notices.
-        auto content = data["content"].toObject();
-        analysis.content.headline = content["headline"].toString();
-        analysis.content.word_count = content["word_count"].toInt();
-        analysis.content.fetch_note = content["fetch_note"].toString();
+        // Persist the raw `data` object keyed by URL so reopening the article
+        // re-shows this result without re-spending credits. Overwrites any
+        // prior cache (re-running ANALYZE refreshes it).
+        const QString json = QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact));
+        auto wr = fincept::NewsArticleRepository::instance().save_analysis(url, json);
+        if (wr.is_err())
+            LOG_WARN("NewsService", "Failed to persist analysis: " + QString::fromStdString(wr.error()));
 
         cb(true, analysis);
     }, this);

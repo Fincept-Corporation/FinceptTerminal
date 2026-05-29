@@ -262,14 +262,28 @@ void StrategyBuilderPanel::on_backtest() {
         return;
     }
 
-    // Save first, then backtest
-    on_save();
+    // Build the strategy from current UI state, persist it, then backtest it
+    // directly (no DB round-trip — unsaved edits are tested as-shown).
+    services::algo::AlgoStrategy strat;
+    strat.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    strat.name = name_edit_->text().trimmed();
+    strat.description = desc_edit_->text().trimmed();
+    strat.timeframe = timeframe_combo_->currentText();
+    strat.entry_conditions = entry_section_->conditions();
+    strat.exit_conditions = exit_section_->conditions();
+    strat.entry_logic = entry_section_->combined_logic();
+    strat.exit_logic = exit_section_->combined_logic();
+    strat.stop_loss = risk_panel_->stop_loss();
+    strat.take_profit = risk_panel_->take_profit();
+    strat.trailing_stop = risk_panel_->trailing_stop();
+
+    services::algo::AlgoTradingService::instance().save_strategy(strat);
+
     QString symbol = symbol_combo_->currentText().trimmed();
     if (symbol.isEmpty()) symbol = QStringLiteral("RELIANCE");
 
     services::algo::AlgoTradingService::instance().run_backtest(
-        QString(), symbol, bt_start_date_->text(), bt_end_date_->text(),
-        bt_capital_->value());
+        strat, symbol, bt_start_date_->text(), bt_end_date_->text(), bt_capital_->value());
     status_label_->setText(tr("Running backtest..."));
 }
 

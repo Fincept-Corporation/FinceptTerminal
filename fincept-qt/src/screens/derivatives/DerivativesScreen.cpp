@@ -161,7 +161,7 @@ QWidget* DerivativesScreen::create_header_bar() {
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(16, 0, 16, 0);
 
-    auto* icon = new QLabel(QStringLiteral("\xF0\x9F\x93\x90")); // calculator emoji
+    auto* icon = new QLabel(QString::fromUtf8("\xF0\x9F\x93\x90")); // calculator emoji
     icon->setStyleSheet(QString("color:%1;font-size:18px;background:transparent;").arg(colors::AMBER()));
 
     auto* title_col = new QVBoxLayout;
@@ -336,7 +336,7 @@ QWidget* DerivativesScreen::create_equity_options_panel() {
     bh->setFixedHeight(34);
     auto* bhl = new QHBoxLayout(bh);
     bhl->setContentsMargins(12, 0, 12, 0);
-    auto* bhi = new QLabel(QStringLiteral("\xE2\x86\x97")); // arrow
+    auto* bhi = new QLabel(QString::fromUtf8("\xE2\x86\x97")); // arrow
     bhi->setObjectName("derivPanelIcon");
     auto* bht = new QLabel("BLACK-SCHOLES PRICING");
     bht->setObjectName("derivPanelTitle");
@@ -386,7 +386,7 @@ QWidget* DerivativesScreen::create_equity_options_panel() {
     ivh->setFixedHeight(34);
     auto* ivhl = new QHBoxLayout(ivh);
     ivhl->setContentsMargins(12, 0, 12, 0);
-    auto* ivhi = new QLabel(QStringLiteral("\xE2\x9A\xA1")); // lightning
+    auto* ivhi = new QLabel(QString::fromUtf8("\xE2\x9A\xA1")); // lightning
     ivhi->setObjectName("derivPanelIcon");
     auto* ivht = new QLabel("IMPLIED VOLATILITY");
     ivht->setObjectName("derivPanelTitle");
@@ -443,7 +443,7 @@ QWidget* DerivativesScreen::create_fx_options_panel() {
     hdr->setFixedHeight(34);
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(12, 0, 12, 0);
-    auto* icon = new QLabel(QStringLiteral("\xF0\x9F\x92\xB1")); // currency emoji
+    auto* icon = new QLabel(QString::fromUtf8("\xF0\x9F\x92\xB1")); // currency emoji
     icon->setObjectName("derivPanelIcon");
     auto* title = new QLabel("FX VANILLA OPTION PRICING");
     title->setObjectName("derivPanelTitle");
@@ -498,7 +498,7 @@ QWidget* DerivativesScreen::create_swaps_panel() {
     hdr->setFixedHeight(34);
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(12, 0, 12, 0);
-    auto* icon = new QLabel(QStringLiteral("\xF0\x9F\x94\x84")); // arrows emoji
+    auto* icon = new QLabel(QString::fromUtf8("\xF0\x9F\x94\x84")); // arrows emoji
     icon->setObjectName("derivPanelIcon");
     auto* title = new QLabel("INTEREST RATE SWAP PRICING");
     title->setObjectName("derivPanelTitle");
@@ -550,7 +550,7 @@ QWidget* DerivativesScreen::create_credit_panel() {
     hdr->setFixedHeight(34);
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(12, 0, 12, 0);
-    auto* icon = new QLabel(QStringLiteral("\xF0\x9F\x8E\xAF")); // target emoji
+    auto* icon = new QLabel(QString::fromUtf8("\xF0\x9F\x8E\xAF")); // target emoji
     icon->setObjectName("derivPanelIcon");
     auto* title = new QLabel("CREDIT DEFAULT SWAP PRICING");
     title->setObjectName("derivPanelTitle");

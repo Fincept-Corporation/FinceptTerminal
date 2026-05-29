@@ -8,6 +8,8 @@
 #include <QJsonDocument>
 #include <QUrlQuery>
 
+#include <algorithm>
+
 namespace fincept::trading {
 
 static int64_t now_ts() {
@@ -485,6 +487,15 @@ ApiResponse<QVector<BrokerCandle>> TradierBroker::get_history(const BrokerCreden
     bool is_intraday = (resolution == "1" || resolution == "5" || resolution == "15" || resolution == "1m" ||
                         resolution == "5m" || resolution == "15m");
 
+    // Reject unsupported intraday resolutions — Tradier only offers 1min/5min/15min bars
+    if (resolution == "30" || resolution == "60" || resolution == "240" || resolution == "30m" ||
+        resolution == "60m" || resolution == "240m" || resolution == "1h" || resolution == "4h") {
+        return {false, std::nullopt,
+                "Tradier does not support " + resolution +
+                    "-minute bars; supported intraday intervals are 1min/5min/15min only",
+                ts};
+    }
+
     if (is_intraday) {
         // timesales endpoint
         QString intrv;
@@ -495,39 +506,123 @@ ApiResponse<QVector<BrokerCandle>> TradierBroker::get_history(const BrokerCreden
         else
             intrv = "15min";
 
-        // timesales expects datetime format "YYYY-MM-DD HH:MM"
-        QString start = from_date + " 09:30";
-        QString end = to_date + " 16:00";
+        // Per-request day cap: Tradier's timesales window is bounded, so long
+        // ranges are split into consecutive sub-windows.
+        //   1min        -> <= 20 days per request
+        //   5min/15min  -> <= 40 days per request
+        const int cap_days = (intrv == "1min") ? 20 : 40;
 
-        QString url = base(creds) + "/v1/markets/timesales?symbol=" + ticker + "&interval=" + intrv +
-                      "&start=" + QUrl::toPercentEncoding(start) + "&end=" + QUrl::toPercentEncoding(end);
+        // One-window fetch + parse. Returns success flag, error message, and the
+        // parsed candles for [winStart, winEnd] (dates as yyyy-MM-dd). The
+        // datetime format and ms timestamp conversion match the original code.
+        struct WindowResult {
+            bool success = false;
+            QString error;
+            QVector<BrokerCandle> candles;
+        };
+        auto fetch_window = [&](const QString& winStart, const QString& winEnd) -> WindowResult {
+            WindowResult wr;
 
-        auto resp = http.get(url, auth_headers(creds));
-        if (!resp.success)
-            return {false, std::nullopt, checked_error(resp, "get_history failed"), ts};
+            // timesales expects datetime format "YYYY-MM-DD HH:MM"
+            QString start = winStart + " 09:30";
+            QString end = winEnd + " 16:00";
 
-        QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
-        if (!doc.isObject())
-            return {false, std::nullopt, "get_history: invalid response", ts};
+            QString url = base(creds) + "/v1/markets/timesales?symbol=" + ticker + "&interval=" + intrv +
+                          "&start=" + QUrl::toPercentEncoding(start) + "&end=" + QUrl::toPercentEncoding(end);
 
-        QJsonValue series_val = doc.object().value("series");
-        if (series_val.isNull() || series_val.isString())
-            return {true, candles, "", ts};
+            auto resp = http.get(url, auth_headers(creds));
+            if (!resp.success) {
+                wr.error = checked_error(resp, "get_history failed");
+                return wr;
+            }
 
-        QJsonArray arr = normalize_array(series_val.toObject().value("data"));
-        candles.reserve(arr.size());
+            QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
+            if (!doc.isObject()) {
+                wr.error = "get_history: invalid response";
+                return wr;
+            }
 
-        for (const QJsonValue& v : arr) {
-            QJsonObject o = v.toObject();
-            BrokerCandle c;
-            // timesales has both "time" (ISO string) and "timestamp" (epoch seconds)
-            c.timestamp = static_cast<int64_t>(o.value("timestamp").toDouble()) * 1000LL;
-            c.open = o.value("open").toDouble();
-            c.high = o.value("high").toDouble();
-            c.low = o.value("low").toDouble();
-            c.close = o.value("close").toDouble();
-            c.volume = static_cast<int64_t>(o.value("volume").toDouble());
-            candles.append(c);
+            QJsonValue series_val = doc.object().value("series");
+            if (series_val.isNull() || series_val.isString()) {
+                // No data for this window — treat as a successful empty result.
+                wr.success = true;
+                return wr;
+            }
+
+            QJsonArray arr = normalize_array(series_val.toObject().value("data"));
+            wr.candles.reserve(arr.size());
+
+            for (const QJsonValue& v : arr) {
+                QJsonObject o = v.toObject();
+                BrokerCandle c;
+                // timesales has both "time" (ISO string) and "timestamp" (epoch seconds)
+                c.timestamp = static_cast<int64_t>(o.value("timestamp").toDouble()) * 1000LL;
+                c.open = o.value("open").toDouble();
+                c.high = o.value("high").toDouble();
+                c.low = o.value("low").toDouble();
+                c.close = o.value("close").toDouble();
+                c.volume = static_cast<int64_t>(o.value("volume").toDouble());
+                wr.candles.append(c);
+            }
+
+            wr.success = true;
+            return wr;
+        };
+
+        QDate startDate = QDate::fromString(from_date, "yyyy-MM-dd");
+        QDate endDate = QDate::fromString(to_date, "yyyy-MM-dd");
+
+        // If either date is unparseable, fall back to a single request over the
+        // raw range (preserves original behavior for unexpected inputs).
+        bool fits_one_window =
+            !startDate.isValid() || !endDate.isValid() || startDate.daysTo(endDate) < cap_days;
+
+        if (fits_one_window) {
+            // Single request — identical to the original single-window path.
+            WindowResult wr = fetch_window(from_date, to_date);
+            if (!wr.success)
+                return {false, std::nullopt, wr.error, ts};
+            candles = std::move(wr.candles);
+        } else {
+            // Loop consecutive <= cap_days sub-windows. Each window spans cap_days
+            // inclusive of both endpoints, i.e. [w, w + (cap_days - 1)].
+            const int kMaxIterations = 60; // safety bound
+            QDate winStart = startDate;
+            int iterations = 0;
+            bool got_data = false;
+
+            while (winStart <= endDate && iterations < kMaxIterations) {
+                QDate winEnd = winStart.addDays(cap_days - 1);
+                if (winEnd > endDate)
+                    winEnd = endDate;
+
+                WindowResult wr = fetch_window(winStart.toString("yyyy-MM-dd"), winEnd.toString("yyyy-MM-dd"));
+                if (!wr.success) {
+                    // First-window failure → propagate error as the original code did.
+                    // Later failure (after collecting data) → break and return partial.
+                    if (!got_data)
+                        return {false, std::nullopt, wr.error, ts};
+                    break;
+                }
+
+                if (!wr.candles.isEmpty()) {
+                    got_data = true;
+                    candles.append(wr.candles);
+                }
+
+                winStart = winEnd.addDays(1);
+                ++iterations;
+            }
+
+            // Sort ascending by timestamp and dedupe (windows are adjacent but a
+            // shared boundary bar could appear in two requests).
+            std::sort(candles.begin(), candles.end(),
+                      [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp < b.timestamp; });
+            candles.erase(std::unique(candles.begin(), candles.end(),
+                                      [](const BrokerCandle& a, const BrokerCandle& b) {
+                                          return a.timestamp == b.timestamp;
+                                      }),
+                          candles.end());
         }
 
     } else {
@@ -537,8 +632,10 @@ ApiResponse<QVector<BrokerCandle>> TradierBroker::get_history(const BrokerCreden
             intrv = "weekly";
         else if (resolution == "M" || resolution == "1M")
             intrv = "monthly";
-        else
+        else if (resolution == "D" || resolution == "1D" || resolution == "1d" || resolution.isEmpty())
             intrv = "daily";
+        else
+            return {false, std::nullopt, "get_history: unsupported resolution '" + resolution + "'", ts};
 
         QString url = base(creds) + "/v1/markets/history?symbol=" + ticker + "&interval=" + intrv +
                       "&start=" + from_date + "&end=" + to_date;

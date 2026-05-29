@@ -465,7 +465,13 @@ ApiResponse<QVector<BrokerQuote>> UpstoxBroker::get_quotes(const BrokerCredentia
 ApiResponse<QVector<BrokerCandle>> UpstoxBroker::get_history(const BrokerCredentials& creds, const QString& symbol,
                                                              const QString& resolution, const QString& from_date,
                                                              const QString& to_date) {
-    const QString ikey = instrument_key(symbol, "NSE", creds.broker_id);
+    // Support "EXCHANGE:SYMBOL" format (mirrors get_quotes); default exchange NSE
+    QString exch = "NSE", s = symbol;
+    if (symbol.contains(':')) {
+        exch = symbol.section(':', 0, 0);
+        s = symbol.section(':', 1);
+    }
+    const QString ikey = instrument_key(s, exch, creds.broker_id);
     const auto iv = upstox_interval(resolution);
 
     // Chunk the date range if needed (Upstox has per-interval max window limits)
@@ -525,6 +531,7 @@ ApiResponse<QVector<BrokerCandle>> UpstoxBroker::get_history(const BrokerCredent
             candle.low = c[3].toDouble();
             candle.close = c[4].toDouble();
             candle.volume = c[5].toDouble();
+            if (c.size() > 6) candle.oi = c[6].toDouble();
             all_candles.append(candle);
         }
 
