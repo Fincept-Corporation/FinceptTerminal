@@ -100,7 +100,11 @@ void DhanWebSocket::open() {
     // 5-depth endpoint. authType=2 + token + clientId in the query string.
     QString url = QString("%1?version=2&token=%2&clientId=%3&authType=2")
                       .arg(QString(kFiveDepthUrl), access_token_, client_id_);
-    LOG_INFO(TAG_DHAN_WS, "Connecting to Dhan 5-depth feed");
+    // Log the connection params with the token redacted — never log the JWT.
+    const QString tok_tail = access_token_.size() > 6 ? access_token_.right(6) : QStringLiteral("??????");
+    LOG_INFO(TAG_DHAN_WS, QString("Connecting to Dhan 5-depth feed (clientId=%1, token=…%2, len=%3)")
+                              .arg(client_id_, tok_tail)
+                              .arg(access_token_.size()));
     ws_->connect_to(url);
     start_health_check();
 }
@@ -474,16 +478,62 @@ BrokerQuote DhanWebSocket::parse_full(const uchar* payload, int len, int segment
     return q;
 }
 
-void DhanWebSocket::handle_disconnect(const uchar* payload, int len) const {
+void DhanWebSocket::handle_disconnect(const uchar* payload, int len) {
     if (len < 2) {
         LOG_WARN(TAG_DHAN_WS, "Received disconnect packet (no code)");
         return;
     }
     const quint16 code = read_u16(payload);
-    QString reason = QStringLiteral("Unknown reason");
-    if (code == 805)
-        reason = QStringLiteral("Maximum websocket connections exceeded");
+
+    // Disconnect codes per DhanHQ v2 live-market-feed docs.
+    QString reason;
+    bool fatal = false;         // retrying won't help → stop the reconnect timer
+    bool token_problem = false; // genuine token/auth failure → surface as TOKEN_EXPIRED
+    switch (code) {
+        case 805:
+            reason = QStringLiteral("Connection limit exceeded (max 5 connections per Client ID)");
+            break;
+        case 806:
+            // Entitlement gap, NOT a token problem: the account is valid for
+            // trading but the market-data (Data API) feed isn't subscribed.
+            // Reconnecting won't help, but the account must stay Connected and
+            // must NOT be reported as an expired token.
+            reason = QStringLiteral("Market data feed not subscribed (Dhan Data API) — quotes unavailable; "
+                                    "trading is unaffected. Enable the Data API subscription on dhan.co.");
+            fatal = true;
+            break;
+        case 807:
+            reason = QStringLiteral("Access token expired");
+            fatal = true;
+            token_problem = true;
+            break;
+        case 808:
+            reason = QStringLiteral("Authentication failed — invalid Client ID or token");
+            fatal = true;
+            token_problem = true;
+            break;
+        case 809:
+            reason = QStringLiteral("Access token invalid");
+            fatal = true;
+            token_problem = true;
+            break;
+        default:
+            reason = QStringLiteral("Unknown reason");
+            break;
+    }
     LOG_WARN(TAG_DHAN_WS, QString("Disconnect packet code=%1 (%2)").arg(code).arg(reason));
+
+    if (fatal)
+        ws_->stop_reconnect(); // no point storming reconnects on any fatal code
+
+    if (token_problem) {
+        // The [TOKEN_EXPIRED] sentinel routes through AccountDataStream's
+        // check_token_expiry() to mark the account TokenExpired and prompt re-auth.
+        emit error_occurred(QString("[TOKEN_EXPIRED] Dhan feed disconnect %1: %2").arg(code).arg(reason));
+    } else if (fatal) {
+        // Surfaced as a plain (non-expiry) error so the account stays Connected.
+        emit error_occurred(QString("Dhan feed disconnect %1: %2").arg(code).arg(reason));
+    }
 }
 
 } // namespace fincept::trading

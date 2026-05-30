@@ -9,8 +9,14 @@
 
 #include <algorithm>
 
+#include <QDate>
+#include <QDateEdit>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
 #include <QHeaderView>
 #include <QHBoxLayout>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
@@ -113,8 +119,8 @@ void StrategyListPanel::build_ui() {
 
     // ── Table ────────────────────────────────────────────────────────────────
     table_ = new QTableWidget(this);
-    table_->setColumnCount(6); // #, NAME, CATEGORY, ID, DEPLOY, DELETE
-    table_->setHorizontalHeaderLabels({"#", "STRATEGY NAME", "CATEGORY", "ID", "", ""});
+    table_->setColumnCount(8); // #, NAME, CATEGORY, ID, EDIT, BACKTEST, DEPLOY, DELETE
+    table_->setHorizontalHeaderLabels({"#", "STRATEGY NAME", "CATEGORY", "ID", "", "", "", ""});
     table_->verticalHeader()->setVisible(false);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -130,10 +136,12 @@ void StrategyListPanel::build_ui() {
     table_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);
     table_->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Fixed);
     table_->setColumnWidth(0, 40);
-    table_->setColumnWidth(2, 180);
-    table_->setColumnWidth(3, 120);
-    table_->setColumnWidth(4, 80);
-    table_->setColumnWidth(5, 70);
+    table_->setColumnWidth(2, 150);
+    table_->setColumnWidth(3, 100);
+    table_->setColumnWidth(4, 56);
+    table_->setColumnWidth(5, 76);
+    table_->setColumnWidth(6, 72);
+    table_->setColumnWidth(7, 66);
     table_->verticalHeader()->setDefaultSectionSize(30);
     table_->setStyleSheet(
         QString("QTableWidget { background:%1; alternate-background-color:%2;"
@@ -242,36 +250,28 @@ void StrategyListPanel::render_page() {
         id_item->setForeground(QColor(colors::TEXT_TERTIARY()));
         table_->setItem(row, 3, id_item);
 
-        // Col 4: DEPLOY button
-        auto* deploy_btn = new QPushButton("DEPLOY", table_);
-        deploy_btn->setCursor(Qt::PointingHandCursor);
-        deploy_btn->setFixedHeight(22);
-        deploy_btn->setStyleSheet(
-            QString("QPushButton { background: transparent; color: %1; border: 1px solid %1;"
-                    " font-size: %2px; font-weight: 700; font-family: %3; padding: 1px 8px; }"
-                    "QPushButton:hover { background: rgba(217,119,6,0.1); }")
-                .arg(colors::AMBER())
-                .arg(fonts::TINY)
-                .arg(fonts::DATA_FAMILY()));
-        connect(deploy_btn, &QPushButton::clicked, this, [this, row]() { on_deploy_clicked(row); });
-        table_->setCellWidget(row, 4, deploy_btn);
-
-        // Col 5: DELETE button (only for DSL strategies — QC strategies come from file registry)
-        const bool is_dsl = !s.id.startsWith("FCT-");
-        if (is_dsl) {
-            auto* delete_btn = new QPushButton("DELETE", table_);
-            delete_btn->setCursor(Qt::PointingHandCursor);
-            delete_btn->setFixedHeight(22);
-            delete_btn->setStyleSheet(
+        auto make_btn = [&](const QString& text, const QString& color, const QString& hover,
+                            int col, auto handler) {
+            auto* btn = new QPushButton(text, table_);
+            btn->setCursor(Qt::PointingHandCursor);
+            btn->setFixedHeight(22);
+            btn->setStyleSheet(
                 QString("QPushButton { background: transparent; color: %1; border: 1px solid %1;"
                         " font-size: %2px; font-weight: 700; font-family: %3; padding: 1px 8px; }"
-                        "QPushButton:hover { background: rgba(220,38,38,0.1); }")
-                    .arg(colors::NEGATIVE())
+                        "QPushButton:hover { background: %4; }")
+                    .arg(color)
                     .arg(fonts::TINY)
-                    .arg(fonts::DATA_FAMILY()));
-            connect(delete_btn, &QPushButton::clicked, this, [this, row]() { on_delete_clicked(row); });
-            table_->setCellWidget(row, 5, delete_btn);
-        }
+                    .arg(fonts::DATA_FAMILY())
+                    .arg(hover));
+            connect(btn, &QPushButton::clicked, this, handler);
+            table_->setCellWidget(row, col, btn);
+        };
+
+        // Col 4: EDIT (Builder). 5: BACKTEST. 6: DEPLOY. 7: DELETE.
+        make_btn("EDIT", colors::CYAN(), "rgba(34,211,238,0.1)", 4, [this, row]() { on_edit_clicked(row); });
+        make_btn("BACKTEST", colors::POSITIVE(), "rgba(22,163,74,0.1)", 5, [this, row]() { on_backtest_clicked(row); });
+        make_btn("DEPLOY", colors::AMBER(), "rgba(217,119,6,0.1)", 6, [this, row]() { on_deploy_clicked(row); });
+        make_btn("DELETE", colors::NEGATIVE(), "rgba(220,38,38,0.1)", 7, [this, row]() { on_delete_clicked(row); });
     }
 
     update_pagination_controls();
@@ -371,6 +371,58 @@ void StrategyListPanel::on_strategies_loaded(QVector<AlgoStrategy> strategies) {
 
 void StrategyListPanel::on_error(const QString& context, const QString& msg) {
     LOG_ERROR("AlgoTrading", QString("StrategyList error [%1]: %2").arg(context, msg));
+}
+
+void StrategyListPanel::on_edit_clicked(int row) {
+    const int abs_index = current_page_ * kPageSize + row;
+    if (abs_index < 0 || abs_index >= filtered_.size())
+        return;
+    emit edit_requested(filtered_[abs_index]); // AlgoTradingScreen routes to the Builder
+}
+
+void StrategyListPanel::on_backtest_clicked(int row) {
+    const int abs_index = current_page_ * kPageSize + row;
+    if (abs_index < 0 || abs_index >= filtered_.size())
+        return;
+    const auto& strategy = filtered_[abs_index];
+
+    // Prompt for symbol + date range before running.
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Backtest: %1").arg(strategy.name));
+    auto* form = new QFormLayout(&dlg);
+
+    auto* symbol = new QLineEdit(QStringLiteral("RELIANCE"), &dlg);
+    symbol->setPlaceholderText(tr("e.g. RELIANCE, AAPL"));
+    const QDate today = QDate::currentDate();
+    // Default range sized to the strategy's timeframe (daily needs years for
+    // SMA200; intraday must stay under Yahoo's history cap).
+    const int lookback = services::algo::algo_default_lookback_days(strategy.timeframe);
+    auto* start = new QDateEdit(today.addDays(-lookback), &dlg);
+    auto* end = new QDateEdit(today, &dlg);
+    for (QDateEdit* d : {start, end}) {
+        d->setCalendarPopup(true);
+        d->setDisplayFormat(QStringLiteral("yyyy-MM-dd"));
+        d->setMinimumDate(QDate(2000, 1, 1));
+        d->setMaximumDate(today);
+    }
+    form->addRow(tr("Symbol"), symbol);
+    form->addRow(tr("Start"), start);
+    form->addRow(tr("End"), end);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    buttons->button(QDialogButtonBox::Ok)->setText(tr("Run Backtest"));
+    form->addRow(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+    if (symbol->text().trimmed().isEmpty() || start->date() >= end->date())
+        return;
+
+    emit backtest_requested(strategy, symbol->text().trimmed(),
+                            start->date().toString(QStringLiteral("yyyy-MM-dd")),
+                            end->date().toString(QStringLiteral("yyyy-MM-dd")));
 }
 
 void StrategyListPanel::on_deploy_clicked(int row) {

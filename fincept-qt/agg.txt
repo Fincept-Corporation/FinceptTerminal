@@ -1,0 +1,456 @@
+========== Handlers includes (top 40) ==========
+1: // src/screens/equity_trading/EquityTradingScreen_Handlers.cpp
+2: //
+3: // User-action handlers: account switch / symbol selection / mode toggle,
+4: // token-expiry recovery, accounts dialog, order submit / cancel / modify,
+5: // order-book click, refresh_candles.
+6: //
+7: // Part of the partial-class split of EquityTradingScreen.cpp.
+8: 
+9: #include "screens/equity_trading/EquityTradingScreen.h"
+10: 
+11: #include "core/logging/Logger.h"
+12: #include "core/session/ScreenStateManager.h"
+13: #include "core/symbol/SymbolContext.h"
+14: #include "core/symbol/SymbolDragSource.h"
+15: #include "screens/equity_trading/AccountManagementDialog.h"
+16: #include "screens/equity_trading/BroadcastOrderDialog.h"
+17: #include "screens/equity_trading/EquityBottomPanel.h"
+18: #include "screens/equity_trading/EquityChart.h"
+19: #include "screens/equity_trading/EquityOrderBook.h"
+20: #include "screens/equity_trading/EquityOrderEntry.h"
+21: #include "screens/equity_trading/EquityTickerBar.h"
+22: #include "screens/equity_trading/EquityWatchlist.h"
+23: #include "services/portfolio/PortfolioService.h"
+24: #include "storage/repositories/SettingsRepository.h"
+25: #include "trading/AccountManager.h"
+26: #include "trading/ActionCenter.h"
+27: #include "trading/BrokerRegistry.h"
+28: #include "trading/DataStreamManager.h"
+29: #include "trading/OrderMatcher.h"
+30: #include "trading/PaperTrading.h"
+31: #include "ui/theme/StyleSheets.h"
+32: #include "ui/theme/Theme.h"
+33: 
+34: #include <QApplication>
+35: #include <QCheckBox>
+36: #include <QComboBox>
+37: #include <QCompleter>
+38: #include <QDate>
+39: #include <QDateTime>
+40: #include <QDialog>
+
+========== Handlers: on_account_changed + credentials_saved (260-360) ==========
+260:     auto* dlg = new AccountManagementDialog(this);
+261: 
+262:     connect(dlg, &AccountManagementDialog::account_added, this, [this](const QString& account_id) {
+263:         Q_UNUSED(account_id);
+264:         update_account_menu();
+265:         // Don't auto-focus a freshly-added account: it has no credentials yet,
+266:         // so on_account_changed() would spawn ~11 QtConcurrent::run fetches that
+267:         // all bail at the empty-api_key check. On macOS that thread-storm trips
+268:         // pthread_create inside QThreadPool and crashes the main thread (see
+269:         // crash report 2026-05-08-123609.ips). Defer focus to credentials_saved.
+270:     });
+271: 
+272:     connect(dlg, &AccountManagementDialog::account_removed, this, [this](const QString& account_id) {
+273:         DataStreamManager::instance().stop_stream(account_id);
+274:         update_account_menu();
+275:         // If removed the focused account, switch to next available
+276:         if (account_id == focused_account_id_) {
+277:             auto accounts = AccountManager::instance().active_accounts();
+278:             if (!accounts.isEmpty())
+279:                 on_account_changed(accounts.first().account_id);
+280:             else
+281:                 focused_account_id_.clear();
+282:         }
+283:         update_connection_status();
+284:     });
+285: 
+286:     connect(dlg, &AccountManagementDialog::credentials_saved, this, [this](const QString& account_id) {
+287:         token_expired_shown_.store(false);
+288:         // First account ever connected: focus it now (account_added intentionally
+289:         // does not auto-focus — see comment there). on_account_changed() does its
+290:         // own start_stream() + symbol/watchlist setup, so we're done after that.
+291:         if (focused_account_id_.isEmpty()) {
+292:             on_account_changed(account_id);
+293:             AccountManager::instance().set_connection_state(account_id, ConnectionState::Connected);
+294:             update_connection_status();
+295:             return;
+296:         }
+297:         // Start/restart the stream with new credentials
+298:         DataStreamManager::instance().start_stream(account_id);
+299:         auto* stream = DataStreamManager::instance().stream_for(account_id);
+300:         if (stream && account_id == focused_account_id_) {
+301:             stream->set_selected_symbol(selected_symbol_, selected_exchange_);
+302:             stream->subscribe_symbols(watchlist_symbols_);
+303:         }
+304:         AccountManager::instance().set_connection_state(account_id, ConnectionState::Connected);
+305:         update_connection_status();
+306:     });
+307: 
+308:     dlg->exec();
+309:     dlg->deleteLater();
+310: }
+311: 
+312: // ============================================================================
+313: // Order Handling
+314: // ============================================================================
+315: 
+316: void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
+317:     if (focused_account_id_.isEmpty()) {
+318:         order_entry_->show_order_status("No account selected — add one via ACCOUNTS", false);
+319:         return;
+320:     }
+321: 
+322:     auto account = AccountManager::instance().get_account(focused_account_id_);
+323: 
+324:     if (account.trading_mode == "paper") {
+325:         const QString portfolio_id = account.paper_portfolio_id;
+326:         if (portfolio_id.isEmpty()) {
+327:             order_entry_->show_order_status("No paper portfolio for this account", false);
+328:             return;
+329:         }
+330: 
+331:         LOG_INFO(TAG, QString("Paper order: %1 %2 x%3 account=%4")
+332:                           .arg(order.side == OrderSide::Buy ? "BUY" : "SELL")
+333:                           .arg(order.symbol)
+334:                           .arg(order.quantity)
+335:                           .arg(account.display_name));
+336: 
+337:         const QString side = order.side == OrderSide::Buy ? "buy" : "sell";
+338:         const QString type = order_type_str(order.order_type);
+339:         std::optional<double> price_opt;
+340:         if (order.order_type == OrderType::Limit || order.order_type == OrderType::StopLossLimit) {
+341:             price_opt = order.price;
+342:         } else if (order.order_type == OrderType::Market) {
+343:             const double ref = current_price_ > 0 ? current_price_ : (order.price > 0 ? order.price : 0.0);
+344:             if (ref > 0)
+345:                 price_opt = ref;
+346:         }
+347:         std::optional<double> stop_opt;
+348:         if (order.stop_price > 0)
+349:             stop_opt = order.stop_price;
+350: 
+351:         if (order.order_type == OrderType::Market && !price_opt) {
+352:             order_entry_->show_order_status("Price not available yet — wait for quotes to load", false);
+353:             return;
+354:         }
+355: 
+356:         try {
+357:             auto pt_order = pt_place_order(portfolio_id, order.symbol, side, type, order.quantity, price_opt, stop_opt);
+358: 
+359:             if (order.order_type == OrderType::Market) {
+360:                 double fill_price = current_price_ > 0 ? current_price_ : (order.price > 0 ? order.price : 0.0);
+
+========== on_account_changed definition location ==========
+src/screens/equity_trading/EquityTradingScreen_Handlers.cpp:73:void EquityTradingScreen::on_account_changed(const QString& account_id) {
+src/screens/equity_trading/EquityTradingScreen_Handlers.cpp:266:        // so on_account_changed() would spawn ~11 QtConcurrent::run fetches that
+src/screens/equity_trading/EquityTradingScreen_Handlers.cpp:279:                on_account_changed(accounts.first().account_id);
+src/screens/equity_trading/EquityTradingScreen_Handlers.cpp:289:        // does not auto-focus — see comment there). on_account_changed() does its
+src/screens/equity_trading/EquityTradingScreen_Handlers.cpp:292:            on_account_changed(account_id);
+src/screens/equity_trading/EquityTradingScreen.cpp:109:                on_account_changed(acct);
+src/screens/equity_trading/EquityTradingScreen.cpp:350:                on_account_changed(accounts.first().account_id);
+src/screens/equity_trading/EquityTradingScreen.cpp:494:            on_account_changed(id);
+src/screens/equity_trading/EquityTradingScreen.cpp:568:        on_account_changed(acct);
+src/screens/equity_trading/EquityTradingScreen.h:59:    void on_account_changed(const QString& account_id);
+
+========== EquityTradingScreen.h (FULL) ==========
+1: #pragma once
+2: // Equity Trading Screen — multi-account coordinator.
+3: // Supports multiple broker accounts simultaneously via DataStreamManager.
+4: // Each account has its own data stream (WS/polling), portfolio, and credentials.
+5: 
+6: #include "core/symbol/IGroupLinked.h"
+7: #include "screens/common/IStatefulScreen.h"
+8: #include "screens/equity_trading/EquityTypes.h"
+9: #include "trading/BrokerAccount.h"
+10: #include "trading/TradingTypes.h"
+11: 
+12: #include <QHash>
+13: #include <QHideEvent>
+14: #include <QLabel>
+15: #include <QLineEdit>
+16: #include <QMenu>
+17: #include <QPushButton>
+18: #include <QShowEvent>
+19: #include <QTimer>
+20: #include <QWidget>
+21: 
+22: #include <atomic>
+23: 
+24: namespace fincept::screens::equity {
+25: class EquityTickerBar;
+26: class EquityWatchlist;
+27: class EquityChart;
+28: class EquityOrderEntry;
+29: class EquityOrderBook;
+30: class EquityBottomPanel;
+31: } // namespace fincept::screens::equity
+32: 
+33: namespace fincept::screens {
+34: 
+35: class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefulScreen {
+36:     Q_OBJECT
+37:     Q_INTERFACES(fincept::IGroupLinked)
+38:   public:
+39:     explicit EquityTradingScreen(QWidget* parent = nullptr);
+40:     ~EquityTradingScreen();
+41: 
+42:     // IGroupLinked — see WatchlistScreen for the propagation contract.
+43:     void set_group(SymbolGroup g) override { link_group_ = g; }
+44:     SymbolGroup group() const override { return link_group_; }
+45:     void on_group_symbol_changed(const SymbolRef& ref) override;
+46:     SymbolRef current_symbol() const override;
+47: 
+48:     // IStatefulScreen
+49:     QVariantMap save_state() const override;
+50:     void restore_state(const QVariantMap& state) override;
+51:     QString state_key() const override { return QStringLiteral("equity_trading"); }
+52: 
+53:   protected:
+54:     void showEvent(QShowEvent* event) override;
+55:     void hideEvent(QHideEvent* event) override;
+56: 
+57:   private slots:
+58:     // Multi-account slots
+59:     void on_account_changed(const QString& account_id);
+60:     void on_symbol_selected(const QString& symbol);
+61:     void on_mode_toggled();
+62:     void on_accounts_clicked(); // opens AccountManagementDialog
+63:     void handle_token_expired(const QString& account_id);
+64:     void on_order_submitted(const trading::UnifiedOrder& order);
+65:     void on_cancel_order(const QString& order_id);
+66:     void on_ob_price_clicked(double price);
+67:     void on_import_holdings_requested(const QVector<trading::BrokerHolding>& holdings);
+68: 
+69:     void refresh_candles();
+70:     void update_clock();
+71: 
+72:     // DataStreamManager signal handlers (on-demand / one-shot — kept as legacy signals)
+73:     void on_stream_candles_fetched(const QString& account_id, const QVector<trading::BrokerCandle>& candles);
+74:     void on_stream_orderbook_fetched(const QString& account_id,
+75:                                      const QVector<QPair<double, double>>& bids,
+76:                                      const QVector<QPair<double, double>>& asks,
+77:                                      double spread, double spread_pct,
+78:                                      const QVector<int>& bid_orders,
+79:                                      const QVector<int>& ask_orders);
+80:     void on_stream_time_sales_fetched(const QString& account_id, const QVector<trading::BrokerTrade>& trades);
+81:     void on_stream_latest_trade_fetched(const QString& account_id, const trading::BrokerTrade& trade);
+82:     void on_stream_calendar_fetched(const QString& account_id, const QVector<trading::MarketCalendarDay>& days);
+83:     void on_stream_clock_fetched(const QString& account_id, const trading::MarketClock& clock);
+84: 
+85:   private:
+86:     void setup_ui();
+87:     void setup_timers();
+88:     void connect_data_stream_signals();
+89:     void init_focused_account();
+90:     void switch_symbol(const QString& symbol);
+91:     void update_account_menu();
+92:     void update_connection_status();
+93:     void async_modify_order(const QString& order_id, double qty, double price);
+94: 
+95:     // DataHub subscription helpers (D4 migration)
+96:     void hub_subscribe_streaming();
+97:     void hub_unsubscribe_all();
+98:     void hub_subscribe_quotes();
+99:     QString broker_id_for_focused() const;
+100: 
+101:     // ── Command bar widgets ──
+102:     QPushButton* account_btn_ = nullptr;  // shows focused account name
+103:     QMenu* account_menu_ = nullptr;       // lists all active accounts
+104:     QLineEdit* symbol_input_ = nullptr;
+105:     QPushButton* mode_btn_ = nullptr;
+106:     QPushButton* accounts_btn_ = nullptr; // opens AccountManagementDialog
+107:     QLabel* exchange_label_ = nullptr;
+108:     QLabel* clock_label_ = nullptr;
+109:     QLabel* conn_label_ = nullptr;        // aggregate connection status
+110: 
+111:     // ── Sub-widgets ──
+112:     equity::EquityTickerBar* ticker_bar_ = nullptr;
+113:     equity::EquityWatchlist* watchlist_ = nullptr;
+114:     equity::EquityChart* chart_ = nullptr;
+115:     equity::EquityOrderEntry* order_entry_ = nullptr;
+116:     equity::EquityOrderBook* orderbook_ = nullptr;
+117:     equity::EquityBottomPanel* bottom_panel_ = nullptr;
+118: 
+119:     // ── Timers (only UI-local timers remain; data timers are in AccountDataStream) ──
+120:     QTimer* clock_timer_ = nullptr;
+121:     QTimer* market_clock_timer_ = nullptr;
+122: 
+123:     // ── Multi-account state ──
+124:     QString focused_account_id_;          // the account targeted by order entry + chart
+125:     QString selected_symbol_ = "RELIANCE";
+126:     QString selected_exchange_ = "NSE";
+127: 
+128:     // Paper trading (derived from focused account)
+129:     int fill_cb_id_ = -1; // OrderMatcher fill callback
+130: 
+131:     // Async guards
+132:     std::atomic<bool> token_expired_shown_{false};
+133: 
+134:     QStringList watchlist_symbols_;
+135:     double current_price_ = 0.0; // last known LTP for selected symbol
+136: 
+137:     bool initialized_ = false;
+138:     bool hub_active_ = false;
+139:     QHash<QString, trading::BrokerQuote> watchlist_quote_cache_;
+140: 
+141:     // Symbol group link — SymbolGroup::None when unlinked.
+142:     SymbolGroup link_group_ = SymbolGroup::None;
+143: };
+144: 
+145: } // namespace fincept::screens
+
+========== EquityTradingScreen.cpp constructor + connects (1-120) ==========
+1: // Equity Trading Screen — multi-account coordinator.
+2: //
+3: // Core: ctor/dtor, show/hide events, setup_ui, setup_timers, update_clock,
+4: // connect_data_stream_signals, init_focused_account, update_account_menu,
+5: // update_connection_status, on_group_symbol_changed, current_symbol. Split
+6: // concerns:
+7: //   - EquityTradingScreen_Streams.cpp  — on_stream_* slots from DataStreamManager
+8: //   - EquityTradingScreen_Handlers.cpp — user-action handlers
+9: //   - EquityTradingScreen_Holdings.cpp — broker→portfolio holdings import
+10: #include "screens/equity_trading/EquityTradingScreen.h"
+11: 
+12: #include "core/logging/Logger.h"
+13: #include "core/session/ScreenStateManager.h"
+14: #include "core/symbol/SymbolContext.h"
+15: #include "core/symbol/SymbolDragSource.h"
+16: 
+17: #include <QApplication>
+18: #include <QMouseEvent>
+19: #include "screens/equity_trading/AccountManagementDialog.h"
+20: #include "screens/equity_trading/BroadcastOrderDialog.h"
+21: #include "screens/equity_trading/EquityBottomPanel.h"
+22: #include "screens/equity_trading/EquityChart.h"
+23: #include "screens/equity_trading/EquityOrderBook.h"
+24: #include "screens/equity_trading/EquityOrderEntry.h"
+25: #include "screens/equity_trading/EquityTickerBar.h"
+26: #include "screens/equity_trading/EquityWatchlist.h"
+27: #include "services/portfolio/PortfolioService.h"
+28: #include "storage/repositories/SettingsRepository.h"
+29: #include "trading/AccountManager.h"
+30: #include "trading/BrokerRegistry.h"
+31: #include "trading/DataStreamManager.h"
+32: #include "trading/OrderMatcher.h"
+33: #include "trading/PaperTrading.h"
+34: #include "trading/UnifiedTrading.h"
+35: #include "ui/theme/StyleSheets.h"
+36: #include "ui/theme/Theme.h"
+37: 
+38: #include <QCheckBox>
+39: #include <QComboBox>
+40: #include <QCompleter>
+41: #include <QDate>
+42: #include <QDateTime>
+43: #include <QDialog>
+44: #include <QDialogButtonBox>
+45: #include <QFormLayout>
+46: #include <QHBoxLayout>
+47: #include <QHash>
+48: #include <QHeaderView>
+49: #include <QJsonArray>
+50: #include <QJsonDocument>
+51: #include <QJsonObject>
+52: #include <QLineEdit>
+53: #include <QMessageBox>
+54: #include <QPointer>
+55: #include <QPushButton>
+56: #include <QRadioButton>
+57: #include <QScrollBar>
+58: #include <QSplitter>
+59: #include <QStringListModel>
+60: #include <QTableWidget>
+61: #include <QVBoxLayout>
+62: 
+63: #include <memory>
+64: 
+65: #include <QtConcurrent/QtConcurrent>
+66: 
+67: 
+68: namespace fincept::screens {
+69: 
+70: using namespace fincept::trading;
+71: using namespace fincept::screens::equity;
+72: 
+73: static const QString TAG = "EquityTrading";
+74: 
+75: EquityTradingScreen::EquityTradingScreen(QWidget* parent) : QWidget(parent) {
+76:     watchlist_symbols_ = DEFAULT_WATCHLIST;
+77:     setup_ui();
+78:     setup_timers();
+79:     connect_data_stream_signals();
+80: 
+81:     // Accept symbol drops anywhere on the screen — route through the
+82:     // existing selection path so sub-panels resync and the linked group is
+83:     // published to.
+84:     symbol_dnd::installDropFilter(this, [this](const SymbolRef& ref, SymbolGroup) {
+85:         if (ref.is_valid())
+86:             on_symbol_selected(ref.symbol);
+87:     });
+88: }
+89: 
+90: EquityTradingScreen::~EquityTradingScreen() {
+91:     if (fill_cb_id_ >= 0)
+92:         OrderMatcher::instance().remove_fill_callback(fill_cb_id_);
+93: }
+94: 
+95: // ============================================================================
+96: // Visibility — start/stop data streams (P3)
+97: // ============================================================================
+98: 
+99: void EquityTradingScreen::showEvent(QShowEvent* event) {
+100:     QWidget::showEvent(event);
+101: 
+102:     // Restore persisted session state on first show
+103:     if (!initialized_) {
+104:         const auto s = ScreenStateManager::instance().load_direct("equity_trading");
+105:         if (!s.isEmpty()) {
+106:             const QString acct = s.value("focused_account_id").toString();
+107:             const QString sym = s.value("selected_symbol", selected_symbol_).toString();
+108:             if (!acct.isEmpty() && acct != focused_account_id_ && AccountManager::instance().has_account(acct))
+109:                 on_account_changed(acct);
+110:             if (sym != selected_symbol_)
+111:                 on_symbol_selected(sym);
+112:         }
+113:     }
+114: 
+115:     // Start all active account data streams
+116:     DataStreamManager::instance().start_all_active();
+117:     DataStreamManager::instance().resume_all();
+118: 
+119:     // Hub subscriptions for streaming data (D4)
+120:     hub_subscribe_streaming();
+
+========== how market data refreshed: grep methods ==========
+109:                on_account_changed(acct);
+323:            stream->fetch_candles(selected_symbol_, tf);
+341:            stream->fetch_clock();
+350:                on_account_changed(accounts.first().account_id);
+370:    connect(&dsm, &DataStreamManager::candles_fetched,
+371:            this, &EquityTradingScreen::on_stream_candles_fetched);
+372:    connect(&dsm, &DataStreamManager::orderbook_fetched,
+373:            this, &EquityTradingScreen::on_stream_orderbook_fetched);
+374:    connect(&dsm, &DataStreamManager::time_sales_fetched,
+375:            this, &EquityTradingScreen::on_stream_time_sales_fetched);
+376:    connect(&dsm, &DataStreamManager::latest_trade_fetched,
+377:            this, &EquityTradingScreen::on_stream_latest_trade_fetched);
+378:    connect(&dsm, &DataStreamManager::calendar_fetched,
+379:            this, &EquityTradingScreen::on_stream_calendar_fetched);
+380:    connect(&dsm, &DataStreamManager::clock_fetched,
+381:            this, &EquityTradingScreen::on_stream_clock_fetched);
+403:    auto* broker = BrokerRegistry::instance().get(account.broker_id);
+407:        order_entry_->set_broker_id(account.broker_id);
+408:        watchlist_->set_broker_id(account.broker_id);
+440:                            LOG_WARN(TAG, "Exception refreshing paper portfolio on fill");
+464:        stream->fetch_candles(selected_symbol_, chart_->current_timeframe());
+465:        stream->fetch_orderbook(selected_symbol_);
+466:        stream->fetch_time_sales(selected_symbol_);
+467:        stream->fetch_calendar();
+468:        stream->fetch_clock();
+490:        auto* broker = BrokerRegistry::instance().get(acct.broker_id);
+491:        const QString broker_name = broker ? broker->profile().display_name : acct.broker_id;
+494:            on_account_changed(id);
+568:        on_account_changed(acct);

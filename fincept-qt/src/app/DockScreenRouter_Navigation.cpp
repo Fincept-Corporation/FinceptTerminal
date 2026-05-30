@@ -129,6 +129,10 @@ void DockScreenRouter::navigate(const QString& id, bool exclusive) {
         // "right-of-TL → below-TL → right-of-BL" cycle was a v1
         // simplification; this is the cleaner Fincept-grade behaviour
         // (everything tabs into centre by default; user splits explicitly).
+        // Product behaviour: a newly-added panel auto-tiles into the next grid
+        // slot rather than stacking as a tab. Place it anywhere first so it's in
+        // a layout, then re-grid all open panels (newest lands in the next slot:
+        // 2→left|right, 3→full-width bottom, 4→2x2, 5+→tab into bottom-right).
         const auto opened = manager_->openedDockAreas();
         ads::CDockAreaWidget* target = nullptr;
         if (auto* focused = manager_->focusedDockWidget()) {
@@ -141,6 +145,7 @@ void DockScreenRouter::navigate(const QString& id, bool exclusive) {
             manager_->addDockWidget(ads::CenterDockWidgetArea, dw, target);
         else
             manager_->addDockWidget(ads::CenterDockWidgetArea, dw);
+        retile_grid(dw);
 
     } else {
         // Widget already has a dedicated area — just bring it to the front.

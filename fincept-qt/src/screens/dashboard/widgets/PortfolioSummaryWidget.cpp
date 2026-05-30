@@ -1,5 +1,6 @@
 #include "screens/dashboard/widgets/PortfolioSummaryWidget.h"
 
+#include "core/currency/Currency.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "services/portfolio/PortfolioService.h"
@@ -228,6 +229,9 @@ void PortfolioSummaryWidget::load_holdings() {
         emit config_changed(config());
     }
     selected_portfolio_name_ = picked->name;
+    // This tile shows the portfolio's OWN currency (intrinsic) — not the global
+    // preferred currency. Values are not converted; we only use the right symbol.
+    selected_portfolio_currency_ = picked->currency.isEmpty() ? QStringLiteral("USD") : picked->currency;
     portfolio_name_lbl_->setText(picked->name.toUpper());
     portfolio_name_lbl_->setVisible(true);
 
@@ -276,9 +280,10 @@ void PortfolioSummaryWidget::render_empty(const QString& message) {
                              .arg(ui::colors::TEXT_TERTIARY()));
     list_layout_->addWidget(empty);
     list_layout_->addStretch();
-    total_value_lbl_->setText(QStringLiteral("$0"));
-    day_pnl_lbl_->setText(QStringLiteral("$0"));
-    total_pnl_lbl_->setText(QStringLiteral("$0"));
+    const QString sym = cur::symbol_for(selected_portfolio_currency_);
+    total_value_lbl_->setText(sym + QStringLiteral("0"));
+    day_pnl_lbl_->setText(sym + QStringLiteral("0"));
+    total_pnl_lbl_->setText(sym + QStringLiteral("0"));
     num_holdings_lbl_->setText(QStringLiteral("0"));
 
     // Reset the colour overrides applied during a populated render so the
@@ -339,6 +344,10 @@ void PortfolioSummaryWidget::render(const QVector<Holding>& holdings,
     last_holdings_ = holdings;
     last_quotes_ = quotes;
 
+    // Portfolio's own currency symbol (intrinsic — not the global preference,
+    // and values are not converted: symbol-only).
+    const QString sym = cur::symbol_for(selected_portfolio_currency_);
+
     QMap<QString, const services::QuoteData*> qmap;
     for (const auto& q : last_quotes_)
         qmap[q.symbol] = &q;
@@ -383,10 +392,13 @@ void PortfolioSummaryWidget::render(const QVector<Holding>& holdings,
         cell(h.symbol, 1, Qt::AlignLeft, ui::colors::TEXT_PRIMARY);
         cell(QString::number(h.shares, 'f', h.shares == (int)h.shares ? 0 : 2), 1, Qt::AlignRight,
              ui::colors::TEXT_SECONDARY);
-        cell(price > 0 ? QString("$%1").arg(price, 0, 'f', 2) : "--", 1, Qt::AlignRight, ui::colors::TEXT_PRIMARY);
-        cell(value > 0 ? QString("$%1").arg(value, 0, 'f', 0) : "--", 1, Qt::AlignRight, ui::colors::TEXT_PRIMARY);
+        cell(price > 0 ? sym + QString::number(price, 'f', 2) : QStringLiteral("--"), 1, Qt::AlignRight,
+             ui::colors::TEXT_PRIMARY);
+        cell(value > 0 ? sym + QString::number(value, 'f', 0) : QStringLiteral("--"), 1, Qt::AlignRight,
+             ui::colors::TEXT_PRIMARY);
 
-        QString pnl_str = pnl >= 0 ? QString("+$%1").arg(pnl, 0, 'f', 0) : QString("-$%1").arg(-pnl, 0, 'f', 0);
+        QString pnl_str = pnl >= 0 ? QStringLiteral("+") + sym + QString::number(pnl, 'f', 0)
+                                   : QStringLiteral("-") + sym + QString::number(-pnl, 'f', 0);
         cell(pnl_str, 1, Qt::AlignRight, pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
 
         list_layout_->addWidget(row);
@@ -394,13 +406,14 @@ void PortfolioSummaryWidget::render(const QVector<Holding>& holdings,
     }
     list_layout_->addStretch();
 
-    total_value_lbl_->setText(QString("$%1").arg(total_value, 0, 'f', 0));
+    total_value_lbl_->setText(sym + QString::number(total_value, 'f', 0));
     num_holdings_lbl_->setText(QString::number(holdings.size()));
 
     double total_pnl = total_value - total_cost;
-    QString day_str = day_pnl >= 0 ? QString("+$%1").arg(day_pnl, 0, 'f', 0) : QString("-$%1").arg(-day_pnl, 0, 'f', 0);
-    QString tot_str =
-        total_pnl >= 0 ? QString("+$%1").arg(total_pnl, 0, 'f', 0) : QString("-$%1").arg(-total_pnl, 0, 'f', 0);
+    QString day_str = day_pnl >= 0 ? QStringLiteral("+") + sym + QString::number(day_pnl, 'f', 0)
+                                   : QStringLiteral("-") + sym + QString::number(-day_pnl, 'f', 0);
+    QString tot_str = total_pnl >= 0 ? QStringLiteral("+") + sym + QString::number(total_pnl, 'f', 0)
+                                     : QStringLiteral("-") + sym + QString::number(-total_pnl, 'f', 0);
 
     day_pnl_lbl_->setText(day_str);
     day_pnl_lbl_->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;")

@@ -542,7 +542,7 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             auto* y_axis = new QValueAxis;
             double margin = (y_max - y_min) * 0.05;
             y_axis->setRange(y_min - margin, y_max + margin);
-            y_axis->setLabelFormat("$%.0f");
+            y_axis->setLabelFormat(cur::symbol() + "%.0f");
             y_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
             y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
             chart->addAxis(y_axis, Qt::AlignLeft);

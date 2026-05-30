@@ -8,6 +8,7 @@
 // live in a shared inline-namespace header.
 #pragma once
 
+#include "core/currency/Currency.h"
 #include "ui/theme/Theme.h"
 
 #include <QCoreApplication>
@@ -59,11 +60,8 @@ inline QString gs_fmt_pct(double v, int decimals = 2) {
 }
 
 inline QString gs_fmt_money(double v) {
-    const double a = std::abs(v);
-    if (a >= 1e9) return QString("$%1B").arg(v / 1e9, 0, 'f', 2);
-    if (a >= 1e6) return QString("$%1M").arg(v / 1e6, 0, 'f', 2);
-    if (a >= 1e3) return QString("$%1K").arg(v / 1e3, 0, 'f', 2);
-    return QString("$%1").arg(v, 0, 'f', 2);
+    // Calculator output — follows the preferred currency.
+    return cur::money(v, /*compact=*/true);
 }
 
 inline QString gs_fmt_signed_money(double v) {
@@ -85,10 +83,8 @@ inline QString gs_pos_neg_color(double v) {
 inline QString format_val(const QJsonValue& val) {
     if (val.isDouble()) {
         double v = val.toDouble();
-        if (std::abs(v) >= 1e9)
-            return QString("$%1B").arg(v / 1e9, 0, 'f', 1);
         if (std::abs(v) >= 1e6)
-            return QString("$%1M").arg(v / 1e6, 0, 'f', 1);
+            return cur::money(v, /*compact=*/true);
         if (std::abs(v) < 1.0 && std::abs(v) > 0.0001)
             return QString("%1%").arg(v * 100, 0, 'f', 2);
         return QString::number(v, 'f', 4);

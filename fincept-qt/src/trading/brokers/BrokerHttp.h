@@ -55,6 +55,13 @@ class BrokerHttp {
     // Raw body PUT — caller provides pre-encoded body + headers (Tradier modify_order)
     BrokerHttpResponse put_raw(const QString& url, const QByteArray& body, const QMap<QString, QString>& headers = {});
 
+    // Generic request — exposes the internal dispatcher for brokers that need a
+    // verb/body combination the typed helpers don't cover. ICICI Breeze, for
+    // example, signs and reads via GET-with-JSON-body (the HTTP method selects
+    // the operation on a single resource endpoint). caller pre-encodes the body.
+    BrokerHttpResponse send(const QString& method, const QString& url, const QByteArray& body,
+                            const QString& content_type, const QMap<QString, QString>& headers = {});
+
     // Timeout in ms (default 8s — tight enough to surface network issues fast,
     // long enough to tolerate a cold TLS handshake).
     void set_timeout(int ms) { timeout_ms_ = ms; }

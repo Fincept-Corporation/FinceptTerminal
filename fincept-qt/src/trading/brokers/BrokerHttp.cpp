@@ -99,6 +99,11 @@ BrokerHttpResponse BrokerHttp::put_raw(const QString& url, const QByteArray& bod
     return execute("PUT", url, body, ct, h);
 }
 
+BrokerHttpResponse BrokerHttp::send(const QString& method, const QString& url, const QByteArray& body,
+                                    const QString& content_type, const QMap<QString, QString>& headers) {
+    return execute(method, url, body, content_type, headers);
+}
+
 BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url, const QByteArray& body,
                                        const QString& content_type, const QMap<QString, QString>& headers) {
     // One QNetworkAccessManager per worker thread so TLS/TCP connections are
@@ -131,7 +136,13 @@ BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url
     // Send request
     QNetworkReply* reply = nullptr;
     if (method == "GET") {
-        reply = nam.get(req);
+        // Some broker REST APIs (e.g. ICICI Breeze) send a JSON body on GET.
+        // QNetworkAccessManager::get() can't carry a body, so fall back to a
+        // custom request when one is present. Empty-body GET keeps the fast path.
+        if (body.isEmpty())
+            reply = nam.get(req);
+        else
+            reply = nam.sendCustomRequest(req, "GET", body);
     } else if (method == "POST") {
         reply = nam.post(req, body);
     } else if (method == "PUT") {

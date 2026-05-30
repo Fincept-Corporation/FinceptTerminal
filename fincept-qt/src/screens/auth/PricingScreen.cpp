@@ -2,6 +2,7 @@
 
 #include "auth/AuthApi.h"
 #include "auth/AuthManager.h"
+#include "core/currency/Currency.h"
 #include "ui/theme/Theme.h"
 
 #include <QApplication>
@@ -370,7 +371,9 @@ QWidget* PricingScreen::create_plan_card(const auth::SubscriptionPlan& plan, int
                                  .arg(MF));
         vl->addWidget(price);
     } else {
-        auto* price = new QLabel(QString("$%1").arg(plan.price_usd, 0, 'f', 0));
+        // Symbol-only (values are stored USD; not FX-converted). Preserve the
+        // whole-number format used for plan prices.
+        auto* price = new QLabel(cur::symbol() + QString::number(plan.price_usd, 'f', 0));
         price->setAlignment(Qt::AlignCenter);
         price->setStyleSheet(QString("color: %1; font-size: 28px; font-weight: 700; "
                                      "background: transparent; %2")

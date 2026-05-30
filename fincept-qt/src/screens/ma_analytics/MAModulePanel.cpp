@@ -1,6 +1,7 @@
 // src/screens/ma_analytics/MAModulePanel.cpp
 #include "screens/ma_analytics/MAModulePanel.h"
 
+#include "core/currency/Currency.h"
 #include "core/logging/Logger.h"
 #include "services/ma_analytics/MAAnalyticsService.h"
 #include "ui/theme/Theme.h"
@@ -77,8 +78,17 @@ QWidget* MAModulePanel::build_input_row(const QString& label, QWidget* input, QW
     auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(0, 2, 0, 2);
     hl->setSpacing(8);
-    auto* lbl = new QLabel(label, row);
+    auto* lbl = new QLabel(row);
     lbl->setFixedWidth(160);
+    // Labels ending in "($)" are a currency-unit hint — bind them so the symbol
+    // tracks the preferred currency live; others are plain text.
+    if (label.endsWith("($)")) {
+        QString base = label;
+        base.chop(3); // strip "($)"
+        cur::bindLabel(lbl, base + "(%1)");
+    } else {
+        lbl->setText(label);
+    }
     lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                            .arg(ui::colors::TEXT_SECONDARY())
                            .arg(ui::fonts::SMALL)
@@ -224,15 +234,13 @@ void MAModulePanel::display_error(const QString& msg) {
     status_label_->setText("Error");
 }
 
-static QString format_value(const QJsonValue& val) {
+// `intrinsic` pins the symbol to a fixed currency (e.g. "USD" for SEC/EDGAR
+// data); empty means follow the user's preferred currency.
+static QString format_value(const QJsonValue& val, const QString& intrinsic = QString()) {
     if (val.isDouble()) {
         double v = val.toDouble();
-        if (std::abs(v) >= 1e9)
-            return QString("$%1B").arg(v / 1e9, 0, 'f', 1);
-        if (std::abs(v) >= 1e6)
-            return QString("$%1M").arg(v / 1e6, 0, 'f', 1);
         if (std::abs(v) >= 1e3)
-            return QString("$%1K").arg(v / 1e3, 0, 'f', 0);
+            return cur::money(v, /*compact=*/true, intrinsic);
         if (std::abs(v) < 1.0 && std::abs(v) > 0.0001)
             return QString("%1%").arg(v * 100, 0, 'f', 1);
         return QString::number(v, 'f', 2);
@@ -244,7 +252,8 @@ static QString format_value(const QJsonValue& val) {
     return QString::fromUtf8("—");
 }
 
-static QTableWidget* build_json_table(const QJsonArray& arr, const QString& accent, QWidget* parent) {
+static QTableWidget* build_json_table(const QJsonArray& arr, const QString& accent, QWidget* parent,
+                                      const QString& intrinsic = QString()) {
     if (arr.isEmpty())
         return nullptr;
     // Collect all column keys from first object
@@ -282,7 +291,7 @@ static QTableWidget* build_json_table(const QJsonArray& arr, const QString& acce
     for (int r = 0; r < arr.size(); ++r) {
         auto obj = arr[r].toObject();
         for (int c = 0; c < cols.size(); ++c) {
-            auto* item = new QTableWidgetItem(format_value(obj[cols[c]]));
+            auto* item = new QTableWidgetItem(format_value(obj[cols[c]], intrinsic));
             item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
             table->setItem(r, c, item);
         }
@@ -291,7 +300,8 @@ static QTableWidget* build_json_table(const QJsonArray& arr, const QString& acce
     return table;
 }
 
-static QTableWidget* build_kv_table(const QJsonObject& obj, const QString& accent, QWidget* parent) {
+static QTableWidget* build_kv_table(const QJsonObject& obj, const QString& accent, QWidget* parent,
+                                    const QString& intrinsic = QString()) {
     // Collect only scalar key-value pairs
     QStringList keys;
     for (auto it = obj.begin(); it != obj.end(); ++it)
@@ -329,7 +339,7 @@ static QTableWidget* build_kv_table(const QJsonObject& obj, const QString& accen
         auto* key_item = new QTableWidgetItem(label.toUpper());
         key_item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         table->setItem(r, 0, key_item);
-        auto* val_item = new QTableWidgetItem(format_value(obj[keys[r]]));
+        auto* val_item = new QTableWidgetItem(format_value(obj[keys[r]], intrinsic));
         val_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         table->setItem(r, 1, val_item);
     }
@@ -341,6 +351,13 @@ void MAModulePanel::display_result(const QJsonObject& payload) {
     clear_results();
 
     QString accent = QString("%1,%2,%3").arg(module_.color.red()).arg(module_.color.green()).arg(module_.color.blue());
+
+    // The Deals module shows SEC/EDGAR filing values, which are USD — pin them
+    // so they don't get repainted with the user's preferred currency symbol.
+    // Every other M&A module is a calculator the user denominates themselves.
+    const QString intrinsic = (module_.id == fincept::services::ma::ModuleId::Deals)
+                                  ? QStringLiteral("USD")
+                                  : QString();
 
     // Section header
     auto* header = new QLabel("RESULTS");
@@ -364,7 +381,7 @@ void MAModulePanel::display_result(const QJsonObject& payload) {
         has_scalars = true;
         QString label = it.key();
         label.replace('_', ' ');
-        auto* card = build_metric_card(label.toUpper(), format_value(it.value()), module_.color.name(), grid);
+        auto* card = build_metric_card(label.toUpper(), format_value(it.value(), intrinsic), module_.color.name(), grid);
         gl->addWidget(card, row, col);
         col++;
         if (col >= 3) {
@@ -394,14 +411,14 @@ void MAModulePanel::display_result(const QJsonObject& payload) {
             results_layout_->addWidget(sec);
 
             if (arr[0].isObject()) {
-                auto* table = build_json_table(arr, accent, this);
+                auto* table = build_json_table(arr, accent, this, intrinsic);
                 if (table)
                     results_layout_->addWidget(table);
             } else {
                 // Simple array — display as comma-separated
                 QStringList items;
                 for (const auto& v : arr)
-                    items.append(format_value(v));
+                    items.append(format_value(v, intrinsic));
                 auto* lbl = new QLabel(items.join(", "));
                 lbl->setWordWrap(true);
                 lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;"
@@ -427,7 +444,7 @@ void MAModulePanel::display_result(const QJsonObject& payload) {
                                    .arg(ui::fonts::DATA_FAMILY));
             results_layout_->addWidget(sec);
 
-            auto* table = build_kv_table(obj, accent, this);
+            auto* table = build_kv_table(obj, accent, this, intrinsic);
             if (table)
                 results_layout_->addWidget(table);
         }
@@ -509,6 +526,9 @@ void MAModulePanel::on_error(const QString& context, const QString& message) {
 void MAModulePanel::apply_tab_stylesheet() {
     if (!sub_tabs_)
         return;
+    // Never truncate tab labels to "Accreti…"; show full text and scroll on overflow.
+    sub_tabs_->setElideMode(Qt::ElideNone);
+    sub_tabs_->setUsesScrollButtons(true);
     sub_tabs_->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
                                      "QTabBar::tab { background:%3; color:%4; padding:6px 16px;"
                                      "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"

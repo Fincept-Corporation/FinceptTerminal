@@ -17,8 +17,9 @@ public:
     double trailing_stop() const;
     double quantity() const;
     double max_order_value() const;
+    double capital_pct() const; // % of capital allocated per backtest entry
 
-    void set_values(double sl, double tp, double ts, double qty, double mov);
+    void set_values(double sl, double tp, double ts, double qty, double mov, double capital_pct = 100.0);
 
 signals:
     void values_changed();
@@ -36,6 +37,7 @@ private:
     SliderRow stop_loss_;
     SliderRow take_profit_;
     SliderRow trailing_stop_;
+    SliderRow capital_pct_;
     QDoubleSpinBox* quantity_spin_ = nullptr;
     QDoubleSpinBox* max_order_spin_ = nullptr;
 };

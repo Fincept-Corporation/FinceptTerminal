@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "core/currency/Currency.h"
 #include "services/backtesting/BacktestingTypes.h"
 
 #include <QComboBox>
@@ -127,13 +128,10 @@ inline QString fmt_metric(const QString& key, const QJsonValue& val) {
     if (ratio_metric_keys().contains(key))
         return QString::number(v, 'f', std::abs(v) >= 10.0 ? 2 : 4);
 
-    // Currency-like large values
-    if (std::abs(v) >= 1e9)
-        return QString("$%1B").arg(v / 1e9, 0, 'f', 1);
-    if (std::abs(v) >= 1e6)
-        return QString("$%1M").arg(v / 1e6, 0, 'f', 1);
+    // Currency-like large values — follow the preferred currency (backtest
+    // capital/equity is user-denominated, not market data).
     if (std::abs(v) >= 1e3)
-        return QString("$%1K").arg(v / 1e3, 0, 'f', 0);
+        return cur::money(v, /*compact=*/true);
 
     return QString::number(v, 'f', 4);
 }

@@ -74,6 +74,20 @@ void AlgoTradingScreen::build_ui() {
     content_stack_->addWidget(dashboard_);
     root->addWidget(content_stack_, 1);
 
+    // "Edit" in My Strategies opens the Builder (tab 0) pre-filled with that strategy.
+    connect(strategies_, &StrategyListPanel::edit_requested, this,
+            [this](const AlgoStrategy& s) {
+                builder_->load_strategy(s);
+                on_tab_changed(0);
+            });
+
+    // "Backtest" opens the Builder (tab 0) pre-filled and runs the backtest immediately.
+    connect(strategies_, &StrategyListPanel::backtest_requested, this,
+            [this](const AlgoStrategy& s, const QString& symbol, const QString& start, const QString& end) {
+                on_tab_changed(0);
+                builder_->load_and_backtest(s, symbol, start, end);
+            });
+
     root->addWidget(build_status_bar());
     setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 }

@@ -112,7 +112,7 @@ class DhanWebSocket : public BrokerWebSocketBase {
     BrokerQuote parse_quote(const uchar* payload, int len, int segment, quint32 security_id) const;
     BrokerQuote parse_full(const uchar* payload, int len, int segment, quint32 security_id,
                            MarketDepth& depth_out, bool& has_depth) const;
-    void handle_disconnect(const uchar* payload, int len) const;
+    void handle_disconnect(const uchar* payload, int len);
 
     // Enrich symbol/exchange for a security id via InstrumentService.
     QString symbol_for_security(quint32 security_id, const QString& fallback) const;

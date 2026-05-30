@@ -229,6 +229,15 @@ class DockScreenRouter : public QObject {
     ads::CDockWidget* create_dock_widget(const QString& id);
     void materialize_screen(const QString& id);
 
+    /// Re-tile all open panels into the auto-grid the product wants when a new
+    /// panel is added: 1=full, 2=left|right, 3=top-row + full-width bottom,
+    /// 4=2x2 (3rd→bottom-left, 4th→bottom-right), 5+=tab into bottom-right.
+    /// Existing panels keep their reading order (top→bottom, left→right); if
+    /// `newest` is given it is placed into the last/next slot. Shared by the
+    /// `layout.tile_2x2` command (newest == nullptr) and navigate()'s
+    /// new-panel path.
+    void retile_grid(ads::CDockWidget* newest = nullptr);
+
     // ── Symbol group linking ──────────────────────────────────────────────────
     // If `screen` (or one of its descendants) implements IGroupLinked, wraps
     // it in a thin container with a top-bar GroupBadge and wires the badge to

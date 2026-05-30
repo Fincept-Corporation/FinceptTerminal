@@ -2,6 +2,7 @@
 
 #include "screens/settings/GeneralSection.h"
 
+#include "core/currency/CurrencyManager.h"
 #include "core/i18n/LanguageManager.h"
 #include "core/logging/Logger.h"
 #include "screens/settings/SettingsRowHelpers.h"
@@ -114,6 +115,34 @@ void GeneralSection::build_ui() {
                 i18n::LanguageManager::instance().set_language(code);
             });
 
+    vl->addSpacing(20);
+
+    // ── CURRENCY ────────────────────────────────────────────────────────────
+    auto* cur_title = new QLabel(tr("CURRENCY"));
+    cur_title->setStyleSheet(section_title_ss());
+    vl->addWidget(cur_title);
+    vl->addWidget(make_sep());
+    vl->addSpacing(8);
+
+    currency_combo_ = new QComboBox;
+    for (const auto& c : currency::CurrencyManager::available())
+        currency_combo_->addItem(QString("%1  %2  (%3)").arg(c.symbol, c.name, c.code), c.code);
+    currency_combo_->setStyleSheet(combo_ss());
+    vl->addWidget(make_row(
+        tr("Display currency"),
+        currency_combo_,
+        tr("Changes the currency symbol on calculators and analytics. Live market "
+           "data keeps its own currency — values are not converted.")));
+
+    connect(currency_combo_, qOverload<int>(&QComboBox::currentIndexChanged), this,
+            [this](int idx) {
+                const QString code = currency_combo_->itemData(idx).toString();
+                if (code.isEmpty())
+                    return;
+                LOG_INFO("Settings", QString("currency → %1").arg(code));
+                currency::CurrencyManager::instance().set_currency(code);
+            });
+
     vl->addStretch();
 
     scroll->setWidget(page);
@@ -137,6 +166,12 @@ void GeneralSection::reload() {
         const int idx = language_combo_->findData(effective);
         QSignalBlocker block(language_combo_);
         language_combo_->setCurrentIndex(idx >= 0 ? idx : 0);
+    }
+    if (currency_combo_) {
+        const QString cur = currency::CurrencyManager::instance().code();
+        const int idx = currency_combo_->findData(cur);
+        QSignalBlocker block(currency_combo_);
+        currency_combo_->setCurrentIndex(idx >= 0 ? idx : 0);
     }
 }
 

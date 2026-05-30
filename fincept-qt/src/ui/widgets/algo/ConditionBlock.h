@@ -1,6 +1,7 @@
 // src/ui/widgets/algo/ConditionBlock.h
 #pragma once
 #include "services/algo_trading/AlgoTradingTypes.h"
+#include "ui/widgets/algo/OperandEditor.h"
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -8,10 +9,14 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QPushButton>
-#include <QWidget>
 
 namespace fincept::ui::algo {
 
+/// A single comparison leaf: `LHS  <operator>  RHS`.
+/// LHS is always an indicator operand; RHS is an indicator-or-value operand,
+/// and is hidden for the unary `rising` / `falling` operators. Serializes to the
+/// flat comparison schema the ConditionEvaluator understands (indicator/params/
+/// field/offset on the left; compare_* / value on the right).
 class ConditionBlock : public QFrame {
     Q_OBJECT
 public:
@@ -26,32 +31,18 @@ signals:
 
 private:
     void build_ui();
-    void on_indicator_changed(int index);
-    void on_compare_mode_changed(int index);
-    void populate_indicators();
-    void populate_fields(QComboBox* combo, const QString& indicator);
     void populate_operators();
-    void update_param_visibility();
+    void on_operator_changed();
 
     bool is_entry_;
 
-    QComboBox* indicator_combo_ = nullptr;
-    QComboBox* field_combo_ = nullptr;
+    OperandEditor* lhs_ = nullptr;
     QComboBox* operator_combo_ = nullptr;
-    QComboBox* compare_mode_combo_ = nullptr;
-    QDoubleSpinBox* value_spin_ = nullptr;
-    QComboBox* compare_indicator_combo_ = nullptr;
-    QComboBox* compare_field_combo_ = nullptr;
-
-    // Indicator parameters
-    QWidget* params_container_ = nullptr;
-    QDoubleSpinBox* param1_spin_ = nullptr;
-    QDoubleSpinBox* param2_spin_ = nullptr;
-    QDoubleSpinBox* param3_spin_ = nullptr;
-    QLabel* param1_label_ = nullptr;
-    QLabel* param2_label_ = nullptr;
-    QLabel* param3_label_ = nullptr;
-
+    OperandEditor* rhs_ = nullptr;
+    // `between` uses two constants (low..high) instead of the RHS operand.
+    QDoubleSpinBox* between_low_ = nullptr;
+    QLabel* between_and_ = nullptr;
+    QDoubleSpinBox* between_high_ = nullptr;
     QPushButton* remove_btn_ = nullptr;
 };
 
