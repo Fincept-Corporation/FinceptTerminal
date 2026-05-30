@@ -71,6 +71,7 @@ class MarketPanel : public QWidget {
     bool fetch_failed_ = false;
 
     QHash<QString, services::QuoteData> row_cache_;
+    QHash<QString, QString> names_;  // symbol → human-readable display name (yfinance, cached)
     QSet<QString> pending_initial_;  // symbols awaiting first delivery for refresh_finished
     bool refresh_inflight_ = false;
     bool hub_active_ = false;

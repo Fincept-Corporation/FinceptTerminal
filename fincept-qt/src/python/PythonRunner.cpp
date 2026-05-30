@@ -488,9 +488,16 @@ void PythonRunner::run_code(const QString& code, Callback cb) {
         return;
     }
 
-    // Write code to a temp file
+    // Write code to a temp file. The filename must be unique even when several
+    // run_code() calls fire within the same millisecond (e.g. on portfolio load
+    // fetch_correlation + benchmark history + risk-free rate all kick off at
+    // once). A bare millisecond timestamp collided, so one cell's completion
+    // would delete the temp file out from under another still-pending cell
+    // ("can't open file … No such file or directory"). A UUID guarantees
+    // uniqueness regardless of timing.
     QString temp_dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
-    QString temp_path = temp_dir + "/fincept_cell_" + QString::number(QDateTime::currentMSecsSinceEpoch()) + ".py";
+    QString temp_path = temp_dir + "/fincept_cell_" + QString::number(QDateTime::currentMSecsSinceEpoch()) + "_" +
+                        QUuid::createUuid().toString(QUuid::Id128) + ".py";
 
     QFile file(temp_path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -763,11 +770,57 @@ void PythonRunner::start_next() {
 // ── Extract JSON ─────────────────────────────────────────────────────────────
 
 QString extract_json(const QString& output) {
-    // Find the first '{' or '[' and return everything from that point.
-    // Scripts print multi-line indented JSON, so we cannot take a single line.
+    // Return the LAST complete top-level JSON value in the output.
+    //
+    // Script/agent stdout is frequently polluted with leading log lines — some
+    // of which contain braces (e.g. a Python dict repr like
+    // "ERROR ... {'error': {...}, 'status': 401}" leaked onto stdout by a
+    // third-party logger). The old "first '{' to end" logic grabbed that dict
+    // repr and QJsonDocument::fromJson() then returned null → the caller saw a
+    // spurious "exit=0" failure. Our scripts always print their real JSON
+    // envelope LAST, so we scan forward tracking brace/bracket depth (respecting
+    // double-quoted strings) and keep the final value whose depth returns to 0.
+    int best_start = -1, best_end = -1; // [start, end) of the last balanced value
+    int cur_start = -1, depth = 0;
+    bool in_str = false, esc = false;
+    for (int i = 0; i < output.size(); ++i) {
+        const QChar c = output[i];
+        if (in_str) {
+            if (esc)
+                esc = false;
+            else if (c == '\\')
+                esc = true;
+            else if (c == '"')
+                in_str = false;
+            continue;
+        }
+        if (c == '"') {
+            in_str = true;
+            continue;
+        }
+        if (depth == 0) {
+            if (c == '{' || c == '[') {
+                cur_start = i;
+                depth = 1;
+            }
+        } else {
+            if (c == '{' || c == '[') {
+                ++depth;
+            } else if (c == '}' || c == ']') {
+                if (--depth == 0) {
+                    best_start = cur_start;
+                    best_end = i + 1;
+                }
+            }
+        }
+    }
+
+    if (best_start >= 0)
+        return output.mid(best_start, best_end - best_start).trimmed();
+
+    // Fallback: original heuristic (first bracket to end) for partial output.
     int brace = output.indexOf('{');
     int bracket = output.indexOf('[');
-
     int start = -1;
     if (brace >= 0 && bracket >= 0)
         start = qMin(brace, bracket);
@@ -775,10 +828,8 @@ QString extract_json(const QString& output) {
         start = brace;
     else if (bracket >= 0)
         start = bracket;
-
     if (start < 0)
         return {};
-
     return output.mid(start).trimmed();
 }
 

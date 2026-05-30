@@ -67,8 +67,11 @@ class NewsDetailPanel : public QWidget {
     QLabel* ai_confidence_ = nullptr;
     QLabel* ai_keywords_ = nullptr;
     QLabel* ai_credits_ = nullptr;
+    QLabel* key_points_title_ = nullptr;
     QVBoxLayout* key_points_layout_ = nullptr;
+    QLabel* risk_title_ = nullptr;
     QVBoxLayout* risk_layout_ = nullptr;
+    QLabel* topics_title_ = nullptr;
     QVBoxLayout* topics_layout_ = nullptr;
     QLabel* ai_entities_title_ = nullptr;
     QVBoxLayout* ai_entities_layout_ = nullptr;

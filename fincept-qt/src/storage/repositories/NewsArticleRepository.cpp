@@ -295,6 +295,24 @@ Result<QVector<fincept::services::NewsArticle>> NewsArticleRepository::load_save
                       {}, map_row);
 }
 
+// ── save_analysis / load_analysis ─────────────────────────────────────────────
+
+Result<void> NewsArticleRepository::save_analysis(const QString& url, const QString& analysis_json) const {
+    return exec_write("INSERT OR REPLACE INTO news_analysis (url, analysis_json, created_at) "
+                      "VALUES (?, ?, strftime('%s','now'))",
+                      {url, analysis_json});
+}
+
+Result<QString> NewsArticleRepository::load_analysis(const QString& url) const {
+    auto r = db().execute("SELECT analysis_json FROM news_analysis WHERE url = ?", {url});
+    if (r.is_err())
+        return Result<QString>::err(r.error());
+    auto& q = r.value();
+    if (!q.next())
+        return Result<QString>::ok({}); // none stored — not an error
+    return Result<QString>::ok(q.value(0).toString());
+}
+
 // ── search_fts ────────────────────────────────────────────────────────────────
 
 Result<QVector<fincept::services::NewsArticle>> NewsArticleRepository::search_fts(const QString& query,

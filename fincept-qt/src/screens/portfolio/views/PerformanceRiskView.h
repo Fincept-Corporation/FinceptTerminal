@@ -17,6 +17,7 @@ class PerformanceRiskView : public QWidget {
 
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
     void set_snapshots(const QVector<portfolio::PortfolioSnapshot>& snapshots);
+    void set_metrics(const portfolio::ComputedMetrics& metrics);
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -35,6 +36,9 @@ class PerformanceRiskView : public QWidget {
     // Header labels
     QLabel* chart_title_ = nullptr;
     QLabel* metrics_header_ = nullptr;
+    QLabel* rf_hint_ = nullptr; // shown only when no FRED key is configured
+
+    void update_rf_hint();
 
     // Chart
     QChartView* chart_view_ = nullptr;
@@ -59,6 +63,7 @@ class PerformanceRiskView : public QWidget {
     // Data
     portfolio::PortfolioSummary summary_;
     QVector<portfolio::PortfolioSnapshot> snapshots_;
+    portfolio::ComputedMetrics metrics_;
     QString currency_;
     bool has_data_ = false;
 };

@@ -87,6 +87,8 @@ class SaxoBankBroker : public IBroker {
     static int saxo_horizon(const QString& resolution);
     // Extract Uic from symbol "NYSE:AAPL:211" → "211"
     static QString extract_uic(const QString& symbol);
+    // Extract optional AssetType from symbol "EXCHANGE:SYMBOL:UIC:ASSETTYPE" → 4th part, else "Stock"
+    static QString extract_asset_type(const QString& symbol);
 };
 
 } // namespace fincept::trading

@@ -8,6 +8,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTimeZone>
 
 namespace fincept::trading {
 
@@ -528,9 +529,8 @@ ApiResponse<QVector<BrokerCandle>> AliceBlueBroker::get_history(const BrokerCred
             dt.setTime(QTime(23, 59, 59));
         else
             dt.setTime(QTime(9, 15, 0));
-        // IST = UTC+5:30 → subtract 5h30m to get UTC, then ms
-        qint64 epoch_ms = dt.toMSecsSinceEpoch() - (5 * 3600 + 30 * 60) * 1000LL;
-        return QString::number(epoch_ms);
+        dt.setTimeZone(QTimeZone(19800));  // interpret wall-clock as IST (+5:30)
+        return QString::number(dt.toMSecsSinceEpoch());
     };
 
     QString res = ab_resolution(resolution);
@@ -564,7 +564,9 @@ ApiResponse<QVector<BrokerCandle>> AliceBlueBroker::get_history(const BrokerCred
         QJsonObject c = item.toObject();
         BrokerCandle candle;
         // Response fields: time (YYYY-MM-DD HH:MM:SS), open, high, low, close, volume
-        candle.timestamp = QDateTime::fromString(c["time"].toString(), "yyyy-MM-dd HH:mm:ss").toMSecsSinceEpoch();
+        QDateTime dt = QDateTime::fromString(c["time"].toString(), "yyyy-MM-dd HH:mm:ss");
+        dt.setTimeZone(QTimeZone(19800));  // interpret wall-clock as IST (+5:30)
+        candle.timestamp = dt.toMSecsSinceEpoch();
         candle.open = c["open"].toDouble();
         candle.high = c["high"].toDouble();
         candle.low = c["low"].toDouble();

@@ -121,6 +121,25 @@ class MarketDataService : public QObject
     using SparklineCallback = std::function<void(bool, QHash<QString, QVector<double>>)>;
     void fetch_sparklines(const QStringList& symbols, SparklineCallback cb);
 
+    /// Resolve human-readable display names (e.g. "^GSPC" → "S&P 500",
+    /// "GC=F" → "Gold") for cryptic tickers so market tables can show names
+    /// instead of raw symbols. Names come from yfinance (longName/shortName).
+    ///
+    /// Names are static, so they are cached to disk: the callback fires once
+    /// immediately with whatever is already cached for `symbols`, and — if any
+    /// were missing — again after a single `quote_names` Python call resolves
+    /// and persists them. The network hit is paid once per symbol, never on
+    /// the quote-refresh path.
+    using NamesCallback = std::function<void(const QHash<QString, QString>&)>;
+    void resolve_names(const QStringList& symbols, NamesCallback cb);
+
+    /// Currency-symbol prefix for a symbol's price (e.g. "AAPL" → "$",
+    /// "RELIANCE.NS" → "₹"), or an empty string when unknown or not meaningful
+    /// (forex pairs, index levels/yields). Resolved alongside display names by
+    /// `resolve_names` and read from the same disk-backed cache, so this is a
+    /// cheap synchronous lookup.
+    QString currency_prefix(const QString& symbol);
+
     static QVector<MarketCategory> default_global_markets();
     static QVector<RegionalMarket> default_regional_markets();
 
@@ -142,6 +161,15 @@ class MarketDataService : public QObject
     void publish_history_to_hub(const QString& symbol, const QString& period, const QString& interval,
                                 const QVector<HistoryPoint>& points);
     void publish_sparkline_to_hub(const QString& symbol, const QVector<double>& points);
+
+    // ── Display-name cache (symbol → human-readable name) ──
+    // Persisted to SettingsRepository so resolution survives restarts and the
+    // per-symbol yfinance .info cost is paid at most once.
+    void load_name_cache();
+    void persist_name_cache();
+    QHash<QString, QString> name_cache_;
+    QHash<QString, QString> currency_cache_;  // symbol → ISO currency code (e.g. "USD")
+    bool name_cache_loaded_ = false;
 
     // ── Batching ──
     struct PendingRequest {

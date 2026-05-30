@@ -13,6 +13,7 @@ using fincept::services::PortfolioAnalyticsService;
 
 #define QT_CHARTS_USE_NAMESPACE
 #include <QChart>
+#include <QTabBar>
 #include <QDate>
 #include <QEvent>
 #include <QHBoxLayout>
@@ -77,6 +78,9 @@ void PortfolioOptimizationView::build_ui() {
     layout->setContentsMargins(0, 0, 0, 0);
 
     tabs_ = new QTabWidget;
+    tabs_->tabBar()->setElideMode(Qt::ElideNone);
+    tabs_->tabBar()->setExpanding(false);
+    tabs_->tabBar()->setUsesScrollButtons(false);
     tabs_->setDocumentMode(true);
     tabs_->setStyleSheet(QString("QTabWidget::pane { border:0; background:%1; }"
                                  "QTabBar::tab { background:%2; color:%3; padding:6px 14px; border:0;"
@@ -131,7 +135,7 @@ QWidget* PortfolioOptimizationView::build_optimize_tab() {
     // via the combo's currentText only after look-up against the storage key.
     method_cb_ = add_combo(tr("METHOD:"), method_field_label_,
                            {"Max Sharpe", "Min Volatility", "Risk Parity", "Max Return", "Equal Weight", "HRP",
-                            "Target Return"});
+                            "Target Return", "B-L Model"});
     returns_cb_ = add_combo(tr("RETURNS:"), returns_field_label_,
                             {"Mean Historical", "EMA", "CAPM", "James-Stein"});
     risk_model_cb_ = add_combo(tr("RISK MODEL:"), risk_model_field_label_,
@@ -493,9 +497,19 @@ QWidget* PortfolioOptimizationView::build_risk_tab() {
         QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     layout->addWidget(risk_title_);
 
-    risk_body_ = make_placeholder(tr("Risk decomposition shows how each holding contributes to overall portfolio risk.\n"
-                                     "Run optimization to compute marginal risk contributions."));
-    layout->addWidget(risk_body_);
+    risk_stack_ = new QStackedWidget;
+    risk_body_ = make_placeholder(tr("Marginal risk contribution decomposes total portfolio volatility across holdings.\n"
+                                     "Run optimization on the OPTIMIZE tab to compute it from the covariance matrix."));
+    risk_stack_->addWidget(risk_body_);
+
+    risk_table_ = new QTableWidget;
+    risk_table_->setColumnCount(5);
+    risk_table_->setHorizontalHeaderLabels(
+        {tr("SYMBOL"), tr("WEIGHT"), tr("ASSET VOL"), tr("MARGINAL RISK"), tr("RISK CONTRIB")});
+    style_table(risk_table_);
+    risk_stack_->addWidget(risk_table_);
+
+    layout->addWidget(risk_stack_, 1);
     return w;
 }
 
@@ -504,14 +518,24 @@ QWidget* PortfolioOptimizationView::build_stress_tab() {
     auto* layout = new QVBoxLayout(w);
     layout->setContentsMargins(16, 12, 16, 12);
 
-    stress_title_ = new QLabel(tr("OPTIMIZATION STRESS SCENARIOS"));
+    stress_title_ = new QLabel(tr("STRESS SCENARIOS"));
     stress_title_->setStyleSheet(
         QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     layout->addWidget(stress_title_);
 
-    stress_body_ = make_placeholder(tr("Test how different optimization methods perform under stress conditions.\n"
-                                       "Compares optimal weights across historical crisis scenarios."));
-    layout->addWidget(stress_body_);
+    stress_stack_ = new QStackedWidget;
+    stress_body_ = make_placeholder(tr("Applies historical crisis shocks to your current asset-class exposure.\n"
+                                       "Select a portfolio to see estimated impact per scenario."));
+    stress_stack_->addWidget(stress_body_);
+
+    stress_table_ = new QTableWidget;
+    stress_table_->setColumnCount(4);
+    stress_table_->setHorizontalHeaderLabels(
+        {tr("SCENARIO"), tr("DESCRIPTION"), tr("IMPACT"), tr("EST. LOSS")});
+    style_table(stress_table_);
+    stress_stack_->addWidget(stress_table_);
+
+    layout->addWidget(stress_stack_, 1);
     return w;
 }
 
@@ -525,10 +549,25 @@ QWidget* PortfolioOptimizationView::build_black_litterman_tab() {
         QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     layout->addWidget(bl_title_);
 
-    bl_body_ = make_placeholder(tr("The Black-Litterman model combines market equilibrium returns with investor views\n"
-                                   "to produce more stable and intuitive portfolio allocations.\n\n"
-                                   "Select 'B-L Model' from the METHOD dropdown on the OPTIMIZE tab to run it."));
+    bl_body_ = new QLabel(tr("Market-implied equilibrium returns (π = δ·Σ·w_market) shown below. "
+                             "Select 'B-L Model' as the METHOD on the OPTIMIZE tab to also compute B-L weights."));
+    bl_body_->setWordWrap(true);
+    bl_body_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     layout->addWidget(bl_body_);
+
+    bl_stack_ = new QStackedWidget;
+    auto* bl_placeholder = make_placeholder(tr("Run optimization on the OPTIMIZE tab to compute "
+                                               "market-implied returns and Black-Litterman weights."));
+    bl_stack_->addWidget(bl_placeholder);
+
+    bl_table_ = new QTableWidget;
+    bl_table_->setColumnCount(4);
+    bl_table_->setHorizontalHeaderLabels(
+        {tr("SYMBOL"), tr("IMPLIED RETURN"), tr("CURRENT WT"), tr("OPTIMIZED WT")});
+    style_table(bl_table_);
+    bl_stack_->addWidget(bl_table_);
+
+    layout->addWidget(bl_stack_, 1);
     return w;
 }
 
@@ -539,6 +578,7 @@ void PortfolioOptimizationView::set_data(const portfolio::PortfolioSummary& summ
     currency_ = currency;
     has_data_ = true;
     update_allocation();
+    update_stress(); // stress test runs off current holdings — no optimization needed
 }
 
 void PortfolioOptimizationView::changeEvent(QEvent* event) {
@@ -589,25 +629,35 @@ void PortfolioOptimizationView::retranslateUi() {
                                    "against historical data to evaluate out-of-sample performance."));
     if (risk_title_)            risk_title_->setText(tr("RISK DECOMPOSITION"));
     if (risk_body_)
-        risk_body_->setText(tr("Risk decomposition shows how each holding contributes to overall portfolio risk.\n"
-                               "Run optimization to compute marginal risk contributions."));
-    if (stress_title_)          stress_title_->setText(tr("OPTIMIZATION STRESS SCENARIOS"));
+        risk_body_->setText(tr("Marginal risk contribution decomposes total portfolio volatility across holdings.\n"
+                               "Run optimization on the OPTIMIZE tab to compute it from the covariance matrix."));
+    if (risk_table_)
+        risk_table_->setHorizontalHeaderLabels(
+            {tr("SYMBOL"), tr("WEIGHT"), tr("ASSET VOL"), tr("MARGINAL RISK"), tr("RISK CONTRIB")});
+    if (stress_title_)          stress_title_->setText(tr("STRESS SCENARIOS"));
     if (stress_body_)
-        stress_body_->setText(tr("Test how different optimization methods perform under stress conditions.\n"
-                                 "Compares optimal weights across historical crisis scenarios."));
+        stress_body_->setText(tr("Applies historical crisis shocks to your current asset-class exposure.\n"
+                                 "Select a portfolio to see estimated impact per scenario."));
+    if (stress_table_)
+        stress_table_->setHorizontalHeaderLabels(
+            {tr("SCENARIO"), tr("DESCRIPTION"), tr("IMPACT"), tr("EST. LOSS")});
     if (bl_title_)              bl_title_->setText(tr("BLACK-LITTERMAN MODEL"));
     if (bl_body_)
-        bl_body_->setText(tr("The Black-Litterman model combines market equilibrium returns with investor views\n"
-                             "to produce more stable and intuitive portfolio allocations.\n\n"
-                             "Select 'B-L Model' from the METHOD dropdown on the OPTIMIZE tab to run it."));
+        bl_body_->setText(tr("Market-implied equilibrium returns (π = δ·Σ·w_market) shown below. "
+                             "Select 'B-L Model' as the METHOD on the OPTIMIZE tab to also compute B-L weights."));
+    if (bl_table_)
+        bl_table_->setHorizontalHeaderLabels(
+            {tr("SYMBOL"), tr("IMPLIED RETURN"), tr("CURRENT WT"), tr("OPTIMIZED WT")});
 
     // Combo items are English keys sent to Python (Max Sharpe, Risk Parity, etc.)
     // and intentionally not translated — they double as cache keys + the analytics
     // service contract. Combos remain untranslated. update_allocation() and
     // update_strategies/compare rebuild table content from data, no tr() literals
     // in row cells, so a re-render isn't needed for table contents.
-    if (has_data_)
+    if (has_data_) {
         update_allocation();
+        update_stress();
+    }
 }
 
 // ── Optimization ──────────────────────────────────────────────────────────────
@@ -692,6 +742,8 @@ void PortfolioOptimizationView::run_optimization() {
                     self->update_frontier(root["frontier"].toArray());
                     self->update_strategies(root["comparison"].toObject());
                     self->update_compare(root["comparison"].toObject());
+                    self->update_risk(root);
+                    self->update_black_litterman(root);
                     if (self->backtest_optimal_btn_)
                         self->backtest_optimal_btn_->setEnabled(true);
                 },
@@ -774,10 +826,12 @@ void PortfolioOptimizationView::run_optimization() {
                         set(4, action, ac);
                     }
 
-                    // ── Frontier, Strategies, Compare ─────────────────────────
+                    // ── Frontier, Strategies, Compare, Risk, B-L ──────────────
                     self->update_frontier(root["frontier"].toArray());
                     self->update_strategies(root["comparison"].toObject());
                     self->update_compare(root["comparison"].toObject());
+                    self->update_risk(root);
+                    self->update_black_litterman(root);
                     if (self->backtest_optimal_btn_)
                         self->backtest_optimal_btn_->setEnabled(true);
 
@@ -1020,6 +1074,158 @@ void PortfolioOptimizationView::update_compare(const QJsonObject& comparison) {
     }
 
     compare_stack_->setCurrentIndex(1);
+}
+
+// ── Risk decomposition ──────────────────────────────────────────────────────────
+// Renders the per-asset marginal risk contribution computed by the optimizer
+// (risk_contributions / marginal_risk / asset_volatility from the Python output).
+void PortfolioOptimizationView::update_risk(const QJsonObject& root) {
+    const auto rc = root["risk_contributions"].toObject();
+    const auto av = root["asset_volatility"].toObject();
+    const auto mr = root["marginal_risk"].toObject();
+    const auto weights = root["weights"].toObject();
+    if (rc.isEmpty() || !risk_table_)
+        return;
+
+    struct Row {
+        QString sym;
+        double w, vol, mrc, rc;
+    };
+    QVector<Row> rows;
+    for (auto it = rc.begin(); it != rc.end(); ++it) {
+        const QString sym = it.key();
+        rows.append({sym, weights.value(sym).toDouble() * 100.0, av.value(sym).toDouble() * 100.0,
+                     mr.value(sym).toDouble(), it.value().toDouble()});
+    }
+    std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.rc > b.rc; });
+
+    risk_table_->setRowCount(rows.size());
+    for (int r = 0; r < rows.size(); ++r) {
+        const auto& row = rows[r];
+        risk_table_->setRowHeight(r, 28);
+        auto set = [&](int col, const QString& text, const char* color = nullptr) {
+            auto* item = new QTableWidgetItem(text);
+            item->setTextAlignment(col == 0 ? (Qt::AlignLeft | Qt::AlignVCenter) : (Qt::AlignRight | Qt::AlignVCenter));
+            if (color)
+                item->setForeground(QColor(color));
+            risk_table_->setItem(r, col, item);
+        };
+        set(0, row.sym, ui::colors::CYAN);
+        set(1, QString("%1%").arg(row.w, 0, 'f', 1));
+        set(2, QString("%1%").arg(row.vol, 0, 'f', 1));
+        set(3, QString::number(row.mrc, 'f', 3));
+        // Flag assets whose share of risk exceeds their share of capital (risk concentration).
+        const char* rc_col = row.rc > row.w + 0.5 ? ui::colors::NEGATIVE : ui::colors::AMBER;
+        set(4, QString("%1%").arg(row.rc, 0, 'f', 1), rc_col);
+    }
+    risk_stack_->setCurrentIndex(1);
+}
+
+// ── Stress scenarios ────────────────────────────────────────────────────────────
+// Applies historical crisis shocks to the portfolio's current asset-class mix.
+// Runs off current holdings — no optimization required.
+void PortfolioOptimizationView::update_stress() {
+    if (summary_.holdings.isEmpty() || !stress_table_)
+        return;
+
+    struct StressScenario {
+        const char* name;
+        const char* desc;
+        double equity_shock;    // %
+        double bond_shock;      // %
+        double commodity_shock; // %
+    };
+    static const StressScenario kScenarios[] = {
+        {"2008 Financial Crisis", "Lehman collapse, credit freeze", -38.5, 5.2, -33.0},
+        {"2020 COVID Crash", "Pandemic selloff (Feb–Mar 2020)", -33.9, 1.2, -20.0},
+        {"Dot-com Bust", "Tech bubble burst (2000–2002)", -49.1, 8.5, -10.0},
+        {"Interest Rate Shock +3%", "Aggressive Fed tightening", -15.0, -12.0, -5.0},
+        {"Black Monday 1987", "Single-day market crash", -22.6, 2.0, -8.0},
+        {"Inflation Surge", "1970s-style stagflation", -10.0, -15.0, 25.0},
+        {"Geopolitical Crisis", "Major conflict escalation", -12.0, 3.0, 15.0},
+        {"Currency Crisis", "Emerging-market contagion", -18.0, 1.0, 5.0},
+    };
+
+    // Classify current holdings into asset classes by symbol heuristics.
+    double equity_wt = 0, bond_wt = 0, commodity_wt = 0, crypto_wt = 0;
+    for (const auto& h : summary_.holdings) {
+        const QString s = h.symbol.toUpper();
+        const double wt = h.weight / 100.0;
+        const bool is_crypto = s.endsWith("-USD") || s.endsWith("-USDT") || s.endsWith("USDT");
+        const bool is_bond = s == "TLT" || s == "AGG" || s == "BND" || s == "IEF" || s == "SHY" || s == "LQD" ||
+                             s == "HYG" || s.contains("TREAS") || s.contains("BOND");
+        const bool is_comm = s == "GLD" || s == "IAU" || s == "SLV" || s == "USO" || s == "DBC" ||
+                             s.contains("GOLD") || s.contains("OIL");
+        if (is_crypto)
+            crypto_wt += wt;
+        else if (is_bond)
+            bond_wt += wt;
+        else if (is_comm)
+            commodity_wt += wt;
+        else
+            equity_wt += wt;
+    }
+
+    const double total_mv = summary_.total_market_value;
+    const int n = static_cast<int>(sizeof(kScenarios) / sizeof(kScenarios[0]));
+    stress_table_->setRowCount(n);
+    for (int i = 0; i < n; ++i) {
+        const auto& sc = kScenarios[i];
+        // Crypto treated as 1.5× equity beta to the shock.
+        const double impact_pct = sc.equity_shock * equity_wt + sc.bond_shock * bond_wt +
+                                  sc.commodity_shock * commodity_wt + sc.equity_shock * 1.5 * crypto_wt;
+        const double loss = total_mv * impact_pct / 100.0;
+
+        stress_table_->setRowHeight(i, 28);
+        auto set = [&](int col, const QString& text, const char* color = nullptr) {
+            auto* item = new QTableWidgetItem(text);
+            item->setTextAlignment(col <= 1 ? (Qt::AlignLeft | Qt::AlignVCenter) : (Qt::AlignRight | Qt::AlignVCenter));
+            if (color)
+                item->setForeground(QColor(color));
+            stress_table_->setItem(i, col, item);
+        };
+        set(0, tr(sc.name), ui::colors::TEXT_PRIMARY);
+        set(1, tr(sc.desc), ui::colors::TEXT_TERTIARY);
+        const char* ic = impact_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
+        set(2, QString("%1%2%").arg(impact_pct >= 0 ? "+" : "").arg(impact_pct, 0, 'f', 1), ic);
+        set(3, QString("%1%2 %3").arg(loss >= 0 ? "+" : "-", currency_, QString::number(std::abs(loss), 'f', 0)), ic);
+    }
+    stress_stack_->setCurrentIndex(1);
+}
+
+// ── Black-Litterman ─────────────────────────────────────────────────────────────
+// Shows market-implied equilibrium returns plus the optimized weights. When the
+// B-L method was the one run, the final column is the Black-Litterman allocation.
+void PortfolioOptimizationView::update_black_litterman(const QJsonObject& root) {
+    const auto implied = root["implied_returns"].toObject();
+    const auto opt_weights = root["weights"].toObject();
+    if (implied.isEmpty() || !bl_table_)
+        return;
+
+    const bool is_bl = root["strategy"].toString() == "black_litterman";
+    bl_table_->setHorizontalHeaderLabels(
+        {tr("SYMBOL"), tr("IMPLIED RETURN"), tr("CURRENT WT"), is_bl ? tr("B-L WT") : tr("OPTIMIZED WT")});
+
+    bl_table_->setRowCount(static_cast<int>(summary_.holdings.size()));
+    for (int r = 0; r < static_cast<int>(summary_.holdings.size()); ++r) {
+        const auto& h = summary_.holdings[r];
+        bl_table_->setRowHeight(r, 28);
+        auto set = [&](int col, const QString& text, const char* color = nullptr) {
+            auto* item = new QTableWidgetItem(text);
+            item->setTextAlignment(col == 0 ? (Qt::AlignLeft | Qt::AlignVCenter) : (Qt::AlignRight | Qt::AlignVCenter));
+            if (color)
+                item->setForeground(QColor(color));
+            bl_table_->setItem(r, col, item);
+        };
+        const double imp = implied.value(h.symbol).toDouble() * 100.0;
+        const double ow = opt_weights.value(h.symbol).toDouble(h.weight / 100.0) * 100.0;
+        set(0, h.symbol, ui::colors::CYAN);
+        set(1, QString("%1%2%").arg(imp >= 0 ? "+" : "").arg(imp, 0, 'f', 1),
+            imp >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
+        set(2, QString("%1%").arg(h.weight, 0, 'f', 1));
+        set(3, QString("%1%").arg(ow, 0, 'f', 1), ui::colors::AMBER);
+    }
+    bl_stack_->setCurrentIndex(1);
 }
 
 } // namespace fincept::screens

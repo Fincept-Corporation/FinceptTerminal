@@ -7,12 +7,14 @@
 #include "trading/instruments/InstrumentService.h"
 
 #include <QCryptographicHash>
+#include <QDate>
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace fincept::trading {
 
@@ -88,7 +90,7 @@ QString ZerodhaBroker::zerodha_interval(const QString& resolution) {
         {"2h", "60minute"}, {"2H", "60minute"},
         {"3d", "day"},      {"3D", "day"},
     };
-    return map.value(resolution, "day");
+    return map.value(resolution, QString());
 }
 
 bool ZerodhaBroker::is_token_expired(const BrokerHttpResponse& resp) {
@@ -409,34 +411,113 @@ ApiResponse<QVector<BrokerCandle>> ZerodhaBroker::get_history(const BrokerCreden
     }
 
     QString interval = zerodha_interval(resolution);
-    QString url = QString("%1/instruments/historical/%2/%3?from=%4&to=%5&continuous=0&oi=1")
-                      .arg(base_url(), token, interval, from_date, to_date);
-    auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
-    int64_t ts = now_ts();
-    if (!resp.success)
-        return {false, std::nullopt, checked_error(resp, resp.error), ts};
-
-    QVector<BrokerCandle> candles;
-    auto arr = resp.json.value("data").toObject().value("candles").toArray();
-    for (const auto& v : arr) {
-        auto c = v.toArray();
-        if (c.size() < 6)
-            continue;
-        qint64 epoch = QDateTime::fromString(c[0].toString(), Qt::ISODateWithMs).toSecsSinceEpoch();
-        if (epoch == 0)
-            epoch = QDateTime::fromString(c[0].toString(), Qt::ISODate).toSecsSinceEpoch();
-        BrokerCandle bc;
-        bc.timestamp = epoch;
-        bc.open = c[1].toDouble();
-        bc.high = c[2].toDouble();
-        bc.low = c[3].toDouble();
-        bc.close = c[4].toDouble();
-        bc.volume = c[5].toDouble();
-        // c[6] is Open Interest when oi=1 is requested (F&O only); 0 elsewhere.
-        if (c.size() >= 7)
-            bc.oi = c[6].toDouble();
-        candles.append(bc);
+    if (interval.isEmpty()) {
+        return {false, std::nullopt,
+                "Zerodha get_history: unsupported resolution '" + resolution + "'", now_ts()};
     }
+
+    // Kite Connect caps the date range PER REQUEST by interval. Resolve the max
+    // number of days allowed in a single request for the (already-resolved) interval.
+    auto cap_days_for_interval = [](const QString& iv) -> int {
+        static const QMap<QString, int> caps = {
+            {"minute", 60},  {"2minute", 60},  {"3minute", 100}, {"4minute", 100}, {"5minute", 100},
+            {"10minute", 100}, {"15minute", 200}, {"30minute", 200}, {"60minute", 400}, {"hour", 400},
+            {"2hour", 400}, {"3hour", 400}, {"4hour", 400}, {"day", 2000}, {"week", 2000},
+        };
+        return caps.value(iv, 2000);
+    };
+    const int cap_days = cap_days_for_interval(interval);
+
+    // Fetch + parse ONE date window. Returns {http_resp, parsed_candles}.
+    // Reuses the existing URL build + response parse (percent-encoding/URL unchanged per request).
+    auto fetch_window = [&](const QString& win_from, const QString& win_to) {
+        QString url = QString("%1/instruments/historical/%2/%3?from=%4&to=%5&continuous=0&oi=1")
+                          .arg(base_url(), token, interval, win_from, win_to);
+        auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
+
+        QVector<BrokerCandle> win_candles;
+        if (resp.success) {
+            auto arr = resp.json.value("data").toObject().value("candles").toArray();
+            for (const auto& v : arr) {
+                auto c = v.toArray();
+                if (c.size() < 6)
+                    continue;
+                qint64 epoch = QDateTime::fromString(c[0].toString(), Qt::ISODateWithMs).toSecsSinceEpoch();
+                if (epoch == 0)
+                    epoch = QDateTime::fromString(c[0].toString(), Qt::ISODate).toSecsSinceEpoch();
+                BrokerCandle bc;
+                bc.timestamp = epoch;
+                bc.open = c[1].toDouble();
+                bc.high = c[2].toDouble();
+                bc.low = c[3].toDouble();
+                bc.close = c[4].toDouble();
+                bc.volume = c[5].toDouble();
+                // c[6] is Open Interest when oi=1 is requested (F&O only); 0 elsewhere.
+                if (c.size() >= 7)
+                    bc.oi = c[6].toDouble();
+                win_candles.append(bc);
+            }
+        }
+        return std::make_pair(resp, win_candles);
+    };
+
+    // The caller passes "yyyy-MM-dd". Parse to compute the span; on failure, fall back
+    // to the single-request path (preserves existing behavior for unexpected formats).
+    const QDate d_from = QDate::fromString(from_date, "yyyy-MM-dd");
+    const QDate d_to = QDate::fromString(to_date, "yyyy-MM-dd");
+    const bool dates_valid = d_from.isValid() && d_to.isValid() && d_from <= d_to;
+    const qint64 span_days = dates_valid ? d_from.daysTo(d_to) : 0;
+
+    // Single-window path: range fits in one request (or dates couldn't be parsed).
+    // Behaviorally identical to the original implementation.
+    if (!dates_valid || span_days <= cap_days) {
+        auto [resp, candles] = fetch_window(from_date, to_date);
+        int64_t ts = now_ts();
+        if (!resp.success)
+            return {false, std::nullopt, checked_error(resp, resp.error), ts};
+        return {true, candles, "", ts};
+    }
+
+    // Multi-window path: slice [from,to] into consecutive <=cap_days sub-windows
+    // (oldest -> newest) and accumulate candles.
+    QVector<BrokerCandle> candles;
+    constexpr int kMaxIterations = 60;
+    int iterations = 0;
+    QDate cursor = d_from;
+    int64_t ts = now_ts();
+    while (cursor <= d_to) {
+        if (++iterations > kMaxIterations)
+            break; // SAFETY: cap the loop; return what we have so far.
+
+        QDate win_end = cursor.addDays(cap_days);
+        if (win_end > d_to)
+            win_end = d_to;
+
+        auto [resp, win_candles] = fetch_window(cursor.toString("yyyy-MM-dd"), win_end.toString("yyyy-MM-dd"));
+        ts = now_ts();
+        if (!resp.success) {
+            // First window fails -> propagate the error as today. Otherwise, partial success:
+            // stop and return whatever we have already collected.
+            if (candles.isEmpty())
+                return {false, std::nullopt, checked_error(resp, resp.error), ts};
+            break;
+        }
+        candles += win_candles;
+
+        // Advance past the current window. Step to the day after win_end to avoid an
+        // infinite loop and overlap; consecutive duplicate timestamps are deduped below.
+        if (win_end == d_to)
+            break;
+        cursor = win_end.addDays(1);
+    }
+
+    // Sort ascending by timestamp, then dedupe consecutive duplicate timestamps.
+    std::sort(candles.begin(), candles.end(),
+              [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp < b.timestamp; });
+    candles.erase(std::unique(candles.begin(), candles.end(),
+                              [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp == b.timestamp; }),
+                  candles.end());
+
     return {true, candles, "", ts};
 }
 

@@ -2,6 +2,8 @@
 #include "storage/repositories/BaseRepository.h"
 #include "trading/instruments/InstrumentTypes.h"
 
+#include <QDateTime>
+
 #include <optional>
 
 namespace fincept::trading {
@@ -42,6 +44,10 @@ class InstrumentRepository : public fincept::BaseRepository<Instrument> {
 
     /// Count rows for a broker (quick freshness check).
     int count(const QString& broker_id) const;
+
+    /// Most recent updated_at across this broker's instruments, or an invalid
+    /// QDateTime if no rows exist. Used for age-based refresh freshness checks.
+    QDateTime last_updated(const QString& broker_id) const;
 
     /// Map a positioned QSqlQuery row to an Instrument. Public for use by async loaders.
     static Instrument map_row_static(QSqlQuery& q);

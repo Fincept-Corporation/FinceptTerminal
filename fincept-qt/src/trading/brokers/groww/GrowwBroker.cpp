@@ -11,6 +11,8 @@
 #include <QUrlQuery>
 #include <QUuid>
 
+#include <algorithm>
+
 namespace fincept::trading {
 
 static int64_t now_ts() {
@@ -111,12 +113,15 @@ int GrowwBroker::resolution_to_minutes(const QString& resolution) {
     return history_interval_minutes(resolution);
 }
 
-// Groww /v1/historical/candles accepts 1, 5, 10, 15, 30, 60 minute bars plus 1440 (1D)
-// and 10080 (1W). Windows are capped per interval: ≤5m → 30d, 10–30m → 90d, ≥1h → 180d.
+// Groww /v1/historical/candles accepts 1, 2, 3, 5, 10, 15, 30, 60 minute bars plus
+// 1440 (1D), 10080 (1W) and 43200 (1M). Windows are capped per interval:
+// ≤5m → 30d, 10–30m → 90d, ≥1h → 180d.
 int GrowwBroker::history_interval_minutes(const QString& resolution) {
     const QString r = resolution.toLower();
     if (r == "1" || r == "1m" || r == "1min")
         return 1;
+    if (r == "2" || r == "2m" || r == "2min")
+        return 2;
     if (r == "3" || r == "3m" || r == "3min")
         return 3;
     if (r == "5" || r == "5m" || r == "5min")
@@ -140,23 +145,24 @@ int GrowwBroker::history_interval_minutes(const QString& resolution) {
     return 1;
 }
 
-// Groww /v1/historical/candles takes a string token, NOT a number.
-// Token enum per docs: 1min, 3min, 5min, 10min, 15min, 30min, 1hour, 4hours,
-// 1day, 1week, 1month.
+// Groww /v1/historical/candles takes a string candle_interval token, NOT a number.
+// Token enum per docs (full-word SINGULAR): 1minute, 2minute, 3minute, 5minute,
+// 10minute, 15minute, 30minute, 1hour, 4hour, 1day, 1week, 1month.
 QString GrowwBroker::history_interval_token(const QString& resolution) {
     switch (history_interval_minutes(resolution)) {
-        case 1:    return "1min";
-        case 3:    return "3min";
-        case 5:    return "5min";
-        case 10:   return "10min";
-        case 15:   return "15min";
-        case 30:   return "30min";
+        case 1:    return "1minute";
+        case 2:    return "2minute";
+        case 3:    return "3minute";
+        case 5:    return "5minute";
+        case 10:   return "10minute";
+        case 15:   return "15minute";
+        case 30:   return "30minute";
         case 60:   return "1hour";
-        case 240:  return "4hours";
+        case 240:  return "4hour";
         case 1440: return "1day";
         case 10080:return "1week";
         case 43200:return "1month";
-        default:   return "1min";
+        default:   return "1minute";
     }
 }
 
@@ -811,46 +817,120 @@ ApiResponse<QVector<BrokerCandle>> GrowwBroker::get_history(const BrokerCredenti
     // groww_symbol is "EXCHANGE-TRADINGSYMBOL" (e.g. "NSE-WIPRO"); for options the
     // suffix is the option-contract code (e.g. "NSE-NIFTY-30Sep25-24650-CE"). The
     // hyphen prefix is required — passing the bare trading symbol returns 4xx.
-    QString start_time = from_date + " 09:15:00";
-    QString end_time = to_date + " 15:30:00";
     const QString groww_symbol = ex + "-" + trading_symbol;
 
-    QUrl qurl(QStringLiteral("https://api.groww.in/v1/historical/candles"));
-    QUrlQuery qq;
-    qq.addQueryItem(QStringLiteral("exchange"), ex);
-    qq.addQueryItem(QStringLiteral("segment"), segment);
-    qq.addQueryItem(QStringLiteral("groww_symbol"), groww_symbol);
-    qq.addQueryItem(QStringLiteral("start_time"), start_time);
-    qq.addQueryItem(QStringLiteral("end_time"), end_time);
-    qq.addQueryItem(QStringLiteral("candle_interval"), interval_token);
-    qurl.setQuery(qq);
-    const QString url = qurl.toString();
+    // Groww caps the queryable window per request by interval. Resolve the cap (in
+    // days) from the interval-minutes bucket so large ranges can be chunked into
+    // consecutive sub-windows and stitched back together.
+    //   ≤5m → 30d, 10/15/30m → 90d, ≥1h (incl. day/week/month) → 180d.
+    const int interval_minutes = history_interval_minutes(resolution);
+    int window_cap_days;
+    if (interval_minutes <= 5)
+        window_cap_days = 30;
+    else if (interval_minutes <= 30)
+        window_cap_days = 90;
+    else
+        window_cap_days = 180;
 
-    auto resp = BrokerHttp::instance().get(url, hdrs);
+    // One-window fetch + parse. Returns the BrokerHttpResponse so the caller can
+    // distinguish a hard failure (network / token) from a successful-but-empty
+    // window, and appends parsed candles into `out`. Only start_time/end_time vary
+    // between windows; the 09:15:00 / 15:30:00 session suffixes are preserved.
+    auto fetch_window = [&](const QString& win_from, const QString& win_to,
+                            QVector<BrokerCandle>& out) -> BrokerHttpResponse {
+        const QString start_time = win_from + " 09:15:00";
+        const QString end_time = win_to + " 15:30:00";
 
-    if (!resp.success)
-        return {false, std::nullopt, checked_error(resp, "Network error"), ts};
-    if (is_token_expired(resp))
-        return {false, std::nullopt, "[TOKEN_EXPIRED]", ts};
+        QUrl qurl(QStringLiteral("https://api.groww.in/v1/historical/candles"));
+        QUrlQuery qq;
+        qq.addQueryItem(QStringLiteral("exchange"), ex);
+        qq.addQueryItem(QStringLiteral("segment"), segment);
+        qq.addQueryItem(QStringLiteral("groww_symbol"), groww_symbol);
+        qq.addQueryItem(QStringLiteral("start_time"), start_time);
+        qq.addQueryItem(QStringLiteral("end_time"), end_time);
+        qq.addQueryItem(QStringLiteral("candle_interval"), interval_token);
+        qurl.setQuery(qq);
 
-    QJsonArray candles = resp.json["payload"].toObject()["candles"].toArray();
+        auto resp = BrokerHttp::instance().get(qurl.toString(), hdrs);
+        if (!resp.success || is_token_expired(resp))
+            return resp;
+
+        const QJsonArray candles = resp.json["payload"].toObject()["candles"].toArray();
+        out.reserve(out.size() + candles.size());
+        for (const auto& item : candles) {
+            QJsonArray c = item.toArray();
+            if (c.size() < 6)
+                continue;
+            BrokerCandle candle;
+            // [timestamp_ms, open, high, low, close, volume]
+            candle.timestamp = static_cast<int64_t>(c[0].toDouble());
+            candle.open = c[1].toDouble();
+            candle.high = c[2].toDouble();
+            candle.low = c[3].toDouble();
+            candle.close = c[4].toDouble();
+            candle.volume = c[5].toDouble();
+            out.append(candle);
+        }
+        return resp;
+    };
+
+    const QDate from = QDate::fromString(from_date, QStringLiteral("yyyy-MM-dd"));
+    const QDate to = QDate::fromString(to_date, QStringLiteral("yyyy-MM-dd"));
+
     QVector<BrokerCandle> result;
-    result.reserve(candles.size());
 
-    for (const auto& item : candles) {
-        QJsonArray c = item.toArray();
-        if (c.size() < 6)
-            continue;
-        BrokerCandle candle;
-        // [timestamp_ms, open, high, low, close, volume]
-        candle.timestamp = static_cast<int64_t>(c[0].toDouble());
-        candle.open = c[1].toDouble();
-        candle.high = c[2].toDouble();
-        candle.low = c[3].toDouble();
-        candle.close = c[4].toDouble();
-        candle.volume = c[5].toDouble();
-        result.append(candle);
+    // Single-request path: when the dates don't parse (defensive) or the span fits
+    // within the cap, issue exactly one GET — behaviour is unchanged from before.
+    if (!from.isValid() || !to.isValid() || from.daysTo(to) <= window_cap_days) {
+        auto resp = fetch_window(from_date, to_date, result);
+        if (!resp.success)
+            return {false, std::nullopt, checked_error(resp, "Network error"), ts};
+        if (is_token_expired(resp))
+            return {false, std::nullopt, "[TOKEN_EXPIRED]", ts};
+        return {true, result, "", ts};
     }
+
+    // Chunked path: walk consecutive ≤cap-day sub-windows. The first window's
+    // failure is fatal (mirrors the single-request behaviour); a later failure once
+    // we already have data breaks the loop and returns the partial series.
+    constexpr int kMaxIterations = 60;
+    QDate win_start = from;
+    int iterations = 0;
+    bool first = true;
+    while (win_start <= to && iterations < kMaxIterations) {
+        QDate win_end = win_start.addDays(window_cap_days);
+        if (win_end > to)
+            win_end = to;
+
+        auto resp = fetch_window(win_start.toString(QStringLiteral("yyyy-MM-dd")),
+                                 win_end.toString(QStringLiteral("yyyy-MM-dd")), result);
+        const bool failed = !resp.success || is_token_expired(resp);
+        if (failed) {
+            if (first) {
+                if (is_token_expired(resp))
+                    return {false, std::nullopt, "[TOKEN_EXPIRED]", ts};
+                return {false, std::nullopt, checked_error(resp, "Network error"), ts};
+            }
+            break; // partial data already collected — return what we have
+        }
+
+        first = false;
+        // Advance past this window. Sub-windows are half-open against the day-cap so
+        // adjacent windows don't re-request the same boundary day (dedupe still guards
+        // overlap from the inclusive session suffixes).
+        win_start = win_end.addDays(1);
+        ++iterations;
+    }
+
+    // Sort ascending by timestamp and drop duplicate bars (windows can overlap at
+    // their boundaries / on retried days).
+    std::sort(result.begin(), result.end(),
+              [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp < b.timestamp; });
+    result.erase(std::unique(result.begin(), result.end(),
+                             [](const BrokerCandle& a, const BrokerCandle& b) {
+                                 return a.timestamp == b.timestamp;
+                             }),
+                 result.end());
 
     return {true, result, "", ts};
 }

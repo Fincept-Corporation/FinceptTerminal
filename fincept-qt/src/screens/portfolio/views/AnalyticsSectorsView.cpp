@@ -4,6 +4,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QChart>
+#include <QTabBar>
 #include <QChartView>
 #include <QEvent>
 #include <QFrame>
@@ -125,6 +126,9 @@ void AnalyticsSectorsView::build_ui() {
     root->setSpacing(0);
 
     tabs_ = new QTabWidget;
+    tabs_->tabBar()->setElideMode(Qt::ElideNone);
+    tabs_->tabBar()->setExpanding(false);
+    tabs_->tabBar()->setUsesScrollButtons(false);
     tabs_->setDocumentMode(true);
     tabs_->setStyleSheet(
         QString("QTabWidget::pane { border:0; background:%1; }"
@@ -333,8 +337,8 @@ QWidget* AnalyticsSectorsView::build_correlation_tab() {
     lay->addWidget(corr_title_);
 
     corr_note_ = new QLabel(
-        tr("Top-10 holdings by weight. Values use a day-change sign proxy until "
-           "OHLC history is wired in — treat the magnitudes as directional, not precise."));
+        tr("Top-10 holdings by weight. Pearson correlation of daily returns over "
+           "the trailing 30 trading days (from real price history)."));
     corr_note_->setWordWrap(true);
     corr_note_->setStyleSheet(QString("color:%1; font-size:%2px;")
                                    .arg(ui::colors::TEXT_TERTIARY())
@@ -364,6 +368,11 @@ void AnalyticsSectorsView::set_data(const portfolio::PortfolioSummary& summary, 
     update_correlation();
 }
 
+void AnalyticsSectorsView::set_correlation(const QHash<QString, double>& matrix) {
+    correlation_matrix_ = matrix;
+    update_correlation();
+}
+
 void AnalyticsSectorsView::changeEvent(QEvent* event) {
     if (event->type() == QEvent::LanguageChange)
         retranslateUi();
@@ -383,8 +392,8 @@ void AnalyticsSectorsView::retranslateUi() {
     if (table_title_) table_title_->setText(tr("SECTOR BREAKDOWN"));
     if (corr_title_)  corr_title_->setText(tr("HOLDINGS CORRELATION MATRIX"));
     if (corr_note_)
-        corr_note_->setText(tr("Top-10 holdings by weight. Values use a day-change sign proxy until "
-                               "OHLC history is wired in — treat the magnitudes as directional, not precise."));
+        corr_note_->setText(tr("Top-10 holdings by weight. Pearson correlation of daily returns over "
+                               "the trailing 30 trading days (from real price history)."));
 
     if (sector_table_)
         sector_table_->setHorizontalHeaderLabels(
@@ -770,6 +779,19 @@ void AnalyticsSectorsView::update_correlation() {
         return;
     }
 
+    // Real correlation matrix is fetched asynchronously (PortfolioService::
+    // fetch_correlation → correlation_computed). Until it arrives, show a
+    // loading state rather than fabricating values from day-change signs.
+    if (correlation_matrix_.isEmpty()) {
+        auto* msg = new QLabel(tr("Computing correlations from price history…"), corr_panel_);
+        msg->setAlignment(Qt::AlignCenter);
+        msg->setStyleSheet(QString("color:%1; font-size:%2px; padding:40px; background:transparent;")
+                                .arg(ui::colors::TEXT_TERTIARY())
+                                .arg(ui::fonts::font_px()));
+        corr_grid_->addWidget(msg, 0, 0);
+        return;
+    }
+
     auto sorted = summary_.holdings;
     std::sort(sorted.begin(), sorted.end(),
               [](const auto& a, const auto& b) { return a.weight > b.weight; });
@@ -796,24 +818,39 @@ void AnalyticsSectorsView::update_correlation() {
         corr_grid_->addWidget(make_header(sorted[r].symbol.left(6), false), r + 1, 0);
 
         for (int c = 0; c < n; ++c) {
-            double corr;
+            // Real Pearson correlation looked up from the service matrix,
+            // keyed "SYMBOL_A|SYMBOL_B". Try both orderings; if a pair is
+            // missing (e.g. no price history for a symbol) show a blank cell
+            // rather than inventing a value.
+            const QString& sa = sorted[r].symbol;
+            const QString& sb = sorted[c].symbol;
+            bool have = false;
+            double corr = 0.0;
             if (r == c) {
                 corr = 1.0;
+                have = true;
             } else {
-                double a = sorted[r].day_change_percent;
-                double b = sorted[c].day_change_percent;
-                bool same_sign = (a >= 0) == (b >= 0);
-                double mag = std::min(std::abs(a) + std::abs(b), 10.0) / 10.0;
-                corr = same_sign ? (mag * 0.8 + 0.1) : -(mag * 0.6 + 0.05);
+                const QString key = sa + "|" + sb;
+                const QString rkey = sb + "|" + sa;
+                if (correlation_matrix_.contains(key)) {
+                    corr = correlation_matrix_.value(key);
+                    have = true;
+                } else if (correlation_matrix_.contains(rkey)) {
+                    corr = correlation_matrix_.value(rkey);
+                    have = true;
+                }
             }
 
-            auto* cell = new QLabel(QString::number(corr, 'f', 2));
+            auto* cell = new QLabel(have ? QString::number(corr, 'f', 2) : QStringLiteral("—"));
             cell->setAlignment(Qt::AlignCenter);
             cell->setFixedSize(54, 26);
 
             QColor bg;
             QString fg;
-            if (r == c) {
+            if (!have) {
+                bg = QColor(ui::colors::BORDER_DIM());
+                fg = ui::colors::TEXT_TERTIARY();
+            } else if (r == c) {
                 bg = QColor(ui::colors::AMBER());
                 fg = ui::colors::BG_BASE();
             } else if (corr > 0) {

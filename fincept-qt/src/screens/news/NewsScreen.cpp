@@ -491,6 +491,11 @@ void NewsScreen::on_article_clicked(const services::NewsArticle& article) {
     detail_panel_->show_article(article);
     feed_panel_->set_selected(article.id);
 
+    // Re-show a previously-run AI analysis for this article, if one was saved.
+    // Only a fresh ANALYZE click re-fetches/overwrites it.
+    if (auto cached = services::NewsService::instance().cached_analysis(article.link))
+        detail_panel_->show_analysis(*cached);
+
     // Find related articles from the same cluster
     for (const auto& cluster : clusters_) {
         if (cluster.lead_article.id == article.id ||

@@ -456,14 +456,6 @@ void PortfolioCommandBar::set_selected_portfolio(const portfolio::Portfolio& p) 
     update_selector_label();
 }
 
-void PortfolioCommandBar::set_summary(const portfolio::PortfolioSummary& /*s*/) {
-    // No-op. The bar no longer displays KPIs \u2014 those moved to the
-    // StatsRibbon below the bar (single source of truth for portfolio stats).
-    // Method retained as a public no-op so existing wiring in PortfolioScreen
-    // doesn't have to change; can be removed in a follow-up once callers drop
-    // the call.
-}
-
 void PortfolioCommandBar::set_refreshing(bool refreshing) {
     refresh_btn_->setEnabled(!refreshing);
     refresh_btn_->setText(refreshing ? "\u23F3" : "\u21BB");

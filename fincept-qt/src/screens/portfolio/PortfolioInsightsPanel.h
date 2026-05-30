@@ -55,6 +55,14 @@ class PortfolioInsightsPanel : public QWidget {
     void retranslateUi();
     void retranslate_ai_run_label();   // re-applies "RUN/RE-RUN <type> ANALYSIS" from cache state
 
+    // Durable result persistence (survives tab switches, panel recreation, and
+    // app restarts). Keyed by portfolio id so each portfolio keeps its own
+    // AI-analysis and agent results.
+    void persist_ai_result(const QString& type, const QString& response, const QString& meta);
+    void persist_agent_result(const QString& agent_id, const QString& response, const QString& meta);
+    void load_persisted_results(const QString& portfolio_id); // repopulates the in-memory caches
+    void restore_agent_view();                                // renders the selected agent's cached result
+
     // Layout
     QLabel* header_title_ = nullptr;
     QPushButton* header_close_btn_ = nullptr;
@@ -94,6 +102,8 @@ class PortfolioInsightsPanel : public QWidget {
     QString agent_streaming_text_;  // accumulated tokens for live rendering
     QHash<QString, QString> ai_cache_;    // type -> markdown
     QHash<QString, QString> agent_cache_; // agent_id -> markdown
+    QHash<QString, QString> ai_meta_cache_;    // type -> "Last run …" label
+    QHash<QString, QString> agent_meta_cache_; // agent_id -> "Last run …" label
 };
 
 } // namespace fincept::screens

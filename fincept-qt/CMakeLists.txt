@@ -844,6 +844,7 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v032_pending_orders.cpp
     src/storage/sqlite/migrations/v033_historify.cpp
     src/storage/sqlite/migrations/v034_strategy_portfolio.cpp
+    src/storage/sqlite/migrations/v035_news_analysis.cpp
 
     # Historical OHLCV data store (Historify, Phase 3 §13)
     src/storage/HistoricalDataStore.cpp
@@ -1020,6 +1021,7 @@ set(TRADING_SOURCES
     src/trading/instruments/ZerodhaInstrumentParser.cpp
     src/trading/instruments/FyersInstrumentParser.cpp
     src/trading/instruments/GrowwInstrumentParser.cpp
+    src/trading/instruments/DhanInstrumentParser.cpp
     src/trading/instruments/InstrumentService.cpp
     src/trading/instruments/SymbolResolver.cpp
 )
@@ -1036,6 +1038,7 @@ set(ALGO_ENGINE_SOURCES
     src/algo_engine/AlgoEngineProducer.cpp
     src/algo_engine/AlgoScanner.cpp
     src/algo_engine/CandleDataFetcher.cpp
+    src/algo_engine/BacktestEngine.cpp
 )
 
 # Services
@@ -2235,6 +2238,7 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v032_pending_orders.cpp
     src/storage/sqlite/migrations/v033_historify.cpp
     src/storage/sqlite/migrations/v034_strategy_portfolio.cpp
+    src/storage/sqlite/migrations/v035_news_analysis.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp

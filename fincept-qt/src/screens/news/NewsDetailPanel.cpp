@@ -22,9 +22,17 @@
 
 namespace fincept::screens {
 
+namespace {
+// Fixed width of the right-hand detail panel. The scroll content is capped to
+// this so word-wrapped labels wrap against it instead of reporting their full
+// unwrapped width — otherwise revealing the AI-analysis section balloons the
+// panel's size hint and pushes it past the screen edge.
+constexpr int kPanelWidth = 420;
+} // namespace
+
 NewsDetailPanel::NewsDetailPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("newsDetailOverlay");
-    setFixedWidth(420);
+    setFixedWidth(kPanelWidth);
     hide(); // start hidden — shown on article click
 
     auto* root = new QVBoxLayout(this);
@@ -90,6 +98,10 @@ QWidget* NewsDetailPanel::build_content_view() {
 
     auto* content = new QWidget(scroll);
     content->setObjectName("newsDetailContent");
+    // Cap the content to the panel width so word-wrapped labels wrap against it
+    // rather than reporting their full single-line width — without this, showing
+    // the AI-analysis section grows the panel beyond the screen edge.
+    content->setMaximumWidth(kPanelWidth);
     auto* layout = new QVBoxLayout(content);
     layout->setContentsMargins(12, 10, 12, 10);
     layout->setSpacing(8);
@@ -339,9 +351,9 @@ QWidget* NewsDetailPanel::build_content_view() {
     ai_keywords_->hide();
     analysis_layout->addWidget(ai_keywords_);
 
-    auto* kp_title = new QLabel("KEY POINTS", analysis_section_);
-    kp_title->setObjectName("newsDetailSubTitle");
-    analysis_layout->addWidget(kp_title);
+    key_points_title_ = new QLabel("KEY POINTS", analysis_section_);
+    key_points_title_->setObjectName("newsDetailSubTitle");
+    analysis_layout->addWidget(key_points_title_);
 
     auto* kp_container = new QWidget(analysis_section_);
     key_points_layout_ = new QVBoxLayout(kp_container);
@@ -349,9 +361,9 @@ QWidget* NewsDetailPanel::build_content_view() {
     key_points_layout_->setSpacing(2);
     analysis_layout->addWidget(kp_container);
 
-    auto* risk_title = new QLabel("RISK SIGNALS", analysis_section_);
-    risk_title->setObjectName("newsDetailSubTitle");
-    analysis_layout->addWidget(risk_title);
+    risk_title_ = new QLabel("RISK SIGNALS", analysis_section_);
+    risk_title_->setObjectName("newsDetailSubTitle");
+    analysis_layout->addWidget(risk_title_);
 
     auto* risk_container = new QWidget(analysis_section_);
     risk_layout_ = new QVBoxLayout(risk_container);
@@ -359,9 +371,9 @@ QWidget* NewsDetailPanel::build_content_view() {
     risk_layout_->setSpacing(2);
     analysis_layout->addWidget(risk_container);
 
-    auto* topics_title = new QLabel("TOPICS", analysis_section_);
-    topics_title->setObjectName("newsDetailSubTitle");
-    analysis_layout->addWidget(topics_title);
+    topics_title_ = new QLabel("TOPICS", analysis_section_);
+    topics_title_->setObjectName("newsDetailSubTitle");
+    analysis_layout->addWidget(topics_title_);
 
     auto* topics_container = new QWidget(analysis_section_);
     topics_layout_ = new QVBoxLayout(topics_container);
@@ -607,7 +619,9 @@ void NewsDetailPanel::show_analysis(const services::NewsAnalysis& analysis) {
     QString pred_color = pred.contains("positive") ? ui::colors::POSITIVE
                                                     : (pred.contains("negative") ? ui::colors::NEGATIVE
                                                                                   : ui::colors::WARNING);
-    ai_prediction_->setText(QString("Outlook: %1").arg(pred.isEmpty() ? "neutral" : pred));
+    // API sends snake_case (e.g. "moderate_positive"); show it as readable words.
+    QString pred_text = pred.isEmpty() ? "neutral" : QString(pred).replace('_', ' ');
+    ai_prediction_->setText(QString("Outlook: %1").arg(pred_text));
     ai_prediction_->setStyleSheet(QString("color: %1;").arg(pred_color));
 
     ai_confidence_->setText(
@@ -626,6 +640,11 @@ void NewsDetailPanel::show_analysis(const services::NewsAnalysis& analysis) {
         lbl->setWordWrap(true);
         key_points_layout_->addWidget(lbl);
     }
+    // Hide the heading + container entirely when there's nothing to show, so
+    // the panel doesn't render a bare "KEY POINTS" label over empty space.
+    const bool has_key_points = !analysis.key_points.isEmpty();
+    key_points_title_->setVisible(has_key_points);
+    key_points_layout_->parentWidget()->setVisible(has_key_points);
 
     // Risk signals — each shows level (color-coded) plus the detail text
     // inline (was tooltip-only before), wrapped so it never overflows.
@@ -668,6 +687,11 @@ void NewsDetailPanel::show_analysis(const services::NewsAnalysis& analysis) {
     add_risk("Geopolitical", analysis.geopolitical);
     add_risk("Operational", analysis.operational);
     add_risk("Market", analysis.market);
+    // add_risk skips "none"/empty levels, so an all-clear article adds no rows —
+    // hide the heading + container in that case.
+    const bool has_risks = risk_layout_->count() > 0;
+    risk_title_->setVisible(has_risks);
+    risk_layout_->parentWidget()->setVisible(has_risks);
 
     // Topics — wrapping grid of badges (a QHBoxLayout would overflow the
     // panel's fixed width with no way to wrap).
@@ -694,6 +718,9 @@ void NewsDetailPanel::show_analysis(const services::NewsAnalysis& analysis) {
             topics_grid->setColumnStretch(c, 1);
         topics_layout_->addWidget(topics_row);
     }
+    const bool has_topics = !analysis.topics.isEmpty();
+    topics_title_->setVisible(has_topics);
+    topics_layout_->parentWidget()->setVisible(has_topics);
 
     // Entities — organizations (with ticker/sector), people, locations.
     while (ai_entities_layout_->count() > 0) {

@@ -6,6 +6,7 @@ Returns JSON output for Qt/C++ integration
 
 import sys
 import json
+import re
 import yfinance as yf
 import pandas as pd
 from datetime import datetime
@@ -314,6 +315,66 @@ def get_batch_quotes(symbols):
             if quote and "error" not in quote:
                 results.append(quote)
         return results
+
+# Month tokens used by futures shortNames, e.g. "Gold Jun 26" / "Crude Oil Jul 26".
+# We strip the contract-month suffix so the panel shows "Gold", not "Gold Jun 26".
+_FUTURES_MONTH_RE = re.compile(
+    r'\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{2,4}$')
+
+def _clean_display_name(symbol, info):
+    """Pick the most human-readable name yfinance offers for `symbol`.
+
+    Preference: longName (fuller, e.g. "Invesco QQQ Trust") over shortName
+    (often truncated to ~30 chars). Falls back to shortName, then "".
+    Futures (`=F`) have no longName and a month-stamped shortName
+    ("Gold Jun 26") — strip the contract month so panels show "Gold".
+    """
+    name = (info.get('longName') or info.get('shortName') or '').strip()
+    if not name:
+        return ''
+    if symbol.endswith('=F'):
+        name = _FUTURES_MONTH_RE.sub('', name).strip()
+    return name
+
+def get_quote_names(symbols):
+    """Resolve display names + quote currency for symbols via yfinance .info.
+
+    Returns {"names": {symbol: name}, "currencies": {symbol: code}}. Both are
+    static per symbol, so the C++ caller caches the result and only asks for
+    symbols it hasn't resolved yet — the per-symbol .info cost is paid once,
+    never on the quote-refresh path. Symbols yfinance can't name/price are
+    simply omitted (caller keeps the raw ticker / no prefix as fallback).
+
+    Currency is omitted for forex pairs (quoteType CURRENCY — the price is a
+    rate, not a monetary amount) and for indices/yields (quoteType INDEX —
+    e.g. a currency symbol on the S&P level or the 10Y yield is misleading),
+    so callers only ever prefix a currency where it's meaningful.
+    """
+    import io, contextlib, logging
+    yf_logger = logging.getLogger("yfinance")
+    prev_level = yf_logger.level
+    yf_logger.setLevel(logging.CRITICAL)
+    names = {}
+    currencies = {}
+    try:
+        for symbol in symbols:
+            try:
+                _buf = io.StringIO()
+                with contextlib.redirect_stdout(_buf), contextlib.redirect_stderr(_buf):
+                    info = yf.Ticker(symbol).info
+                info = info or {}
+                name = _clean_display_name(symbol, info)
+                if name:
+                    names[symbol] = name
+                quote_type = (info.get("quoteType") or "").upper()
+                currency = info.get("currency")
+                if currency and quote_type not in ("CURRENCY", "INDEX"):
+                    currencies[symbol] = currency
+            except Exception:
+                continue
+    finally:
+        yf_logger.setLevel(prev_level)
+    return {"names": names, "currencies": currencies}
 
 def get_batch_sparklines(symbols, period="5d", interval="1h"):
     """Fetch close price series for multiple symbols — used for blotter sparklines.
@@ -1141,6 +1202,13 @@ def main(args=None):
         else:
             symbols = args[1:]
             result = get_batch_sparklines(symbols)
+
+    elif command == "quote_names":
+        if len(args) < 2:
+            result = {"error": "Usage: python yfinance_data.py quote_names <sym1> <sym2> ..."}
+        else:
+            symbols = args[1:]
+            result = get_quote_names(symbols)
 
     elif command == "batch_all":
         # Unified hub-refresh endpoint: payload is a single JSON blob on argv[1]
