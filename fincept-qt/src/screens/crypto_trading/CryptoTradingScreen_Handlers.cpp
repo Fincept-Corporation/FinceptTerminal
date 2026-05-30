@@ -197,7 +197,7 @@ void CryptoTradingScreen::on_mode_toggled() {
     } else {
         live_data_timer_->stop();
         order_entry_->set_submit_busy(false);
-            refresh_portfolio();
+        refresh_portfolio();
     }
 }
 
@@ -275,7 +275,7 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
 void CryptoTradingScreen::on_cancel_order(const QString& order_id) {
     LOG_INFO(TAG, QString("Cancel order: %1 (%2)").arg(order_id, trading_mode_ == TradingMode::Paper ? "paper" : "live"));
     if (trading_mode_ == TradingMode::Paper) {
-            order_entry_->set_submit_busy(true);  try {
+        try {
             pt_cancel_order(order_id);
             OrderMatcher::instance().remove_order(order_id);
             refresh_portfolio();

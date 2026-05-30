@@ -113,7 +113,7 @@ void LlmService::ensure_config() const {
     }
 
     // Fincept key always comes from the live AuthManager session; SettingsRepository fallback is the legacy path.
-   if (provider_ == "fincept") {
+    if (provider_ == "fincept") {
         const auto& sess = fincept::auth::AuthManager::instance().session();
         if (!sess.api_key.isEmpty()) {
             api_key_ = sess.api_key;
