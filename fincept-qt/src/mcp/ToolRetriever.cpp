@@ -11,6 +11,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <vector>
 
 namespace fincept::mcp {
 
@@ -249,15 +251,15 @@ int ToolRetriever::levenshtein_distance(const QString& s1, const QString& s2) {
 
 QString ToolRetriever::classify_category(const QStringList& query_stems) {
     static const QHash<QString, QSet<QString>> kCategorySignals = {
-        {"watchlist", {"watchlist", "watch", "track"}},
-        {"paper-trading", {"trade", "buy", "sell", "order", "portfolio", "pnl", "holding", "position", "broker"}},
-        {"news", {"news", "feed", "rss", "headline", "article", "filing", "edgar"}},
-        {"report-builder", {"report", "builder", "generate", "document", "template", "pdf"}},
-        {"quant-lab", {"quant", "factor", "backtest", "alpha", "risk", "metric", "sharpe", "var"}},
-        {"markets", {"market", "quote", "price", "stock", "equity", "ticker", "chart", "ohlc"}},
-        {"notes", {"note", "memo", "mind", "journal", "write"}},
-        {"file-manager", {"file", "folder", "directory", "path", "open", "read", "write"}},
-        {"settings", {"setting", "config", "setup", "credential", "api", "key"}}
+        {"watchlist",      {"watchlist", "watch", "track"}},
+        {"paper-trading",  {"trad", "buy", "sell", "order", "portfolio", "pnl", "hold", "position", "broker"}},
+        {"news",           {"new", "feed", "rss", "headlin", "articl", "file", "edgar"}},
+        {"report-builder", {"report", "builder", "generat", "document", "templat", "pdf"}},
+        {"quant-lab",      {"quant", "factor", "backtest", "alpha", "risk", "metric", "sharp", "var"}},
+        {"markets",        {"market", "quot", "pric", "stock", "equity", "ticker", "chart", "ohlc"}},
+        {"notes",          {"not", "memo", "mind", "journal", "writ"}},
+        {"file_manager",   {"fil", "folder", "directory", "path", "open", "read", "writ"}},
+        {"settings",       {"sett", "config", "setup", "credential", "api", "key"}}
     };
 
     QHash<QString, int> category_scores;
@@ -484,6 +486,15 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
                 if (dist < best_dist) {
                     best_dist = dist;
                     best_match = vocab_term;
+                } else if (dist == best_dist && !best_match.isEmpty()) {
+                    // Stable tie-breaker: prefer shorter length, then lexicographical order
+                    if (vocab_term.length() < best_match.length()) {
+                        best_match = vocab_term;
+                    } else if (vocab_term.length() == best_match.length()) {
+                        if (vocab_term < best_match) {
+                            best_match = vocab_term;
+                        }
+                    }
                 }
             }
             // Accept if distance is 1 (or 2 for words longer than 6 chars)
@@ -538,7 +549,6 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
             const double idf = std::log(((N - df + 0.5) / (df + 0.5)) + 1.0);
             const double norm = 1.0 - kB + kB * (static_cast<double>(d.length) / avg_doc_length_);
             const double tf_part = (tf * (kK1 + 1.0)) / (tf + kK1 * norm);
-            
             double term_weight = query_term_weights.value(q_term, 1.0);
             s += idf * tf_part * term_weight;
 
