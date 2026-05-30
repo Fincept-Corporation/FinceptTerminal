@@ -22,6 +22,11 @@ class WebSocketClient : public QObject {
     void send_binary(const QByteArray& data);
     bool is_connected() const;
 
+    // Halt auto-reconnect until the next connect_to(). Use on a fatal,
+    // non-retryable failure (e.g. expired/invalid token, Data API not
+    // subscribed) so we stop the reconnect storm immediately. Thread-safe.
+    void stop_reconnect();
+
   signals:
     void connected();
     void disconnected();
@@ -51,6 +56,7 @@ class WebSocketClient : public QObject {
     QTimer reconnect_timer_;
     QString url_;
     int reconnect_attempts_ = 0;
+    bool reconnect_stopped_ = false; // set by stop_reconnect() on fatal disconnects; cleared by connect_to()
     static constexpr int MAX_RECONNECT_ATTEMPTS = 10;
 };
 

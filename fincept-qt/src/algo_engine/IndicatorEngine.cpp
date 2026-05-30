@@ -179,11 +179,20 @@ IndicatorResult IndicatorEngine::compute_stock_attr(const QVector<OhlcvCandle>& 
     else if (attr == "LOW")    { cv = curr.low;    pv = prev.low; }
     else if (attr == "VOLUME") { cv = curr.volume; pv = prev.volume; }
     else if (attr == "VWAP") {
-        auto vwap = [](const OhlcvCandle& c) {
-            return c.volume > 0 ? (c.high + c.low + c.close) / 3.0 : c.close;
-        };
-        cv = vwap(curr);
-        pv = vwap(prev);
+        // Cumulative VWAP over the provided window: Σ(typical·vol)/Σ(vol).
+        // (Per-bar (H+L+C)/3 was just typical price, not a VWAP.)
+        const int n = candles.size();
+        double num = 0.0, den = 0.0;
+        for (int i = 0; i < n; ++i) {
+            if (i == n - 1) // snapshot the previous-bar VWAP before adding the last bar
+                pv = den > 0.0 ? num / den : prev.close;
+            const auto& c = candles[i];
+            const double tp = (c.high + c.low + c.close) / 3.0;
+            const double v = c.volume > 0.0 ? c.volume : 0.0;
+            num += tp * v;
+            den += v;
+        }
+        cv = den > 0.0 ? num / den : curr.close;
     }
     r.current[QStringLiteral("value")] = cv;
     r.previous[QStringLiteral("value")] = pv;

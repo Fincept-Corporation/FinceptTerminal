@@ -11,9 +11,10 @@ namespace fincept::services::algo {
 
 // ── Kind & backend enums ────────────────────────────────────────────────────
 
-/// Strategy kind. Derived from the ID prefix — never persisted as a column.
-///   FCT-XXXXXXXX → Qc (code-based, lives under scripts/strategies/<file>.py)
-///   anything else → Dsl (indicator-rule-based, persisted in algo_strategies table)
+/// Strategy kind. All strategies are now Dsl (indicator-rule based, persisted in
+/// the algo_strategies table and evaluated by the C++ ConditionEvaluator). The Qc
+/// value is retained only so historical deployment records still classify; the
+/// Python/LEAN QC library was removed.
 enum class StrategyKind { Dsl, Qc };
 
 inline StrategyKind kind_from_id(const QString& id) {
@@ -64,14 +65,11 @@ struct AlgoStrategy {
     double stop_loss = 0;
     double take_profit = 0;
     double trailing_stop = 0;
+    double position_size_pct = 100.0; // in-memory only — % of capital allocated per backtest entry
     bool is_active = true;
     QString created_at;
     QString updated_at;
     QJsonObject last_backtest; // in-memory only — populated when backtest runs, not persisted
-
-    // For QC strategies, this is the .py file path relative to scripts/strategies/.
-    // Empty for DSL strategies (their definition lives in entry_conditions/exit_conditions).
-    QString script_path;
 
     StrategyKind kind() const { return kind_from_id(id); }
 };
@@ -136,27 +134,41 @@ struct ConditionDef {
     QString indicator;
     QJsonObject params;
     QString field;
-    QString op; // >, <, >=, <=, ==, crosses_above, crosses_below
+    QString op; // >, <, >=, <=, ==, crosses_above, crosses_below, rising, falling, between
     double value = 0;
+    double value2 = 0; // upper bound for the `between` operator (value = lower)
     QString compare_mode = "value"; // value, indicator
     QString compare_indicator;
     QJsonObject compare_params;
     QString compare_field;
+    int offset = 0;         // bars-ago for the LHS operand (0 = current bar)
+    int compare_offset = 0; // bars-ago for the RHS operand (indicator mode)
 };
 
 // ── Indicator categories ────────────────────────────────────────────────────
+
+// A single tunable indicator parameter with a UI-ready range. Aggregate-init as
+// {name, min, max, default, step, decimals}.
+struct ParamSpec {
+    QString name;
+    double min = 1;
+    double max = 500;
+    double def = 14;
+    double step = 1;
+    int decimals = 0;
+};
 
 struct IndicatorDef {
     QString id;
     QString label;
     QString category; // stock, ma, momentum, trend, volatility, volume
-    QStringList params;
-    QStringList fields;
+    QVector<ParamSpec> params;
+    QStringList fields; // named outputs; first is the default
 };
 
 inline QVector<IndicatorDef> algo_indicators() {
     return {
-        // Stock attributes
+        // Stock attributes (no params)
         {"CLOSE", "Close Price", "stock", {}, {"value"}},
         {"OPEN", "Open Price", "stock", {}, {"value"}},
         {"HIGH", "High Price", "stock", {}, {"value"}},
@@ -164,49 +176,154 @@ inline QVector<IndicatorDef> algo_indicators() {
         {"VOLUME", "Volume", "stock", {}, {"value"}},
         {"VWAP", "VWAP", "stock", {}, {"value"}},
         // Moving averages
-        {"SMA", "SMA", "ma", {"period"}, {"value"}},
-        {"EMA", "EMA", "ma", {"period"}, {"value"}},
-        {"WMA", "WMA", "ma", {"period"}, {"value"}},
-        {"DEMA", "DEMA", "ma", {"period"}, {"value"}},
-        {"TEMA", "TEMA", "ma", {"period"}, {"value"}},
+        {"SMA", "SMA", "ma", {{"period", 1, 500, 20, 1, 0}}, {"value"}},
+        {"EMA", "EMA", "ma", {{"period", 1, 500, 20, 1, 0}}, {"value"}},
+        {"WMA", "WMA", "ma", {{"period", 1, 500, 20, 1, 0}}, {"value"}},
+        {"DEMA", "DEMA", "ma", {{"period", 1, 500, 20, 1, 0}}, {"value"}},
+        {"TEMA", "TEMA", "ma", {{"period", 1, 500, 20, 1, 0}}, {"value"}},
         // Momentum
-        {"RSI", "RSI", "momentum", {"period"}, {"value"}},
-        {"MACD", "MACD", "momentum", {"fast", "slow", "signal"}, {"line", "signal_line", "histogram"}},
-        {"STOCHASTIC", "Stochastic", "momentum", {"k_period", "d_period"}, {"k", "d"}},
-        {"CCI", "CCI", "momentum", {"period"}, {"value"}},
-        {"WILLIAMS_R", "Williams %R", "momentum", {"period"}, {"value"}},
-        {"MFI", "MFI", "momentum", {"period"}, {"value"}},
-        {"ROC", "Rate of Change", "momentum", {"period"}, {"value"}},
+        {"RSI", "RSI", "momentum", {{"period", 2, 100, 14, 1, 0}}, {"value"}},
+        {"MACD", "MACD", "momentum",
+         {{"fast", 1, 100, 12, 1, 0}, {"slow", 1, 200, 26, 1, 0}, {"signal", 1, 100, 9, 1, 0}},
+         {"line", "signal_line", "histogram"}},
+        {"STOCHASTIC", "Stochastic", "momentum",
+         {{"k_period", 1, 100, 14, 1, 0}, {"d_period", 1, 100, 3, 1, 0}}, {"k", "d"}},
+        {"CCI", "CCI", "momentum", {{"period", 1, 100, 20, 1, 0}}, {"value"}},
+        {"WILLIAMS_R", "Williams %R", "momentum", {{"period", 1, 100, 14, 1, 0}}, {"value"}},
+        {"MFI", "MFI", "momentum", {{"period", 1, 100, 14, 1, 0}}, {"value"}},
+        {"ROC", "Rate of Change", "momentum", {{"period", 1, 100, 12, 1, 0}}, {"value"}},
         // Trend
-        {"ADX", "ADX", "trend", {"period"}, {"value", "plus_di", "minus_di"}},
-        {"SUPERTREND", "SuperTrend", "trend", {"period", "multiplier"}, {"value", "direction"}},
-        {"AROON", "Aroon", "trend", {"period"}, {"up", "down"}},
-        {"ICHIMOKU",
-         "Ichimoku",
-         "trend",
-         {"tenkan", "kijun", "senkou"},
+        {"ADX", "ADX", "trend", {{"period", 1, 100, 14, 1, 0}}, {"value", "plus_di", "minus_di"}},
+        {"SUPERTREND", "SuperTrend", "trend",
+         {{"period", 1, 100, 10, 1, 0}, {"multiplier", 0.5, 10, 3, 0.5, 1}}, {"value", "direction"}},
+        {"AROON", "Aroon", "trend", {{"period", 1, 100, 14, 1, 0}}, {"up", "down"}},
+        {"ICHIMOKU", "Ichimoku", "trend",
+         {{"tenkan", 1, 100, 9, 1, 0}, {"kijun", 1, 100, 26, 1, 0}, {"senkou", 1, 200, 52, 1, 0}},
          {"tenkan_sen", "kijun_sen", "senkou_a", "senkou_b"}},
         // Volatility
-        {"ATR", "ATR", "volatility", {"period"}, {"value"}},
-        {"BOLLINGER",
-         "Bollinger Bands",
-         "volatility",
-         {"period", "std_dev"},
+        {"ATR", "ATR", "volatility", {{"period", 1, 100, 14, 1, 0}}, {"value"}},
+        {"BOLLINGER", "Bollinger Bands", "volatility",
+         {{"period", 1, 100, 20, 1, 0}, {"std_dev", 0.5, 5, 2, 0.5, 1}},
          {"upper", "middle", "lower", "width", "pct_b"}},
-        {"KELTNER", "Keltner Channel", "volatility", {"period", "multiplier"}, {"upper", "middle", "lower"}},
-        {"DONCHIAN", "Donchian Channel", "volatility", {"period"}, {"upper", "lower"}},
+        {"KELTNER", "Keltner Channel", "volatility",
+         {{"period", 1, 100, 20, 1, 0}, {"multiplier", 0.5, 10, 2, 0.5, 1}}, {"upper", "middle", "lower"}},
+        {"DONCHIAN", "Donchian Channel", "volatility", {{"period", 1, 100, 20, 1, 0}}, {"upper", "lower"}},
         // Volume
         {"OBV", "On Balance Volume", "volume", {}, {"value"}},
-        {"CMF", "Chaikin Money Flow", "volume", {"period"}, {"value"}},
+        {"CMF", "Chaikin Money Flow", "volume", {{"period", 1, 100, 20, 1, 0}}, {"value"}},
     };
 }
 
 inline QStringList algo_operators() {
-    return {">", "<", ">=", "<=", "==", "crosses_above", "crosses_below", "rising", "falling"};
+    return {">",  "<",  ">=",            "<=",            "==",     "crosses_above",
+            "crosses_below", "rising", "falling", "between"};
 }
 
 inline QStringList algo_timeframes() {
     return {"live", "1m", "3m", "5m", "10m", "15m", "30m", "1h", "4h", "1d"};
+}
+
+// Sensible default backtest lookback per timeframe. Daily needs years so long
+// indicators (SMA200, EMA200) have valid history; intraday must stay under
+// Yahoo's history caps (≈60 days for 5–30m, 7 for 1m).
+inline int algo_default_lookback_days(const QString& tf) {
+    if (tf == "1d") return 365 * 3;
+    if (tf == "4h" || tf == "1h") return 365;
+    if (tf == "1m") return 7;
+    if (tf == "live") return 365;
+    return 55; // 3m / 5m / 10m / 15m / 30m — just under Yahoo's ~60-day cap
+}
+
+// ── Strategy templates ────────────────────────────────────────────────────
+// Ready-made, editable starting points (long-only, matching the backtest engine).
+
+struct StrategyTemplate {
+    QString name;
+    QString description;
+    QString timeframe;
+    QString entry_logic = "AND";
+    QString exit_logic = "AND";
+    double stop_loss = 2.0;
+    double take_profit = 5.0;
+    QJsonArray entry;
+    QJsonArray exit;
+};
+
+inline QVector<StrategyTemplate> algo_strategy_templates() {
+    // value-comparison leaf
+    auto cv = [](const QString& ind, const QJsonObject& p, const QString& field,
+                 const QString& op, double value) {
+        QJsonObject c;
+        c["indicator"] = ind;
+        c["params"] = p;
+        c["field"] = field;
+        c["operator"] = op;
+        c["compare_mode"] = "value";
+        c["value"] = value;
+        return c;
+    };
+    // indicator-vs-indicator leaf
+    auto ci = [](const QString& ind, const QJsonObject& p, const QString& field, const QString& op,
+                 const QString& cmpInd, const QJsonObject& cmpP, const QString& cmpField) {
+        QJsonObject c;
+        c["indicator"] = ind;
+        c["params"] = p;
+        c["field"] = field;
+        c["operator"] = op;
+        c["compare_mode"] = "indicator";
+        c["compare_indicator"] = cmpInd;
+        c["compare_params"] = cmpP;
+        c["compare_field"] = cmpField;
+        return c;
+    };
+
+    QVector<StrategyTemplate> t;
+
+    StrategyTemplate golden;
+    golden.name = "Golden Cross";
+    golden.description = "SMA(50) crosses above SMA(200)";
+    golden.timeframe = "1d";
+    golden.stop_loss = 5;
+    golden.take_profit = 15;
+    golden.entry = {ci("SMA", {{"period", 50}}, "value", "crosses_above", "SMA", {{"period", 200}}, "value")};
+    golden.exit = {ci("SMA", {{"period", 50}}, "value", "crosses_below", "SMA", {{"period", 200}}, "value")};
+    t.append(golden);
+
+    StrategyTemplate rsi;
+    rsi.name = "RSI Reversal";
+    rsi.description = "Buy oversold RSI < 30, exit RSI > 60";
+    rsi.timeframe = "1h";
+    rsi.entry = {cv("RSI", {{"period", 14}}, "value", "<", 30)};
+    rsi.exit = {cv("RSI", {{"period", 14}}, "value", ">", 60)};
+    t.append(rsi);
+
+    StrategyTemplate macd;
+    macd.name = "MACD Cross";
+    macd.description = "MACD line crosses above signal";
+    macd.timeframe = "15m";
+    macd.entry = {ci("MACD", {{"fast", 12}, {"slow", 26}, {"signal", 9}}, "line", "crosses_above",
+                     "MACD", {{"fast", 12}, {"slow", 26}, {"signal", 9}}, "signal_line")};
+    macd.exit = {ci("MACD", {{"fast", 12}, {"slow", 26}, {"signal", 9}}, "line", "crosses_below",
+                    "MACD", {{"fast", 12}, {"slow", 26}, {"signal", 9}}, "signal_line")};
+    t.append(macd);
+
+    StrategyTemplate boll;
+    boll.name = "Bollinger Breakout";
+    boll.description = "Close breaks upper band, exit at middle band";
+    boll.timeframe = "1h";
+    boll.entry = {ci("CLOSE", {}, "value", "crosses_above", "BOLLINGER", {{"period", 20}, {"std_dev", 2}}, "upper")};
+    boll.exit = {ci("CLOSE", {}, "value", "crosses_below", "BOLLINGER", {{"period", 20}, {"std_dev", 2}}, "middle")};
+    t.append(boll);
+
+    StrategyTemplate st;
+    st.name = "SuperTrend Follow";
+    st.description = "Close crosses SuperTrend(10, 3)";
+    st.timeframe = "15m";
+    st.entry = {ci("CLOSE", {}, "value", "crosses_above", "SUPERTREND", {{"period", 10}, {"multiplier", 3}}, "value")};
+    st.exit = {ci("CLOSE", {}, "value", "crosses_below", "SUPERTREND", {{"period", 10}, {"multiplier", 3}}, "value")};
+    t.append(st);
+
+    return t;
 }
 
 // ── Scanner preset conditions ───────────────────────────────────────────────

@@ -3,9 +3,21 @@
 
 #include <QJsonObject>
 
+#include <cmath>
+#include <limits>
+
 namespace fincept::algo {
 
 using services::algo::ConditionDef;
+
+namespace {
+constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
+
+bool op_needs_prev(const QString& op) {
+    return op == "crosses_above" || op == "crosses_below" ||
+           op == "rising" || op == "falling";
+}
+} // namespace
 
 ConditionDef ConditionEvaluator::parse_condition(const QJsonObject& obj) {
     ConditionDef c;
@@ -14,14 +26,22 @@ ConditionDef ConditionEvaluator::parse_condition(const QJsonObject& obj) {
     c.field = obj.value("field").toString("value");
     c.op = obj.value("operator").toString(">");
     c.value = obj.value("value").toDouble(0);
+    c.value2 = obj.value("value2").toDouble(0);
     c.compare_mode = obj.value("compare_mode").toString("value");
     c.compare_indicator = obj.value("compare_indicator").toString();
     c.compare_params = obj.value("compare_params").toObject();
     c.compare_field = obj.value("compare_field").toString("value");
+    c.offset = obj.value("offset").toInt(0);
+    c.compare_offset = obj.value("compare_offset").toInt(0);
     return c;
 }
 
+bool ConditionEvaluator::is_group_node(const QJsonObject& node) {
+    return node.contains("children") || node.value("type").toString() == "group";
+}
+
 bool ConditionEvaluator::apply_comparison(double lhs, const QString& op, double rhs) {
+    if (std::isnan(lhs) || std::isnan(rhs)) return false;
     if (op == ">")  return lhs > rhs;
     if (op == "<")  return lhs < rhs;
     if (op == ">=") return lhs >= rhs;
@@ -33,6 +53,9 @@ bool ConditionEvaluator::apply_comparison(double lhs, const QString& op, double 
 bool ConditionEvaluator::apply_crossing(double curr, double prev,
                                          double target_curr, double target_prev,
                                          const QString& op) {
+    if (std::isnan(curr) || std::isnan(prev) ||
+        std::isnan(target_curr) || std::isnan(target_prev))
+        return false;
     if (op == "crosses_above")
         return prev <= target_prev && curr > target_curr;
     if (op == "crosses_below")
@@ -40,11 +63,24 @@ bool ConditionEvaluator::apply_crossing(double curr, double prev,
     return false;
 }
 
-bool ConditionEvaluator::apply_trend(const QVector<double>& /*values*/,
-                                      int /*count*/, const QString& /*op*/) {
-    // Simplified: compare last two values
-    // A more sophisticated version would check N consecutive bars
-    return false;
+double ConditionEvaluator::operand_value(const QString& indicator, const QJsonObject& params,
+                                         const QString& field, int offset,
+                                         const QVector<OhlcvCandle>& candles, QString* error) {
+    if (offset < 0) offset = 0;
+    QVector<OhlcvCandle> window = candles;
+    if (offset > 0) {
+        if (offset >= candles.size()) {
+            if (error) *error = QStringLiteral("insufficient data for offset %1").arg(offset);
+            return kNaN;
+        }
+        window = candles.mid(0, candles.size() - offset);
+    }
+    auto r = IndicatorEngine::compute(indicator, window, params, field);
+    if (!r.valid) {
+        if (error) *error = r.error;
+        return kNaN;
+    }
+    return r.current.value(field, kNaN);
 }
 
 ConditionResult ConditionEvaluator::evaluate_single(
@@ -56,88 +92,97 @@ ConditionResult ConditionEvaluator::evaluate_single(
     result.field = condition.field;
     result.op = condition.op;
 
-    auto ind_result = IndicatorEngine::compute(
-        condition.indicator, candles, condition.params, condition.field);
+    const bool needs_prev = op_needs_prev(condition.op);
 
-    if (!ind_result.valid) {
-        result.error = ind_result.error;
+    QString err;
+    double lhs_curr = operand_value(condition.indicator, condition.params, condition.field,
+                                    condition.offset, candles, &err);
+    if (!err.isEmpty()) {
+        result.error = err;
         return result;
     }
+    result.computed_value = lhs_curr;
 
-    double curr_val = ind_result.current.value(condition.field, 0);
-    double prev_val = ind_result.previous.value(condition.field, curr_val);
-    result.computed_value = curr_val;
+    double lhs_prev = needs_prev
+        ? operand_value(condition.indicator, condition.params, condition.field,
+                        condition.offset + 1, candles, nullptr)
+        : kNaN;
 
+    double rhs_curr, rhs_prev;
     if (condition.compare_mode == "indicator") {
-        auto cmp_result = IndicatorEngine::compute(
-            condition.compare_indicator, candles,
-            condition.compare_params, condition.compare_field);
-
-        if (!cmp_result.valid) {
-            result.error = cmp_result.error;
+        QString cerr;
+        rhs_curr = operand_value(condition.compare_indicator, condition.compare_params,
+                                 condition.compare_field, condition.compare_offset, candles, &cerr);
+        if (!cerr.isEmpty()) {
+            result.error = cerr;
             return result;
         }
-
-        double target_curr = cmp_result.current.value(condition.compare_field, 0);
-        double target_prev = cmp_result.previous.value(condition.compare_field, target_curr);
-        result.target_value = target_curr;
-
-        if (condition.op == "crosses_above" || condition.op == "crosses_below") {
-            result.met = apply_crossing(curr_val, prev_val, target_curr, target_prev, condition.op);
-        } else if (condition.op == "rising" || condition.op == "falling") {
-            result.met = (condition.op == "rising") ? (curr_val > prev_val) : (curr_val < prev_val);
-        } else {
-            result.met = apply_comparison(curr_val, condition.op, target_curr);
-        }
+        rhs_prev = needs_prev
+            ? operand_value(condition.compare_indicator, condition.compare_params,
+                            condition.compare_field, condition.compare_offset + 1, candles, nullptr)
+            : kNaN;
     } else {
-        result.target_value = condition.value;
+        rhs_curr = condition.value;
+        rhs_prev = condition.value;
+    }
+    result.target_value = rhs_curr;
 
-        if (condition.op == "crosses_above" || condition.op == "crosses_below") {
-            result.met = apply_crossing(curr_val, prev_val,
-                                        condition.value, condition.value, condition.op);
-        } else if (condition.op == "rising" || condition.op == "falling") {
-            result.met = (condition.op == "rising") ? (curr_val > prev_val) : (curr_val < prev_val);
-        } else {
-            result.met = apply_comparison(curr_val, condition.op, condition.value);
-        }
+    if (condition.op == "crosses_above" || condition.op == "crosses_below") {
+        result.met = apply_crossing(lhs_curr, lhs_prev, rhs_curr, rhs_prev, condition.op);
+    } else if (condition.op == "rising") {
+        result.met = !std::isnan(lhs_curr) && !std::isnan(lhs_prev) && lhs_curr > lhs_prev;
+    } else if (condition.op == "falling") {
+        result.met = !std::isnan(lhs_curr) && !std::isnan(lhs_prev) && lhs_curr < lhs_prev;
+    } else if (condition.op == "between") {
+        result.met = !std::isnan(lhs_curr) && lhs_curr >= condition.value && lhs_curr <= condition.value2;
+        result.target_value = condition.value2;
+    } else {
+        result.met = apply_comparison(lhs_curr, condition.op, rhs_curr);
     }
 
     return result;
 }
 
 GroupEvalResult ConditionEvaluator::evaluate_group(
-    const QJsonArray& conditions_json,
+    const QJsonArray& children,
     const QString& logic,
     const QVector<OhlcvCandle>& candles) {
 
     GroupEvalResult group;
     group.logic = logic;
 
-    if (conditions_json.isEmpty()) {
+    if (children.isEmpty()) {
         group.triggered = false;
         return group;
     }
 
-    bool is_and = (logic.toUpper() == "AND");
+    const bool is_and = (logic.toUpper() != "OR"); // default AND
     bool overall = is_and;
 
-    for (const auto& val : conditions_json) {
-        auto cond = parse_condition(val.toObject());
-        auto result = evaluate_single(cond, candles);
-        group.details.append(result);
+    for (const auto& val : children) {
+        const QJsonObject node = val.toObject();
+
+        bool met;
+        if (is_group_node(node)) {
+            auto sub = evaluate_group(node.value("children").toArray(),
+                                      node.value("logic").toString(
+                                          node.value("op").toString("AND")),
+                                      candles);
+            met = node.value("negate").toBool(false) ? !sub.triggered : sub.triggered;
+            group.details.append(sub.details); // flatten nested detail for reporting
+        } else {
+            auto cond = parse_condition(node);
+            auto r = evaluate_single(cond, candles);
+            group.details.append(r);
+            met = r.met;
+        }
 
         if (is_and) {
-            overall = overall && result.met;
+            overall = overall && met;
+            if (!overall) break; // short-circuit
         } else {
-            overall = overall || result.met;
-        }
-    }
-
-    // Reset to false for OR if first iteration set it wrong
-    if (!is_and && !conditions_json.isEmpty()) {
-        overall = false;
-        for (const auto& d : group.details) {
-            if (d.met) { overall = true; break; }
+            overall = overall || met;
+            if (overall) break; // short-circuit
         }
     }
 

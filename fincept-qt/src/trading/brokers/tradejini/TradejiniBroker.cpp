@@ -456,8 +456,40 @@ ApiResponse<QVector<BrokerQuote>> TradejiniBroker::get_quotes(const BrokerCreden
             "Tradejini quotes are WebSocket-only — use the streaming adapter (no REST quote endpoint)", now_ts()};
 }
 
+// Roll up intraday OHLCV bars into one bar per IST civil day. Input must be
+// sorted ascending by timestamp (ms). Used to synthesise daily candles, since
+// Tradejini's chart API has no native daily endpoint.
+static QVector<BrokerCandle> tj_aggregate_to_daily(const QVector<BrokerCandle>& bars) {
+    QVector<BrokerCandle> out;
+    constexpr qint64 kIstOffsetSecs = 19800; // +5:30
+    qint64 cur_day = 0;
+    bool started = false;
+    for (const auto& b : bars) {
+        const qint64 day = (b.timestamp / 1000 + kIstOffsetSecs) / 86400;
+        if (!started || day != cur_day) {
+            BrokerCandle d = b;
+            // Stamp the daily bar at IST midnight, expressed back as UTC ms.
+            d.timestamp = (day * 86400 - kIstOffsetSecs) * 1000LL;
+            out.append(d);
+            cur_day = day;
+            started = true;
+        } else {
+            BrokerCandle& d = out.last();
+            d.high = std::max(d.high, b.high);
+            d.low = std::min(d.low, b.low);
+            d.close = b.close;    // last bar of the day
+            d.volume += b.volume; // summed
+            d.oi = b.oi;          // last
+        }
+    }
+    return out;
+}
+
 // ---------- get_history ----------
 // GET /api/mkt-data/chart/interval-data?id=<symId>&interval=<min>&from=<sec>&to=<sec>
+// Native intervals are minutes (1/5/15/30). Daily ("D") is synthesised by
+// fetching 1-minute bars and aggregating client-side — note Tradejini retains
+// only ~30 days of 1-minute history, so synthesised daily history is limited.
 
 ApiResponse<QVector<BrokerCandle>> TradejiniBroker::get_history(const BrokerCredentials& creds, const QString& symbol,
                                                                const QString& resolution, const QString& from_date,
@@ -478,14 +510,22 @@ ApiResponse<QVector<BrokerCandle>> TradejiniBroker::get_history(const BrokerCred
     int64_t from_epoch = QDateTime(from, QTime(9, 15, 0)).toSecsSinceEpoch();
     int64_t to_epoch = QDateTime(to, QTime(23, 59, 59)).toSecsSinceEpoch();
 
-    // Tradejini intervals are integer minutes; daily is unsupported via this endpoint.
+    // Native intervals are integer minutes. Daily ("D"/"1D"/"DAY") has no native
+    // endpoint, so fetch 1-minute bars and aggregate to daily after collection.
     static const QMap<QString, QString> interval_map = {
         {"1", "1"}, {"5", "5"}, {"15", "15"}, {"30", "30"},
     };
-    if (!interval_map.contains(resolution))
+    const QString res_upper = resolution.toUpper();
+    const bool want_daily = (res_upper == "D" || res_upper == "1D" || res_upper == "DAY");
+    QString interval;
+    if (want_daily)
+        interval = "1"; // fetch minute bars, roll up below
+    else if (interval_map.contains(resolution))
+        interval = interval_map.value(resolution);
+    else
         return {false, std::nullopt,
-                QString("Tradejini chart supports only minute intervals (1,5,30); resolution '%1' (e.g. daily) is not supported by this endpoint").arg(resolution), ts};
-    QString interval = interval_map.value(resolution);
+                QString("Tradejini chart supports minute intervals (1,5,15,30) and synthesised daily (D); "
+                        "resolution '%1' is not supported").arg(resolution), ts};
 
     auto& http = BrokerHttp::instance();
 
@@ -622,6 +662,10 @@ ApiResponse<QVector<BrokerCandle>> TradejiniBroker::get_history(const BrokerCred
                                   return a.timestamp == b.timestamp;
                               }),
                   candles.end());
+
+    // Synthesise daily candles from the collected 1-minute bars when requested.
+    if (want_daily)
+        candles = tj_aggregate_to_daily(candles);
 
     return {true, candles, "", ts};
 }

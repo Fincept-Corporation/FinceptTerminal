@@ -1,5 +1,7 @@
 #include "trading/instruments/DhanInstrumentParser.h"
 
+#include "trading/instruments/InstrumentNormalize.h"
+
 #include "core/logging/Logger.h"
 
 #include <QDate>
@@ -51,11 +53,10 @@ InstrumentType map_dhan_type(const QString& instrument_name, const QString& opti
 
 QString DhanInstrumentParser::map_index_name(const QString& trading_symbol) {
     const QString up = trading_symbol.toUpper();
-    auto it = dhan_index_map().constFind(up);
-    if (it != dhan_index_map().constEnd())
-        return it.value();
-    // Unmapped index: strip spaces (e.g. "NIFTY MIDCAP 150" → "NIFTYMIDCAP150").
-    return QString(up).remove(' ');
+    // Broker map first (handles Dhan's spaced names), then the shared normalizer
+    // as the final authority so the canonical index name matches every broker.
+    const QString mapped = dhan_index_map().value(up, QString(up).remove(' '));
+    return norm::normalise_index_symbol(mapped);
 }
 
 // "2024-08-28 14:30:00" (or "2024-08-28") → "28AUG24"
@@ -95,11 +96,7 @@ QString DhanInstrumentParser::normalise_symbol(const QString& trading_symbol, co
     }
     if (itype == "CE" || itype == "PE") {
         if (!underlying.isEmpty() && !expiry_nd.isEmpty()) {
-            QString strike_str;
-            if (strike == static_cast<qint64>(strike))
-                strike_str = QString::number(static_cast<qint64>(strike));
-            else
-                strike_str = QString::number(strike, 'f', 2);
+            QString strike_str = norm::format_strike(strike);
             return map_index_name(underlying) + expiry_nd + strike_str + itype;
         }
         return trading_symbol.toUpper();

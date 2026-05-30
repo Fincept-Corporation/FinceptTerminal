@@ -50,8 +50,9 @@ static Result<void> v023_add_column_if_missing(QSqlDatabase& db, const QString& 
 
 Result<void> apply_v023(QSqlDatabase& db) {
     // ── Strategy registry (DSL strategies) ──────────────────────────────────
-    // QC strategies live in scripts/strategies/_registry.py — not in SQL.
-    // This table only holds DSL strategies built in StrategyBuilderPanel.
+    // Holds all strategies: the seeded curated library (LIB-*) plus user
+    // strategies built in StrategyBuilderPanel. (The old Python/LEAN QC library
+    // was removed.)
     {
         auto r = v023_sql(db, R"sql(
             CREATE TABLE IF NOT EXISTS algo_strategies (

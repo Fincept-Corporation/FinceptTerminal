@@ -13,6 +13,7 @@
 #include "trading/websocket/FivePaisaWebSocket.h"
 #include "trading/websocket/FyersWebSocket.h"
 #include "trading/websocket/IIFLWebSocket.h"
+#include "trading/websocket/IciciDirectWebSocket.h"
 #include "trading/websocket/KotakWebSocket.h"
 #include "trading/websocket/MotilalPoller.h"
 #include "trading/websocket/ShoonyaWebSocket.h"
@@ -988,6 +989,25 @@ void AccountDataStream::ws_init() {
                 w->subscribe(current_symbols());
         });
         mp->open();
+        return;
+    }
+
+    if (broker_id_ == "icicidirect") {
+        auto creds = AccountManager::instance().load_credentials(account_id_);
+        // access_token = base64("user_id:session_key") from the Breeze session flow.
+        if (creds.access_token.isEmpty()) {
+            LOG_WARN(ADS_TAG, QString("ICICI WS: missing session token for %1").arg(account_id_));
+            return;
+        }
+        auto* iws = new IciciDirectWebSocket(creds.access_token, creds.user_id, this);
+        ws_ = iws;
+        wire_base_ws(iws);
+        connect(iws, &IciciDirectWebSocket::connected, this, [this, current_symbols, resolve_tokens]() {
+            LOG_INFO(ADS_TAG, QString("ICICI WS connected for %1").arg(account_id_));
+            if (auto* w = qobject_cast<IciciDirectWebSocket*>(ws_))
+                w->subscribe(resolve_tokens(current_symbols()));
+        });
+        iws->open();
         return;
     }
 

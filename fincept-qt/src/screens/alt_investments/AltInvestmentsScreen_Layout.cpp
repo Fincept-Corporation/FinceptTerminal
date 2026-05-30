@@ -220,7 +220,7 @@ QWidget* AltInvestmentsScreen::create_right_panel() {
     verdict_badge_ = new QLabel("AWAITING ANALYSIS");
     verdict_badge_->setObjectName("altVerdictBadge");
     verdict_badge_->setAlignment(Qt::AlignCenter);
-    verdict_badge_->setStyleSheet(QString("color:%1; background:%2; font-size:11px; font-weight:700;"
+    verdict_badge_->setStyleSheet(QString("color:%1; background:%2; font-size:13px; font-weight:700;"
                                           " padding:4px 14px; letter-spacing:0.5px;")
                                       .arg(colors::TEXT_DIM(), colors::BG_RAISED()));
     val->addWidget(verdict_badge_);

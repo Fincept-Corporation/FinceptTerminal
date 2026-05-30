@@ -2,6 +2,9 @@
 #include "algo_engine/BacktestEngine.h"
 
 #include "algo_engine/ConditionEvaluator.h"
+#include "core/logging/Logger.h"
+
+#include <QDateTime>
 
 #include <algorithm>
 #include <cmath>
@@ -43,8 +46,10 @@ QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles,
                                 const QJsonArray& entry_conditions, const QString& entry_logic,
                                 const QJsonArray& exit_conditions, const QString& exit_logic,
                                 double stop_loss_pct, double take_profit_pct, double trailing_stop_pct,
-                                double initial_capital, const QString& timeframe) {
+                                double initial_capital, const QString& timeframe,
+                                double position_size_pct) {
     const int n = candles.size();
+    const double size_frac = std::clamp(position_size_pct, 1.0, 100.0) / 100.0;
     if (n < kWarmupBars + 10) {
         QJsonObject err;
         err["success"] = false;
@@ -53,6 +58,20 @@ QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles,
                            .arg(kWarmupBars + 10);
         return err;
     }
+
+    LOG_INFO("Backtest", QString("run: candles=%1 tf=%2 entryConds=%3 exitConds=%4 sl=%5 tp=%6 sizePct=%7")
+                             .arg(n)
+                             .arg(timeframe)
+                             .arg(entry_conditions.size())
+                             .arg(exit_conditions.size())
+                             .arg(stop_loss_pct)
+                             .arg(take_profit_pct)
+                             .arg(position_size_pct));
+
+    // ── Diagnostics ──────────────────────────────────────────────────────────
+    int entry_eval_count = 0, entry_true_count = 0, exit_true_count = 0, entry_err_count = 0;
+    QString last_entry_err;
+    bool entry_sampled = false;
 
     double cash = initial_capital;
     bool in_pos = false;
@@ -68,6 +87,10 @@ QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles,
     QJsonArray trades;
     QVector<double> equity_curve;
     equity_curve.reserve(n - kWarmupBars);
+    // Buy-&-hold benchmark: invest all capital at the first evaluated bar's close.
+    QVector<double> benchmark_curve;
+    benchmark_curve.reserve(n - kWarmupBars);
+    const double bench_base = candles[kWarmupBars].close;
     double peak_equity = initial_capital;
     double max_dd = 0.0;
 
@@ -96,7 +119,7 @@ QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles,
         // ── 1. Execute pending signal fills at THIS bar's open ──────────────
         if (!in_pos && entry_signal) {
             const double px = bar.open;
-            const long long qty = px > 0 ? static_cast<long long>(std::floor(cash / px)) : 0;
+            const long long qty = px > 0 ? static_cast<long long>(std::floor(cash * size_frac / px)) : 0;
             if (qty > 0) {
                 in_pos = true;
                 entry_price = px;
@@ -140,16 +163,43 @@ QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles,
         const int start = std::max(0, i - kEvalWindow + 1);
         const QVector<OhlcvCandle> window = candles.mid(start, i - start + 1);
         if (!in_pos && !entry_signal && !entry_conditions.isEmpty()) {
-            if (ConditionEvaluator::evaluate_group(entry_conditions, entry_logic, window).triggered)
+            const auto g = ConditionEvaluator::evaluate_group(entry_conditions, entry_logic, window);
+            ++entry_eval_count;
+            if (g.triggered) {
                 entry_signal = true;
+                ++entry_true_count;
+            }
+            for (const auto& d : g.details)
+                if (!d.error.isEmpty()) {
+                    ++entry_err_count;
+                    if (last_entry_err.isEmpty())
+                        last_entry_err = d.error;
+                }
+            // Snapshot the first evaluation where the LHS operand is actually computed
+            // (past indicator warm-up) so we can see real operand values vs targets.
+            if (!entry_sampled && !g.details.isEmpty() && !std::isnan(g.details.first().computed_value)) {
+                entry_sampled = true;
+                for (const auto& d : g.details)
+                    LOG_INFO("Backtest",
+                             QString("  entry[bar %1] %2.%3 %4  lhs=%5 rhs=%6 met=%7 err=%8")
+                                 .arg(i)
+                                 .arg(d.indicator, d.field, d.op)
+                                 .arg(d.computed_value)
+                                 .arg(d.target_value)
+                                 .arg(d.met ? QStringLiteral("Y") : QStringLiteral("N"))
+                                 .arg(d.error));
+            }
         } else if (in_pos && !exit_signal && !exit_conditions.isEmpty()) {
-            if (ConditionEvaluator::evaluate_group(exit_conditions, exit_logic, window).triggered)
+            if (ConditionEvaluator::evaluate_group(exit_conditions, exit_logic, window).triggered) {
                 exit_signal = true;
+                ++exit_true_count;
+            }
         }
 
         // ── 4. Mark-to-market equity on close ───────────────────────────────
         const double equity = cash + (in_pos ? static_cast<double>(shares) * bar.close : 0.0);
         equity_curve.append(equity);
+        benchmark_curve.append(bench_base > 0 ? initial_capital * bar.close / bench_base : initial_capital);
         if (equity > peak_equity)
             peak_equity = equity;
         const double dd = peak_equity > 0 ? (peak_equity - equity) / peak_equity * 100.0 : 0.0;
@@ -160,6 +210,15 @@ QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles,
     // Close any open position at the last bar's close.
     if (in_pos)
         close_trade(candles[n - 1].close, "end_of_data", n - 1);
+
+    LOG_INFO("Backtest",
+             QString("done: evalBars=%1 entryTrue=%2 exitTrue=%3 entryErr=%4 trades=%5 lastErr='%6'")
+                 .arg(entry_eval_count)
+                 .arg(entry_true_count)
+                 .arg(exit_true_count)
+                 .arg(entry_err_count)
+                 .arg(trades.size())
+                 .arg(last_entry_err));
 
     // ── Metrics ─────────────────────────────────────────────────────────────
     const int total_trades = trades.size();
@@ -184,7 +243,13 @@ QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles,
         out["profit_factor"] = 0.0;
         out["sharpe_ratio"] = 0.0;
         out["sharpe"] = 0.0;
+        out["sortino"] = 0.0;
+        out["calmar"] = 0.0;
+        out["expectancy"] = 0.0;
         out["equity_curve"] = QJsonArray();
+        out["benchmark_curve"] = QJsonArray();
+        out["benchmark_return"] = 0.0;
+        out["monthly_returns"] = QJsonArray();
         out["trades"] = trades;
         return out;
     }
@@ -217,8 +282,10 @@ QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles,
     if (profit_factor > 999.99)
         profit_factor = 999.99;
 
-    // Sharpe from equity-curve point-to-point returns, annualised by timeframe.
+    // Sharpe & Sortino from equity-curve point-to-point returns, annualised by
+    // timeframe. Calmar = annualised-ish return over max drawdown.
     double sharpe = 0.0;
+    double sortino = 0.0;
     if (equity_curve.size() > 1) {
         QVector<double> rets;
         rets.reserve(equity_curve.size() - 1);
@@ -231,29 +298,70 @@ QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles,
             for (double r : rets)
                 mean += r;
             mean /= rets.size();
-            double var = 0.0;
-            for (double r : rets)
+            double var = 0.0, dvar = 0.0;
+            for (double r : rets) {
                 var += (r - mean) * (r - mean);
+                if (r < 0.0)
+                    dvar += r * r; // downside-only second moment
+            }
             var /= rets.size();
+            dvar /= rets.size();
             const double sd = std::sqrt(var);
+            const double dsd = std::sqrt(dvar);
+            const double ann = std::sqrt(bars_per_year(timeframe));
             if (sd > 0.0)
-                sharpe = (mean / sd) * std::sqrt(bars_per_year(timeframe));
+                sharpe = (mean / sd) * ann;
+            if (dsd > 0.0)
+                sortino = (mean / dsd) * ann;
+        }
+    }
+    const double calmar = (max_dd > 0.0) ? (total_return_pct / max_dd) : 0.0;
+
+    // Downsample equity + buy-&-hold benchmark to <= 500 aligned points (keep last).
+    QJsonArray equity_out, benchmark_out;
+    {
+        const int sz = equity_curve.size();
+        const int step = sz > 500 ? sz / 500 : 1;
+        for (int i = 0; i < sz; i += step) {
+            equity_out.append(round_to(equity_curve[i], 2));
+            benchmark_out.append(round_to(benchmark_curve[i], 2));
+        }
+        if (sz > 0 && equity_out.last().toDouble() != round_to(equity_curve.last(), 2)) {
+            equity_out.append(round_to(equity_curve.last(), 2));
+            benchmark_out.append(round_to(benchmark_curve.last(), 2));
         }
     }
 
-    // Downsample equity curve to <= 500 points (keep last point).
-    QJsonArray equity_out;
-    if (equity_curve.size() > 500) {
-        const int step = equity_curve.size() / 500;
-        for (int i = 0; i < equity_curve.size(); i += step)
-            equity_out.append(round_to(equity_curve[i], 2));
-        if (equity_out.isEmpty() ||
-            equity_out.last().toDouble() != round_to(equity_curve.last(), 2))
-            equity_out.append(round_to(equity_curve.last(), 2));
-    } else {
-        for (double e : equity_curve)
-            equity_out.append(round_to(e, 2));
+    // Per-calendar-month returns of the strategy equity (for the heatmap).
+    QJsonArray monthly_returns;
+    {
+        QString cur_month;
+        bool have_month = false;
+        double month_end = initial_capital;
+        double prev_month_end = initial_capital;
+        auto flush = [&](const QString& label) {
+            const double ret = prev_month_end > 0 ? (month_end - prev_month_end) / prev_month_end * 100.0 : 0.0;
+            QJsonObject m;
+            m["month"] = label;
+            m["return"] = round_to(ret, 2);
+            monthly_returns.append(m);
+            prev_month_end = month_end;
+        };
+        for (int j = 0; j < equity_curve.size(); ++j) {
+            const QString ym =
+                QDateTime::fromMSecsSinceEpoch(candles[kWarmupBars + j].open_time, Qt::UTC).toString("yyyy-MM");
+            if (have_month && ym != cur_month)
+                flush(cur_month);
+            cur_month = ym;
+            have_month = true;
+            month_end = equity_curve[j];
+        }
+        if (have_month)
+            flush(cur_month);
     }
+
+    const double bench_final = benchmark_curve.isEmpty() ? initial_capital : benchmark_curve.last();
+    const double bench_return_pct = initial_capital > 0 ? (bench_final - initial_capital) / initial_capital * 100.0 : 0.0;
 
     out["total_trades"] = total_trades;
     out["winning_trades"] = wins;
@@ -268,7 +376,13 @@ QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles,
     out["profit_factor"] = round_to(profit_factor, 2);
     out["sharpe_ratio"] = round_to(sharpe, 3); // panel reads sharpe_ratio
     out["sharpe"] = round_to(sharpe, 3);       // alias
+    out["sortino"] = round_to(sortino, 3);
+    out["calmar"] = round_to(calmar, 2);
+    out["expectancy"] = round_to(avg_pnl, 2); // avg P&L per trade
     out["equity_curve"] = equity_out;
+    out["benchmark_curve"] = benchmark_out;
+    out["benchmark_return"] = round_to(bench_return_pct, 2);
+    out["monthly_returns"] = monthly_returns;
     out["trades"] = trades;
     return out;
 }

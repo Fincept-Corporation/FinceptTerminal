@@ -1,5 +1,7 @@
 #include "trading/instruments/GrowwInstrumentParser.h"
 
+#include "trading/instruments/InstrumentNormalize.h"
+
 #include "core/logging/Logger.h"
 
 #include <QDate>
@@ -63,7 +65,8 @@ QString GrowwInstrumentParser::expiry_nodashes(const QString& expiry_iso) {
 }
 
 QString GrowwInstrumentParser::map_index_name(const QString& trading_symbol) {
-    return groww_index_map().value(trading_symbol.toUpper(), trading_symbol.toUpper());
+    // Broker map first, then the shared normalizer so index naming matches every broker.
+    return norm::normalise_index_symbol(groww_index_map().value(trading_symbol.toUpper(), trading_symbol.toUpper()));
 }
 
 // Groww exchange column is NSE/BSE/MCX even for derivatives; segment distinguishes
@@ -101,12 +104,8 @@ QString GrowwInstrumentParser::normalise_symbol(const QString& trading_symbol, c
     }
     if (itype == "CE" || itype == "PE") {
         if (!underlying.isEmpty() && !expiry_nd.isEmpty()) {
-            // Drop decimals for whole-number strikes; keep decimals otherwise (e.g. silver)
-            QString strike_str;
-            if (strike == static_cast<qint64>(strike))
-                strike_str = QString::number(static_cast<qint64>(strike));
-            else
-                strike_str = QString::number(strike, 'f', 2);
+            // Shared strike formatting — identical across all brokers.
+            QString strike_str = norm::format_strike(strike);
             return underlying.toUpper() + expiry_nd + strike_str + itype;
         }
         return trading_symbol;

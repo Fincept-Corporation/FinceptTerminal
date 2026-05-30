@@ -493,7 +493,8 @@ QWidget* BacktestingScreen::build_right_panel() {
     exec_title->setStyleSheet(section_style);
     exec_layout->addWidget(exec_title);
 
-    auto* cap_lbl = new QLabel("INITIAL CAPITAL ($)", execution_section_);
+    auto* cap_lbl = new QLabel(execution_section_);
+    cur::bindLabel(cap_lbl, "INITIAL CAPITAL (%1)");
     cap_lbl->setStyleSheet(label_style);
     exec_layout->addWidget(cap_lbl);
     capital_spin_ = new QDoubleSpinBox(execution_section_);
@@ -610,7 +611,7 @@ QWidget* BacktestingScreen::build_right_panel() {
             pos_sizing_value_spin_->setRange(1, 100);
             pos_sizing_value_spin_->setValue(100);
         } else if (text == "fixed") {
-            pos_sizing_value_label_->setText("SIZE ($)");
+            pos_sizing_value_label_->setText(QString("SIZE (%1)").arg(cur::symbol()));
             pos_sizing_value_spin_->setSuffix("");
             pos_sizing_value_spin_->setRange(1, 1e9);
             pos_sizing_value_spin_->setValue(10000);

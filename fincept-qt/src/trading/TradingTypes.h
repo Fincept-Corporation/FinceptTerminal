@@ -439,6 +439,7 @@ enum class BrokerId {
     Flattrade,
     Paytm,
     Tradejini,
+    IciciDirect,
     Alpaca,
     IBKR,
     Tradier,
@@ -480,6 +481,8 @@ inline const char* broker_id_str(BrokerId id) {
             return "paytm";
         case BrokerId::Tradejini:
             return "tradejini";
+        case BrokerId::IciciDirect:
+            return "icicidirect";
         case BrokerId::Alpaca:
             return "alpaca";
         case BrokerId::IBKR:
@@ -527,6 +530,8 @@ inline std::optional<BrokerId> parse_broker_id(const QString& s) {
         return BrokerId::Paytm;
     if (s == "tradejini")
         return BrokerId::Tradejini;
+    if (s == "icicidirect")
+        return BrokerId::IciciDirect;
     if (s == "alpaca")
         return BrokerId::Alpaca;
     if (s == "ibkr")

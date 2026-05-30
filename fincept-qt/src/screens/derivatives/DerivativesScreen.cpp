@@ -1,5 +1,6 @@
 #include "screens/derivatives/DerivativesScreen.h"
 
+#include "core/currency/Currency.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "services/python_cli/PythonCliService.h"
@@ -230,7 +231,8 @@ QWidget* DerivativesScreen::create_bonds_panel() {
     ph->setFixedHeight(34);
     auto* phl = new QHBoxLayout(ph);
     phl->setContentsMargins(12, 0, 12, 0);
-    auto* phi = new QLabel("$");
+    auto* phi = new QLabel;
+    cur::bindLabel(phi, "%1"); // panel icon reflects the preferred currency, live
     phi->setObjectName("derivPanelIcon");
     auto* pht = new QLabel("BOND PRICE CALCULATOR");
     pht->setObjectName("derivPanelTitle");

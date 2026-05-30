@@ -1,6 +1,9 @@
 #include "trading/brokers/motilal/MotilalBroker.h"
 
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/instruments/InstrumentService.h"
+
+#include <algorithm>
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -599,7 +602,8 @@ ApiResponse<QVector<BrokerCandle>> MotilalBroker::get_history(const BrokerCreden
                                                               const QString& to_date) {
     int64_t ts = now_ts();
 
-    // Only daily / weekly / monthly are supported.
+    // Only daily / weekly / monthly are supported — Motilal Oswal has no public
+    // intraday history endpoint.
     const QString r = resolution.toUpper();
     const bool is_daily = r == "D" || r == "1D" || r == "DAY" || r == "W" || r == "1W" || r == "WEEK" ||
                           r == "M" || r == "1M" || r == "MONTH";
@@ -607,17 +611,24 @@ ApiResponse<QVector<BrokerCandle>> MotilalBroker::get_history(const BrokerCreden
         return {false, std::nullopt,
                 "Motilal Oswal historical API supports only EOD bars (D/W/M). Intraday is unavailable.", ts};
 
-    // Parse "EX:SYMBOL:TOKEN" — token is required.
+    // Parse "EX:SYMBOL[:TOKEN]". Token keys the scripcode; resolve it from
+    // InstrumentService when the caller didn't pass it explicitly.
     QStringList parts = symbol.split(':');
     QString exch = parts.size() >= 1 ? parts[0] : "NSE";
     QString name = parts.size() >= 2 ? parts[1] : symbol;
     QString token = parts.size() >= 3 ? parts[2] : QString();
+    if (token.isEmpty()) {
+        auto tok = InstrumentService::instance().instrument_token(name, exch, creds.broker_id);
+        if (tok.has_value() && tok.value() > 0)
+            token = QString::number(static_cast<qlonglong>(tok.value()));
+    }
     if (token.isEmpty())
         return {false, std::nullopt, "MO history requires instrument token (format EXCHANGE:SYMBOL:TOKEN)", ts};
 
     QJsonObject body;
     body["clientcode"] = creds.user_id;
-    body["exchange"] = mo_exchange(exch);
+    body["exchangename"] = mo_exchange(exch); // documented field name
+    body["exchange"] = mo_exchange(exch);     // older deployments accept `exchange`
     body["scripcode"] = token.toInt();
     body["fromdate"] = from_date;
     body["todate"] = to_date;
@@ -635,17 +646,35 @@ ApiResponse<QVector<BrokerCandle>> MotilalBroker::get_history(const BrokerCreden
     if (obj.value("status").toString() != "SUCCESS")
         return {false, std::nullopt, obj.value("message").toString("get_history failed"), ts};
 
+    // `geteoddatabyexchangename` can return one row per scrip for the whole
+    // exchange and may ignore the date range — keep only the requested scripcode
+    // and clamp [from, to] client-side so callers always get the right series.
+    const int want_scrip = token.toInt();
+    const QDate d_from = QDate::fromString(from_date, "yyyy-MM-dd");
+    const QDate d_to = QDate::fromString(to_date, "yyyy-MM-dd");
+
     QVector<BrokerCandle> candles;
     const QJsonArray rows = obj.value("data").toArray();
     candles.reserve(rows.size());
     for (const auto& v : rows) {
         const QJsonObject o = v.toObject();
-        BrokerCandle c;
+        if (want_scrip != 0 && o.contains("scripcode") &&
+            o.value("scripcode").toVariant().toInt() != want_scrip)
+            continue;
         const QString date_str = o.value("date").toString();
-        // MO returns "yyyy-MM-dd" or "dd-MMM-yyyy" depending on the deployment.
+        // Date formats seen across MO deployments: yyyy-MM-dd, dd-MM-yyyy, dd-MMM-yyyy.
         QDate d = QDate::fromString(date_str, "yyyy-MM-dd");
         if (!d.isValid())
+            d = QDate::fromString(date_str, "dd-MM-yyyy");
+        if (!d.isValid())
             d = QDate::fromString(date_str, "dd-MMM-yyyy");
+        if (d.isValid()) {
+            if (d_from.isValid() && d < d_from)
+                continue;
+            if (d_to.isValid() && d > d_to)
+                continue;
+        }
+        BrokerCandle c;
         c.timestamp = d.isValid() ? QDateTime(d, QTime(15, 30)).toSecsSinceEpoch() : 0;
         c.open = o.value("open").toDouble();
         c.high = o.value("high").toDouble();
@@ -654,6 +683,9 @@ ApiResponse<QVector<BrokerCandle>> MotilalBroker::get_history(const BrokerCreden
         c.volume = o.value("volume").toDouble();
         candles.append(c);
     }
+
+    std::sort(candles.begin(), candles.end(),
+              [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp < b.timestamp; });
     return {true, candles, "", ts};
 }
 

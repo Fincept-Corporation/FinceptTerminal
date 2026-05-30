@@ -7,6 +7,7 @@
 
 #include "screens/alt_investments/AltInvestmentsScreen.h"
 
+#include "core/currency/Currency.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "services/python_cli/PythonCliService.h"
@@ -33,6 +34,25 @@
 namespace fincept::screens {
 
 using namespace fincept::ui;
+
+// Currency-aware field helpers: labels ending in "($)" and spin prefixes of "$"
+// track the user's preferred currency live; everything else is left untouched.
+static void set_alt_field_label(QLabel* lbl, const QString& label) {
+    if (label.endsWith("($)")) {
+        QString base = label;
+        base.chop(3); // strip "($)"
+        cur::bindLabel(lbl, base + "(%1)");
+    } else {
+        lbl->setText(label);
+    }
+}
+
+static void apply_alt_field_prefix(QDoubleSpinBox* sp, const QString& prefix) {
+    if (prefix == QLatin1String("$"))
+        cur::bindPrefix(sp);
+    else if (!prefix.isEmpty())
+        sp->setPrefix(prefix);
+}
 
 static AltField text_field(const QString& key, const QString& label, const QString& def = "") {
     AltField f;
@@ -392,7 +412,8 @@ void AltInvestmentsScreen::rebuild_form(int cat, int ana) {
                 auto* cl = new QVBoxLayout(col);
                 cl->setContentsMargins(0, 0, 0, 0);
                 cl->setSpacing(3);
-                auto* lbl = new QLabel(field.label);
+                auto* lbl = new QLabel;
+                set_alt_field_label(lbl, field.label);
                 lbl->setObjectName("altFieldLabel");
                 cl->addWidget(lbl);
                 auto* sp = new QDoubleSpinBox;
@@ -400,8 +421,7 @@ void AltInvestmentsScreen::rebuild_form(int cat, int ana) {
                 sp->setValue(field.default_val);
                 sp->setDecimals(field.decimals);
                 sp->setButtonSymbols(QAbstractSpinBox::NoButtons);
-                if (!field.prefix.isEmpty())
-                    sp->setPrefix(field.prefix);
+                apply_alt_field_prefix(sp, field.prefix);
                 if (!field.suffix.isEmpty())
                     sp->setSuffix(field.suffix);
                 cl->addWidget(sp);
@@ -418,7 +438,8 @@ void AltInvestmentsScreen::rebuild_form(int cat, int ana) {
             auto* cl = new QVBoxLayout(col);
             cl->setContentsMargins(0, 0, 0, 0);
             cl->setSpacing(3);
-            auto* lbl = new QLabel(f.label);
+            auto* lbl = new QLabel;
+            set_alt_field_label(lbl, f.label);
             lbl->setObjectName("altFieldLabel");
             cl->addWidget(lbl);
 
@@ -438,8 +459,7 @@ void AltInvestmentsScreen::rebuild_form(int cat, int ana) {
                 sp->setValue(f.default_val);
                 sp->setDecimals(f.decimals);
                 sp->setButtonSymbols(QAbstractSpinBox::NoButtons);
-                if (!f.prefix.isEmpty())
-                    sp->setPrefix(f.prefix);
+                apply_alt_field_prefix(sp, f.prefix);
                 if (!f.suffix.isEmpty())
                     sp->setSuffix(f.suffix);
                 cl->addWidget(sp);
@@ -547,7 +567,7 @@ void AltInvestmentsScreen::run_analysis(const QString& command, const QJsonObjec
     set_loading(true);
     verdict_badge_->setText("ANALYZING...");
     verdict_badge_->setStyleSheet(QString("color:%1; background:rgba(217,119,6,0.15);"
-                                          " font-size:11px; font-weight:700; padding:4px 14px;")
+                                          " font-size:13px; font-weight:700; padding:4px 14px;")
                                       .arg(colors::AMBER()));
     verdict_rating_->clear();
     verdict_rec_->clear();
@@ -625,7 +645,7 @@ void AltInvestmentsScreen::display_verdict(const QJsonObject& result, const QStr
     }
 
     verdict_badge_->setText(category.toUpper());
-    verdict_badge_->setStyleSheet(QString("color:%1; background:%2; font-size:11px; font-weight:700;"
+    verdict_badge_->setStyleSheet(QString("color:%1; background:%2; font-size:13px; font-weight:700;"
                                           " padding:4px 14px; letter-spacing:0.5px;")
                                       .arg(badge_color, badge_bg));
 

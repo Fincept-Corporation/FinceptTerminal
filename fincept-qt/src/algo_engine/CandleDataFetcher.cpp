@@ -438,10 +438,9 @@ void CandleDataFetcher::fetch_from_yahoo(const QStringList& symbols, const QStri
                 .arg(yi.interval);
 
         QNetworkRequest req{QUrl(url)};
-        // Yahoo blocks non-browser User-Agents — present a realistic one.
-        req.setHeader(QNetworkRequest::UserAgentHeader,
-                      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-                      "(KHTML, like Gecko) Chrome/120.0 Safari/537.36");
+        // Yahoo's chart endpoint 429s detailed browser UA strings (and python-requests),
+        // but accepts a bare "Mozilla/5.0" — verified empirically.
+        req.setHeader(QNetworkRequest::UserAgentHeader, "Mozilla/5.0");
         req.setRawHeader("Accept", "application/json");
 
         QPointer<CandleDataFetcher> self = this;

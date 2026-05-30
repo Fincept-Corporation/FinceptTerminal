@@ -13,6 +13,7 @@
 #include "core/config/ProfileManager.h"
 #include "core/components/ComponentCatalog.h"
 #include "core/crash/CrashHandler.h"
+#include "core/currency/CurrencyManager.h"
 #include "core/i18n/LanguageManager.h"
 #include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
@@ -638,6 +639,7 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v033();
     fincept::register_migration_v034();
     fincept::register_migration_v035();
+    fincept::register_migration_v036();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
@@ -681,6 +683,10 @@ int main(int argc, char* argv[]) {
         // any windows are shown — eliminates an English-flash on first paint
         // when the user has previously chosen another language.
         fincept::i18n::LanguageManager::instance().initialize();
+
+        // Load persisted display-currency preference so the symbol is correct
+        // on first paint of any calculator/analytics surface.
+        fincept::currency::CurrencyManager::instance().initialize();
     }
 
     // Open cache database (non-fatal if fails)

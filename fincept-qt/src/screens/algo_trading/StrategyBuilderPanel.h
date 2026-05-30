@@ -1,17 +1,20 @@
 // src/screens/algo_trading/StrategyBuilderPanel.h
 #pragma once
 #include "services/algo_trading/AlgoTradingTypes.h"
+#include "ui/widgets/algo/BacktestReportPanel.h"
 #include "ui/widgets/algo/ConditionSection.h"
 #include "ui/widgets/algo/RiskManagementPanel.h"
 #include "ui/widgets/algo/SymbolSearchCombo.h"
 
 #include <QComboBox>
+#include <QDateEdit>
 #include <QDoubleSpinBox>
 #include <QJsonArray>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSplitter>
+#include <QString>
 #include <QWidget>
 
 namespace fincept::screens {
@@ -23,6 +26,11 @@ public:
 
     QVariantMap save_draft() const;
     void restore_draft(const QVariantMap& draft);
+    // Loads an existing strategy for editing (keeps its id so Save updates in place).
+    void load_strategy(const services::algo::AlgoStrategy& strategy);
+    // Loads a strategy, sets symbol/date range, and runs a backtest immediately.
+    void load_and_backtest(const services::algo::AlgoStrategy& strategy, const QString& symbol,
+                           const QString& start_date, const QString& end_date);
 
 private slots:
     void on_save();
@@ -39,12 +47,20 @@ private:
     QWidget* build_right_panel();
     void display_backtest_result(const QJsonObject& data);
     void clear_results();
+    // Builds an AlgoStrategy from the current UI state, reusing the same id for
+    // the lifetime of this editor so repeated Save/Backtest/Deploy update one
+    // strategy instead of spawning duplicates.
+    services::algo::AlgoStrategy build_strategy();
+    void load_template(int index);
+    // Returns a human-readable error if the strategy is unrunnable, else empty.
+    QString validate() const;
 
     // Top toolbar
     QLineEdit* name_edit_ = nullptr;
     QLineEdit* desc_edit_ = nullptr;
     ui::algo::SymbolSearchCombo* symbol_combo_ = nullptr;
     QComboBox* timeframe_combo_ = nullptr;
+    QComboBox* template_combo_ = nullptr;
     QPushButton* save_btn_ = nullptr;
     QPushButton* backtest_btn_ = nullptr;
     QPushButton* deploy_btn_ = nullptr;
@@ -56,24 +72,18 @@ private:
 
     // Right panel — backtest
     QDoubleSpinBox* bt_capital_ = nullptr;
-    QLineEdit* bt_start_date_ = nullptr;
-    QLineEdit* bt_end_date_ = nullptr;
+    QDateEdit* bt_start_date_ = nullptr;
+    QDateEdit* bt_end_date_ = nullptr;
     QLabel* status_label_ = nullptr;
 
-    // KPI card labels
-    QLabel* kpi_total_return_val_ = nullptr;
-    QLabel* kpi_total_return_sub_ = nullptr;
-    QLabel* kpi_sharpe_val_ = nullptr;
-    QLabel* kpi_sharpe_sub_ = nullptr;
-    QLabel* kpi_max_dd_val_ = nullptr;
-    QLabel* kpi_max_dd_sub_ = nullptr;
-    QLabel* kpi_win_rate_val_ = nullptr;
-    QLabel* kpi_win_rate_sub_ = nullptr;
-    QLabel* kpi_trades_val_ = nullptr;
-    QLabel* kpi_trades_sub_ = nullptr;
-    QLabel* kpi_profit_factor_val_ = nullptr;
-    QLabel* kpi_profit_factor_sub_ = nullptr;
-    QWidget* kpi_grid_widget_ = nullptr;
+    // Identity of the strategy currently being edited (empty => not yet minted).
+    QString loaded_strategy_id_;
+
+    // Right panel — backtest performance report (KPIs, equity, drawdown, trades)
+    ui::algo::BacktestReportPanel* report_panel_ = nullptr;
+
+    // Inline validation banner shown above the builder when a guard fails.
+    QLabel* validation_banner_ = nullptr;
 };
 
 } // namespace fincept::screens

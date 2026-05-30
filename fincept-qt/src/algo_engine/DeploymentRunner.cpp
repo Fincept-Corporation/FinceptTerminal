@@ -1,5 +1,6 @@
 // src/algo_engine/DeploymentRunner.cpp
 #include "algo_engine/DeploymentRunner.h"
+#include "algo_engine/CandleDataFetcher.h"
 #include "algo_engine/ConditionEvaluator.h"
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
@@ -10,6 +11,7 @@ using fincept::Database;
 #include "trading/TradingTypes.h"
 
 #include <QDateTime>
+#include <QPointer>
 #include <QSqlQuery>
 #include <QUuid>
 #include <QVariant>
@@ -24,7 +26,8 @@ DeploymentRunner::DeploymentRunner(const services::algo::AlgoDeployment& deploym
     , strategy_(strategy)
     , timeframe_(timeframe_from_string(deployment.timeframe.isEmpty() ? strategy.timeframe : deployment.timeframe)) {
 
-    aggregator_ = std::make_unique<CandleAggregator>(deployment.symbol, timeframe_, 200, this);
+    // Capacity 500 so long indicators (SMA200) + a crossover lookback fit.
+    aggregator_ = std::make_unique<CandleAggregator>(deployment.symbol, timeframe_, 500, this);
     connect(aggregator_.get(), &CandleAggregator::candle_closed,
             this, &DeploymentRunner::on_candle_closed);
 
@@ -50,7 +53,32 @@ void DeploymentRunner::start() {
     paused_ = false;
     last_heartbeat_ms_ = QDateTime::currentMSecsSinceEpoch();
 
-    subscribe_tick_topic();
+    // Warm the aggregator with historical candles before going live, so indicators
+    // are valid immediately. Without this the buffer starts empty and the strategy
+    // can't trigger until hundreds of live bars accumulate. Live ticks are
+    // subscribed only after the backfill attempt (warm_from replaces the buffer).
+    const QString tf = timeframe_to_string(timeframe_);
+    const int lookback = services::algo::algo_default_lookback_days(tf);
+    const DataSource src = deployment_.broker_id.isEmpty() ? DataSource::YFinance : DataSource::Auto;
+    QPointer<DeploymentRunner> self = this;
+    CandleDataFetcher::instance().fetch(
+        deployment_.symbol, tf, lookback, src, deployment_.broker_id, deployment_.broker_account_id,
+        [self](bool ok, const QVector<OhlcvCandle>& candles, const QString& err) {
+            if (!self || !self->running_.load())
+                return;
+            if (ok && !candles.isEmpty()) {
+                self->aggregator_->warm_from(candles);
+                LOG_INFO("AlgoEngine", QString("Deployment %1 warmed with %2 historical candles")
+                                           .arg(self->deployment_.id)
+                                           .arg(candles.size()));
+            } else {
+                LOG_WARN("AlgoEngine",
+                         QString("Deployment %1 backfill failed (%2) — warming from live ticks only")
+                             .arg(self->deployment_.id, err));
+            }
+            self->subscribe_tick_topic();
+        });
+
     heartbeat_timer_->start();
 
     update_deployment_status(QStringLiteral("running"));
@@ -206,6 +234,12 @@ void DeploymentRunner::evaluate_exit(const QVector<OhlcvCandle>& candles) {
 }
 
 void DeploymentRunner::emit_order_signal(const AlgoOrderSignal& signal) {
+    // Only one order in flight at a time. Position/risk state updates only when a
+    // fill arrives, so without this guard a stop-loss re-fires on every tick (and
+    // entry/exit on every candle) until the fill lands — flooding duplicate orders.
+    if (!pending_orders_.isEmpty())
+        return;
+
     PendingOrder pending;
     pending.signal = signal;
     pending.submitted_ms = QDateTime::currentMSecsSinceEpoch();
@@ -271,6 +305,18 @@ void DeploymentRunner::on_order_rejected(const QString& /*broker_order_id*/,
 void DeploymentRunner::on_heartbeat() {
     if (!running_.load()) return;
     int64_t now = QDateTime::currentMSecsSinceEpoch();
+
+    // Purge orders that never reported a fill/rejection so a lost ack doesn't
+    // permanently block new signals (the in-flight guard in emit_order_signal).
+    for (int i = pending_orders_.size() - 1; i >= 0; --i) {
+        if (now - pending_orders_[i].submitted_ms > 60000) {
+            LOG_WARN("AlgoEngine",
+                     QString("Deployment %1: pending order timed out (no fill/reject in 60s), clearing")
+                         .arg(deployment_.id));
+            pending_orders_.removeAt(i);
+        }
+    }
+
     if (now - last_heartbeat_ms_ > 30000) {
         LOG_ERROR("AlgoEngine", QString("Deployment %1: no tick data for 30s, marking error")
                   .arg(deployment_.id));

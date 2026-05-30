@@ -1,5 +1,7 @@
 #include "trading/instruments/FyersInstrumentParser.h"
 
+#include "trading/instruments/InstrumentNormalize.h"
+
 #include "core/logging/Logger.h"
 
 #include <QDateTime>
@@ -102,8 +104,7 @@ QVector<Instrument> FyersInstrumentParser::parse(const QByteArray& json_data) {
             // CE/PE: NIFTY + 26MAY26 + 24000 + CE
             QString exp_compact = inst.expiry;
             exp_compact.remove('-');
-            int strike_int = static_cast<int>(inst.strike);
-            inst.symbol = inst.name + exp_compact + QString::number(strike_int) +
+            inst.symbol = inst.name + exp_compact + norm::format_strike(inst.strike) +
                           instrument_type_str(inst.instrument_type);
         }
 

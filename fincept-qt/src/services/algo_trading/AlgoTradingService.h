@@ -38,6 +38,7 @@ class AlgoTradingService : public QObject {
 
   private:
     explicit AlgoTradingService(QObject* parent = nullptr);
+    void seed_library(); // idempotently seeds the curated C++ DSL library
     Q_DISABLE_COPY(AlgoTradingService)
 };
 

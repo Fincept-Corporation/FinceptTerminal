@@ -32,6 +32,7 @@
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
 #include "trading/UnifiedTrading.h"
+#include "trading/instruments/InstrumentService.h"
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
 
@@ -77,6 +78,23 @@ EquityTradingScreen::EquityTradingScreen(QWidget* parent) : QWidget(parent) {
     setup_ui();
     setup_timers();
     connect_data_stream_signals();
+
+    // When InstrumentService finishes loading/downloading a broker's instrument
+    // master, reload market data for the active account if its broker matches.
+    // Account data works without this, but quotes/charts/depth need the numeric
+    // securityId map that only exists once instruments are loaded.
+    {
+        QPointer<EquityTradingScreen> self = this;
+        connect(&trading::InstrumentService::instance(), &trading::InstrumentService::refresh_done,
+                this, [self](const QString& broker_id, int /*count*/) {
+                    if (self)
+                        self->on_instruments_ready(broker_id);
+                });
+        connect(&trading::InstrumentService::instance(), &trading::InstrumentService::refresh_failed,
+                this, [](const QString& broker_id, const QString& error) {
+                    LOG_WARN(TAG, QString("Instrument load failed for %1: %2").arg(broker_id, error));
+                });
+    }
 
     // Accept symbol drops anywhere on the screen — route through the
     // existing selection path so sub-panels resync and the linked group is
@@ -362,6 +380,67 @@ void EquityTradingScreen::update_clock() {
 // DataStreamManager signal connections
 // ============================================================================
 
+void EquityTradingScreen::ensure_instruments_loaded(const QString& account_id) {
+    if (account_id.isEmpty())
+        return;
+    const auto creds = AccountManager::instance().load_credentials(account_id);
+    const QString broker_id = creds.broker_id;
+    if (broker_id.isEmpty())
+        return;
+
+    auto& svc = trading::InstrumentService::instance();
+    if (svc.is_loaded(broker_id)) {
+        // Already in memory — make sure market data reflects it.
+        on_instruments_ready(broker_id);
+        return;
+    }
+
+    QPointer<EquityTradingScreen> self = this;
+    svc.load_from_db_async(broker_id, [self, broker_id, creds](int count) {
+        if (!self)
+            return;
+        if (count > 0) {
+            // Cache hit: instruments now in memory → reload market data.
+            self->on_instruments_ready(broker_id);
+            return;
+        }
+        // No cache on disk — download from the broker. refresh() emits
+        // refresh_done on completion, which routes to on_instruments_ready().
+        LOG_INFO(TAG, QString("Downloading %1 instruments from broker...").arg(broker_id));
+        trading::InstrumentService::instance().refresh(broker_id, creds);
+    });
+}
+
+void EquityTradingScreen::on_instruments_ready(const QString& broker_id) {
+    // Only act if the currently-focused account uses this broker.
+    if (focused_account_id_.isEmpty())
+        return;
+    const QString focused_broker =
+        AccountManager::instance().load_credentials(focused_account_id_).broker_id;
+    if (focused_broker != broker_id)
+        return;
+
+    LOG_INFO(TAG, QString("Instruments ready for %1 — reloading market data").arg(broker_id));
+
+    // Rebuild the watchlist so its completer/validation pick up the new cache,
+    // then re-issue the data fetches for the active symbol + watchlist via the
+    // stream (the same path on_account_changed uses on connect).
+    watchlist_->set_symbols(watchlist_symbols_);
+
+    auto* stream = DataStreamManager::instance().stream_for(focused_account_id_);
+    if (stream) {
+        stream->set_selected_symbol(selected_symbol_, selected_exchange_);
+        stream->subscribe_symbols(watchlist_symbols_);
+        stream->fetch_candles(selected_symbol_, chart_->current_timeframe());
+        stream->fetch_orderbook(selected_symbol_);
+        stream->fetch_time_sales(selected_symbol_);
+    }
+
+    // Re-subscribe hub topics so streaming quotes flow for the resolved symbols.
+    if (isVisible())
+        hub_subscribe_streaming();
+}
+
 void EquityTradingScreen::connect_data_stream_signals() {
     auto& dsm = DataStreamManager::instance();
     // Streaming data (quotes, positions, holdings, orders, funds) now comes
@@ -407,6 +486,12 @@ void EquityTradingScreen::init_focused_account() {
         order_entry_->set_broker_id(account.broker_id);
         watchlist_->set_broker_id(account.broker_id);
     }
+
+    // Load the broker instrument master (numeric securityId map) for the
+    // restored/active account so quotes, charts and depth resolve on app
+    // restart / account switch. Loads from the SQLite cache when present,
+    // else downloads; on_instruments_ready() reloads market data when done.
+    ensure_instruments_loaded(focused_account_id_);
 
     // Register fill callback for paper trading
     if (fill_cb_id_ < 0) {

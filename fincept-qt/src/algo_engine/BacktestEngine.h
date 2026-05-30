@@ -30,7 +30,8 @@ public:
                            const QJsonArray& entry_conditions, const QString& entry_logic,
                            const QJsonArray& exit_conditions, const QString& exit_logic,
                            double stop_loss_pct, double take_profit_pct, double trailing_stop_pct,
-                           double initial_capital, const QString& timeframe);
+                           double initial_capital, const QString& timeframe,
+                           double position_size_pct = 100.0);
 };
 
 } // namespace fincept::algo

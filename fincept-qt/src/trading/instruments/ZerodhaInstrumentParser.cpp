@@ -1,6 +1,7 @@
 #include "trading/instruments/ZerodhaInstrumentParser.h"
 
 #include "core/logging/Logger.h"
+#include "trading/instruments/InstrumentNormalize.h"
 
 #include <QDate>
 #include <QMap>
@@ -89,7 +90,9 @@ QString ZerodhaInstrumentParser::expiry_nodashes(const QString& expiry_iso) {
 }
 
 QString ZerodhaInstrumentParser::map_index_name(const QString& tradingsymbol) {
-    return index_map().value(tradingsymbol.toUpper(), tradingsymbol);
+    // Broker map first, then the shared normalizer as the final authority so the
+    // canonical index name matches every other broker's output.
+    return norm::normalise_index_symbol(index_map().value(tradingsymbol.toUpper(), tradingsymbol));
 }
 
 QString ZerodhaInstrumentParser::normalise_exchange(const QString& exchange, const QString& segment) {
@@ -107,8 +110,8 @@ QString ZerodhaInstrumentParser::normalise_symbol(const QString& tradingsymbol, 
         return name.toUpper() + expiry_nd + "FUT";
     }
     if (instrument_type == "CE" || instrument_type == "PE") {
-        // strike as integer (drop .0)
-        QString strike_str = QString::number(static_cast<int>(strike));
+        // Shared strike formatting (preserves fractional strikes — matches every broker).
+        QString strike_str = norm::format_strike(strike);
         return name.toUpper() + expiry_nd + strike_str + instrument_type.toUpper();
     }
     if (instrument_type == "INDEX") {
