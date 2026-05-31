@@ -6,8 +6,11 @@
 namespace fincept::screens {
 
 /// Returns the full list of available column identifiers for MarketPanel.
+/// SYMBOL is the locked first column and renders the human-readable name;
+/// TICKER is the optional column that shows the raw ticker. NAME is retained
+/// for backward-compatibility with previously-saved panel configs.
 inline QStringList all_market_columns() {
-    return {"SYMBOL", "LAST", "CHG", "CHG%", "HIGH", "LOW", "VOL", "BID", "ASK", "OPEN", "NAME"};
+    return {"SYMBOL", "LAST", "CHG", "CHG%", "HIGH", "LOW", "VOL", "BID", "ASK", "OPEN", "TICKER", "NAME"};
 }
 
 /// Returns the default column set used for new panels.

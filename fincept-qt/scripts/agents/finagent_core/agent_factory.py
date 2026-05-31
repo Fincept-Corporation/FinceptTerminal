@@ -127,8 +127,20 @@ class AgentFactory:
         # ── Native provider instances ─────────────────────────────────────────
         if provider == "openai":
             from agno.models.openai import OpenAIChat
-            return OpenAIChat(id=model_id, api_key=api_key,
+            # Agno maps "system"→"developer" by default, valid only for OpenAI
+            # o-series models. gpt-* models reject "developer", so use the
+            # standard role map unless this is an o-series id.
+            oai_kwargs = dict(id=model_id, api_key=api_key,
                               temperature=temperature, max_tokens=max_tokens)
+            if not (model_id or "").lower().startswith(("o1", "o3", "o4")):
+                oai_kwargs["role_map"] = {
+                    "system": "system",
+                    "user": "user",
+                    "assistant": "assistant",
+                    "tool": "tool",
+                    "model": "assistant",
+                }
+            return OpenAIChat(**{k: v for k, v in oai_kwargs.items() if v})
 
         if provider == "anthropic":
             from agno.models.anthropic import Claude

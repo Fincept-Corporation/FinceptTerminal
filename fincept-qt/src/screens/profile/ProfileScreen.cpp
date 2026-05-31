@@ -2,6 +2,7 @@
 
 #include "auth/AuthManager.h"
 #include "auth/UserApi.h"
+#include "core/currency/Currency.h"
 #include "core/logging/Logger.h"
 #include "ui/theme/Theme.h"
 
@@ -704,7 +705,7 @@ void ProfileScreen::fetch_billing_data() {
             self->bill_history_->setItem(row, 0, new QTableWidgetItem(e["created_at"].toString().left(10)));
             self->bill_history_->setItem(row, 1, new QTableWidgetItem(e["plan_name"].toString()));
             self->bill_history_->setItem(
-                row, 2, new QTableWidgetItem(QString("$%1").arg(e["amount_usd"].toDouble(), 0, 'f', 2)));
+                row, 2, new QTableWidgetItem(cur::money(e["amount_usd"].toDouble())));
             self->bill_history_->setItem(row, 3, new QTableWidgetItem(QString::number(e["credits_purchased"].toInt())));
             self->bill_history_->setItem(row, 4, new QTableWidgetItem(e["status"].toString().toUpper()));
         }

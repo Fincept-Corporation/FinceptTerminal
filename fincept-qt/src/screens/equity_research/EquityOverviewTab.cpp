@@ -75,7 +75,7 @@ QLabel* EquityOverviewTab::add_row_(QFrame* panel, const char* key, const char* 
                          .arg(FONT_KEY));
     i18n_labels_.insert(k, key);
 
-    auto* v = new QLabel(QStringLiteral("\xe2\x80\x94"));
+    auto* v = new QLabel(QString::fromUtf8("\xe2\x80\x94"));
     v->setStyleSheet(QString("color:%1;font-size:%2px;font-weight:600;background:transparent;border:0;")
                          .arg(val_color)
                          .arg(FONT_VAL));
@@ -504,7 +504,7 @@ QWidget* EquityOverviewTab::build_analyst_panel() {
     target_low_val_    = add_row_(p, QT_TR_NOOP("LOW"),      ui::colors::NEGATIVE);
     analyst_count_val_ = add_row_(p, QT_TR_NOOP("ANALYSTS"), CYAN);
 
-    rec_key_label_ = new QLabel(QStringLiteral("\xe2\x80\x94"));
+    rec_key_label_ = new QLabel(QString::fromUtf8("\xe2\x80\x94"));
     rec_key_label_->setAlignment(Qt::AlignCenter);
     rec_key_label_->setStyleSheet(QString("background:%1;color:%2;border-radius:2px;padding:3px 8px;"
                                           "font-size:12px;font-weight:700;")
@@ -564,7 +564,7 @@ QWidget* EquityOverviewTab::build_bottom_row() {
 
 QWidget* EquityOverviewTab::build_company_desc_panel() {
     auto* p = make_panel_(QT_TR_NOOP("COMPANY OVERVIEW"), CYAN);
-    company_desc_ = new QLabel(QStringLiteral("\xe2\x80\x94"));
+    company_desc_ = new QLabel(QString::fromUtf8("\xe2\x80\x94"));
     company_desc_->setWordWrap(true);
     company_desc_->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     company_desc_->setStyleSheet(QString("color:%1;font-size:%2px;line-height:1.5;"
@@ -691,7 +691,7 @@ void EquityOverviewTab::render_info(const services::equity::StockInfo& info) {
         rec_text = tr("STRONG SELL");
         rec_color = ui::colors::NEGATIVE;
     }
-    rec_key_label_->setText(rec_text.isEmpty() ? QStringLiteral("\xe2\x80\x94") : rec_text);
+    rec_key_label_->setText(rec_text.isEmpty() ? QString::fromUtf8("\xe2\x80\x94") : rec_text);
     rec_key_label_->setStyleSheet(QString("background:%1;color:%2;border-radius:2px;padding:3px 8px;"
                                           "font-size:12px;font-weight:700;")
                                       .arg(ui::colors::BG_RAISED(), rec_color));
@@ -826,7 +826,7 @@ QString EquityOverviewTab::currency_symbol(const QString& currency_code) {
 
 QString EquityOverviewTab::fmt_price(double v) const {
     if (v == 0.0)
-        return QStringLiteral("\xe2\x80\x94");
+        return QString::fromUtf8("\xe2\x80\x94");
     const QString sym = current_currency_.isEmpty() ? "$" : currency_symbol(current_currency_);
     return QString("%1%2").arg(sym).arg(v, 0, 'f', 2);
 }

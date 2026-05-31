@@ -103,7 +103,6 @@ void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
     current_summary_ = summary;
     summary_loaded_ = true;
 
-    command_bar_->set_summary(summary);
     command_bar_->set_refreshing(false);
     stats_ribbon_->set_summary(summary);
     status_bar_->set_summary(summary);

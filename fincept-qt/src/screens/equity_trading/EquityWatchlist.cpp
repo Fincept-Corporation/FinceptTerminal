@@ -2,6 +2,8 @@
 #include "screens/equity_trading/EquityWatchlist.h"
 
 #include "screens/equity_trading/EquityTypes.h"
+#include "trading/AccountManager.h"
+#include "trading/BrokerRegistry.h"
 #include "trading/instruments/InstrumentService.h"
 #include "ui/theme/Theme.h"
 
@@ -12,6 +14,38 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens::equity {
+
+namespace {
+
+// Distinct broker ids for every connected (active) account, with the focused
+// broker first so its matches sort to the top of unified search. Falls back to
+// just the focused broker when no accounts are enumerated.
+QStringList connected_broker_ids(const QString& active) {
+    QStringList ids;
+    if (!active.isEmpty())
+        ids << active;
+    for (const auto& a : trading::AccountManager::instance().active_accounts()) {
+        if (!a.broker_id.isEmpty() && !ids.contains(a.broker_id))
+            ids << a.broker_id;
+    }
+    return ids;
+}
+
+// Human-readable broker name for the suggestion tag.
+QString broker_display(const QString& broker_id) {
+    auto* b = trading::BrokerRegistry::instance().get(broker_id);
+    return b ? b->profile().display_name : broker_id;
+}
+
+// True if at least one of the connected brokers has its instrument catalog loaded.
+bool any_loaded(const QStringList& ids) {
+    for (const QString& id : ids)
+        if (trading::InstrumentService::instance().is_loaded(id))
+            return true;
+    return false;
+}
+
+} // namespace
 
 EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     setObjectName("eqWatchlist");
@@ -240,13 +274,17 @@ void EquityWatchlist::on_add_symbol_entered() {
     if (raw.isEmpty())
         return;
 
-    // If broker instruments are loaded, validate the symbol exists
-    // Extract just the symbol part (ignore "EXCHANGE:SYMBOL" format from completer)
-    QString sym = raw.contains(':') ? raw.section(':', 1) : raw;
+    // The completer suggestion is "SYMBOL  ·  EXCH  ·  Broker" — keep only the
+    // leading symbol token. Also tolerate the legacy "EXCHANGE:SYMBOL" form.
+    QString sym = raw.section(QStringLiteral("  ·  "), 0, 0).trimmed();
+    if (sym.contains(':'))
+        sym = sym.section(':', 1);
 
-    if (!broker_id_.isEmpty() && trading::InstrumentService::instance().is_loaded(broker_id_)) {
-        // Accept if any exchange has it
-        auto results = trading::InstrumentService::instance().search(sym, "", broker_id_, 1);
+    // Validate against every connected broker (not just the focused one) so a
+    // symbol that only one connected broker carries is still accepted.
+    const QStringList ids = connected_broker_ids(broker_id_);
+    if (any_loaded(ids)) {
+        auto results = trading::InstrumentService::instance().search_all(sym, "", ids, 1);
         if (results.isEmpty()) {
             // Not found — flash the edit red briefly to signal invalid
             add_edit_->setStyleSheet(QString("border: 1px solid %1;").arg(fincept::ui::colors::NEGATIVE()));
@@ -261,18 +299,32 @@ void EquityWatchlist::on_add_symbol_entered() {
 }
 
 void EquityWatchlist::on_add_text_changed(const QString& text) {
-    if (broker_id_.isEmpty() || text.trimmed().length() < 2)
+    if (text.trimmed().length() < 2)
         return;
-    if (!trading::InstrumentService::instance().is_loaded(broker_id_))
+    const QStringList ids = connected_broker_ids(broker_id_);
+    if (ids.isEmpty())
         return;
 
+    // Unified search across all connected brokers — one row per (broker,
+    // instrument). search_all hits the SQLite catalog directly, so we do NOT
+    // gate on the in-memory cache (is_loaded) here: as soon as a broker's
+    // master is in the DB the symbols are searchable, even if the in-memory
+    // cache rebuild hasn't landed yet. The symbol stays the leading token (so
+    // prefix completion on the typed text still works); exchange + broker follow.
     const QString query = text.trimmed().toUpper();
-    auto results = trading::InstrumentService::instance().search(query, "", broker_id_, 12);
+    auto results = trading::InstrumentService::instance().search_all(query, "", ids, 24);
     QStringList suggestions;
     suggestions.reserve(results.size());
-    for (const auto& inst : results)
-        suggestions.append(inst.symbol);
+    for (const auto& inst : results) {
+        suggestions.append(
+            QString("%1  ·  %2  ·  %3").arg(inst.symbol, inst.exchange, broker_display(inst.broker_id)));
+    }
     completer_model_->setStringList(suggestions);
+    // Force the popup to refresh against the just-updated model (otherwise the
+    // completer can filter against the previous, stale/empty model for this
+    // keystroke and show nothing).
+    if (!suggestions.isEmpty())
+        completer_->complete();
 }
 
 } // namespace fincept::screens::equity

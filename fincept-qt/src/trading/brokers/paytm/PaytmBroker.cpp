@@ -5,7 +5,11 @@
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QTimeZone>
 #include <QUrl>
+#include <QUrlQuery>
+
+#include <algorithm>
 
 namespace fincept::trading {
 
@@ -19,6 +23,45 @@ static int64_t now_ts() {
 // camelCase field aliasing) and return it as a QJsonValue.
 static QJsonValue pm_first(const QJsonObject& o, const QString& a, const QString& b) {
     return o.contains(a) ? o.value(a) : o.value(b);
+}
+
+// Map a unified exchange to the value Paytm's chart endpoint expects. The
+// undocumented price-charts route is exercised here for equities only, so only
+// the cash exchanges are accepted; anything else returns "" (caller errors).
+static QString api_exchange_for_history(const QString& exchange) {
+    const QString e = exchange.toUpper();
+    if (e == "NSE")
+        return "NSE";
+    if (e == "BSE")
+        return "BSE";
+    return QString();
+}
+
+// Best-effort timestamp -> epoch-milliseconds for the undocumented chart payload,
+// whose time field shape is unknown. Handles numeric seconds, numeric ms, and a
+// few string date/datetime formats (interpreted as IST). Returns 0 on failure.
+static int64_t pm_history_epoch_ms(const QJsonValue& v) {
+    if (v.isDouble()) {
+        const int64_t n = static_cast<int64_t>(v.toVariant().toLongLong());
+        return (n > 1000000000000LL) ? n : n * 1000LL; // 13-digit ms vs 10-digit s
+    }
+    const QString s = v.toVariant().toString();
+    if (s.isEmpty())
+        return 0;
+    bool ok = false;
+    const qint64 n = s.toLongLong(&ok);
+    if (ok)
+        return (n > 1000000000000LL) ? n : n * 1000LL;
+    const QTimeZone ist(19800); // +5:30
+    for (const char* fmt : {"yyyy-MM-ddTHH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd"}) {
+        QDateTime dt = QDateTime::fromString(s, fmt);
+        if (dt.isValid()) {
+            dt.setTimeZone(ist);
+            return dt.toMSecsSinceEpoch();
+        }
+    }
+    QDateTime iso = QDateTime::fromString(s, Qt::ISODate);
+    return iso.isValid() ? iso.toMSecsSinceEpoch() : 0;
 }
 
 // ---------- Static helpers ----------
@@ -540,14 +583,132 @@ ApiResponse<QVector<BrokerQuote>> PaytmBroker::get_quotes(const BrokerCredential
 }
 
 // ---------- get_history ----------
-// Paytm Money does not expose a historical-data API. Return an empty result so
-// downstream consumers (charts, IV/straddle tooling) render a graceful no-data
-// state rather than erroring. Mirrors OpenAlgo's Paytm BrokerData.get_history.
+// EXPERIMENTAL / UNDOCUMENTED endpoint.
+//
+// Paytm Money publishes no historical-data API in its docs, but the official
+// pyPMClient SDK carries a disabled route under a "# historical_data endpoints"
+// comment: GET /data/v1/price-charts/sym (pmClient/constants.py). Live probes
+// confirm the route is real and JWT-gated — no token -> 400 PM_OPEN_API_400 (the
+// same app-layer error the live-quote endpoint returns), bad token -> 401, and
+// POST -> 405 (so the live verb is GET, not the POST in the stale SDK). The
+// request/response contract is NOT officially documented; the query fields below
+// mirror the SDK's commented signature. Parsing is deliberately defensive and the
+// method fails soft (empty success) when the shape doesn't match, so charts
+// degrade gracefully. Verify against a live token before relying on this.
+//
+// Symbol format: "EXCHANGE:SYMBOL" (equity). SYMBOL is the trading symbol, NOT
+// the numeric security_id used by get_quotes — this endpoint keys on symbol.
 
-ApiResponse<QVector<BrokerCandle>> PaytmBroker::get_history(const BrokerCredentials& /*creds*/,
-                                                            const QString& /*symbol*/, const QString& /*resolution*/,
-                                                            const QString& /*from_date*/, const QString& /*to_date*/) {
-    return {true, QVector<BrokerCandle>{}, "Paytm Money does not provide a historical data API", now_ts()};
+ApiResponse<QVector<BrokerCandle>> PaytmBroker::get_history(const BrokerCredentials& creds, const QString& symbol,
+                                                           const QString& resolution, const QString& from_date,
+                                                           const QString& to_date) {
+    int64_t ts = now_ts();
+
+    QString exchange = "NSE";
+    QString name = symbol;
+    if (symbol.contains(':')) {
+        exchange = symbol.section(':', 0, 0);
+        name = symbol.section(':', 1, 1);
+    }
+    if (api_exchange_for_history(exchange).isEmpty())
+        return {false, std::nullopt, "Paytm history: unsupported exchange " + exchange, ts};
+    if (name.isEmpty())
+        return {false, std::nullopt, "Paytm history: empty symbol", ts};
+
+    // Map the unified resolution to Paytm's chart interval token. The SDK sample
+    // shows "MINUTE"; daily/weekly/monthly tokens are inferred and may need
+    // adjustment once the live contract is confirmed.
+    const QString r = resolution.toUpper();
+    QString interval;
+    if (r == "D" || r == "1D" || r == "DAY")
+        interval = "DAY";
+    else if (r == "W" || r == "1W" || r == "WEEK")
+        interval = "WEEK";
+    else if (r == "M" || r == "1M" || r == "MONTH")
+        interval = "MONTH";
+    else
+        interval = "MINUTE"; // 1/5/15/30/60-minute all map here (count is implicit)
+
+    QUrlQuery q;
+    q.addQueryItem("symbol", name);
+    q.addQueryItem("exchange", api_exchange_for_history(exchange));
+    q.addQueryItem("instType", "EQUITY");
+    q.addQueryItem("interval", interval);
+    q.addQueryItem("fromDate", from_date);
+    q.addQueryItem("toDate", to_date);
+    q.addQueryItem("cont", "false");
+
+    const QString url = QString("%1/data/v1/price-charts/sym?%2").arg(BASE, q.toString(QUrl::FullyEncoded));
+    auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
+
+    if (is_token_expired(resp))
+        return {false, std::nullopt, "[TOKEN_EXPIRED] Session expired, please re-login", ts};
+    if (!resp.success && resp.status_code == 0)
+        return {false, std::nullopt, checked_error(resp, "get_history failed"), ts};
+
+    QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
+
+    // Locate the candle array across the shapes this undocumented endpoint might
+    // return: a bare array, {data:[...]}, or {data:{candles|data:[...]}}.
+    QJsonArray rows;
+    if (doc.isArray()) {
+        rows = doc.array();
+    } else if (doc.isObject()) {
+        const QJsonObject root = doc.object();
+        const QJsonValue d = root.value("data");
+        if (d.isArray())
+            rows = d.toArray();
+        else if (d.isObject()) {
+            const QJsonObject dobj = d.toObject();
+            rows = dobj.value("candles").toArray();
+            if (rows.isEmpty())
+                rows = dobj.value("data").toArray();
+        }
+        if (rows.isEmpty())
+            rows = root.value("candles").toArray();
+    }
+
+    QVector<BrokerCandle> candles;
+    candles.reserve(rows.size());
+    for (const QJsonValue& v : rows) {
+        BrokerCandle c;
+        if (v.isArray()) {
+            // [time, open, high, low, close, volume]
+            const QJsonArray row = v.toArray();
+            if (row.size() < 6)
+                continue;
+            c.timestamp = pm_history_epoch_ms(row[0]);
+            c.open = row[1].toVariant().toDouble();
+            c.high = row[2].toVariant().toDouble();
+            c.low = row[3].toVariant().toDouble();
+            c.close = row[4].toVariant().toDouble();
+            c.volume = row[5].toVariant().toDouble();
+        } else if (v.isObject()) {
+            const QJsonObject o = v.toObject();
+            QJsonValue tv = o.contains("time") ? o.value("time")
+                            : o.contains("timestamp") ? o.value("timestamp")
+                            : o.contains("date") ? o.value("date") : o.value("dateTime");
+            c.timestamp = pm_history_epoch_ms(tv);
+            c.open = pm_first(o, "open", "o").toVariant().toDouble();
+            c.high = pm_first(o, "high", "h").toVariant().toDouble();
+            c.low = pm_first(o, "low", "l").toVariant().toDouble();
+            c.close = pm_first(o, "close", "c").toVariant().toDouble();
+            c.volume = pm_first(o, "volume", "v").toVariant().toDouble();
+        } else {
+            continue;
+        }
+        candles.append(c);
+    }
+
+    std::sort(candles.begin(), candles.end(),
+              [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp < b.timestamp; });
+
+    // Fail soft: if the undocumented contract didn't yield candles, return
+    // empty-success with a hint rather than erroring, so charts show "no data".
+    if (candles.isEmpty())
+        return {true, candles,
+                "Paytm history returned no parseable candles (undocumented endpoint — verify contract)", ts};
+    return {true, candles, "", ts};
 }
 
 } // namespace fincept::trading

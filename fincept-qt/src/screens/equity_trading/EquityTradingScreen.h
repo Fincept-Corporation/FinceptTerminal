@@ -66,6 +66,10 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void on_ob_price_clicked(double price);
     void on_import_holdings_requested(const QVector<trading::BrokerHolding>& holdings);
 
+    // Instruments ready — reloads watchlist/market data for the active account
+    // when InstrumentService finishes a load/download for the matching broker.
+    void on_instruments_ready(const QString& broker_id);
+
     void refresh_candles();
     void update_clock();
 
@@ -97,6 +101,12 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void hub_unsubscribe_all();
     void hub_subscribe_quotes();
     QString broker_id_for_focused() const;
+
+    // Ensure the broker instrument master for `account_id` is loaded into
+    // InstrumentService (from SQLite cache or a fresh download). Market data
+    // (quotes/charts/depth) needs the numeric securityId map, which only exists
+    // once instruments are loaded. Mirrors the ChainSubTab load pattern.
+    void ensure_instruments_loaded(const QString& account_id);
 
     // ── Command bar widgets ──
     QPushButton* account_btn_ = nullptr;  // shows focused account name

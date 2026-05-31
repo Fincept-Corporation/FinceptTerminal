@@ -6,6 +6,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QBarSeries>
+#include <QTabBar>
 #include <QBarSet>
 #include <QChart>
 #include <QChartView>
@@ -131,6 +132,9 @@ void QuantStatsView::build_ui() {
 
     // ── Tab widget ────────────────────────────────────────────────────────────
     tabs_ = new QTabWidget;
+    tabs_->tabBar()->setElideMode(Qt::ElideNone);
+    tabs_->tabBar()->setExpanding(false);
+    tabs_->tabBar()->setUsesScrollButtons(false);
     tabs_->setDocumentMode(true);
     tabs_->setStyleSheet(QString("QTabWidget::pane { border:0; background:%1; }"
                                  "QTabBar::tab { background:%2; color:%3; padding:6px 14px; border:0;"

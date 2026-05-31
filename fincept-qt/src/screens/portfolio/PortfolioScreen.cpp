@@ -70,6 +70,8 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
     connect(&svc, &services::PortfolioService::correlation_computed, this, [this](QHash<QString, double> matrix) {
         if (sector_panel_)
             sector_panel_->set_correlation(matrix);
+        if (detail_wrapper_)
+            detail_wrapper_->update_correlation(matrix);
     });
     connect(&svc, &services::PortfolioService::spy_history_loaded, this,
             [this](QStringList /*dates*/, QVector<double> /*closes*/) {

@@ -1,11 +1,23 @@
 // src/screens/portfolio/views/EconomicsView.cpp
 #include "screens/portfolio/views/EconomicsView.h"
 
+#include "python/PythonRunner.h"
+#include "storage/secure/SecureStorage.h"
 #include "ui/theme/Theme.h"
 
+#include <QColor>
+#include <QDate>
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QInputDialog>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QLineEdit>
+#include <QPointer>
+#include <QPushButton>
+#include <QTableWidgetItem>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -60,13 +72,78 @@ void EconomicsView::build_ui() {
                                          .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
                                               ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
     ind_layout->addWidget(indicators_table_, 1);
-    layout->addWidget(ind_section, 6);
+    layout->addWidget(ind_section, 5);
 
     // Separator
     auto* sep = new QWidget(this);
     sep->setFixedHeight(1);
     sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
     layout->addWidget(sep);
+
+    // ── Middle: live macro conditions (FRED) ──────────────────────────────────
+    auto* macro_section = new QWidget(this);
+    auto* macro_layout = new QVBoxLayout(macro_section);
+    macro_layout->setContentsMargins(12, 8, 12, 8);
+    macro_layout->setSpacing(4);
+
+    macro_title_ = new QLabel(tr("CURRENT MACRO CONDITIONS  (LIVE · FRED)"));
+    macro_title_->setStyleSheet(
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+    macro_layout->addWidget(macro_title_);
+
+    macro_note_ = new QLabel(tr("Loading live macro data…"));
+    macro_note_->setWordWrap(true);
+    macro_note_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
+    macro_layout->addWidget(macro_note_);
+
+    // Shown only when no FRED key is configured — lets the user paste one inline.
+    macro_set_key_btn_ = new QPushButton(tr("➜ SET FREE FRED API KEY"));
+    macro_set_key_btn_->setCursor(Qt::PointingHandCursor);
+    macro_set_key_btn_->setFixedHeight(24);
+    macro_set_key_btn_->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %1; font-size:9px;"
+                "  font-weight:700; letter-spacing:1px; padding:0 10px; } QPushButton:hover { background:%1; color:#000; }")
+            .arg(ui::colors::AMBER()));
+    macro_set_key_btn_->setVisible(false);
+    connect(macro_set_key_btn_, &QPushButton::clicked, this, [this]() {
+        bool ok = false;
+        const QString key = QInputDialog::getText(
+            this, tr("FRED API Key"),
+            tr("Paste your free FRED API key (get one at https://fredaccount.stlouisfed.org/apikeys).\n"
+               "It is stored encrypted and shared with all FRED-backed features."),
+            QLineEdit::Normal, QString(), &ok);
+        if (!ok || key.trimmed().isEmpty())
+            return;
+        fincept::SecureStorage::instance().store("FRED_API_KEY", key.trimmed());
+        macro_loaded_ = false; // force a refetch with the new key
+        fetch_macro();
+    });
+    {
+        auto* btn_row = new QHBoxLayout;
+        btn_row->setContentsMargins(0, 0, 0, 0);
+        btn_row->addWidget(macro_set_key_btn_);
+        btn_row->addStretch();
+        macro_layout->addLayout(btn_row);
+    }
+
+    macro_table_ = new QTableWidget;
+    macro_table_->setColumnCount(3);
+    macro_table_->setHorizontalHeaderLabels({tr("INDICATOR"), tr("CURRENT"), tr("AS OF")});
+    macro_table_->setSelectionMode(QAbstractItemView::NoSelection);
+    macro_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    macro_table_->setShowGrid(false);
+    macro_table_->verticalHeader()->setVisible(false);
+    macro_table_->horizontalHeader()->setStretchLastSection(true);
+    macro_table_->setColumnWidth(0, 220);
+    macro_table_->setColumnWidth(1, 140);
+    macro_table_->setStyleSheet(indicators_table_->styleSheet());
+    macro_layout->addWidget(macro_table_, 1);
+    layout->addWidget(macro_section, 3);
+
+    auto* sep2 = new QWidget(this);
+    sep2->setFixedHeight(1);
+    sep2->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
+    layout->addWidget(sep2);
 
     // ── Bottom: Portfolio Factor Sensitivity ──────────────────────────────────
     auto* sens_section = new QWidget(this);
@@ -102,6 +179,107 @@ void EconomicsView::set_data(const portfolio::PortfolioSummary& summary, const Q
     has_data_ = true;
     update_indicators();
     update_sensitivity();
+    // Macro data is portfolio-independent — fetch once per view lifetime.
+    if (!macro_loaded_ && !macro_loading_)
+        fetch_macro();
+}
+
+// ── Live macro conditions (FRED) ──────────────────────────────────────────────
+
+namespace {
+// FRED series → friendly label + unit suffix, in display order.
+struct MacroSeries {
+    const char* id;
+    const char* label;
+    const char* suffix;
+};
+const MacroSeries kMacroSeries[] = {
+    {"DGS10", "10Y Treasury Yield", "%"},
+    {"T10YIE", "Inflation (10Y breakeven)", "%"},
+    {"A191RL1Q225SBEA", "Real GDP Growth (annualised)", "%"},
+    {"DTWEXBGS", "USD Index (broad)", ""},
+    {"DCOILWTICO", "WTI Crude Oil", " $/bbl"},
+};
+} // namespace
+
+void EconomicsView::fetch_macro() {
+    macro_loading_ = true;
+    if (macro_note_)
+        macro_note_->setText(tr("Loading live macro data from FRED…"));
+
+    // Fetch the last ~120 days so we get a recent observation cheaply.
+    QStringList args;
+    args << "multiple";
+    for (const auto& m : kMacroSeries)
+        args << m.id;
+    args << QDate::currentDate().addDays(-120).toString("yyyy-MM-dd");
+
+    QPointer<EconomicsView> self = this;
+    fincept::python::PythonRunner::instance().run(
+        "fred_data.py", args, [self](const fincept::python::PythonResult& r) {
+            if (!self)
+                return;
+            self->macro_loading_ = false;
+            self->macro_loaded_ = true;
+            self->macro_values_.clear();
+            self->macro_dates_.clear();
+
+            const auto doc = QJsonDocument::fromJson(r.output.trimmed().toUtf8());
+            if (!r.success || !doc.isArray()) {
+                self->macro_status_ =
+                    tr("Could not load live macro data. Add a free FRED API key in Settings → API Credentials.");
+                self->update_macro_table();
+                return;
+            }
+            for (const auto v : doc.array()) {
+                const auto o = v.toObject();
+                if (o.contains("error"))
+                    continue;
+                const QString id = o.value("series_id").toString();
+                const auto obs = o.value("observations").toArray();
+                if (obs.isEmpty())
+                    continue;
+                const auto last = obs.last().toObject();
+                self->macro_values_[id] = last.value("value").toDouble();
+                self->macro_dates_[id] = last.value("date").toString();
+            }
+            self->macro_status_.clear();
+            self->update_macro_table();
+        });
+}
+
+void EconomicsView::update_macro_table() {
+    if (!macro_table_)
+        return;
+    if (macro_note_) {
+        macro_note_->setText(macro_status_.isEmpty()
+                                 ? tr("Live levels from the U.S. Federal Reserve (FRED). Your factor exposures below "
+                                      "show how the portfolio reacts to moves in each.")
+                                 : macro_status_);
+        macro_note_->setStyleSheet(QString("color:%1; font-size:9px;")
+                                       .arg(macro_status_.isEmpty() ? ui::colors::TEXT_TERTIARY() : ui::colors::WARNING()));
+    }
+    // Offer the inline key-entry button whenever live data failed to load.
+    if (macro_set_key_btn_)
+        macro_set_key_btn_->setVisible(!macro_status_.isEmpty());
+    const int n = static_cast<int>(sizeof(kMacroSeries) / sizeof(kMacroSeries[0]));
+    macro_table_->setRowCount(n);
+    for (int r = 0; r < n; ++r) {
+        const auto& m = kMacroSeries[r];
+        macro_table_->setRowHeight(r, 26);
+        auto set = [&](int col, const QString& text, const char* color, int align) {
+            auto* it = new QTableWidgetItem(text);
+            it->setTextAlignment(static_cast<Qt::Alignment>(align) | Qt::AlignVCenter);
+            if (color)
+                it->setForeground(QColor(color));
+            macro_table_->setItem(r, col, it);
+        };
+        const bool have = macro_values_.contains(m.id);
+        const QString val = have ? (QString::number(macro_values_.value(m.id), 'f', 2) + m.suffix) : QStringLiteral("—");
+        set(0, tr(m.label), ui::colors::TEXT_PRIMARY, Qt::AlignLeft);
+        set(1, val, have ? ui::colors::CYAN : ui::colors::TEXT_TERTIARY, Qt::AlignRight);
+        set(2, macro_dates_.value(m.id, QStringLiteral("—")), ui::colors::TEXT_TERTIARY, Qt::AlignRight);
+    }
 }
 
 void EconomicsView::changeEvent(QEvent* event) {

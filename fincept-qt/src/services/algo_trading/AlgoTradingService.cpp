@@ -1,29 +1,19 @@
 // src/services/algo_trading/AlgoTradingService.cpp
 #include "services/algo_trading/AlgoTradingService.h"
 
-#include "core/config/AppPaths.h"
+#include "algo_engine/BacktestEngine.h"
+#include "algo_engine/CandleDataFetcher.h"
 #include "core/logging/Logger.h"
-#include "python/PythonRunner.h"
-#include "storage/cache/CacheManager.h"
+#include "services/algo_trading/AlgoStrategyLibrary.h"
 #include "storage/sqlite/Database.h"
-#include "trading/UnifiedTrading.h"
+#include "trading/AccountManager.h"
 
-#include <QFile>
+#include <QDate>
+#include <QJsonArray>
 #include <QJsonDocument>
-#include <QPointer>
 #include <QUuid>
 
 namespace fincept::services::algo {
-
-static constexpr int kStrategiesTtlSec = 30;
-static constexpr int kDeploymentsTtlSec = 30;
-static constexpr const char* kStrategiesCacheKey = "algo:strategies:registry";
-static constexpr const char* kDeploymentsCacheKey = "algo:deployments";
-
-// ── DB path helper ────────────────────────────────────────────────────────────
-static QString algo_db_path() {
-    return fincept::AppPaths::data() + "/fincept.db";
-}
 
 AlgoTradingService& AlgoTradingService::instance() {
     static AlgoTradingService inst;
@@ -32,79 +22,48 @@ AlgoTradingService& AlgoTradingService::instance() {
 
 AlgoTradingService::AlgoTradingService(QObject* parent) : QObject(parent) {}
 
-void AlgoTradingService::run_python(const QString& script, const QStringList& args, const QString& context,
-                                    std::function<void(bool, const QString&)> cb) {
-    QPointer<AlgoTradingService> self = this;
-    python::PythonRunner::instance().run(script, args, [self, context, cb](python::PythonResult result) {
-        if (!self)
-            return;
-        cb(result.success, result.success ? result.output : result.error);
-    });
-}
-
 // ── Strategy CRUD ─────────────────────────────────────────────────────────────
+// Native SQLite UPSERT into algo_strategies (schema owned by migration v023).
 void AlgoTradingService::save_strategy(const AlgoStrategy& strategy) {
-    QJsonObject obj;
-
-    // Upsert by name: if a strategy with the same name exists, reuse its ID
+    // Upsert by name: if an active strategy with the same name exists, reuse its ID
     QString resolved_id = strategy.id;
     if (resolved_id.isEmpty() && !strategy.name.isEmpty()) {
         auto q = fincept::Database::instance().execute(
-            "SELECT id FROM algo_strategies WHERE name = ? AND is_active = 1 LIMIT 1",
-            {strategy.name});
+            "SELECT id FROM algo_strategies WHERE name = ? AND is_active = 1 LIMIT 1", {strategy.name});
         if (q.is_ok() && q.value().next())
             resolved_id = q.value().value(0).toString();
     }
     if (resolved_id.isEmpty())
         resolved_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
 
-    obj["id"] = resolved_id;
-    obj["name"] = strategy.name;
-    obj["description"] = strategy.description;
-    obj["timeframe"] = strategy.timeframe;
-    obj["entry_conditions"] = strategy.entry_conditions;
-    obj["exit_conditions"] = strategy.exit_conditions;
-    obj["entry_logic"] = strategy.entry_logic;
-    obj["exit_logic"] = strategy.exit_logic;
-    obj["stop_loss"] = strategy.stop_loss;
-    obj["take_profit"] = strategy.take_profit;
-    obj["trailing_stop"] = strategy.trailing_stop;
+    const QString entry_json =
+        QString::fromUtf8(QJsonDocument(strategy.entry_conditions).toJson(QJsonDocument::Compact));
+    const QString exit_json =
+        QString::fromUtf8(QJsonDocument(strategy.exit_conditions).toJson(QJsonDocument::Compact));
 
-    auto json = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    run_python("algo_trading/backtest_engine.py", {"save_strategy", json, "--db", algo_db_path()}, "save_strategy",
-               [this, obj](bool ok, const QString& out) {
-                   if (!ok) {
-                       emit error_occurred("save_strategy", out);
-                       return;
-                   }
-                   fincept::CacheManager::instance().remove(kStrategiesCacheKey);
-                   emit strategy_saved(obj["id"].toString());
-               });
-}
+    // is_active=1 in the UPDATE branch so re-saving a soft-deleted strategy revives it.
+    auto r = fincept::Database::instance().execute(
+        "INSERT INTO algo_strategies "
+        "(id, name, description, timeframe, entry_conditions, exit_conditions, "
+        " entry_logic, exit_logic, stop_loss, take_profit, trailing_stop, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) "
+        "ON CONFLICT(id) DO UPDATE SET "
+        "  name=excluded.name, description=excluded.description, timeframe=excluded.timeframe, "
+        "  entry_conditions=excluded.entry_conditions, exit_conditions=excluded.exit_conditions, "
+        "  entry_logic=excluded.entry_logic, exit_logic=excluded.exit_logic, "
+        "  stop_loss=excluded.stop_loss, take_profit=excluded.take_profit, "
+        "  trailing_stop=excluded.trailing_stop, is_active=1, updated_at=CURRENT_TIMESTAMP",
+        {resolved_id, strategy.name, strategy.description, strategy.timeframe, entry_json, exit_json,
+         strategy.entry_logic, strategy.exit_logic, strategy.stop_loss, strategy.take_profit,
+         strategy.trailing_stop});
 
-static QVector<AlgoStrategy> parse_strategies(const QJsonArray& arr) {
-    QVector<AlgoStrategy> strategies;
-    strategies.reserve(arr.size());
-    for (const auto& v : arr) {
-        auto o = v.toObject();
-        AlgoStrategy s;
-        s.id = o["id"].toString();
-        s.name = o["name"].toString();
-        s.description = o["description"].toString();
-        s.timeframe = o["timeframe"].toString();
-        s.entry_conditions = o["entry_conditions"].toArray();
-        s.exit_conditions = o["exit_conditions"].toArray();
-        s.entry_logic = o["entry_logic"].toString("AND");
-        s.exit_logic = o["exit_logic"].toString("AND");
-        s.stop_loss = o["stop_loss"].toDouble();
-        s.take_profit = o["take_profit"].toDouble();
-        s.trailing_stop = o["trailing_stop"].toDouble();
-        s.created_at = o["created_at"].toString();
-        s.updated_at = o["updated_at"].toString();
-        s.script_path = o["script_path"].toString(); // empty for DSL, file path for QC
-        strategies.append(s);
+    if (r.is_err()) {
+        LOG_ERROR("AlgoTrading", QString("save_strategy failed: %1").arg(QString::fromStdString(r.error())));
+        emit error_occurred("save_strategy", QString::fromStdString(r.error()));
+        return;
     }
-    return strategies;
+    LOG_INFO("AlgoTrading", QString("Saved strategy %1 (%2)").arg(resolved_id, strategy.name));
+    emit strategy_saved(resolved_id);
 }
 
 static QVector<AlgoStrategy> load_dsl_strategies_from_db() {
@@ -137,41 +96,84 @@ static QVector<AlgoStrategy> load_dsl_strategies_from_db() {
     return result;
 }
 
+// Bump when the curated library's *definitions* change (e.g. a fixed strategy).
+// On a bump, existing LIB-* rows are refreshed to the latest definition (without
+// reviving rows the user deleted); otherwise only missing ids are inserted, so
+// user-created strategies and edits are preserved.
+static constexpr int kLibraryVersion = 2;
+
+void AlgoTradingService::seed_library() {
+    int stored = 0;
+    {
+        auto q = fincept::Database::instance().execute(
+            "SELECT value FROM key_value_storage WHERE key='algo_library_version'", {});
+        if (q.is_ok() && q.value().next())
+            stored = q.value().value(0).toInt();
+    }
+    const bool force = stored < kLibraryVersion;
+
+    for (const auto& s : algo_library_strategies()) {
+        const QString entry_json =
+            QString::fromUtf8(QJsonDocument(s.entry_conditions).toJson(QJsonDocument::Compact));
+        const QString exit_json =
+            QString::fromUtf8(QJsonDocument(s.exit_conditions).toJson(QJsonDocument::Compact));
+        const QVariantList args = {s.id,        s.name,        s.description,  s.timeframe,
+                                   entry_json,  exit_json,     s.entry_logic,  s.exit_logic,
+                                   s.stop_loss, s.take_profit, s.trailing_stop};
+        if (force) {
+            // Refresh definition in place; do NOT touch is_active (keeps deletions).
+            fincept::Database::instance().execute(
+                "INSERT INTO algo_strategies "
+                "(id, name, description, timeframe, entry_conditions, exit_conditions, "
+                " entry_logic, exit_logic, stop_loss, take_profit, trailing_stop, is_active, "
+                " created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) "
+                "ON CONFLICT(id) DO UPDATE SET name=excluded.name, description=excluded.description, "
+                " timeframe=excluded.timeframe, entry_conditions=excluded.entry_conditions, "
+                " exit_conditions=excluded.exit_conditions, entry_logic=excluded.entry_logic, "
+                " exit_logic=excluded.exit_logic, stop_loss=excluded.stop_loss, "
+                " take_profit=excluded.take_profit, trailing_stop=excluded.trailing_stop, "
+                " updated_at=CURRENT_TIMESTAMP",
+                args);
+        } else {
+            fincept::Database::instance().execute(
+                "INSERT OR IGNORE INTO algo_strategies "
+                "(id, name, description, timeframe, entry_conditions, exit_conditions, "
+                " entry_logic, exit_logic, stop_loss, take_profit, trailing_stop, is_active, "
+                " created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                args);
+        }
+    }
+
+    if (force) {
+        fincept::Database::instance().execute(
+            "INSERT INTO key_value_storage(key, value, updated_at) "
+            "VALUES('algo_library_version', ?, CAST(strftime('%s','now') AS INTEGER)) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+            {QString::number(kLibraryVersion)});
+        LOG_INFO("AlgoTrading", QString("Curated library refreshed to v%1").arg(kLibraryVersion));
+    }
+}
+
 void AlgoTradingService::list_strategies() {
-    QVector<AlgoStrategy> all;
-
-    // 1. Load QC strategies from pre-generated registry_index.json
-    const QString json_path =
-        python::PythonRunner::instance().scripts_dir() + "/strategies/registry_index.json";
-    QFile f(json_path);
-    if (f.open(QIODevice::ReadOnly)) {
-        auto doc = QJsonDocument::fromJson(f.readAll());
-        f.close();
-        if (!doc.isNull())
-            all = parse_strategies(doc.object()["strategies"].toArray());
-    }
-
-    // 2. Load user-saved DSL strategies from the database
-    auto dsl = load_dsl_strategies_from_db();
-    if (!dsl.isEmpty()) {
-        all.append(dsl);
-        LOG_INFO("AlgoTrading", QString("Loaded %1 DSL strategies from DB").arg(dsl.size()));
-    }
-
-    LOG_INFO("AlgoTrading", QString("Total strategies: %1 (QC + DSL)").arg(all.size()));
+    seed_library(); // idempotent — ensures the curated library exists
+    QVector<AlgoStrategy> all = load_dsl_strategies_from_db();
+    LOG_INFO("AlgoTrading", QString("Loaded %1 strategies from DB").arg(all.size()));
     emit strategies_loaded(all);
 }
 
 void AlgoTradingService::delete_strategy(const QString& id) {
-    run_python("algo_trading/backtest_engine.py", {"delete_strategy", id, "--db", algo_db_path()}, "delete_strategy",
-               [this, id](bool ok, const QString& out) {
-                   if (!ok) {
-                       emit error_occurred("delete_strategy", out);
-                       return;
-                   }
-                   fincept::CacheManager::instance().remove(kStrategiesCacheKey);
-                   emit strategy_deleted(id);
-               });
+    // Soft delete — keeps history; list_strategies filters on is_active = 1.
+    auto r = fincept::Database::instance().execute(
+        "UPDATE algo_strategies SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?", {id});
+    if (r.is_err()) {
+        LOG_ERROR("AlgoTrading", QString("delete_strategy failed: %1").arg(QString::fromStdString(r.error())));
+        emit error_occurred("delete_strategy", QString::fromStdString(r.error()));
+        return;
+    }
+    LOG_INFO("AlgoTrading", QString("Deleted strategy %1").arg(id));
+    emit strategy_deleted(id);
 }
 
 // ── Deployment lifecycle — now handled by AlgoEngine (src/algo_engine/) ──────
@@ -179,26 +181,64 @@ void AlgoTradingService::delete_strategy(const QString& id) {
 // list_deployments, check_bridge_needed have been removed.
 // Use fincept::algo::AlgoEngine::instance() for all deployment operations.
 
-// ── Backtesting ───────────────────────────────────────────────────────────────
-void AlgoTradingService::run_backtest(const QString& strategy_id, const QString& symbol, const QString& start_date,
-                                      const QString& end_date, double capital) {
-    QJsonObject params;
-    params["strategy_id"] = strategy_id;
-    params["symbol"] = symbol;
-    params["start_date"] = start_date;
-    params["end_date"] = end_date;
-    params["initial_capital"] = capital;
-    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+// ── Backtesting (native C++ engine) ────────────────────────────────────────────
+void AlgoTradingService::run_backtest(const AlgoStrategy& strategy, const QString& symbol,
+                                      const QString& start_date, const QString& end_date, double capital) {
+    // Derive the historical window from the date range (fallback: 1 year).
+    int lookback_days = 365;
+    const QDate d1 = QDate::fromString(start_date, "yyyy-MM-dd");
+    const QDate d2 = QDate::fromString(end_date, "yyyy-MM-dd");
+    if (d1.isValid() && d2.isValid() && d1 < d2)
+        lookback_days = static_cast<int>(d1.daysTo(d2));
+    if (lookback_days < 1)
+        lookback_days = 365;
 
-    run_python("algo_trading/backtest_engine.py", {"run_backtest", json, "--db", algo_db_path()}, "backtest",
-               [this](bool ok, const QString& out) {
-                   if (!ok) {
-                       emit error_occurred("backtest", out);
-                       return;
-                   }
-                   auto doc = QJsonDocument::fromJson(python::extract_json(out).toUtf8());
-                   emit backtest_result(doc.object());
-               });
+    // Data source: a connected broker if one exists, otherwise native Yahoo.
+    QString broker_id, account_id;
+    auto& accts = trading::AccountManager::instance();
+    for (const auto& acc : accts.active_accounts()) {
+        if (accts.connection_state(acc.account_id) == trading::ConnectionState::Connected) {
+            broker_id = acc.broker_id;
+            account_id = acc.account_id;
+            break;
+        }
+    }
+    const fincept::algo::DataSource source =
+        broker_id.isEmpty() ? fincept::algo::DataSource::YFinance : fincept::algo::DataSource::Auto;
+
+    // Capture strategy parameters for the async callback.
+    const QJsonArray entry = strategy.entry_conditions;
+    const QJsonArray exit = strategy.exit_conditions;
+    const QString entry_logic = strategy.entry_logic.isEmpty() ? QStringLiteral("AND") : strategy.entry_logic;
+    const QString exit_logic = strategy.exit_logic.isEmpty() ? QStringLiteral("AND") : strategy.exit_logic;
+    const double sl = strategy.stop_loss;
+    const double tp = strategy.take_profit;
+    const double trail = strategy.trailing_stop;
+    const double size_pct = strategy.position_size_pct > 0 ? strategy.position_size_pct : 100.0;
+    const QString timeframe = strategy.timeframe.isEmpty() ? QStringLiteral("1d") : strategy.timeframe;
+
+    LOG_INFO("AlgoTrading",
+             QString("Backtest %1 [%2] %3 — source=%4")
+                 .arg(symbol, timeframe, strategy.name,
+                      broker_id.isEmpty() ? "yahoo" : broker_id));
+
+    // Singleton — `this` outlives any async work, so capture directly.
+    fincept::algo::CandleDataFetcher::instance().fetch(
+        symbol, timeframe, lookback_days, source, broker_id, account_id,
+        [this, entry, exit, entry_logic, exit_logic, sl, tp, trail, size_pct, capital, timeframe, symbol](
+            bool ok, const QVector<fincept::algo::OhlcvCandle>& candles, const QString& err) {
+            if (!ok || candles.isEmpty()) {
+                emit error_occurred("backtest", err.isEmpty() ? QStringLiteral("No data") : err);
+                return;
+            }
+            const QJsonObject result = fincept::algo::BacktestEngine::run(
+                candles, entry, entry_logic, exit, exit_logic, sl, tp, trail, capital, timeframe, size_pct);
+            if (!result.value("success").toBool(false)) {
+                emit error_occurred("backtest", result.value("error").toString(QStringLiteral("Backtest failed")));
+                return;
+            }
+            emit backtest_result(result);
+        });
 }
 
 // Scanner is now in AlgoScanner (src/algo_engine/AlgoScanner.h/.cpp).

@@ -2,12 +2,15 @@
 #include "screens/algo_trading/StrategyBuilderPanel.h"
 
 #include "algo_engine/AlgoEngine.h"
+#include "core/currency/Currency.h"
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "screens/algo_trading/AlgoDeployDialog.h"
 #include "services/algo_trading/AlgoTradingService.h"
 #include "ui/theme/Theme.h"
 
+#include <QDate>
+#include <QDateEdit>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QJsonDocument>
@@ -32,6 +35,15 @@ void StrategyBuilderPanel::build_ui() {
     main_layout->setSpacing(0);
 
     main_layout->addWidget(build_top_toolbar());
+
+    validation_banner_ = new QLabel(this);
+    validation_banner_->setObjectName(QStringLiteral("builderValidationBanner"));
+    validation_banner_->setWordWrap(true);
+    validation_banner_->setStyleSheet(QStringLiteral(
+        "background:#3A1A1A;color:#FCA5A5;border:1px solid #7F1D1D;"
+        "padding:5px 10px;font-size:11px;font-weight:600;"));
+    validation_banner_->setVisible(false);
+    main_layout->addWidget(validation_banner_);
 
     auto* splitter = new QSplitter(Qt::Horizontal, this);
     splitter->setObjectName(QStringLiteral("builderSplitter"));
@@ -70,6 +82,12 @@ QWidget* StrategyBuilderPanel::build_top_toolbar() {
         timeframe_combo_->addItem(tf);
     timeframe_combo_->setCurrentText(QStringLiteral("5m"));
 
+    template_combo_ = new QComboBox(this);
+    template_combo_->setObjectName(QStringLiteral("builderTemplateCombo"));
+    template_combo_->addItem(tr("Templates…"));
+    for (const auto& t : services::algo::algo_strategy_templates())
+        template_combo_->addItem(t.name);
+
     save_btn_ = new QPushButton(tr("Save"), this);
     save_btn_->setObjectName(QStringLiteral("builderSaveBtn"));
     backtest_btn_ = new QPushButton(tr("Backtest"), this);
@@ -81,6 +99,7 @@ QWidget* StrategyBuilderPanel::build_top_toolbar() {
     layout->addWidget(desc_edit_);
     layout->addWidget(symbol_combo_);
     layout->addWidget(timeframe_combo_);
+    layout->addWidget(template_combo_);
     layout->addStretch();
     layout->addWidget(save_btn_);
     layout->addWidget(backtest_btn_);
@@ -89,6 +108,8 @@ QWidget* StrategyBuilderPanel::build_top_toolbar() {
     connect(save_btn_, &QPushButton::clicked, this, &StrategyBuilderPanel::on_save);
     connect(backtest_btn_, &QPushButton::clicked, this, &StrategyBuilderPanel::on_backtest);
     connect(deploy_btn_, &QPushButton::clicked, this, &StrategyBuilderPanel::on_deploy);
+    connect(template_combo_, QOverload<int>::of(&QComboBox::activated), this,
+            &StrategyBuilderPanel::load_template);
 
     return toolbar;
 }
@@ -125,17 +146,6 @@ QWidget* StrategyBuilderPanel::build_right_panel() {
     layout->setContentsMargins(12, 8, 12, 8);
     layout->setSpacing(8);
 
-    // Chart placeholder
-    auto* chart_placeholder = new QWidget(this);
-    chart_placeholder->setObjectName(QStringLiteral("builderChartPlaceholder"));
-    chart_placeholder->setMinimumHeight(200);
-    auto* chart_layout = new QVBoxLayout(chart_placeholder);
-    auto* chart_label = new QLabel(tr("Select a symbol and deploy to view live chart"), this);
-    chart_label->setObjectName(QStringLiteral("builderChartLabel"));
-    chart_label->setAlignment(Qt::AlignCenter);
-    chart_layout->addWidget(chart_label);
-    layout->addWidget(chart_placeholder, 1);
-
     // Backtest params
     auto* bt_section = new QLabel(tr("BACKTEST"), this);
     bt_section->setObjectName(QStringLiteral("builderBtHeader"));
@@ -149,17 +159,24 @@ QWidget* StrategyBuilderPanel::build_right_panel() {
     bt_capital_->setRange(1000, 100000000);
     bt_capital_->setDecimals(0);
     bt_capital_->setValue(100000);
-    bt_capital_->setPrefix(QStringLiteral("$ "));
+    cur::bindPrefix(bt_capital_); // backtest capital is user-denominated
 
-    bt_start_date_ = new QLineEdit(this);
+    const QDate today = QDate::currentDate();
+    bt_start_date_ = new QDateEdit(this);
     bt_start_date_->setObjectName(QStringLiteral("builderBtStart"));
-    bt_start_date_->setPlaceholderText(QStringLiteral("2024-01-01"));
-    bt_start_date_->setText(QStringLiteral("2024-01-01"));
+    bt_start_date_->setCalendarPopup(true);
+    bt_start_date_->setDisplayFormat(QStringLiteral("yyyy-MM-dd"));
+    bt_start_date_->setMinimumDate(QDate(2000, 1, 1));
+    bt_start_date_->setMaximumDate(today);
+    bt_start_date_->setDate(today.addYears(-1));
 
-    bt_end_date_ = new QLineEdit(this);
+    bt_end_date_ = new QDateEdit(this);
     bt_end_date_->setObjectName(QStringLiteral("builderBtEnd"));
-    bt_end_date_->setPlaceholderText(QStringLiteral("2024-12-31"));
-    bt_end_date_->setText(QStringLiteral("2024-12-31"));
+    bt_end_date_->setCalendarPopup(true);
+    bt_end_date_->setDisplayFormat(QStringLiteral("yyyy-MM-dd"));
+    bt_end_date_->setMinimumDate(QDate(2000, 1, 1));
+    bt_end_date_->setMaximumDate(today);
+    bt_end_date_->setDate(today);
 
     bt_grid->addWidget(new QLabel(tr("Capital"), this), 0, 0);
     bt_grid->addWidget(bt_capital_, 0, 1);
@@ -173,50 +190,8 @@ QWidget* StrategyBuilderPanel::build_right_panel() {
     status_label_->setObjectName(QStringLiteral("builderStatus"));
     layout->addWidget(status_label_);
 
-    // KPI grid (hidden until backtest runs)
-    kpi_grid_widget_ = new QWidget(this);
-    kpi_grid_widget_->setObjectName(QStringLiteral("builderKpiGrid"));
-    kpi_grid_widget_->setVisible(false);
-
-    auto* kpi_grid = new QGridLayout(kpi_grid_widget_);
-    kpi_grid->setSpacing(8);
-
-    auto make_kpi = [&](int row, int col, const QString& title) -> std::pair<QLabel*, QLabel*> {
-        auto* card = new QWidget(kpi_grid_widget_);
-        card->setObjectName(QStringLiteral("kpiCard"));
-        auto* card_layout = new QVBoxLayout(card);
-        card_layout->setContentsMargins(8, 6, 8, 6);
-        card_layout->setSpacing(2);
-
-        auto* title_lbl = new QLabel(title, card);
-        title_lbl->setObjectName(QStringLiteral("kpiTitle"));
-        auto* val_lbl = new QLabel(QStringLiteral("--"), card);
-        val_lbl->setObjectName(QStringLiteral("kpiValue"));
-        auto* sub_lbl = new QLabel(card);
-        sub_lbl->setObjectName(QStringLiteral("kpiSub"));
-
-        card_layout->addWidget(title_lbl);
-        card_layout->addWidget(val_lbl);
-        card_layout->addWidget(sub_lbl);
-        kpi_grid->addWidget(card, row, col);
-        return {val_lbl, sub_lbl};
-    };
-
-    auto [tr_v, tr_s] = make_kpi(0, 0, tr("TOTAL RETURN"));
-    kpi_total_return_val_ = tr_v; kpi_total_return_sub_ = tr_s;
-    auto [sh_v, sh_s] = make_kpi(0, 1, tr("SHARPE RATIO"));
-    kpi_sharpe_val_ = sh_v; kpi_sharpe_sub_ = sh_s;
-    auto [dd_v, dd_s] = make_kpi(0, 2, tr("MAX DRAWDOWN"));
-    kpi_max_dd_val_ = dd_v; kpi_max_dd_sub_ = dd_s;
-    auto [wr_v, wr_s] = make_kpi(1, 0, tr("WIN RATE"));
-    kpi_win_rate_val_ = wr_v; kpi_win_rate_sub_ = wr_s;
-    auto [tt_v, tt_s] = make_kpi(1, 1, tr("TOTAL TRADES"));
-    kpi_trades_val_ = tt_v; kpi_trades_sub_ = tt_s;
-    auto [pf_v, pf_s] = make_kpi(1, 2, tr("PROFIT FACTOR"));
-    kpi_profit_factor_val_ = pf_v; kpi_profit_factor_sub_ = pf_s;
-
-    layout->addWidget(kpi_grid_widget_);
-    layout->addStretch();
+    report_panel_ = new ui::algo::BacktestReportPanel(this);
+    layout->addWidget(report_panel_, 1);
 
     return right;
 }
@@ -233,14 +208,12 @@ void StrategyBuilderPanel::connect_service() {
             });
 }
 
-void StrategyBuilderPanel::on_save() {
-    if (name_edit_->text().trimmed().isEmpty()) {
-        status_label_->setText(tr("Please enter a strategy name."));
-        return;
-    }
+services::algo::AlgoStrategy StrategyBuilderPanel::build_strategy() {
+    if (loaded_strategy_id_.isEmpty())
+        loaded_strategy_id_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
 
     services::algo::AlgoStrategy strat;
-    strat.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    strat.id = loaded_strategy_id_;
     strat.name = name_edit_->text().trimmed();
     strat.description = desc_edit_->text().trimmed();
     strat.timeframe = timeframe_combo_->currentText();
@@ -251,8 +224,17 @@ void StrategyBuilderPanel::on_save() {
     strat.stop_loss = risk_panel_->stop_loss();
     strat.take_profit = risk_panel_->take_profit();
     strat.trailing_stop = risk_panel_->trailing_stop();
+    strat.position_size_pct = risk_panel_->capital_pct();
+    return strat;
+}
 
-    services::algo::AlgoTradingService::instance().save_strategy(strat);
+void StrategyBuilderPanel::on_save() {
+    if (name_edit_->text().trimmed().isEmpty()) {
+        status_label_->setText(tr("Please enter a strategy name."));
+        return;
+    }
+
+    services::algo::AlgoTradingService::instance().save_strategy(build_strategy());
     status_label_->setText(tr("Saving strategy..."));
 }
 
@@ -261,15 +243,28 @@ void StrategyBuilderPanel::on_backtest() {
         status_label_->setText(tr("Save strategy first."));
         return;
     }
+    if (bt_start_date_->date() >= bt_end_date_->date()) {
+        status_label_->setText(tr("Start date must be before end date."));
+        return;
+    }
+    if (const QString err = validate(); !err.isEmpty()) {
+        validation_banner_->setText(err);
+        validation_banner_->setVisible(true);
+        return;
+    }
+    validation_banner_->setVisible(false);
 
-    // Save first, then backtest
-    on_save();
+    // Backtest the current UI state directly, without persisting — backtesting is
+    // non-mutating; the user saves explicitly via Save. (Avoids silently rewriting
+    // library rows / bumping updated_at on every run.)
+    auto strat = build_strategy();
+
     QString symbol = symbol_combo_->currentText().trimmed();
     if (symbol.isEmpty()) symbol = QStringLiteral("RELIANCE");
 
     services::algo::AlgoTradingService::instance().run_backtest(
-        QString(), symbol, bt_start_date_->text(), bt_end_date_->text(),
-        bt_capital_->value());
+        strat, symbol, bt_start_date_->date().toString(QStringLiteral("yyyy-MM-dd")),
+        bt_end_date_->date().toString(QStringLiteral("yyyy-MM-dd")), bt_capital_->value());
     status_label_->setText(tr("Running backtest..."));
 }
 
@@ -278,20 +273,15 @@ void StrategyBuilderPanel::on_deploy() {
         status_label_->setText(tr("Save strategy first."));
         return;
     }
+    if (const QString err = validate(); !err.isEmpty()) {
+        validation_banner_->setText(err);
+        validation_banner_->setVisible(true);
+        return;
+    }
+    validation_banner_->setVisible(false);
 
     // Build strategy from current UI state
-    services::algo::AlgoStrategy strat;
-    strat.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    strat.name = name_edit_->text().trimmed();
-    strat.description = desc_edit_->text().trimmed();
-    strat.timeframe = timeframe_combo_->currentText();
-    strat.entry_conditions = entry_section_->conditions();
-    strat.exit_conditions = exit_section_->conditions();
-    strat.entry_logic = entry_section_->combined_logic();
-    strat.exit_logic = exit_section_->combined_logic();
-    strat.stop_loss = risk_panel_->stop_loss();
-    strat.take_profit = risk_panel_->take_profit();
-    strat.trailing_stop = risk_panel_->trailing_stop();
+    auto strat = build_strategy();
 
     auto* dialog = new AlgoDeployDialog(strat, this);
     if (dialog->exec() == QDialog::Accepted) {
@@ -311,6 +301,68 @@ void StrategyBuilderPanel::on_deploy() {
     dialog->deleteLater();
 }
 
+void StrategyBuilderPanel::load_template(int index) {
+    const auto tpls = services::algo::algo_strategy_templates();
+    const int i = index - 1; // index 0 is the "Templates…" placeholder
+    if (i < 0 || i >= tpls.size())
+        return;
+    const auto& t = tpls[i];
+
+    loaded_strategy_id_.clear(); // a template seeds a brand-new strategy
+    name_edit_->setText(t.name);
+    desc_edit_->setText(t.description);
+    timeframe_combo_->setCurrentText(t.timeframe);
+    entry_section_->set_conditions(t.entry, t.entry_logic);
+    exit_section_->set_conditions(t.exit, t.exit_logic);
+    risk_panel_->set_values(t.stop_loss, t.take_profit, 0.0, 1.0, 0.0);
+    report_panel_->clear();
+    status_label_->setText(tr("Loaded template: %1").arg(t.name));
+    template_combo_->setCurrentIndex(0); // reset to placeholder
+}
+
+void StrategyBuilderPanel::load_strategy(const services::algo::AlgoStrategy& s) {
+    loaded_strategy_id_ = s.id; // keep id → Save updates this strategy in place
+    name_edit_->setText(s.name);
+    desc_edit_->setText(s.description);
+    timeframe_combo_->setCurrentText(s.timeframe.isEmpty() ? QStringLiteral("5m") : s.timeframe);
+    entry_section_->set_conditions(s.entry_conditions, s.entry_logic.isEmpty() ? QStringLiteral("AND") : s.entry_logic);
+    exit_section_->set_conditions(s.exit_conditions, s.exit_logic.isEmpty() ? QStringLiteral("AND") : s.exit_logic);
+    risk_panel_->set_values(s.stop_loss, s.take_profit, s.trailing_stop, 1.0, 0.0,
+                            s.position_size_pct > 0 ? s.position_size_pct : 100.0);
+    // Size the backtest range to the strategy's timeframe (daily needs years for
+    // long indicators; intraday must stay under Yahoo's history cap).
+    const QDate today = QDate::currentDate();
+    bt_start_date_->setDate(today.addDays(-services::algo::algo_default_lookback_days(s.timeframe)));
+    bt_end_date_->setDate(today);
+    report_panel_->clear();
+    validation_banner_->setVisible(false);
+    status_label_->setText(tr("Editing: %1").arg(s.name));
+}
+
+void StrategyBuilderPanel::load_and_backtest(const services::algo::AlgoStrategy& s,
+                                             const QString& symbol, const QString& start_date,
+                                             const QString& end_date) {
+    load_strategy(s);
+    if (!symbol.isEmpty())
+        symbol_combo_->setCurrentText(symbol);
+    const QDate sd = QDate::fromString(start_date, QStringLiteral("yyyy-MM-dd"));
+    const QDate ed = QDate::fromString(end_date, QStringLiteral("yyyy-MM-dd"));
+    if (sd.isValid())
+        bt_start_date_->setDate(sd);
+    if (ed.isValid())
+        bt_end_date_->setDate(ed);
+    on_backtest(); // reuses validation + service call; report renders in the right panel
+}
+
+QString StrategyBuilderPanel::validate() const {
+    if (entry_section_->conditions().isEmpty())
+        return tr("Add at least one entry condition.");
+    const bool no_exit = exit_section_->conditions().isEmpty();
+    if (no_exit && risk_panel_->stop_loss() <= 0.0 && risk_panel_->take_profit() <= 0.0)
+        return tr("Strategy never exits: add an exit condition or set a stop-loss / take-profit.");
+    return QString();
+}
+
 void StrategyBuilderPanel::on_backtest_result(const QJsonObject& payload) {
     status_label_->setText(tr("Backtest complete."));
     display_backtest_result(payload);
@@ -322,43 +374,16 @@ void StrategyBuilderPanel::on_error(const QString& context, const QString& msg) 
 }
 
 void StrategyBuilderPanel::display_backtest_result(const QJsonObject& payload) {
-    kpi_grid_widget_->setVisible(true);
-
-    double total_return = payload.value("total_return").toDouble();
-    double sharpe = payload.value("sharpe_ratio").toDouble();
-    double max_dd = payload.value("max_drawdown").toDouble();
-    int total_trades = payload.value("total_trades").toInt();
-    double win_rate = payload.value("win_rate").toDouble();
-    double profit_factor = payload.value("profit_factor").toDouble();
-    double final_val = payload.value("final_value").toDouble();
-
-    kpi_total_return_val_->setText(
-        QString("%1%2%").arg(total_return >= 0 ? "+" : "").arg(total_return, 0, 'f', 2));
-    kpi_total_return_sub_->setText(QString("Final: $%1").arg(final_val, 0, 'f', 0));
-
-    kpi_sharpe_val_->setText(QString::number(sharpe, 'f', 3));
-    kpi_sharpe_sub_->setText(sharpe >= 1.0 ? "Excellent" : sharpe >= 0.5 ? "Good" : "Weak");
-
-    kpi_max_dd_val_->setText(QString("-%1%").arg(qAbs(max_dd), 0, 'f', 2));
-    kpi_max_dd_sub_->setText("Max Drawdown");
-
-    kpi_win_rate_val_->setText(QString("%1%").arg(win_rate, 0, 'f', 1));
-    kpi_win_rate_sub_->setText(win_rate >= 50.0 ? "Above average" : "Below average");
-
-    kpi_trades_val_->setText(QString::number(total_trades));
-    kpi_trades_sub_->setText("Total trades");
-
-    kpi_profit_factor_val_->setText(QString::number(profit_factor, 'f', 2));
-    kpi_profit_factor_sub_->setText(
-        profit_factor >= 1.5 ? "Strong" : profit_factor >= 1.0 ? "Profitable" : "Losing");
+    report_panel_->set_result(payload);
 }
 
 void StrategyBuilderPanel::clear_results() {
-    kpi_grid_widget_->setVisible(false);
+    report_panel_->clear();
 }
 
 QVariantMap StrategyBuilderPanel::save_draft() const {
     QVariantMap draft;
+    draft["id"] = loaded_strategy_id_;
     draft["name"] = name_edit_->text();
     draft["description"] = desc_edit_->text();
     draft["symbol"] = symbol_combo_->currentText();
@@ -372,10 +397,12 @@ QVariantMap StrategyBuilderPanel::save_draft() const {
     draft["trailing_stop"] = risk_panel_->trailing_stop();
     draft["quantity"] = risk_panel_->quantity();
     draft["max_order_value"] = risk_panel_->max_order_value();
+    draft["capital_pct"] = risk_panel_->capital_pct();
     return draft;
 }
 
 void StrategyBuilderPanel::restore_draft(const QVariantMap& draft) {
+    loaded_strategy_id_ = draft.value("id").toString();
     name_edit_->setText(draft.value("name").toString());
     desc_edit_->setText(draft.value("description").toString());
     symbol_combo_->setCurrentText(draft.value("symbol").toString());
@@ -391,7 +418,8 @@ void StrategyBuilderPanel::restore_draft(const QVariantMap& draft) {
         draft.value("take_profit", 5.0).toDouble(),
         draft.value("trailing_stop", 0.0).toDouble(),
         draft.value("quantity", 1.0).toDouble(),
-        draft.value("max_order_value", 0.0).toDouble());
+        draft.value("max_order_value", 0.0).toDouble(),
+        draft.value("capital_pct", 100.0).toDouble());
 }
 
 } // namespace fincept::screens

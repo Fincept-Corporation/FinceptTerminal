@@ -32,6 +32,40 @@
 
 namespace fincept::services {
 
+namespace {
+
+// ── Risk-model tuning constants ───────────────────────────────────────────────
+// The composite risk score is a 0–100 number built from normalised sub-scores.
+// Each raw input is divided by a "cap" (the level at which that input is
+// considered maximally risky and saturates its sub-score at 1.0), then weighted.
+// Caps are expressed in the same units as the inputs (annualised % for vol,
+// weight % for concentration, % for drawdown, unitless for beta).
+constexpr double kVolCapPct = 40.0;          // 40% annualised vol → max vol risk
+constexpr double kConcentrationCapPct = 80.0; // top-3 weight 80% → max concentration risk
+constexpr double kDrawdownCapPct = 50.0;     // 50% max drawdown → max drawdown risk
+constexpr double kBetaCap = 2.0;             // |beta| 2.0 → max market-sensitivity risk
+
+// Sub-score weights when ALL four signals are available (time-series path).
+// They sum to 100.
+constexpr double kWVolFull = 30.0;
+constexpr double kWConcFull = 25.0;
+constexpr double kWDrawdownFull = 25.0;
+constexpr double kWBetaFull = 20.0;
+
+// Sub-score weights for the DEGRADED path (<3 snapshots): only volatility and
+// concentration are estimable, so the drawdown/beta weight is redistributed
+// evenly across the two available signals (50/50, summing to 100).
+constexpr double kWVolDegraded = 50.0;
+constexpr double kWConcDegraded = 50.0;
+
+// Historical VaR/CVaR confidence level. kVar95Tail is the tail probability
+// (5% → 95% confidence); kVar95Z is the corresponding one-sided normal z-score,
+// used only by the parametric fallback when the historical sample is too small.
+constexpr double kVar95Tail = 0.05;
+constexpr double kVar95Z = 1.645;
+
+} // namespace
+
 void PortfolioService::fetch_correlation(const QStringList& symbols) {
     if (symbols.size() < 2) {
         emit correlation_computed({});
@@ -56,10 +90,16 @@ for sym in symbols:
     try:
         hist = yf.download(sym, period="30d", interval="1d", progress=False)
         if hist is not None and not hist.empty:
-            closes = hist["Close"].dropna().tolist()
-            if hasattr(closes[0], 'item'):
+            close_obj = hist["Close"]
+            # Newer yfinance returns MultiIndex columns even for a single ticker,
+            # so hist["Close"] can be a DataFrame — collapse it to a Series.
+            if hasattr(close_obj, "columns"):
+                close_obj = close_obj.iloc[:, 0]
+            closes = close_obj.dropna().tolist()
+            if closes and hasattr(closes[0], 'item'):
                 closes = [v.item() for v in closes]
-            data[sym] = closes
+            if closes:
+                data[sym] = closes
     except Exception:
         pass
 
@@ -219,27 +259,35 @@ void PortfolioService::fetch_risk_free_rate() {
         }
     }
 
-    // Fetch from FRED via inline Python (requests library)
+    // Fetch from FRED via inline Python. The API key is read from the
+    // FRED_API_KEY environment variable, which PythonRunner::build_python_env()
+    // injects from SecureStorage (user configures it under Settings → API
+    // Credentials → "FRED (Federal Reserve)"). No key is ever hardcoded here.
+    // If no key is configured we skip the network call and fall back to the
+    // default rate so Sharpe/Sortino still compute (with a logged note).
     const QString code = QString(R"python(
-import json, urllib.request
-api_key = "9da0d86e0cf58f4a4023e5e686226d69"
-url = (
-    "https://api.stlouisfed.org/fred/series/observations"
-    "?series_id=DGS10&api_key=" + api_key +
-    "&file_type=json&sort_order=desc&limit=5"
-)
-try:
-    with urllib.request.urlopen(url, timeout=10) as r:
-        data = json.loads(r.read().decode())
-    rate = None
-    for obs in data.get("observations", []):
-        v = obs.get("value", ".")
-        if v != ".":
-            rate = float(v) / 100.0  # convert percent to decimal
-            break
-    print(json.dumps({"rate": rate if rate is not None else 0.04}))
-except Exception as e:
-    print(json.dumps({"rate": 0.04, "error": str(e)}))
+import os, json, urllib.request
+api_key = os.environ.get("FRED_API_KEY", "").strip()
+if not api_key:
+    print(json.dumps({"rate": 0.04, "error": "FRED_API_KEY not configured; using default risk-free rate"}))
+else:
+    url = (
+        "https://api.stlouisfed.org/fred/series/observations"
+        "?series_id=DGS10&api_key=" + api_key +
+        "&file_type=json&sort_order=desc&limit=5"
+    )
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            data = json.loads(r.read().decode())
+        rate = None
+        for obs in data.get("observations", []):
+            v = obs.get("value", ".")
+            if v != ".":
+                rate = float(v) / 100.0  # convert percent to decimal
+                break
+        print(json.dumps({"rate": rate if rate is not None else 0.04}))
+    except Exception as e:
+        print(json.dumps({"rate": 0.04, "error": str(e)}))
 )python");
 
     QPointer<PortfolioService> self = this;
@@ -250,8 +298,12 @@ except Exception as e:
         if (result.success && !result.output.trimmed().isEmpty()) {
             QJsonParseError err;
             const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8(), &err);
-            if (err.error == QJsonParseError::NoError && doc.object().contains("rate"))
+            if (err.error == QJsonParseError::NoError && doc.object().contains("rate")) {
                 rate = doc.object()["rate"].toDouble(0.04);
+                const QString note = doc.object().value("error").toString();
+                if (!note.isEmpty())
+                    LOG_WARN("PortfolioSvc", "Risk-free rate: " + note + " (using " + QString::number(rate * 100, 'f', 2) + "%)");
+            }
         }
         // Persist to 24h cache
         auto& settings = SettingsRepository::instance();
@@ -282,7 +334,9 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
     for (qsizetype i = 0; i < std::min(qsizetype{3}, weights.size()); ++i)
         conc += weights[i];
     metrics.concentration_top3 = conc;
-    metrics.risk_score = std::min(conc / 80.0, 1.0) * 50.0; // concentration-only baseline
+    // Concentration-only baseline (overwritten below once vol/drawdown/beta are
+    // known). Capped at half-scale since it is a single-signal estimate.
+    metrics.risk_score = std::min(conc / kConcentrationCapPct, 1.0) * kWConcDegraded;
 
     // ── Load snapshots synchronously for time-series metrics ─────────────────
     // (this runs on the calling thread — compute_metrics is always called from
@@ -321,9 +375,9 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
             if (daily_vol > 1e-6)
                 metrics.sharpe = ((mean / 100.0 - rf_daily) / (daily_vol / 100.0)) * std::sqrt(252.0);
             if (summary.total_market_value > 0)
-                metrics.var_95 = summary.total_market_value * std::abs(mean / 100.0 - 1.645 * daily_vol / 100.0);
-            const double vol_score = std::min(ann_vol / 40.0, 1.0) * 50.0;
-            const double conc_score = std::min(conc / 80.0, 1.0) * 50.0;
+                metrics.var_95 = summary.total_market_value * std::abs(mean / 100.0 - kVar95Z * daily_vol / 100.0);
+            const double vol_score = std::min(ann_vol / kVolCapPct, 1.0) * kWVolDegraded;
+            const double conc_score = std::min(conc / kConcentrationCapPct, 1.0) * kWConcDegraded;
             metrics.risk_score = vol_score + conc_score;
         }
         emit metrics_computed(metrics);
@@ -366,6 +420,22 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
     const double rf_daily = rf_rate_ / 252.0 * 100.0;
     if (daily_vol > 1e-6)
         metrics.sharpe = ((mean - rf_daily) / daily_vol) * std::sqrt(252.0);
+
+    // ── Sortino ratio (annualised) ────────────────────────────────────────────
+    // Like Sharpe but penalises only downside deviation below the minimum
+    // acceptable return (MAR = daily risk-free rate). Returns at or above MAR
+    // contribute zero to the downside variance.
+    {
+        double downside_sq = 0.0;
+        for (const double r : port_returns) {
+            const double shortfall = r - rf_daily;
+            if (shortfall < 0.0)
+                downside_sq += shortfall * shortfall;
+        }
+        const double downside_dev = std::sqrt(downside_sq / n); // population over all periods
+        if (downside_dev > 1e-6)
+            metrics.sortino = ((mean - rf_daily) / downside_dev) * std::sqrt(252.0);
+    }
 
     // ── Max drawdown ──────────────────────────────────────────────────────────
     double peak = snaps.first().total_value;
@@ -430,8 +500,20 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
                 cov += (port_aligned[i] - port_mean) * (spy_aligned[i] - spy_mean);
                 var_spy += (spy_aligned[i] - spy_mean) * (spy_aligned[i] - spy_mean);
             }
-            if (var_spy > 1e-10)
-                metrics.beta = cov / var_spy;
+            if (var_spy > 1e-10) {
+                const double beta_val = cov / var_spy;
+                metrics.beta = beta_val;
+
+                // ── Jensen's alpha (annualised) ──────────────────────────────
+                // alpha = R_p - [R_f + beta * (R_m - R_f)], all annualised.
+                // port_mean / spy_mean are daily % returns over the aligned
+                // window; annualise by *252 and convert % → decimal.
+                const double port_ann = port_mean / 100.0 * 252.0;
+                const double mkt_ann = spy_mean / 100.0 * 252.0;
+                const double alpha_dec =
+                    port_ann - (rf_rate_ + beta_val * (mkt_ann - rf_rate_));
+                metrics.alpha = alpha_dec * 100.0; // store as %
+            }
         }
     }
 
@@ -440,7 +522,7 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
     if (summary.total_market_value > 0 && !port_returns.isEmpty()) {
         QVector<double> sorted_rets = port_returns;
         std::sort(sorted_rets.begin(), sorted_rets.end());
-        const int tail_count = std::max(1, static_cast<int>(std::floor(sorted_rets.size() * 0.05)));
+        const int tail_count = std::max(1, static_cast<int>(std::floor(sorted_rets.size() * kVar95Tail)));
         // VaR: loss at 95th percentile (positive value = amount at risk)
         const double var_pct = -sorted_rets[tail_count - 1]; // worst 5th pct return (%)
         metrics.var_95 = summary.total_market_value * std::max(var_pct, 0.0) / 100.0;
@@ -453,12 +535,14 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
     }
 
     // ── Composite risk score (0-100) ─────────────────────────────────────────
+    // Full four-signal model: volatility + concentration + drawdown + beta,
+    // weighted 30/25/25/20. See the tuning constants at the top of this file.
     {
-        const double vol_score = std::min(ann_vol / 40.0, 1.0) * 30.0;
-        const double conc_score = std::min(conc / 80.0, 1.0) * 25.0;
-        const double dd_score = std::min(std::abs(max_dd) / 50.0, 1.0) * 25.0;
+        const double vol_score = std::min(ann_vol / kVolCapPct, 1.0) * kWVolFull;
+        const double conc_score = std::min(conc / kConcentrationCapPct, 1.0) * kWConcFull;
+        const double dd_score = std::min(std::abs(max_dd) / kDrawdownCapPct, 1.0) * kWDrawdownFull;
         const double beta_val = metrics.beta.value_or(1.0);
-        const double beta_score = std::min(std::abs(beta_val) / 2.0, 1.0) * 20.0;
+        const double beta_score = std::min(std::abs(beta_val) / kBetaCap, 1.0) * kWBetaFull;
         metrics.risk_score = vol_score + conc_score + dd_score + beta_score;
     }
 

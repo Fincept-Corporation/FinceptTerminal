@@ -1,11 +1,11 @@
 // src/ui/widgets/algo/ConditionBlock.cpp
 #include "ui/widgets/algo/ConditionBlock.h"
+
 #include "services/algo_trading/AlgoTradingTypes.h"
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 
-using fincept::services::algo::algo_indicators;
 using fincept::services::algo::algo_operators;
 
 namespace fincept::ui::algo {
@@ -22,259 +22,122 @@ void ConditionBlock::build_ui() {
     main_layout->setContentsMargins(8, 6, 8, 6);
     main_layout->setSpacing(4);
 
-    // Row 1: indicator, operator, value
-    auto* row1 = new QHBoxLayout();
-    row1->setSpacing(6);
+    // ── Line 1: left operand ────────────────────────────────────────────────
+    auto* line1 = new QHBoxLayout();
+    line1->setSpacing(6);
+    lhs_ = new OperandEditor(/*allow_value=*/false, this);
+    line1->addWidget(lhs_, 1);
 
-    indicator_combo_ = new QComboBox(this);
-    indicator_combo_->setObjectName(QStringLiteral("condBlockIndicator"));
-    indicator_combo_->setMinimumWidth(120);
-    populate_indicators();
+    remove_btn_ = new QPushButton(QStringLiteral("✕"), this);
+    remove_btn_->setObjectName(QStringLiteral("condBlockRemove"));
+    remove_btn_->setFixedSize(24, 24);
+    remove_btn_->setToolTip(tr("Remove condition"));
+    line1->addWidget(remove_btn_);
+    main_layout->addLayout(line1);
 
-    field_combo_ = new QComboBox(this);
-    field_combo_->setObjectName(QStringLiteral("condBlockField"));
-    field_combo_->setMinimumWidth(80);
+    // ── Line 2: operator + right operand ────────────────────────────────────
+    auto* line2 = new QHBoxLayout();
+    line2->setSpacing(6);
+    line2->setContentsMargins(16, 0, 0, 0); // indent to read as "…compared to…"
 
     operator_combo_ = new QComboBox(this);
     operator_combo_->setObjectName(QStringLiteral("condBlockOperator"));
-    operator_combo_->setMinimumWidth(100);
+    operator_combo_->setMinimumWidth(120);
     populate_operators();
+    line2->addWidget(operator_combo_);
 
-    compare_mode_combo_ = new QComboBox(this);
-    compare_mode_combo_->setObjectName(QStringLiteral("condBlockCompareMode"));
-    compare_mode_combo_->addItem(tr("Value"), QStringLiteral("value"));
-    compare_mode_combo_->addItem(tr("Indicator"), QStringLiteral("indicator"));
+    rhs_ = new OperandEditor(/*allow_value=*/true, this);
+    rhs_->set_value_mode(true); // default to a constant on the right
+    line2->addWidget(rhs_, 1);
 
-    value_spin_ = new QDoubleSpinBox(this);
-    value_spin_->setObjectName(QStringLiteral("condBlockValue"));
-    value_spin_->setRange(-999999, 999999);
-    value_spin_->setDecimals(4);
+    // `between` bounds (hidden unless the operator is "between").
+    between_low_ = new QDoubleSpinBox(this);
+    between_low_->setObjectName(QStringLiteral("condBlockBetweenLow"));
+    between_low_->setRange(-1e9, 1e9);
+    between_low_->setDecimals(4);
+    between_and_ = new QLabel(tr("and"), this);
+    between_high_ = new QDoubleSpinBox(this);
+    between_high_->setObjectName(QStringLiteral("condBlockBetweenHigh"));
+    between_high_->setRange(-1e9, 1e9);
+    between_high_->setDecimals(4);
+    between_high_->setValue(100);
+    line2->addWidget(between_low_);
+    line2->addWidget(between_and_);
+    line2->addWidget(between_high_);
+    main_layout->addLayout(line2);
 
-    compare_indicator_combo_ = new QComboBox(this);
-    compare_indicator_combo_->setObjectName(QStringLiteral("condBlockCompareInd"));
-    compare_indicator_combo_->setMinimumWidth(120);
-    populate_indicators();
-    for (int i = 0; i < compare_indicator_combo_->count(); ++i) {
-        if (compare_indicator_combo_->itemData(i).toString().isEmpty())
-            compare_indicator_combo_->model()->setData(
-                compare_indicator_combo_->model()->index(i, 0), false, Qt::UserRole - 1);
-    }
-    compare_indicator_combo_->hide();
-
-    compare_field_combo_ = new QComboBox(this);
-    compare_field_combo_->setObjectName(QStringLiteral("condBlockCompareField"));
-    compare_field_combo_->setMinimumWidth(80);
-    compare_field_combo_->hide();
-
-    remove_btn_ = new QPushButton(this);
-    remove_btn_->setObjectName(QStringLiteral("condBlockRemove"));
-    remove_btn_->setText(QStringLiteral("X"));
-    remove_btn_->setFixedSize(24, 24);
-
-    row1->addWidget(indicator_combo_);
-    row1->addWidget(field_combo_);
-    row1->addWidget(operator_combo_);
-    row1->addWidget(compare_mode_combo_);
-    row1->addWidget(value_spin_);
-    row1->addWidget(compare_indicator_combo_);
-    row1->addWidget(compare_field_combo_);
-    row1->addStretch();
-    row1->addWidget(remove_btn_);
-    main_layout->addLayout(row1);
-
-    // Row 2: parameters (hidden by default for stock attributes)
-    params_container_ = new QWidget(this);
-    params_container_->setObjectName(QStringLiteral("condBlockParams"));
-    auto* params_layout = new QHBoxLayout(params_container_);
-    params_layout->setContentsMargins(0, 0, 0, 0);
-    params_layout->setSpacing(6);
-
-    param1_label_ = new QLabel(this);
-    param1_spin_ = new QDoubleSpinBox(this);
-    param1_spin_->setRange(1, 500);
-    param1_spin_->setDecimals(0);
-    param1_spin_->setValue(14);
-
-    param2_label_ = new QLabel(this);
-    param2_spin_ = new QDoubleSpinBox(this);
-    param2_spin_->setRange(1, 500);
-    param2_spin_->setDecimals(1);
-    param2_spin_->setValue(26);
-
-    param3_label_ = new QLabel(this);
-    param3_spin_ = new QDoubleSpinBox(this);
-    param3_spin_->setRange(0.1, 100);
-    param3_spin_->setDecimals(1);
-    param3_spin_->setValue(9);
-
-    params_layout->addWidget(param1_label_);
-    params_layout->addWidget(param1_spin_);
-    params_layout->addWidget(param2_label_);
-    params_layout->addWidget(param2_spin_);
-    params_layout->addWidget(param3_label_);
-    params_layout->addWidget(param3_spin_);
-    params_layout->addStretch();
-    main_layout->addWidget(params_container_);
-
-    // Connections
-    connect(indicator_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &ConditionBlock::on_indicator_changed);
-    connect(compare_mode_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &ConditionBlock::on_compare_mode_changed);
-    connect(compare_indicator_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [this](int) {
-                populate_fields(compare_field_combo_,
-                                compare_indicator_combo_->currentData().toString());
-                emit changed();
-            });
+    connect(between_low_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
+            [this](double) { emit changed(); });
+    connect(between_high_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
+            [this](double) { emit changed(); });
+    connect(lhs_, &OperandEditor::changed, this, &ConditionBlock::changed);
+    connect(rhs_, &OperandEditor::changed, this, &ConditionBlock::changed);
+    connect(operator_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { on_operator_changed(); });
     connect(remove_btn_, &QPushButton::clicked, this, &ConditionBlock::remove_requested);
-    connect(value_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this]() { emit changed(); });
-    connect(operator_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [this]() { emit changed(); });
 
-    on_indicator_changed(0);
-    on_compare_mode_changed(0);
-}
-
-void ConditionBlock::populate_indicators() {
-    QComboBox* combo = (sender() == nullptr) ? indicator_combo_ : compare_indicator_combo_;
-    if (!combo) combo = indicator_combo_;
-
-    auto inds = algo_indicators();
-    QString last_cat;
-    for (const auto& ind : inds) {
-        if (ind.category != last_cat) {
-            last_cat = ind.category;
-            QString label = ind.category.toUpper();
-            combo->addItem(QStringLiteral("-- %1 --").arg(label), QString());
-        }
-        combo->addItem(ind.label, ind.id);
-    }
-    // Also populate compare_indicator_combo_ on init
-    if (combo == indicator_combo_ && compare_indicator_combo_) {
-        compare_indicator_combo_->clear();
-        for (const auto& ind : inds) {
-            if (ind.category != last_cat) {
-                last_cat = ind.category;
-            }
-            compare_indicator_combo_->addItem(ind.label, ind.id);
-        }
-    }
-}
-
-void ConditionBlock::populate_fields(QComboBox* combo, const QString& indicator_id) {
-    combo->clear();
-    auto inds = algo_indicators();
-    for (const auto& ind : inds) {
-        if (ind.id == indicator_id) {
-            for (const auto& f : ind.fields)
-                combo->addItem(f);
-            break;
-        }
-    }
-    if (combo->count() == 0)
-        combo->addItem(QStringLiteral("value"));
+    on_operator_changed();
 }
 
 void ConditionBlock::populate_operators() {
-    auto ops = algo_operators();
-    QStringList labels = {">", "<", ">=", "<=", "==",
-                          "Crosses Above", "Crosses Below", "Rising", "Falling"};
+    const auto ops = algo_operators();
+    const QStringList labels = {">", "<", ">=", "<=", "==",
+                                tr("Crosses Above"), tr("Crosses Below"),
+                                tr("Rising"), tr("Falling")};
     for (int i = 0; i < ops.size() && i < labels.size(); ++i)
         operator_combo_->addItem(labels[i], ops[i]);
 }
 
-void ConditionBlock::on_indicator_changed(int /*index*/) {
-    QString ind_id = indicator_combo_->currentData().toString();
-    if (ind_id.isEmpty()) {
-        indicator_combo_->setCurrentIndex(indicator_combo_->currentIndex() + 1);
-        return;
-    }
-    populate_fields(field_combo_, ind_id);
-    update_param_visibility();
+void ConditionBlock::on_operator_changed() {
+    const QString op = operator_combo_->currentData().toString();
+    const bool unary = (op == "rising" || op == "falling");
+    const bool is_between = (op == "between");
+    // Rising/Falling describe the LHS series alone; Between uses two constants.
+    rhs_->setVisible(!unary && !is_between);
+    between_low_->setVisible(is_between);
+    between_and_->setVisible(is_between);
+    between_high_->setVisible(is_between);
     emit changed();
-}
-
-void ConditionBlock::on_compare_mode_changed(int index) {
-    bool is_indicator = (index == 1);
-    value_spin_->setVisible(!is_indicator);
-    compare_indicator_combo_->setVisible(is_indicator);
-    compare_field_combo_->setVisible(is_indicator);
-    emit changed();
-}
-
-void ConditionBlock::update_param_visibility() {
-    QString ind_id = indicator_combo_->currentData().toString();
-    auto inds = algo_indicators();
-
-    QStringList param_names;
-    for (const auto& ind : inds) {
-        if (ind.id == ind_id) {
-            param_names = ind.params;
-            break;
-        }
-    }
-
-    param1_label_->setVisible(!param_names.isEmpty());
-    param1_spin_->setVisible(!param_names.isEmpty());
-    param2_label_->setVisible(param_names.size() > 1);
-    param2_spin_->setVisible(param_names.size() > 1);
-    param3_label_->setVisible(param_names.size() > 2);
-    param3_spin_->setVisible(param_names.size() > 2);
-
-    if (param_names.size() > 0) param1_label_->setText(param_names[0] + ":");
-    if (param_names.size() > 1) param2_label_->setText(param_names[1] + ":");
-    if (param_names.size() > 2) param3_label_->setText(param_names[2] + ":");
-
-    params_container_->setVisible(!param_names.isEmpty());
 }
 
 QJsonObject ConditionBlock::to_json() const {
     QJsonObject obj;
-    obj["indicator"] = indicator_combo_->currentData().toString();
-    obj["field"] = field_combo_->currentText();
-    obj["operator"] = operator_combo_->currentData().toString();
-    obj["compare_mode"] = compare_mode_combo_->currentData().toString();
-    obj["value"] = value_spin_->value();
+    obj["indicator"] = lhs_->indicator_id();
+    obj["params"] = lhs_->params();
+    obj["field"] = lhs_->field();
+    obj["offset"] = lhs_->offset();
 
-    // Build params
-    QString ind_id = indicator_combo_->currentData().toString();
-    auto inds = algo_indicators();
-    QJsonObject params;
-    for (const auto& ind : inds) {
-        if (ind.id == ind_id) {
-            if (ind.params.size() > 0) params[ind.params[0]] = static_cast<int>(param1_spin_->value());
-            if (ind.params.size() > 1) params[ind.params[1]] = param2_spin_->value();
-            if (ind.params.size() > 2) params[ind.params[2]] = param3_spin_->value();
-            break;
-        }
+    const QString op = operator_combo_->currentData().toString();
+    obj["operator"] = op;
+
+    const bool unary = (op == "rising" || op == "falling");
+    if (op == "between") {
+        obj["compare_mode"] = QStringLiteral("value");
+        obj["value"] = between_low_->value();
+        obj["value2"] = between_high_->value();
+    } else if (unary) {
+        obj["compare_mode"] = QStringLiteral("value");
+        obj["value"] = 0;
+    } else if (rhs_->is_value_mode()) {
+        obj["compare_mode"] = QStringLiteral("value");
+        obj["value"] = rhs_->value();
+    } else {
+        obj["compare_mode"] = QStringLiteral("indicator");
+        obj["compare_indicator"] = rhs_->indicator_id();
+        obj["compare_params"] = rhs_->params();
+        obj["compare_field"] = rhs_->field();
+        obj["compare_offset"] = rhs_->offset();
     }
-    obj["params"] = params;
-
-    if (compare_mode_combo_->currentData().toString() == "indicator") {
-        obj["compare_indicator"] = compare_indicator_combo_->currentData().toString();
-        obj["compare_field"] = compare_field_combo_->currentText();
-        obj["compare_params"] = QJsonObject();
-    }
-
     return obj;
 }
 
 void ConditionBlock::from_json(const QJsonObject& obj) {
-    QString ind = obj.value("indicator").toString();
-    for (int i = 0; i < indicator_combo_->count(); ++i) {
-        if (indicator_combo_->itemData(i).toString() == ind) {
-            indicator_combo_->setCurrentIndex(i);
-            break;
-        }
-    }
+    lhs_->set_indicator(obj.value("indicator").toString());
+    lhs_->set_params(obj.value("params").toObject());
+    lhs_->set_field(obj.value("field").toString("value"));
+    lhs_->set_offset(obj.value("offset").toInt(0));
 
-    QString field = obj.value("field").toString();
-    int fi = field_combo_->findText(field);
-    if (fi >= 0) field_combo_->setCurrentIndex(fi);
-
-    QString op = obj.value("operator").toString();
+    const QString op = obj.value("operator").toString(">");
     for (int i = 0; i < operator_combo_->count(); ++i) {
         if (operator_combo_->itemData(i).toString() == op) {
             operator_combo_->setCurrentIndex(i);
@@ -282,38 +145,23 @@ void ConditionBlock::from_json(const QJsonObject& obj) {
         }
     }
 
-    value_spin_->setValue(obj.value("value").toDouble());
-
-    QString cmp = obj.value("compare_mode").toString("value");
-    compare_mode_combo_->setCurrentIndex(cmp == "indicator" ? 1 : 0);
-
-    if (cmp == "indicator") {
-        QString ci = obj.value("compare_indicator").toString();
-        for (int i = 0; i < compare_indicator_combo_->count(); ++i) {
-            if (compare_indicator_combo_->itemData(i).toString() == ci) {
-                compare_indicator_combo_->setCurrentIndex(i);
-                break;
-            }
-        }
-        QString cf = obj.value("compare_field").toString();
-        int cfi = compare_field_combo_->findText(cf);
-        if (cfi >= 0) compare_field_combo_->setCurrentIndex(cfi);
-    }
-
-    // Restore params
-    auto params = obj.value("params").toObject();
-    auto inds = algo_indicators();
-    for (const auto& indef : inds) {
-        if (indef.id == ind) {
-            if (indef.params.size() > 0 && params.contains(indef.params[0]))
-                param1_spin_->setValue(params.value(indef.params[0]).toDouble());
-            if (indef.params.size() > 1 && params.contains(indef.params[1]))
-                param2_spin_->setValue(params.value(indef.params[1]).toDouble());
-            if (indef.params.size() > 2 && params.contains(indef.params[2]))
-                param3_spin_->setValue(params.value(indef.params[2]).toDouble());
-            break;
+    if (op == "between") {
+        between_low_->setValue(obj.value("value").toDouble(0));
+        between_high_->setValue(obj.value("value2").toDouble(0));
+    } else {
+        const QString cmp = obj.value("compare_mode").toString("value");
+        if (cmp == "indicator") {
+            rhs_->set_value_mode(false);
+            rhs_->set_indicator(obj.value("compare_indicator").toString());
+            rhs_->set_params(obj.value("compare_params").toObject());
+            rhs_->set_field(obj.value("compare_field").toString("value"));
+            rhs_->set_offset(obj.value("compare_offset").toInt(0));
+        } else {
+            rhs_->set_value_mode(true);
+            rhs_->set_value(obj.value("value").toDouble(0));
         }
     }
+    on_operator_changed();
 }
 
 } // namespace fincept::ui::algo

@@ -82,6 +82,7 @@ class IBKRBroker : public IBroker {
     struct HistoryParams {
         QString bar;
         QString period;
+        QString start_time; // IBKR startTime "YYYYMMDD-HH:mm:ss" (UTC); empty = most-recent window
     };
     static HistoryParams ibkr_history_params(const QString& resolution, const QString& from_date,
                                              const QString& to_date);

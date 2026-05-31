@@ -47,6 +47,14 @@ class NewsArticleRepository : public BaseRepository<fincept::services::NewsArtic
     /// Ensure the saved column exists (idempotent ALTER TABLE).
     void ensure_saved_column();
 
+    /// Persist the AI analysis JSON for an article URL (INSERT OR REPLACE).
+    /// Overwrites any prior result so a re-run from the UI updates the cache.
+    Result<void> save_analysis(const QString& url, const QString& analysis_json) const;
+
+    /// Load the cached analysis JSON for a URL. Returns an empty string (ok)
+    /// when none is stored.
+    Result<QString> load_analysis(const QString& url) const;
+
     /// Full-text search over headline + summary using the FTS5 index.
     /// Returns matching articles ordered by FTS rank (best match first).
     /// Falls back to LIKE scan if FTS table is unavailable.

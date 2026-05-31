@@ -18,6 +18,7 @@
 #include "services/updater/UpdateService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "trading/instruments/InstrumentService.h"
+#include "trading/instruments/SymbolResolver.h"
 #include "ui/navigation/DockStatusBar.h"
 #include "ui/navigation/DockToolBar.h"
 #include "ui/theme/Theme.h"
@@ -155,10 +156,13 @@ void WindowFrame::on_auth_state_changed() {
             });
             // Warm instrument cache in background — only loaded if not already cached.
             // Runs concurrently while the user reads the dashboard (3-5s head start).
-            fincept::trading::InstrumentService::instance().load_from_db_async("zerodha");
-            fincept::trading::InstrumentService::instance().load_from_db_async("angelone");
-            fincept::trading::InstrumentService::instance().load_from_db_async("groww");
-            fincept::trading::InstrumentService::instance().load_from_db_async("fyers");
+            // Load every registered broker (all 17 Indian brokers) so unified
+            // cross-broker search includes any broker whose master was already
+            // downloaded, without needing the user to focus each one first.
+            // instance() also registers all broker sources, so registered_brokers() is populated.
+            auto& isvc = fincept::trading::InstrumentService::instance();
+            for (const QString& bid : fincept::trading::SymbolResolver::instance().registered_brokers())
+                isvc.load_from_db_async(bid);
         } else {
             // Free/no plan → show pricing gate
             set_shell_visible(false);

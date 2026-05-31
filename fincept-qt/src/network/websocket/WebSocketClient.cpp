@@ -2,8 +2,10 @@
 
 #include "core/logging/Logger.h"
 
+#include <QDateTime>
 #include <QMetaObject>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QThread>
 #include <QTimer>
 
@@ -11,6 +13,15 @@ namespace fincept {
 
 namespace {
 constexpr const char* kTag = "WS";
+
+// Mask the `token=` query value so broker access tokens (JWTs) never reach the
+// log file. Applied to every URL we log — these tokens are bearer credentials.
+QString redact_url(const QString& url) {
+    QString out = url;
+    static const QRegularExpression re(QStringLiteral("token=[^&]*"));
+    out.replace(re, QStringLiteral("token=REDACTED"));
+    return out;
+}
 
 QString thread_label() {
     auto* t = QThread::currentThread();
@@ -70,6 +81,7 @@ void WebSocketClient::connect_to(const QString& url) {
             return;
         self->url_ = u;
         self->reconnect_attempts_ = 0;
+        self->reconnect_enabled_ = true; // a fresh connect re-enables auto-reconnect
         LOG_INFO(kTag, QString("[%1] Connecting to %2").arg(thread_label(), u));
         self->socket_->open(QUrl(u));
     });
@@ -80,9 +92,32 @@ void WebSocketClient::disconnect() {
     run_on_owning_thread(this, [self]() {
         if (!self)
             return;
-        LOG_INFO(kTag, QString("[%1] Disconnect requested for %2").arg(thread_label(), self->url_));
+        LOG_INFO(kTag, QString("[%1] Disconnect requested for %2").arg(thread_label(), redact_url(self->url_)));
         self->reconnect_timer_.stop();
         self->socket_->close();
+    });
+}
+
+void WebSocketClient::stop_reconnect() {
+    QPointer<WebSocketClient> self(this);
+    run_on_owning_thread(this, [self]() {
+        if (!self)
+            return;
+        self->reconnect_stopped_ = true;
+        self->reconnect_timer_.stop();
+        LOG_INFO(kTag, QString("[%1] Auto-reconnect halted for %2 (fatal error or explicit stop)")
+                           .arg(thread_label(), redact_url(self->url_)));
+    });
+}
+
+void WebSocketClient::stop_reconnect() {
+    QPointer<WebSocketClient> self(this);
+    run_on_owning_thread(this, [self]() {
+        if (!self)
+            return;
+        LOG_INFO(kTag, QString("[%1] Auto-reconnect halted for %2").arg(thread_label(), self->url_));
+        self->reconnect_enabled_ = false;
+        self->reconnect_timer_.stop();
     });
 }
 
@@ -122,7 +157,7 @@ void WebSocketClient::on_disconnected() {
                        .arg(thread_label(), url_)
                        .arg(static_cast<int>(socket_ ? socket_->state() : QAbstractSocket::UnconnectedState)));
     emit disconnected();
-    if (reconnect_attempts_ < MAX_RECONNECT_ATTEMPTS) {
+    if (reconnect_enabled_ && reconnect_attempts_ < MAX_RECONNECT_ATTEMPTS) {
         const int delay = std::min(1000 * (1 << reconnect_attempts_), 30000);
         LOG_INFO(kTag, QString("[%1] Scheduling reconnect attempt %2/%3 in %4ms")
                            .arg(thread_label())
@@ -149,18 +184,23 @@ void WebSocketClient::on_binary_received(const QByteArray& data) {
 void WebSocketClient::on_error(QAbstractSocket::SocketError err) {
     const QString es = socket_ ? socket_->errorString() : QStringLiteral("(no socket)");
     LOG_ERROR(kTag, QString("[%1] Error on %2: %3 (code=%4)")
-                       .arg(thread_label(), url_, es)
+                       .arg(thread_label(), redact_url(url_), es)
                        .arg(static_cast<int>(err)));
     emit error_occurred(es);
 }
 
 void WebSocketClient::attempt_reconnect() {
+    if (reconnect_stopped_) {
+        LOG_INFO(kTag, QString("[%1] attempt_reconnect skipped for %2 (stop_reconnect)")
+                           .arg(thread_label(), redact_url(url_)));
+        return;
+    }
     reconnect_attempts_++;
     LOG_INFO(kTag, QString("[%1] Reconnect attempt %2/%3 to %4")
                        .arg(thread_label())
                        .arg(reconnect_attempts_)
                        .arg(MAX_RECONNECT_ATTEMPTS)
-                       .arg(url_));
+                       .arg(redact_url(url_)));
     socket_->open(QUrl(url_));
 }
 
@@ -171,6 +211,7 @@ void WebSocketClient::connect_to(const QString& /*url*/) {
     LOG_WARN(kTag, "WebSocket not available — Qt6::WebSockets not installed");
 }
 void WebSocketClient::disconnect() {}
+void WebSocketClient::stop_reconnect() {}
 void WebSocketClient::send(const QString& /*message*/) {}
 void WebSocketClient::send_binary(const QByteArray& /*data*/) {}
 bool WebSocketClient::is_connected() const {

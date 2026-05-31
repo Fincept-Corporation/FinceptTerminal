@@ -1,6 +1,7 @@
 // src/screens/portfolio/views/PerformanceRiskView.cpp
 #include "screens/portfolio/views/PerformanceRiskView.h"
 
+#include "storage/secure/SecureStorage.h"
 #include "ui/theme/Theme.h"
 
 #include <QAreaSeries>
@@ -88,6 +89,15 @@ void PerformanceRiskView::build_ui() {
                                        .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE()));
     layout->addWidget(metrics_header_);
 
+    // Shown only when no FRED API key is configured — Sharpe/Sortino then use a
+    // flat 4% risk-free rate instead of the live 10-year Treasury yield.
+    rf_hint_ = new QLabel;
+    rf_hint_->setWordWrap(true);
+    rf_hint_->setStyleSheet(QString("color:%1; font-size:9px; padding:2px 12px; background:transparent;")
+                                .arg(ui::colors::WARNING()));
+    rf_hint_->setVisible(false);
+    layout->addWidget(rf_hint_);
+
     auto* cards_layout = new QGridLayout;
     cards_layout->setContentsMargins(12, 8, 12, 8);
     cards_layout->setSpacing(8);
@@ -95,11 +105,11 @@ void PerformanceRiskView::build_ui() {
     sharpe_card_ = add_metric_card(cards_layout, tr("SHARPE RATIO"), tr("Risk-adjusted return (annualised)"), ui::colors::CYAN);
     sortino_card_ = add_metric_card(cards_layout, tr("SORTINO RATIO"), tr("Downside risk-adjusted return"), ui::colors::CYAN);
     beta_card_ = add_metric_card(cards_layout, tr("BETA"), tr("Sensitivity vs SPY (snapshot regression)"), ui::colors::WARNING);
-    alpha_card_ = add_metric_card(cards_layout, tr("ALPHA"), tr("Excess return vs 8% annual benchmark"), ui::colors::POSITIVE);
+    alpha_card_ = add_metric_card(cards_layout, tr("ALPHA"), tr("Jensen's alpha vs benchmark (CAPM)"), ui::colors::POSITIVE);
     vol_card_ = add_metric_card(cards_layout, tr("VOLATILITY"), tr("Annualised from daily returns"), ui::colors::AMBER);
     drawdown_card_ =
         add_metric_card(cards_layout, tr("MAX DRAWDOWN"), tr("Peak-to-trough from snapshots"), ui::colors::NEGATIVE);
-    var_card_ = add_metric_card(cards_layout, tr("VALUE AT RISK (95%)"), tr("1-day parametric VaR"), ui::colors::NEGATIVE);
+    var_card_ = add_metric_card(cards_layout, tr("VALUE AT RISK (95%)"), tr("1-day historical VaR"), ui::colors::NEGATIVE);
     cvar_card_ = add_metric_card(cards_layout, tr("CONDITIONAL VaR"), tr("Expected shortfall (95%)"), ui::colors::NEGATIVE);
 
     auto* cards_widget = new QWidget(this);
@@ -156,6 +166,25 @@ void PerformanceRiskView::set_snapshots(const QVector<portfolio::PortfolioSnapsh
     update_metrics();
 }
 
+void PerformanceRiskView::set_metrics(const portfolio::ComputedMetrics& metrics) {
+    metrics_ = metrics;
+    update_metrics();
+}
+
+void PerformanceRiskView::update_rf_hint() {
+    if (!rf_hint_)
+        return;
+    // Sharpe/Sortino use the live 10-year Treasury yield from FRED when a key is
+    // configured; otherwise they fall back to a flat 4%. Surface that so the
+    // numbers aren't silently approximate.
+    const auto key = fincept::SecureStorage::instance().retrieve("FRED_API_KEY");
+    const bool have_key = key.is_ok() && !key.value().trimmed().isEmpty();
+    rf_hint_->setVisible(!have_key);
+    if (!have_key)
+        rf_hint_->setText(tr("⚠ Using a default 4% risk-free rate for Sharpe/Sortino. "
+                             "Add a free FRED API key in Settings → API Credentials for the live Treasury yield."));
+}
+
 void PerformanceRiskView::changeEvent(QEvent* event) {
     if (event->type() == QEvent::LanguageChange)
         retranslateUi();
@@ -175,13 +204,13 @@ void PerformanceRiskView::retranslateUi() {
     if (beta_card_.title)     beta_card_.title->setText(tr("BETA"));
     if (beta_card_.desc)      beta_card_.desc->setText(tr("Sensitivity vs SPY (snapshot regression)"));
     if (alpha_card_.title)    alpha_card_.title->setText(tr("ALPHA"));
-    if (alpha_card_.desc)     alpha_card_.desc->setText(tr("Excess return vs 8% annual benchmark"));
+    if (alpha_card_.desc)     alpha_card_.desc->setText(tr("Jensen's alpha vs benchmark (CAPM)"));
     if (vol_card_.title)      vol_card_.title->setText(tr("VOLATILITY"));
     if (vol_card_.desc)       vol_card_.desc->setText(tr("Annualised from daily returns"));
     if (drawdown_card_.title) drawdown_card_.title->setText(tr("MAX DRAWDOWN"));
     if (drawdown_card_.desc)  drawdown_card_.desc->setText(tr("Peak-to-trough from snapshots"));
     if (var_card_.title)      var_card_.title->setText(tr("VALUE AT RISK (95%)"));
-    if (var_card_.desc)       var_card_.desc->setText(tr("1-day parametric VaR"));
+    if (var_card_.desc)       var_card_.desc->setText(tr("1-day historical VaR"));
     if (cvar_card_.title)     cvar_card_.title->setText(tr("CONDITIONAL VaR"));
     if (cvar_card_.desc)      cvar_card_.desc->setText(tr("Expected shortfall (95%)"));
 
@@ -257,20 +286,21 @@ void PerformanceRiskView::update_chart() {
         min_val = std::min(min_val, last_val);
         max_val = std::max(max_val, last_val);
     } else {
-        // Fallback: interpolate cost → current
-        int pts = 30;
+        // Insufficient snapshot history (backfill not yet complete): draw an
+        // honest straight segment connecting the two real values we do know —
+        // cost basis at acquisition and current market value today. No
+        // fabricated intermediate movement.
         QDateTime now = QDateTime::currentDateTime();
-        for (int i = 0; i < pts; ++i) {
-            double t = static_cast<double>(i) / (pts - 1);
-            double val = first_val + (last_val - first_val) * t;
-            val *= (1.0 + 0.005 * std::sin(i * 0.7));
-            qint64 ms = now.addDays(-(pts - 1 - i)).toMSecsSinceEpoch();
-            line->append(ms, val);
-            upper->append(ms, val);
-            lower->append(ms, first_val);
-            min_val = std::min(min_val, val);
-            max_val = std::max(max_val, val);
-        }
+        qint64 start_ms = now.addDays(-30).toMSecsSinceEpoch();
+        qint64 now_ms = now.toMSecsSinceEpoch();
+        line->append(start_ms, first_val);
+        upper->append(start_ms, first_val);
+        lower->append(start_ms, first_val);
+        line->append(now_ms, last_val);
+        upper->append(now_ms, last_val);
+        lower->append(now_ms, first_val);
+        min_val = std::min({min_val, first_val, last_val});
+        max_val = std::max({max_val, first_val, last_val});
     }
 
     bool up = last_val >= first_val;
@@ -313,153 +343,93 @@ void PerformanceRiskView::update_chart() {
 }
 
 void PerformanceRiskView::update_metrics() {
+    update_rf_hint();
     auto fmt = [](double v, int dp = 2) { return QString::number(v, 'f', dp); };
 
-    // ── Build daily return series from snapshots ───────────────────────────
-    // daily_ret[i] = (val[i] - val[i-1]) / val[i-1]
-    auto snaps = snapshots_;
-    std::sort(snaps.begin(), snaps.end(),
-              [](const auto& a, const auto& b) { return a.snapshot_date < b.snapshot_date; });
+    // All headline metrics are sourced from the service's ComputedMetrics
+    // (PortfolioService::compute_metrics), which derives them from real daily
+    // snapshots and a real OLS regression against the currency benchmark. The
+    // view no longer recomputes anything from assumed market returns. When a
+    // metric is unset (insufficient history / no benchmark alignment), the card
+    // shows "N/A" rather than a fabricated value.
+    const QString na = tr("N/A");
+    const QString dim_style =
+        QString("color:%1; font-size:18px; font-weight:700; border:none;").arg(ui::colors::TEXT_TERTIARY());
 
-    QVector<double> daily_ret;
-    for (int i = 1; i < snaps.size(); ++i) {
-        double prev = snaps[i - 1].total_value;
-        double curr = snaps[i].total_value;
-        if (prev > 1.0)
-            daily_ret.append((curr - prev) / prev * 100.0);
-    }
+    auto set_na = [&](MetricCard& card) {
+        if (!card.value)
+            return;
+        card.value->setText(na);
+        card.value->setStyleSheet(dim_style);
+    };
+    auto set_colored = [&](MetricCard& card, const QString& text, const char* color) {
+        if (!card.value)
+            return;
+        card.value->setText(text);
+        card.value->setStyleSheet(
+            QString("color:%1; font-size:18px; font-weight:700; border:none;").arg(color));
+    };
 
-    // Fall back to using holdings day-change if no snapshot history
-    if (daily_ret.size() < 3) {
-        for (const auto& h : summary_.holdings)
-            if (std::abs(h.day_change_percent) > 0.001)
-                daily_ret.append(h.day_change_percent);
-    }
-
-    int n = daily_ret.size();
-    double daily_mean = 0, daily_vol = 0;
-
-    if (n >= 2) {
-        daily_mean = std::accumulate(daily_ret.begin(), daily_ret.end(), 0.0) / n;
-        double var = 0;
-        for (double r : daily_ret)
-            var += (r - daily_mean) * (r - daily_mean);
-        daily_vol = std::sqrt(var / n);
-    }
-
-    double ann_vol = daily_vol * std::sqrt(252.0);
-    double risk_free_daily = 4.0 / 252.0; // 4% annual
-
-    // ── Sharpe ────────────────────────────────────────────────────────────────
-    if (daily_vol > 0.001) {
-        double sharpe = (daily_mean - risk_free_daily) / daily_vol * std::sqrt(252.0);
-        sharpe_card_.value->setText(fmt(sharpe));
-        const char* c = sharpe >= 1.0 ? ui::colors::POSITIVE : sharpe >= 0 ? ui::colors::WARNING : ui::colors::NEGATIVE;
-        sharpe_card_.value->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700; border:none;").arg(c));
-    }
-
-    // ── Sortino (downside deviation only) ────────────────────────────────────
-    double neg_sq = 0;
-    int neg_n = 0;
-    for (double r : daily_ret) {
-        if (r < 0) {
-            neg_sq += r * r;
-            ++neg_n;
-        }
-    }
-    if (neg_n > 0) {
-        double dd = std::sqrt(neg_sq / neg_n);
-        if (dd > 0.001) {
-            double sortino = (daily_mean - risk_free_daily) / dd * std::sqrt(252.0);
-            sortino_card_.value->setText(fmt(sortino));
-        }
-    }
-
-    // ── Beta (OLS regression of portfolio daily returns vs assumed market 0.08%/day)
-    // We don't have real SPY daily data, so we compute beta from the actual
-    // snapshot return variance relative to a 8% annual market assumption:
-    // beta ≈ cov(portfolio, market) / var(market)
-    // With market daily return assumed ~N(0.032%, 1%), we proxy:
-    // beta = daily_mean / 0.032 (mean-based slope)
-    double market_daily = 8.0 / 252.0 / 100.0 * 100.0; // 0.0317%
-    if (n >= 5 && daily_vol > 0.001) {
-        double beta = (market_daily > 0.001) ? (daily_mean / market_daily) : 1.0;
-        // Constrain to reasonable range
-        beta = std::max(-3.0, std::min(5.0, beta));
-        beta_card_.value->setText(fmt(beta));
-        const char* c = std::abs(beta - 1.0) < 0.2   ? ui::colors::POSITIVE
-                        : std::abs(beta - 1.0) < 0.5 ? ui::colors::WARNING
-                                                     : ui::colors::NEGATIVE;
-        beta_card_.value->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700; border:none;").arg(c));
-    } else if (n >= 2) {
-        // Minimal data: estimate from pnl% relative to assumed 8% market
-        double total_pnl_pct = summary_.total_unrealized_pnl_percent;
-        double beta = total_pnl_pct / 8.0;
-        beta = std::max(-3.0, std::min(5.0, beta));
-        beta_card_.value->setText(fmt(beta));
-    }
-
-    // ── Alpha (annualised excess over 8% benchmark) ───────────────────────────
-    // Alpha = annualised portfolio return - 8%
-    if (snaps.size() >= 2) {
-        double first = snaps.first().total_value;
-        double last = snaps.last().total_value;
-        int days =
-            static_cast<int>(snaps.first().snapshot_date.left(10) < snaps.last().snapshot_date.left(10)
-                                 ? QDate::fromString(snaps.first().snapshot_date.left(10), Qt::ISODate)
-                                       .daysTo(QDate::fromString(snaps.last().snapshot_date.left(10), Qt::ISODate))
-                                 : 1);
-        if (first > 1.0 && days > 0) {
-            double total_ret = (last - first) / first * 100.0;
-            double ann_ret = total_ret * 365.0 / days;
-            double alpha = ann_ret - 8.0;
-            alpha_card_.value->setText(QString("%1%2%").arg(alpha >= 0 ? "+" : "").arg(fmt(alpha, 1)));
-            const char* c = alpha >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-            alpha_card_.value->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700; border:none;").arg(c));
-        }
+    // ── Sharpe ──────────────────────────────────────────────────────────────
+    if (metrics_.sharpe) {
+        const double v = *metrics_.sharpe;
+        const char* c = v >= 1.0 ? ui::colors::POSITIVE : v >= 0 ? ui::colors::WARNING : ui::colors::NEGATIVE;
+        set_colored(sharpe_card_, fmt(v), c);
     } else {
-        double alpha = summary_.total_unrealized_pnl_percent - 8.0;
-        alpha_card_.value->setText(QString("%1%2%").arg(alpha >= 0 ? "+" : "").arg(fmt(alpha, 1)));
+        set_na(sharpe_card_);
     }
 
-    // ── Volatility ────────────────────────────────────────────────────────────
-    if (n >= 2) {
-        vol_card_.value->setText(QString("%1%").arg(fmt(ann_vol, 1)));
-    }
-
-    // ── Max Drawdown from snapshots ───────────────────────────────────────────
-    if (snaps.size() >= 2) {
-        double peak = 0, max_dd = 0;
-        for (const auto& s : snaps) {
-            peak = std::max(peak, s.total_value);
-            if (peak > 0) {
-                double dd = (peak - s.total_value) / peak * 100.0;
-                max_dd = std::max(max_dd, dd);
-            }
-        }
-        // Also check against current value
-        peak = std::max(peak, summary_.total_market_value);
-        double cur_dd = peak > 0 ? (peak - summary_.total_market_value) / peak * 100.0 : 0;
-        max_dd = std::max(max_dd, cur_dd);
-        drawdown_card_.value->setText(QString("-%1%").arg(fmt(max_dd, 1)));
+    // ── Sortino ─────────────────────────────────────────────────────────────
+    if (metrics_.sortino) {
+        const double v = *metrics_.sortino;
+        const char* c = v >= 1.0 ? ui::colors::POSITIVE : v >= 0 ? ui::colors::WARNING : ui::colors::NEGATIVE;
+        set_colored(sortino_card_, fmt(v), c);
     } else {
-        // Fallback: if current < cost basis, that is the drawdown
-        double dd = summary_.total_unrealized_pnl < 0 ? std::abs(summary_.total_unrealized_pnl_percent) : 0;
-        drawdown_card_.value->setText(QString("-%1%").arg(fmt(dd, 1)));
+        set_na(sortino_card_);
     }
 
-    // ── VaR 95% (parametric, 1-day) ───────────────────────────────────────────
-    double mv = summary_.total_market_value;
-    if (daily_vol > 0.001 && mv > 0) {
-        // Parametric: VaR = MV * (mean - 1.645 * sigma) / 100
-        double var95 = mv * std::abs(daily_mean - 1.645 * daily_vol) / 100.0;
-        var_card_.value->setText(QString("%1 %2").arg(currency_, fmt(var95)));
-
-        // CVaR ≈ E[loss | loss > VaR], for normal: CVaR = MV * (phi(1.645)/0.05) * sigma
-        // phi(1.645) = 0.1031, so CVaR ≈ 1.546 * VaR
-        double cvar95 = var95 * 1.546;
-        cvar_card_.value->setText(QString("%1 %2").arg(currency_, fmt(cvar95)));
+    // ── Beta (real OLS vs benchmark) ──────────────────────────────────────────
+    if (metrics_.beta) {
+        const double v = *metrics_.beta;
+        const char* c = std::abs(v - 1.0) < 0.2   ? ui::colors::POSITIVE
+                        : std::abs(v - 1.0) < 0.5 ? ui::colors::WARNING
+                                                  : ui::colors::NEGATIVE;
+        set_colored(beta_card_, fmt(v), c);
+    } else {
+        set_na(beta_card_);
     }
+
+    // ── Alpha (real Jensen's alpha vs benchmark) ──────────────────────────────
+    if (metrics_.alpha) {
+        const double v = *metrics_.alpha;
+        const char* c = v >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
+        set_colored(alpha_card_, QString("%1%2%").arg(v >= 0 ? "+" : "").arg(fmt(v, 1)), c);
+    } else {
+        set_na(alpha_card_);
+    }
+
+    // ── Volatility (annualised %) ─────────────────────────────────────────────
+    if (metrics_.volatility)
+        set_colored(vol_card_, QString("%1%").arg(fmt(*metrics_.volatility, 1)), ui::colors::TEXT_PRIMARY);
+    else
+        set_na(vol_card_);
+
+    // ── Max Drawdown (% , negative) ───────────────────────────────────────────
+    if (metrics_.max_drawdown)
+        set_colored(drawdown_card_, QString("%1%").arg(fmt(*metrics_.max_drawdown, 1)), ui::colors::NEGATIVE);
+    else
+        set_na(drawdown_card_);
+
+    // ── VaR / CVaR 95% (historical, in currency) ──────────────────────────────
+    if (metrics_.var_95)
+        set_colored(var_card_, QString("%1 %2").arg(currency_, fmt(*metrics_.var_95)), ui::colors::TEXT_PRIMARY);
+    else
+        set_na(var_card_);
+
+    if (metrics_.cvar_95)
+        set_colored(cvar_card_, QString("%1 %2").arg(currency_, fmt(*metrics_.cvar_95)), ui::colors::TEXT_PRIMARY);
+    else
+        set_na(cvar_card_);
 }
 
 } // namespace fincept::screens

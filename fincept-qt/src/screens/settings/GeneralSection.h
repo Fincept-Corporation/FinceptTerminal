@@ -25,6 +25,7 @@ class GeneralSection : public QWidget {
 
     QComboBox* on_close_combo_ = nullptr;
     QComboBox* language_combo_ = nullptr;
+    QComboBox* currency_combo_ = nullptr;
 };
 
 } // namespace fincept::screens

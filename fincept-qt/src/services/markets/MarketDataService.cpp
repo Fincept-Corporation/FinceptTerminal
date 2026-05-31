@@ -4,6 +4,7 @@
 #include "python/PythonRunner.h"
 #include "python/PythonWorker.h"
 #include "storage/cache/CacheManager.h"
+#include "storage/repositories/SettingsRepository.h"
 
 #    include "datahub/DataHub.h"
 #    include "datahub/DataHubMetaTypes.h"
@@ -789,6 +790,126 @@ void MarketDataService::fetch_sparklines(const QStringList& symbols, SparklineCa
         }
         cb(true, out);
     });
+}
+
+// ── Display-name resolution ─────────────────────────────────────────────────
+
+void MarketDataService::load_name_cache() {
+    if (name_cache_loaded_)
+        return;
+    name_cache_loaded_ = true;
+
+    auto load = [](const char* key, QHash<QString, QString>& cache) {
+        auto res = SettingsRepository::instance().get(key);
+        if (!res.is_ok() || res.value().isEmpty())
+            return;
+        auto doc = QJsonDocument::fromJson(res.value().toUtf8());
+        if (!doc.isObject())
+            return;
+        const QJsonObject obj = doc.object();
+        for (auto it = obj.begin(); it != obj.end(); ++it)
+            cache.insert(it.key(), it.value().toString());
+    };
+    load("market_symbol_names", name_cache_);
+    load("market_symbol_currencies", currency_cache_);
+}
+
+void MarketDataService::persist_name_cache() {
+    auto dump = [](const QHash<QString, QString>& cache) {
+        QJsonObject obj;
+        for (auto it = cache.constBegin(); it != cache.constEnd(); ++it)
+            obj.insert(it.key(), it.value());
+        return QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+    };
+    auto& settings = SettingsRepository::instance();
+    settings.set("market_symbol_names", dump(name_cache_), "market_data");
+    settings.set("market_symbol_currencies", dump(currency_cache_), "market_data");
+}
+
+// ISO 4217 code → display symbol. Falls back to "<CODE> " so an unmapped but
+// valid currency still reads sensibly (e.g. "SEK 142.50").
+QString MarketDataService::currency_prefix(const QString& symbol) {
+    load_name_cache();
+    const QString code = currency_cache_.value(symbol);
+    if (code.isEmpty())
+        return {};
+
+    static const QHash<QString, QString> kSymbols = {
+        {"USD", "$"},   {"EUR", "€"},   {"GBP", "£"},    {"JPY", "¥"},
+        {"CNY", "CN¥"}, {"INR", "₹"},   {"HKD", "HK$"},  {"AUD", "A$"},
+        {"CAD", "C$"},  {"NZD", "NZ$"}, {"SGD", "S$"},   {"KRW", "₩"},
+        {"BRL", "R$"},  {"ZAR", "R"},   {"CHF", "CHF "}, {"RUB", "₽"},
+        {"TWD", "NT$"}, {"THB", "฿"},   {"IDR", "Rp"},   {"MYR", "RM"},
+        {"AED", "AED "},
+    };
+    auto it = kSymbols.find(code.toUpper());
+    return it != kSymbols.end() ? it.value() : (code + QLatin1Char(' '));
+}
+
+void MarketDataService::resolve_names(const QStringList& symbols, NamesCallback cb) {
+    load_name_cache();
+
+    // Build the cached subset for the requested symbols only.
+    auto subset_for = [this](const QStringList& syms) {
+        QHash<QString, QString> m;
+        for (const auto& s : syms)
+            if (name_cache_.contains(s))
+                m.insert(s, name_cache_.value(s));
+        return m;
+    };
+
+    // Deliver what we already know straight away (may be empty on cold start).
+    if (cb)
+        cb(subset_for(symbols));
+
+    // Collect the symbols we still need a name for.
+    QStringList missing;
+    for (const auto& s : symbols)
+        if (!s.isEmpty() && !name_cache_.contains(s))
+            missing.append(s);
+    if (missing.isEmpty())
+        return;
+
+    QStringList args;
+    args << "quote_names" << missing;
+
+    QPointer<MarketDataService> self = this;
+    python::PythonRunner::instance().run(
+        "yfinance_data.py", args,
+        [self, symbols, cb, subset_for](python::PythonResult result) {
+            if (!self)
+                return;
+            if (result.success && !result.output.trimmed().isEmpty()) {
+                auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8());
+                if (doc.isObject()) {
+                    const QJsonObject root  = doc.object();
+                    const QJsonObject names = root.value("names").toObject();
+                    const QJsonObject currs = root.value("currencies").toObject();
+                    bool changed = false;
+                    for (auto it = names.begin(); it != names.end(); ++it) {
+                        const QString name = it.value().toString().trimmed();
+                        if (!name.isEmpty()) {
+                            self->name_cache_.insert(it.key(), name);
+                            changed = true;
+                        }
+                    }
+                    for (auto it = currs.begin(); it != currs.end(); ++it) {
+                        const QString code = it.value().toString().trimmed();
+                        if (!code.isEmpty()) {
+                            self->currency_cache_.insert(it.key(), code);
+                            changed = true;
+                        }
+                    }
+                    if (changed)
+                        self->persist_name_cache();
+                }
+            } else if (!result.success) {
+                LOG_WARN("MarketData", "quote_names failed: " + result.error.left(200));
+            }
+            // Re-deliver with whatever resolved (cached subset now richer).
+            if (cb)
+                cb(subset_for(symbols));
+        });
 }
 
 } // namespace fincept::services

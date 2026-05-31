@@ -1,8 +1,9 @@
 // src/ui/widgets/algo/ConditionSection.cpp
 #include "ui/widgets/algo/ConditionSection.h"
 
+#include <QHBoxLayout>
 #include <QLabel>
-#include <QVBoxLayout>
+#include <QStyle>
 
 namespace fincept::ui::algo {
 
@@ -15,108 +16,169 @@ ConditionSection::ConditionSection(Type type, QWidget* parent)
     main_layout->setContentsMargins(0, 0, 0, 0);
     main_layout->setSpacing(4);
 
-    // Section header
-    auto* header = new QLabel(
+    // ── Header: title + section AND/OR toggle ───────────────────────────────
+    auto* header = new QHBoxLayout();
+    header->setSpacing(6);
+    auto* title = new QLabel(
         type == Type::Entry ? tr("ENTRY CONDITIONS") : tr("EXIT CONDITIONS"), this);
-    header->setObjectName(type == Type::Entry ? QStringLiteral("condSectionHeaderEntry")
-                                               : QStringLiteral("condSectionHeaderExit"));
-    main_layout->addWidget(header);
+    title->setObjectName(type == Type::Entry ? QStringLiteral("condSectionHeaderEntry")
+                                             : QStringLiteral("condSectionHeaderExit"));
+    header->addWidget(title);
+    header->addStretch();
 
-    // Condition blocks container
-    blocks_layout_ = new QVBoxLayout();
-    blocks_layout_->setSpacing(0);
-    blocks_layout_->setContentsMargins(0, 0, 0, 0);
-    main_layout->addLayout(blocks_layout_);
+    auto* match = new QLabel(tr("Match:"), this);
+    match->setObjectName(QStringLiteral("condSectionMatchLabel"));
+    header->addWidget(match);
+    and_btn_ = new QPushButton(tr("ALL (AND)"), this);
+    and_btn_->setObjectName(QStringLiteral("logicBtnAnd"));
+    and_btn_->setCheckable(true);
+    and_btn_->setFixedHeight(22);
+    or_btn_ = new QPushButton(tr("ANY (OR)"), this);
+    or_btn_->setObjectName(QStringLiteral("logicBtnOr"));
+    or_btn_->setCheckable(true);
+    or_btn_->setFixedHeight(22);
+    header->addWidget(and_btn_);
+    header->addWidget(or_btn_);
+    main_layout->addLayout(header);
 
-    // Add button
-    add_btn_ = new QPushButton(tr("+ Add Condition"), this);
-    add_btn_->setObjectName(QStringLiteral("condSectionAddBtn"));
-    connect(add_btn_, &QPushButton::clicked, this, &ConditionSection::add_condition);
-    main_layout->addWidget(add_btn_);
+    // ── Children ────────────────────────────────────────────────────────────
+    nodes_layout_ = new QVBoxLayout();
+    nodes_layout_->setSpacing(2);
+    nodes_layout_->setContentsMargins(0, 0, 0, 0);
+    main_layout->addLayout(nodes_layout_);
+
+    // ── Add buttons ─────────────────────────────────────────────────────────
+    auto* add_row = new QHBoxLayout();
+    add_row->setSpacing(6);
+    auto* add_cond = new QPushButton(tr("+ Add Condition"), this);
+    add_cond->setObjectName(QStringLiteral("condSectionAddBtn"));
+    auto* add_grp = new QPushButton(tr("+ Add Group"), this);
+    add_grp->setObjectName(QStringLiteral("condSectionAddGroupBtn"));
+    add_row->addWidget(add_cond);
+    add_row->addWidget(add_grp);
+    add_row->addStretch();
+    main_layout->addLayout(add_row);
 
     main_layout->addStretch();
 
+    connect(and_btn_, &QPushButton::clicked, this, [this]() { set_logic(QStringLiteral("AND")); emit conditions_changed(); });
+    connect(or_btn_, &QPushButton::clicked, this, [this]() { set_logic(QStringLiteral("OR")); emit conditions_changed(); });
+    connect(add_cond, &QPushButton::clicked, this, &ConditionSection::add_condition);
+    connect(add_grp, &QPushButton::clicked, this, &ConditionSection::add_group);
+
+    update_logic_buttons();
     add_condition();
 }
 
-void ConditionSection::add_condition() {
-    auto* block = new ConditionBlock(type_ == Type::Entry, this);
-    connect(block, &ConditionBlock::remove_requested, this, [this, block]() {
-        on_block_removed(block);
-    });
-    connect(block, &ConditionBlock::changed, this, &ConditionSection::conditions_changed);
+void ConditionSection::set_logic(const QString& logic) {
+    logic_ = (logic.toUpper() == "OR") ? QStringLiteral("OR") : QStringLiteral("AND");
+    update_logic_buttons();
+    rebuild_layout();
+}
 
-    blocks_.append(block);
+void ConditionSection::update_logic_buttons() {
+    const bool is_and = (logic_ == "AND");
+    and_btn_->setChecked(is_and);
+    or_btn_->setChecked(!is_and);
+    for (QPushButton* b : {and_btn_, or_btn_}) {
+        b->setProperty("active", b->isChecked());
+        b->style()->unpolish(b);
+        b->style()->polish(b);
+    }
+}
+
+void ConditionSection::attach_node(QWidget* node) {
+    if (auto* c = qobject_cast<ConditionBlock*>(node)) {
+        connect(c, &ConditionBlock::remove_requested, this, [this, node]() { remove_node(node); });
+        connect(c, &ConditionBlock::changed, this, &ConditionSection::conditions_changed);
+    } else if (auto* g = qobject_cast<GroupBlock*>(node)) {
+        connect(g, &GroupBlock::remove_requested, this, [this, node]() { remove_node(node); });
+        connect(g, &GroupBlock::changed, this, &ConditionSection::conditions_changed);
+    }
+    nodes_.append(node);
+}
+
+void ConditionSection::add_condition() {
+    attach_node(new ConditionBlock(type_ == Type::Entry, this));
     rebuild_layout();
     emit conditions_changed();
 }
 
-void ConditionSection::on_block_removed(ConditionBlock* block) {
-    int idx = blocks_.indexOf(block);
-    if (idx < 0) return;
-    if (blocks_.size() <= 1) return;
+void ConditionSection::add_group() {
+    attach_node(new GroupBlock(type_ == Type::Entry, this));
+    rebuild_layout();
+    emit conditions_changed();
+}
 
-    blocks_.removeAt(idx);
-    block->deleteLater();
+void ConditionSection::remove_node(QWidget* node) {
+    const int idx = nodes_.indexOf(node);
+    if (idx < 0) return;
+    if (nodes_.size() <= 1) return; // keep at least one row
+    nodes_.removeAt(idx);
+    node->deleteLater();
     rebuild_layout();
     emit conditions_changed();
 }
 
 void ConditionSection::rebuild_layout() {
-    // Clear layout
-    while (blocks_layout_->count() > 0) {
-        auto* item = blocks_layout_->takeAt(0);
-        if (item->widget() && qobject_cast<LogicConnectorWidget*>(item->widget())) {
+    while (nodes_layout_->count() > 0) {
+        QLayoutItem* item = nodes_layout_->takeAt(0);
+        if (item->widget() && item->widget()->objectName() == "sectionConnectorLabel")
             item->widget()->deleteLater();
-        }
         delete item;
     }
-    connectors_.clear();
-
-    for (int i = 0; i < blocks_.size(); ++i) {
+    const QString conn = (logic_ == "OR") ? tr("OR") : tr("AND");
+    for (int i = 0; i < nodes_.size(); ++i) {
         if (i > 0) {
-            auto* connector = new LogicConnectorWidget(this);
-            connectors_.append(connector);
-            connect(connector, &LogicConnectorWidget::logic_changed,
-                    this, &ConditionSection::conditions_changed);
-            blocks_layout_->addWidget(connector);
+            auto* lbl = new QLabel(conn, this);
+            lbl->setObjectName(QStringLiteral("sectionConnectorLabel"));
+            nodes_layout_->addWidget(lbl);
         }
-        blocks_layout_->addWidget(blocks_[i]);
+        nodes_layout_->addWidget(nodes_[i]);
     }
 }
 
 QJsonArray ConditionSection::conditions() const {
     QJsonArray arr;
-    for (const auto* block : blocks_)
-        arr.append(block->to_json());
+    for (QWidget* n : nodes_) {
+        if (auto* c = qobject_cast<ConditionBlock*>(n))
+            arr.append(c->to_json());
+        else if (auto* g = qobject_cast<GroupBlock*>(n))
+            arr.append(g->to_json());
+    }
     return arr;
 }
 
-QString ConditionSection::combined_logic() const {
-    if (connectors_.isEmpty()) return QStringLiteral("AND");
-    return connectors_.first()->logic();
-}
+QString ConditionSection::combined_logic() const { return logic_; }
 
 void ConditionSection::set_conditions(const QJsonArray& conditions, const QString& logic) {
-    clear_all();
+    set_logic(logic);
+
+    for (QWidget* n : nodes_)
+        n->deleteLater();
+    nodes_.clear();
+
     for (const auto& val : conditions) {
-        auto* block = new ConditionBlock(type_ == Type::Entry, this);
-        block->from_json(val.toObject());
-        connect(block, &ConditionBlock::remove_requested, this, [this, block]() {
-            on_block_removed(block);
-        });
-        connect(block, &ConditionBlock::changed, this, &ConditionSection::conditions_changed);
-        blocks_.append(block);
+        const QJsonObject node = val.toObject();
+        if (node.contains("children")) {
+            auto* g = new GroupBlock(type_ == Type::Entry, this);
+            attach_node(g);
+            g->from_json(node);
+        } else {
+            auto* c = new ConditionBlock(type_ == Type::Entry, this);
+            attach_node(c);
+            c->from_json(node);
+        }
     }
+    if (nodes_.isEmpty())
+        attach_node(new ConditionBlock(type_ == Type::Entry, this));
     rebuild_layout();
-    for (auto* c : connectors_)
-        c->set_logic(logic);
 }
 
 void ConditionSection::clear_all() {
-    for (auto* b : blocks_)
-        b->deleteLater();
-    blocks_.clear();
+    for (QWidget* n : nodes_)
+        n->deleteLater();
+    nodes_.clear();
     rebuild_layout();
 }
 

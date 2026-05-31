@@ -13,6 +13,7 @@
 #include "trading/brokers/fyers/FyersBroker.h"
 #include "trading/brokers/groww/GrowwBroker.h"
 #include "trading/brokers/ibkr/IBKRBroker.h"
+#include "trading/brokers/icicidirect/IciciDirectBroker.h"
 #include "trading/brokers/metaapi/MetaApiBroker.h"
 #include "trading/brokers/iifl/IIFLBroker.h"
 #include "trading/brokers/kotak/KotakBroker.h"
@@ -130,6 +131,7 @@ void BrokerRegistry::register_all() {
     brokers_["flattrade"] = std::make_unique<FlattradeBroker>();
     brokers_["paytm"] = std::make_unique<PaytmBroker>();
     brokers_["tradejini"] = std::make_unique<TradejiniBroker>();
+    brokers_["icicidirect"] = std::make_unique<IciciDirectBroker>();
 
     // US brokers
     brokers_["alpaca"] = std::make_unique<AlpacaBroker>();

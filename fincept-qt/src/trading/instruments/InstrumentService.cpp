@@ -3,9 +3,13 @@
 #include "core/logging/Logger.h"
 #include "storage/sqlite/Database.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/instruments/DhanInstrumentParser.h"
 #include "trading/instruments/FyersInstrumentParser.h"
 #include "trading/instruments/GrowwInstrumentParser.h"
+#include "trading/instruments/IciciInstrumentParser.h"
+#include "trading/instruments/InstrumentNormalize.h"
 #include "trading/instruments/InstrumentRepository.h"
+#include "trading/instruments/InstrumentSources.h"
 #include "trading/instruments/SymbolResolver.h"
 #include "trading/instruments/ZerodhaInstrumentParser.h"
 
@@ -169,12 +173,13 @@ static QVector<Instrument> parse_angel_master_json(const QByteArray& json_data) 
 
         if (raw_type == "AMXIDX") {
             inst.exchange = inst.brexchange + "_INDEX";
-            inst.symbol = normalise_index_symbol(inst.name.isEmpty() ? inst.brsymbol : inst.name);
+            // Final pass through the shared normalizer so the index name matches every broker.
+            inst.symbol = norm::normalise_index_symbol(normalise_index_symbol(inst.name.isEmpty() ? inst.brsymbol : inst.name));
         } else if (raw_type.startsWith("FUT")) {
             inst.symbol = inst.name.toUpper() + exp_nd + "FUT";
         } else if (raw_type.startsWith("OPT")) {
             QString suffix = option_suffix(inst.brsymbol);
-            QString strike_str = QString::number(static_cast<int>(inst.strike));
+            QString strike_str = norm::format_strike(inst.strike);
             inst.symbol = inst.name.toUpper() + exp_nd + strike_str + suffix;
         } else {
             inst.symbol = normalise_spot_symbol(inst.brsymbol);
@@ -212,6 +217,14 @@ void ensure_builtin_sources_registered() {
         r.register_source({QStringLiteral("fyers"),
                            [](const BrokerCredentials&) { return InstrumentService::download_fyers_json(); },
                            [](const QByteArray& p) { return FyersInstrumentParser::parse(p); }});
+        r.register_source({QStringLiteral("dhan"),
+                           [](const BrokerCredentials&) { return InstrumentService::download_dhan_csv(); },
+                           [](const QByteArray& p) { return DhanInstrumentParser::parse(p); }});
+        r.register_source({QStringLiteral("icicidirect"),
+                           [](const BrokerCredentials&) { return InstrumentService::download_icici_csv(); },
+                           [](const QByteArray& p) { return IciciInstrumentParser::parse(p); }});
+        // The 11 additional Indian brokers (unified cross-broker search).
+        register_extra_instrument_sources();
         return true;
     }();
     Q_UNUSED(registered);
@@ -228,7 +241,32 @@ InstrumentService& InstrumentService::instance() {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 void InstrumentService::refresh(const QString& broker_id, const BrokerCredentials& creds, int max_age_hours) {
-    Q_UNUSED(max_age_hours)
+    // Age-based freshness gate. max_age_hours <= 0 disables it (always download).
+    // Timestamp source: MAX(updated_at) on the instruments table (set on every
+    // full refresh via DELETE+INSERT).
+    if (max_age_hours > 0) {
+        const QDateTime last = InstrumentRepository::instance().last_updated(broker_id);
+        if (last.isValid()) {
+            const qint64 age_hours = last.secsTo(QDateTime::currentDateTimeUtc()) / 3600;
+            if (age_hours >= 0 && age_hours < max_age_hours) {
+                LOG_INFO("InstrumentService",
+                         QString("%1 instruments are fresh (%2h old < %3h) — skipping download")
+                             .arg(broker_id)
+                             .arg(age_hours)
+                             .arg(max_age_hours));
+                // Instruments on disk are fresh but may not be in the in-memory
+                // cache yet (e.g. first refresh() of a relaunch within
+                // max_age_hours). Without this, is_loaded() stays false forever
+                // and every lookup fails. load_from_db() uses the shared
+                // main-thread QSqlDatabase connection; refresh() is only ever
+                // called from the UI/main thread (ChainSubTab + EquityTradingScreen
+                // callbacks), so this is safe here.
+                if (!is_loaded(broker_id))
+                    load_from_db(broker_id);
+                return;
+            }
+        }
+    }
     // For AngelOne we need NSE equities to be present — check specifically for NSE count.
     // A partial cache (e.g. only NFO/MCX) means a previous download was incomplete.
     {
@@ -327,7 +365,7 @@ void InstrumentService::load_from_db_async(const QString& broker_id,
                 QSqlQuery q(db);
                 q.prepare("SELECT instrument_token, exchange_token, symbol, brsymbol, name, "
                           "exchange, brexchange, expiry, strike, lot_size, instrument_type, "
-                          "tick_size, broker_id "
+                          "tick_size, broker_id, broker_token "
                           "FROM instruments WHERE broker_id = ?");
                 q.addBindValue(broker_id);
                 if (q.exec()) {
@@ -370,6 +408,43 @@ void InstrumentService::load_from_db_async(const QString& broker_id,
     });
 }
 
+void InstrumentService::load_from_db_worker(const QString& broker_id) {
+    // Synchronous DB load safe to call from a QtConcurrent worker thread. Opens a
+    // private named connection (never touches the shared main-thread connection)
+    // then build_cache (mutex-guarded). No-op if already loaded.
+    if (is_loaded(broker_id))
+        return;
+    const QString db_path = fincept::Database::instance().path();
+    const QString conn_name =
+        "inst_sync_" + broker_id + "_" + QUuid::createUuid().toString(QUuid::WithoutBraces);
+    QVector<Instrument> all;
+    {
+        QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", conn_name);
+        db.setDatabaseName(db_path);
+        if (db.open()) {
+            QSqlQuery q(db);
+            q.prepare("SELECT instrument_token, exchange_token, symbol, brsymbol, name, "
+                      "exchange, brexchange, expiry, strike, lot_size, instrument_type, "
+                      "tick_size, broker_id FROM instruments WHERE broker_id = ?");
+            q.addBindValue(broker_id);
+            if (q.exec()) {
+                while (q.next())
+                    all.append(InstrumentRepository::map_row_static(q));
+            } else {
+                LOG_ERROR("InstrumentService", QString("load_from_db_worker: query failed for %1: %2")
+                                                   .arg(broker_id, q.lastError().text()));
+            }
+            db.close();
+        } else {
+            LOG_ERROR("InstrumentService", QString("load_from_db_worker: failed to open DB for %1: %2")
+                                               .arg(broker_id, db.lastError().text()));
+        }
+    }
+    QSqlDatabase::removeDatabase(conn_name);
+    if (!all.isEmpty())
+        build_cache(broker_id, all);
+}
+
 // ── Lookups ───────────────────────────────────────────────────────────────────
 
 std::optional<qint64> InstrumentService::instrument_token(const QString& symbol, const QString& exchange,
@@ -378,7 +453,9 @@ std::optional<qint64> InstrumentService::instrument_token(const QString& symbol,
     auto it = caches_.find(broker_id);
     if (it == caches_.end())
         return std::nullopt;
-    auto jt = it->by_symbol.find({symbol, exchange});
+    // Cache keys are stored upper-case; normalise so callers passing e.g.
+    // "reliance"/"nse" still match.
+    auto jt = it->by_symbol.find({symbol.toUpper(), exchange.toUpper()});
     if (jt == it->by_symbol.end())
         return std::nullopt;
     return jt->instrument_token;
@@ -390,7 +467,9 @@ std::optional<QString> InstrumentService::to_brsymbol(const QString& symbol, con
     auto it = caches_.find(broker_id);
     if (it == caches_.end())
         return std::nullopt;
-    auto jt = it->by_symbol.find({symbol, exchange});
+    // Cache keys are stored upper-case; normalise so callers passing e.g.
+    // "reliance"/"nse" still match.
+    auto jt = it->by_symbol.find({symbol.toUpper(), exchange.toUpper()});
     if (jt == it->by_symbol.end())
         return std::nullopt;
     return jt->brsymbol;
@@ -402,7 +481,7 @@ std::optional<QString> InstrumentService::from_brsymbol(const QString& brsymbol,
     auto it = caches_.find(broker_id);
     if (it == caches_.end())
         return std::nullopt;
-    auto jt = it->by_brsymbol.find({brsymbol, brexchange});
+    auto jt = it->by_brsymbol.find({brsymbol.toUpper(), brexchange.toUpper()});
     if (jt == it->by_brsymbol.end())
         return std::nullopt;
     return jt->symbol;
@@ -414,7 +493,9 @@ std::optional<Instrument> InstrumentService::find(const QString& symbol, const Q
     auto it = caches_.find(broker_id);
     if (it == caches_.end())
         return std::nullopt;
-    auto jt = it->by_symbol.find({symbol, exchange});
+    // Cache keys are stored upper-case; normalise so callers passing e.g.
+    // "reliance"/"nse" still match.
+    auto jt = it->by_symbol.find({symbol.toUpper(), exchange.toUpper()});
     if (jt == it->by_symbol.end())
         return std::nullopt;
     return *jt;
@@ -435,6 +516,13 @@ QVector<Instrument> InstrumentService::search(const QString& query, const QStrin
                                               int limit) const {
     // Delegate to DB for search (cache doesn't hold a text index)
     return InstrumentRepository::instance().search(query, exchange, broker_id, limit);
+}
+
+QVector<Instrument> InstrumentService::search_all(const QString& query, const QString& exchange,
+                                                  const QStringList& broker_ids, int limit) const {
+    // Delegate to DB — the repository handles the broker_id IN(...) scoping and
+    // active-broker-first ordering.
+    return InstrumentRepository::instance().search_all(query, exchange, broker_ids, limit);
 }
 
 // ── F&O / Options chain helpers ─────────────────────────────────────────────
@@ -761,6 +849,104 @@ QByteArray InstrumentService::download_groww_csv() {
     QByteArray data = reply->readAll();
     drain();
     LOG_INFO("InstrumentService", QString("Downloaded Groww instrument CSV: %1 bytes").arg(data.size()));
+    return data;
+}
+
+QByteArray InstrumentService::download_dhan_csv() {
+    // Public, unauthenticated scrip master (~27MB, 16-column CSV, no auth needed).
+    // Own QNAM (not BrokerHttp) so the long download doesn't starve concurrent
+    // quote/order calls — same rationale as download_groww_csv.
+    static const QString kUrl = "https://images.dhan.co/api-data/api-scrip-master.csv";
+
+    auto* nam = new QNetworkAccessManager;
+    QNetworkRequest req{QUrl(kUrl)};
+    req.setRawHeader("Accept", "text/csv");
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+
+    QNetworkReply* reply = nam->get(req);
+
+    QEventLoop loop;
+    QTimer timer;
+    timer.setSingleShot(true);
+    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+    timer.start(60000); // 60s — ~27MB file on slow connection
+    loop.exec();
+
+    auto drain = [&]() {
+        reply->deleteLater();
+        nam->deleteLater();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    };
+
+    if (!timer.isActive()) {
+        reply->abort();
+        LOG_ERROR("InstrumentService", "Dhan scrip master download timed out");
+        drain();
+        return {};
+    }
+    timer.stop();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        LOG_ERROR("InstrumentService", "Failed to download Dhan scrip master: " + reply->errorString());
+        drain();
+        return {};
+    }
+
+    QByteArray data = reply->readAll();
+    drain();
+    LOG_INFO("InstrumentService", QString("Downloaded Dhan scrip master: %1 bytes").arg(data.size()));
+    return data;
+}
+
+QByteArray InstrumentService::download_icici_csv() {
+    // Public, unauthenticated security master (~4MB plain CSV, 13 columns: equity
+    // + F&O + commodity across NSE/BSE/NFO/BFO/MCX). Deliberately the unzipped
+    // StockScriptNew.csv rather than SecurityMaster.zip so we need no ZIP decoder
+    // (Qt's QZipReader is a private-header dependency, gated on Qt6::GuiPrivate).
+    // Own QNAM (not BrokerHttp) for the same reason as download_dhan_csv: a long
+    // download must not starve concurrent quote/order calls.
+    static const QString kUrl =
+        "https://traderweb.icicidirect.com/Content/File/txtFile/ScripFile/StockScriptNew.csv";
+
+    auto* nam = new QNetworkAccessManager;
+    QNetworkRequest req{QUrl(kUrl)};
+    req.setRawHeader("Accept", "text/csv");
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+
+    QNetworkReply* reply = nam->get(req);
+
+    QEventLoop loop;
+    QTimer timer;
+    timer.setSingleShot(true);
+    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+    timer.start(60000); // 60s — ~4MB file on slow connection
+    loop.exec();
+
+    auto drain = [&]() {
+        reply->deleteLater();
+        nam->deleteLater();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    };
+
+    if (!timer.isActive()) {
+        reply->abort();
+        LOG_ERROR("InstrumentService", "ICICI security master download timed out");
+        drain();
+        return {};
+    }
+    timer.stop();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        LOG_ERROR("InstrumentService", "Failed to download ICICI security master: " + reply->errorString());
+        drain();
+        return {};
+    }
+
+    QByteArray data = reply->readAll();
+    drain();
+    LOG_INFO("InstrumentService", QString("Downloaded ICICI security master: %1 bytes").arg(data.size()));
     return data;
 }
 

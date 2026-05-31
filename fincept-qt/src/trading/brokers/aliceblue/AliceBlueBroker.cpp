@@ -2,12 +2,14 @@
 
 #include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/instruments/InstrumentService.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTimeZone>
 
 namespace fincept::trading {
 
@@ -496,28 +498,42 @@ ApiResponse<QVector<BrokerCandle>> AliceBlueBroker::get_history(const BrokerCred
     int64_t ts = now_ts();
     auto hdrs = auth_headers(creds);
 
-    // BSE historical data not supported by AliceBlue
+    // Parse "EXCHANGE:SYMBOL[:TOKEN]". Exchange defaults to NSE when omitted; an
+    // explicit third part is taken as the numeric instrument token.
     QString exchange = "NSE";
     QString trading_symbol = symbol;
-    int colon = symbol.indexOf(':');
-    if (colon != -1) {
-        exchange = symbol.left(colon);
-        trading_symbol = symbol.mid(colon + 1);
-    }
-    if (exchange == "BSE" || exchange == "BCD")
-        return {false, std::nullopt, "AliceBlue does not support BSE historical data", ts};
-
-    // instrument_token should be passed in from the caller via symbol "NSE:RELIANCE:3045"
-    // For now accept "EXCHANGE:SYMBOL:TOKEN" format if colon count == 2
     QString instrument_token;
-    QStringList parts = symbol.split(':');
-    if (parts.size() == 3) {
+    const QStringList parts = symbol.split(':');
+    if (parts.size() == 1) {
+        trading_symbol = parts[0];
+    } else if (parts.size() == 2) {
         exchange = parts[0];
         trading_symbol = parts[1];
-        instrument_token = parts[2];
+    } else if (parts.size() >= 3) {
+        exchange = parts[0];
+        trading_symbol = parts[1];
+        instrument_token = parts[2]; // explicit token overrides lookup
+    }
+
+    // AliceBlue's chart endpoint serves NSE/NFO/CDS/MCX only. BSE, BCD and BFO
+    // candle data are "added later" per the official ANT docs — reject early with
+    // a clear message rather than letting the server return stat:"Not_Ok".
+    if (exchange != "NSE" && exchange != "NFO" && exchange != "CDS" && exchange != "MCX")
+        return {false, std::nullopt,
+                "AliceBlue historical data is available only for NSE/NFO/CDS/MCX (got " + exchange + ")", ts};
+
+    // Resolve the numeric instrument token from InstrumentService when the caller
+    // didn't pass an explicit "EXCHANGE:SYMBOL:TOKEN" — parity with Zerodha so a
+    // plain "NSE:RELIANCE" works once instruments are loaded.
+    if (instrument_token.isEmpty()) {
+        auto tok = InstrumentService::instance().instrument_token(trading_symbol, exchange, creds.broker_id);
+        if (tok.has_value() && tok.value() > 0)
+            instrument_token = QString::number(static_cast<qlonglong>(tok.value()));
     }
     if (instrument_token.isEmpty())
-        return {false, std::nullopt, "AliceBlue requires instrument token for historical data", ts};
+        return {false, std::nullopt,
+                "AliceBlue get_history: instrument token not found for " + symbol +
+                    " (load instruments first, or pass EXCHANGE:SYMBOL:TOKEN)", ts};
 
     // Convert YYYY-MM-DD to Unix milliseconds (IST 09:15 start, 23:59 end)
     auto to_epoch_ms = [](const QString& date_str, bool is_end) -> QString {
@@ -528,9 +544,8 @@ ApiResponse<QVector<BrokerCandle>> AliceBlueBroker::get_history(const BrokerCred
             dt.setTime(QTime(23, 59, 59));
         else
             dt.setTime(QTime(9, 15, 0));
-        // IST = UTC+5:30 → subtract 5h30m to get UTC, then ms
-        qint64 epoch_ms = dt.toMSecsSinceEpoch() - (5 * 3600 + 30 * 60) * 1000LL;
-        return QString::number(epoch_ms);
+        dt.setTimeZone(QTimeZone(19800));  // interpret wall-clock as IST (+5:30)
+        return QString::number(dt.toMSecsSinceEpoch());
     };
 
     QString res = ab_resolution(resolution);
@@ -564,7 +579,9 @@ ApiResponse<QVector<BrokerCandle>> AliceBlueBroker::get_history(const BrokerCred
         QJsonObject c = item.toObject();
         BrokerCandle candle;
         // Response fields: time (YYYY-MM-DD HH:MM:SS), open, high, low, close, volume
-        candle.timestamp = QDateTime::fromString(c["time"].toString(), "yyyy-MM-dd HH:mm:ss").toMSecsSinceEpoch();
+        QDateTime dt = QDateTime::fromString(c["time"].toString(), "yyyy-MM-dd HH:mm:ss");
+        dt.setTimeZone(QTimeZone(19800));  // interpret wall-clock as IST (+5:30)
+        candle.timestamp = dt.toMSecsSinceEpoch();
         candle.open = c["open"].toDouble();
         candle.high = c["high"].toDouble();
         candle.low = c["low"].toDouble();

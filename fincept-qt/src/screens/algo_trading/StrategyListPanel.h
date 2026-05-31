@@ -12,17 +12,26 @@
 
 namespace fincept::screens {
 
-/// Strategy list — compact table with pagination, loads from registry_index.json in <50ms.
+/// Strategy list — compact paginated table of DSL strategies loaded from the
+/// algo_strategies DB table (curated library + user-created). Per-row EDIT opens
+/// the Builder pre-filled; DEPLOY and DELETE act on the strategy.
 class StrategyListPanel : public QWidget {
     Q_OBJECT
   public:
     explicit StrategyListPanel(QWidget* parent = nullptr);
+
+  signals:
+    void edit_requested(fincept::services::algo::AlgoStrategy strategy);
+    void backtest_requested(fincept::services::algo::AlgoStrategy strategy, QString symbol,
+                            QString start_date, QString end_date);
 
   private slots:
     void on_strategies_loaded(QVector<fincept::services::algo::AlgoStrategy> strategies);
     void on_sort_changed(int index);
     void on_error(const QString& context, const QString& msg);
     void on_filter_changed(const QString& text);
+    void on_edit_clicked(int row);
+    void on_backtest_clicked(int row);
     void on_deploy_clicked(int row);
     void on_delete_clicked(int row);
     void go_to_page(int page);

@@ -742,7 +742,10 @@ ApiResponse<QVector<BrokerCandle>> KotakBroker::get_history(const BrokerCredenti
                                                             const QString& /*from_date*/, const QString& /*to_date*/) {
     int64_t ts = now_ts();
     LOG_WARN(TAG, "get_history called — Kotak Neo does not support historical data");
-    return {true, QVector<BrokerCandle>{}, "", ts};
+    // Kotak Neo exposes no historical/candle REST endpoint (confirmed by Kotak's
+    // own support docs and the official Neo SDK). Return empty-but-successful with
+    // an explanatory message so charts render a graceful "no data" state.
+    return {true, QVector<BrokerCandle>{}, "Kotak Neo does not provide a historical data API", ts};
 }
 
 // ============================================================================

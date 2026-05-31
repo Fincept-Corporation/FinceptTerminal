@@ -9,6 +9,7 @@
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
 
+#include "core/currency/Currency.h"
 #include "core/logging/Logger.h"
 #include "services/ai_quant_lab/AIQuantLabService.h"
 #include "services/file_manager/FileManagerService.h"
@@ -81,8 +82,16 @@ QWidget* QuantModulePanel::build_input_row(const QString& label, QWidget* input,
     auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(0, 2, 0, 2);
     hl->setSpacing(8);
-    auto* lbl = new QLabel(label, row);
+    auto* lbl = new QLabel(row);
     lbl->setFixedWidth(160);
+    // Bind "($)" unit hints to the preferred currency; others stay plain.
+    if (label.endsWith("($)")) {
+        QString base = label;
+        base.chop(3); // strip "($)"
+        cur::bindLabel(lbl, base + "(%1)");
+    } else {
+        lbl->setText(label);
+    }
     lbl->setStyleSheet(QString("color:%1; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(lbl);
     hl->addWidget(input, 1);

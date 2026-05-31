@@ -20,6 +20,9 @@
 
 #include <QDateTime>
 #include <QJsonArray>
+#include <QSet>
+
+#include <algorithm>
 
 namespace fincept::trading {
 
@@ -460,15 +463,17 @@ ApiResponse<QVector<BrokerCandle>> DhanBroker::get_history(const BrokerCredentia
     const QString seg = dhan_exchange(exch);
 
     // Determine daily vs intraday + interval string
-    bool is_daily = (resolution == "D" || resolution == "1D" || resolution == "W" || resolution == "M");
+    const QString res_lc = resolution.toLower();
+    const bool is_daily = (res_lc == "d" || res_lc == "1d" || res_lc == "w" || res_lc == "m");
     static const QMap<QString, QString> intraday_map = {
         {"1", "1"},   {"1m", "1"},   {"5", "5"},   {"5m", "5"},   {"15", "15"}, {"15m", "15"},
         {"25", "25"}, {"25m", "25"}, {"60", "60"}, {"60m", "60"}, {"1h", "60"},
     };
     const QString interval_str = intraday_map.value(resolution, "");
     if (!is_daily && interval_str.isEmpty()) {
-        // Unsupported resolution — fall back to daily
-        is_daily = true;
+        // Unsupported intraday interval (Dhan supports only 1/5/15/25/60) — error out
+        // rather than silently returning daily candles for a different timeframe.
+        return {false, std::nullopt, "Unsupported resolution for Dhan history: " + resolution, ts};
     }
 
     QDate from = QDate::fromString(from_date, "yyyy-MM-dd");
@@ -496,18 +501,25 @@ ApiResponse<QVector<BrokerCandle>> DhanBroker::get_history(const BrokerCredentia
         // Map exchange segment → Dhan `instrument` enum. EQUITY is correct only
         // for cash; F&O / currency / commodity each take a distinct value.
         // Spec values: EQUITY, INDEX, FUTIDX, FUTSTK, OPTIDX, OPTSTK,
-        //              FUTCUR, OPTCUR, FUTCOM, OPTCOM.
+        //              FUTCUR, OPTCUR, FUTCOM, OPTFUT.
         QString instrument = "EQUITY";
         if (seg == "NSE_FNO" || seg == "BSE_FNO") {
-            // Heuristic: option contract names end in CE/PE; futures end in FUT.
+            // Index derivatives use OPTIDX/FUTIDX; stock derivatives use OPTSTK/FUTSTK.
+            // Detect index underlyings by their well-known root symbols.
+            static const QSet<QString> kIdxRoots = {"NIFTY",      "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY",
+                                                    "NIFTYNXT50", "SENSEX",    "BANKEX",   "SENSEX50"};
+            const bool isIdx =
+                std::any_of(kIdxRoots.begin(), kIdxRoots.end(),
+                            [&](const QString& r) { return name.startsWith(r); });
+            // Heuristic: option contract names end in CE/PE; futures contain FUT.
             if (name.endsWith("CE") || name.endsWith("PE"))
-                instrument = "OPTSTK";
+                instrument = isIdx ? "OPTIDX" : "OPTSTK";
             else if (name.contains("FUT"))
-                instrument = "FUTSTK";
+                instrument = isIdx ? "FUTIDX" : "FUTSTK";
         } else if (seg == "IDX_I") {
             instrument = "INDEX";
         } else if (seg == "MCX_COMM") {
-            instrument = name.contains("FUT") ? "FUTCOM" : "OPTCOM";
+            instrument = name.contains("FUT") ? "FUTCOM" : "OPTFUT";
         } else if (seg == "NSE_CURRENCY" || seg == "BSE_CURRENCY") {
             instrument = name.contains("FUT") ? "FUTCUR" : "OPTCUR";
         }

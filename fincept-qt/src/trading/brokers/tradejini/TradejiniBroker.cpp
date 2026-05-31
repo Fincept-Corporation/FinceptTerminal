@@ -7,6 +7,8 @@
 #include <QJsonDocument>
 #include <QUrlQuery>
 
+#include <algorithm>
+
 namespace fincept::trading {
 
 static constexpr const char* BASE = "https://api.tradejini.com/v2";
@@ -454,8 +456,40 @@ ApiResponse<QVector<BrokerQuote>> TradejiniBroker::get_quotes(const BrokerCreden
             "Tradejini quotes are WebSocket-only — use the streaming adapter (no REST quote endpoint)", now_ts()};
 }
 
+// Roll up intraday OHLCV bars into one bar per IST civil day. Input must be
+// sorted ascending by timestamp (ms). Used to synthesise daily candles, since
+// Tradejini's chart API has no native daily endpoint.
+static QVector<BrokerCandle> tj_aggregate_to_daily(const QVector<BrokerCandle>& bars) {
+    QVector<BrokerCandle> out;
+    constexpr qint64 kIstOffsetSecs = 19800; // +5:30
+    qint64 cur_day = 0;
+    bool started = false;
+    for (const auto& b : bars) {
+        const qint64 day = (b.timestamp / 1000 + kIstOffsetSecs) / 86400;
+        if (!started || day != cur_day) {
+            BrokerCandle d = b;
+            // Stamp the daily bar at IST midnight, expressed back as UTC ms.
+            d.timestamp = (day * 86400 - kIstOffsetSecs) * 1000LL;
+            out.append(d);
+            cur_day = day;
+            started = true;
+        } else {
+            BrokerCandle& d = out.last();
+            d.high = std::max(d.high, b.high);
+            d.low = std::min(d.low, b.low);
+            d.close = b.close;    // last bar of the day
+            d.volume += b.volume; // summed
+            d.oi = b.oi;          // last
+        }
+    }
+    return out;
+}
+
 // ---------- get_history ----------
 // GET /api/mkt-data/chart/interval-data?id=<symId>&interval=<min>&from=<sec>&to=<sec>
+// Native intervals are minutes (1/5/15/30). Daily ("D") is synthesised by
+// fetching 1-minute bars and aggregating client-side — note Tradejini retains
+// only ~30 days of 1-minute history, so synthesised daily history is limited.
 
 ApiResponse<QVector<BrokerCandle>> TradejiniBroker::get_history(const BrokerCredentials& creds, const QString& symbol,
                                                                const QString& resolution, const QString& from_date,
@@ -476,64 +510,162 @@ ApiResponse<QVector<BrokerCandle>> TradejiniBroker::get_history(const BrokerCred
     int64_t from_epoch = QDateTime(from, QTime(9, 15, 0)).toSecsSinceEpoch();
     int64_t to_epoch = QDateTime(to, QTime(23, 59, 59)).toSecsSinceEpoch();
 
-    // Tradejini intervals are integer minutes; daily is unsupported via this endpoint.
+    // Native intervals are integer minutes. Daily ("D"/"1D"/"DAY") has no native
+    // endpoint, so fetch 1-minute bars and aggregate to daily after collection.
     static const QMap<QString, QString> interval_map = {
-        {"1", "1"}, {"5", "5"}, {"15", "15"}, {"30", "30"}, {"60", "60"},
+        {"1", "1"}, {"5", "5"}, {"15", "15"}, {"30", "30"},
     };
-    QString interval = interval_map.value(resolution, "5");
-
-    QUrlQuery q;
-    q.addQueryItem("id", sym_id);
-    q.addQueryItem("interval", interval);
-    q.addQueryItem("from", QString::number(from_epoch));
-    q.addQueryItem("to", QString::number(to_epoch));
-    QString url = QString("%1/api/mkt-data/chart/interval-data?%2").arg(BASE, q.toString(QUrl::FullyEncoded));
+    const QString res_upper = resolution.toUpper();
+    const bool want_daily = (res_upper == "D" || res_upper == "1D" || res_upper == "DAY");
+    QString interval;
+    if (want_daily)
+        interval = "1"; // fetch minute bars, roll up below
+    else if (interval_map.contains(resolution))
+        interval = interval_map.value(resolution);
+    else
+        return {false, std::nullopt,
+                QString("Tradejini chart supports minute intervals (1,5,15,30) and synthesised daily (D); "
+                        "resolution '%1' is not supported").arg(resolution), ts};
 
     auto& http = BrokerHttp::instance();
-    auto resp = http.get(url, {{"Authorization", bearer(creds)}});
 
-    if (!resp.success && resp.status_code == 0)
-        return {false, std::nullopt, checked_error(resp, "get_history failed"), ts};
+    // Tradejini's chart endpoint caps each request to ~30 days. Fetch one
+    // <=30-day window at a time, keeping the IST 09:15/15:30 session clamp.
+    // Returns parsed candles on success; on failure, `ok` is false and `err`
+    // carries the upstream error.
+    struct WindowResult {
+        bool ok = false;
+        QVector<BrokerCandle> candles;
+        QString err;
+    };
+    auto fetch_window = [&](int64_t win_from, int64_t win_to) -> WindowResult {
+        WindowResult wr;
 
-    QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
-    if (!doc.isObject())
-        return {false, std::nullopt, "get_history: invalid response", ts};
+        QUrlQuery q;
+        q.addQueryItem("id", sym_id);
+        q.addQueryItem("interval", interval);
+        q.addQueryItem("from", QString::number(win_from));
+        q.addQueryItem("to", QString::number(win_to));
+        QString url = QString("%1/api/mkt-data/chart/interval-data?%2").arg(BASE, q.toString(QUrl::FullyEncoded));
 
-    QJsonObject obj = doc.object();
-    if (obj.value("s").toString() != "ok")
-        return {false, std::nullopt, checked_error(resp, "get_history failed"), ts};
+        auto resp = http.get(url, {{"Authorization", bearer(creds)}});
+
+        if (!resp.success && resp.status_code == 0) {
+            wr.err = checked_error(resp, "get_history failed");
+            return wr;
+        }
+
+        QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
+        if (!doc.isObject()) {
+            wr.err = "get_history: invalid response";
+            return wr;
+        }
+
+        QJsonObject obj = doc.object();
+        if (obj.value("s").toString() != "ok") {
+            wr.err = checked_error(resp, "get_history failed");
+            return wr;
+        }
+
+        // Payload "d" is typically an array of candle rows; support both object-rows
+        // and column arrays [t, o, h, l, c, v].
+        for (const QJsonValue& v : obj.value("d").toArray()) {
+            BrokerCandle c;
+            if (v.isObject()) {
+                QJsonObject o = v.toObject();
+                QJsonValue tv = o.contains("timestamp") ? o.value("timestamp") : o.value("time");
+                int64_t t = static_cast<int64_t>(tv.toVariant().toLongLong());
+                c.timestamp = (t > 1000000000000LL) ? t : t * 1000LL;
+                c.open = o.value("open").toVariant().toDouble();
+                c.high = o.value("high").toVariant().toDouble();
+                c.low = o.value("low").toVariant().toDouble();
+                c.close = o.value("close").toVariant().toDouble();
+                c.volume = o.value("volume").toVariant().toDouble();
+            } else if (v.isArray()) {
+                QJsonArray row = v.toArray();
+                if (row.size() < 6)
+                    continue;
+                int64_t t = row[0].toVariant().toLongLong();
+                c.timestamp = (t > 1000000000000LL) ? t : t * 1000LL;
+                c.open = row[1].toVariant().toDouble();
+                c.high = row[2].toVariant().toDouble();
+                c.low = row[3].toVariant().toDouble();
+                c.close = row[4].toVariant().toDouble();
+                c.volume = row[5].toVariant().toDouble();
+            } else {
+                continue;
+            }
+            wr.candles.append(c);
+        }
+
+        wr.ok = true;
+        return wr;
+    };
+
+    // Window cap: <= 30 days per request for all supported intervals.
+    static constexpr int64_t kMaxWindowSecs = 30LL * 24 * 60 * 60;
+    static constexpr int kMaxIterations = 60;
 
     QVector<BrokerCandle> candles;
-    // Payload "d" is typically an array of candle rows; support both object-rows
-    // and column arrays [t, o, h, l, c, v].
-    for (const QJsonValue& v : obj.value("d").toArray()) {
-        BrokerCandle c;
-        if (v.isObject()) {
-            QJsonObject o = v.toObject();
-            QJsonValue tv = o.contains("timestamp") ? o.value("timestamp") : o.value("time");
-            int64_t t = static_cast<int64_t>(tv.toVariant().toLongLong());
-            c.timestamp = (t > 1000000000000LL) ? t : t * 1000LL;
-            c.open = o.value("open").toVariant().toDouble();
-            c.high = o.value("high").toVariant().toDouble();
-            c.low = o.value("low").toVariant().toDouble();
-            c.close = o.value("close").toVariant().toDouble();
-            c.volume = o.value("volume").toVariant().toDouble();
-        } else if (v.isArray()) {
-            QJsonArray row = v.toArray();
-            if (row.size() < 6)
-                continue;
-            int64_t t = row[0].toVariant().toLongLong();
-            c.timestamp = (t > 1000000000000LL) ? t : t * 1000LL;
-            c.open = row[1].toVariant().toDouble();
-            c.high = row[2].toVariant().toDouble();
-            c.low = row[3].toVariant().toDouble();
-            c.close = row[4].toVariant().toDouble();
-            c.volume = row[5].toVariant().toDouble();
-        } else {
-            continue;
+
+    if (to_epoch - from_epoch <= kMaxWindowSecs) {
+        // Range fits in a single request: behaves exactly as before.
+        WindowResult wr = fetch_window(from_epoch, to_epoch);
+        if (!wr.ok)
+            return {false, std::nullopt, wr.err, ts};
+        candles = wr.candles;
+    } else {
+        // Chunk into consecutive <=30-day sub-windows, re-clamping each window's
+        // day boundaries to the IST 09:15/15:30 session.
+        bool any_data = false;
+        int iterations = 0;
+        int64_t cursor = from_epoch;
+
+        while (cursor < to_epoch && iterations < kMaxIterations) {
+            ++iterations;
+
+            QDate win_from_date = QDateTime::fromSecsSinceEpoch(cursor).date();
+            int64_t win_from = QDateTime(win_from_date, QTime(9, 15, 0)).toSecsSinceEpoch();
+
+            int64_t tentative_to = cursor + kMaxWindowSecs;
+            int64_t win_end = qMin(tentative_to, to_epoch);
+            QDate win_to_date = QDateTime::fromSecsSinceEpoch(win_end).date();
+            int64_t win_to = QDateTime(win_to_date, QTime(15, 30, 0)).toSecsSinceEpoch();
+            if (win_to > to_epoch)
+                win_to = to_epoch;
+
+            WindowResult wr = fetch_window(win_from, win_to);
+            if (!wr.ok) {
+                // First-window failure surfaces the error; a later failure after we
+                // already have data returns the partial result.
+                if (!any_data)
+                    return {false, std::nullopt, wr.err, ts};
+                break;
+            }
+
+            if (!wr.candles.isEmpty()) {
+                candles += wr.candles;
+                any_data = true;
+            }
+
+            // Advance one day past this window's end to avoid re-requesting the
+            // boundary day.
+            cursor = win_end + 24 * 60 * 60;
         }
-        candles.append(c);
     }
+
+    // Sort ascending by timestamp and dedupe (windows may overlap at boundaries).
+    std::sort(candles.begin(), candles.end(),
+              [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp < b.timestamp; });
+    candles.erase(std::unique(candles.begin(), candles.end(),
+                              [](const BrokerCandle& a, const BrokerCandle& b) {
+                                  return a.timestamp == b.timestamp;
+                              }),
+                  candles.end());
+
+    // Synthesise daily candles from the collected 1-minute bars when requested.
+    if (want_daily)
+        candles = tj_aggregate_to_daily(candles);
 
     return {true, candles, "", ts};
 }

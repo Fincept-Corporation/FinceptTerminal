@@ -95,7 +95,9 @@ struct PortfolioSummary {
 
 struct ComputedMetrics {
     std::optional<double> sharpe;
+    std::optional<double> sortino;            // annualized, downside-deviation based
     std::optional<double> beta;
+    std::optional<double> alpha;              // annualized Jensen's alpha vs benchmark, %
     std::optional<double> volatility;         // annualized %
     std::optional<double> max_drawdown;       // %
     std::optional<double> var_95;             // 1-day VaR in currency

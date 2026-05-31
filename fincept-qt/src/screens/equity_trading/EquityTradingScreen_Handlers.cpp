@@ -127,6 +127,10 @@ void EquityTradingScreen::on_account_changed(const QString& account_id) {
     const bool has_creds = !AccountManager::instance().load_credentials(account_id).api_key.isEmpty();
     auto& dsm = DataStreamManager::instance();
     if (has_creds) {
+        // Load the broker instrument master (numeric securityId map) so quotes,
+        // charts and depth resolve. Loads from the SQLite cache when present,
+        // else downloads. on_instruments_ready() reloads market data when done.
+        ensure_instruments_loaded(account_id);
         dsm.start_stream(account_id);
         auto* stream = dsm.stream_for(account_id);
         if (stream) {
@@ -285,6 +289,10 @@ void EquityTradingScreen::on_accounts_clicked() {
 
     connect(dlg, &AccountManagementDialog::credentials_saved, this, [this](const QString& account_id) {
         token_expired_shown_.store(false);
+        // Broker just connected — load its instrument master so market data
+        // (watchlist quotes, charts, depth) can resolve numeric securityIds.
+        // Covers every broker: all connect paths emit credentials_saved.
+        ensure_instruments_loaded(account_id);
         // First account ever connected: focus it now (account_added intentionally
         // does not auto-focus — see comment there). on_account_changed() does its
         // own start_stream() + symbol/watchlist setup, so we're done after that.

@@ -26,8 +26,8 @@ namespace fincept::trading {
 ///   auto sym   = InstrumentService::instance().to_brsymbol("NIFTY28MAR24FUT", "NFO", "zerodha");
 ///
 /// Thread safety: refresh() runs on a QtConcurrent worker thread and posts results
-/// back to the UI thread via QMetaObject::invokeMethod. All cache reads are
-/// guarded by a QReadWriteLock (reads concurrent, writes exclusive on refresh).
+/// back to the UI thread via QMetaObject::invokeMethod. All cache reads and writes
+/// are guarded by a single QMutex (mutex_); reads and writes are mutually exclusive.
 class InstrumentService : public QObject {
     Q_OBJECT
   public:
@@ -53,6 +53,11 @@ class InstrumentService : public QObject {
     void load_from_db_async(const QString& broker_id,
                             std::function<void(int)> callback = nullptr);
 
+    /// Synchronous DB load safe to call from a QtConcurrent worker thread.
+    /// Opens a private named QSqlDatabase connection (does NOT touch the shared
+    /// main-thread connection). Blocks until the cache is built. No-op if loaded.
+    void load_from_db_worker(const QString& broker_id);
+
     // ── Lookups (synchronous, in-memory) ─────────────────────────────────────
 
     /// symbol + exchange → numeric instrument_token  (for get_history)
@@ -75,6 +80,14 @@ class InstrumentService : public QObject {
     // ── Search (for symbol picker UI) ────────────────────────────────────────
     QVector<Instrument> search(const QString& query, const QString& exchange, const QString& broker_id,
                                int limit = 50) const;
+
+    /// Unified cross-broker search. Returns one row per (broker, instrument)
+    /// across all `broker_ids` (empty = every broker in the catalog), with the
+    /// first broker in the list sorted first. Used by the watchlist when more
+    /// than one broker is connected. Each row carries its own broker_id +
+    /// brsymbol + token, so selection routes to that broker.
+    QVector<Instrument> search_all(const QString& query, const QString& exchange, const QStringList& broker_ids,
+                                   int limit = 50) const;
 
     // ── F&O / Options chain helpers ──────────────────────────────────────────
     //
@@ -142,6 +155,8 @@ class InstrumentService : public QObject {
     static QByteArray download_angel_master_json();
     static QByteArray download_groww_csv();
     static QByteArray download_fyers_json();
+    static QByteArray download_dhan_csv();
+    static QByteArray download_icici_csv();
 };
 
 } // namespace fincept::trading

@@ -701,6 +701,7 @@ set(CORE_SOURCES
     src/core/session/SessionManager.cpp
     src/core/session/ScreenStateManager.cpp
     src/core/i18n/LanguageManager.cpp
+    src/core/currency/CurrencyManager.cpp
     src/core/keys/KeyConfigManager.cpp
     src/core/keys/WindowCycler.cpp
     src/core/net/NetSpeedMeter.cpp
@@ -844,6 +845,8 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v032_pending_orders.cpp
     src/storage/sqlite/migrations/v033_historify.cpp
     src/storage/sqlite/migrations/v034_strategy_portfolio.cpp
+    src/storage/sqlite/migrations/v035_news_analysis.cpp
+    src/storage/sqlite/migrations/v036_instrument_broker_token.cpp
 
     # Historical OHLCV data store (Historify, Phase 3 §13)
     src/storage/HistoricalDataStore.cpp
@@ -987,6 +990,7 @@ set(TRADING_SOURCES
     src/trading/websocket/UpstoxWebSocket.cpp
     src/trading/websocket/KotakWebSocket.cpp
     src/trading/websocket/IIFLWebSocket.cpp
+    src/trading/websocket/IciciDirectWebSocket.cpp
     # Indian brokers
     src/trading/brokers/zerodha/ZerodhaBroker.cpp
     src/trading/brokers/zerodha/Totp.cpp
@@ -1007,6 +1011,7 @@ set(TRADING_SOURCES
     src/trading/brokers/flattrade/FlattradeBroker.cpp
     src/trading/brokers/paytm/PaytmBroker.cpp
     src/trading/brokers/tradejini/TradejiniBroker.cpp
+    src/trading/brokers/icicidirect/IciciDirectBroker.cpp
     # Global brokers
     src/trading/brokers/alpaca/AlpacaBroker.cpp
     src/trading/brokers/alpaca/AlpacaWebSocket.cpp
@@ -1016,12 +1021,31 @@ set(TRADING_SOURCES
     src/trading/brokers/metaapi/MetaApiBroker.cpp
 
     # Instrument system (Phase 1)
+    src/trading/instruments/InstrumentNormalize.cpp
+    src/trading/instruments/InstrumentDecompress.cpp
+    src/trading/instruments/InstrumentDownload.cpp
     src/trading/instruments/InstrumentRepository.cpp
     src/trading/instruments/ZerodhaInstrumentParser.cpp
     src/trading/instruments/FyersInstrumentParser.cpp
     src/trading/instruments/GrowwInstrumentParser.cpp
+    src/trading/instruments/DhanInstrumentParser.cpp
+    src/trading/instruments/IciciInstrumentParser.cpp
     src/trading/instruments/InstrumentService.cpp
     src/trading/instruments/SymbolResolver.cpp
+    # Unified cross-broker search — additional broker instrument sources
+    src/trading/instruments/InstrumentSources.cpp
+    src/trading/instruments/parsers/NorenSymbolParser.cpp
+    src/trading/instruments/parsers/ShoonyaInstrumentSource.cpp
+    src/trading/instruments/parsers/FlattradeInstrumentSource.cpp
+    src/trading/instruments/parsers/SamcoInstrumentParser.cpp
+    src/trading/instruments/parsers/UpstoxInstrumentParser.cpp
+    src/trading/instruments/parsers/FivePaisaInstrumentParser.cpp
+    src/trading/instruments/parsers/PaytmInstrumentParser.cpp
+    src/trading/instruments/parsers/MotilalInstrumentParser.cpp
+    src/trading/instruments/parsers/AliceBlueInstrumentParser.cpp
+    src/trading/instruments/parsers/TradejiniInstrumentParser.cpp
+    src/trading/instruments/parsers/KotakInstrumentParser.cpp
+    src/trading/instruments/parsers/XtsInstrumentParser.cpp
 )
 
 # Algo Engine (native C++ trading engine — replaces Python algo runner)
@@ -1036,6 +1060,7 @@ set(ALGO_ENGINE_SOURCES
     src/algo_engine/AlgoEngineProducer.cpp
     src/algo_engine/AlgoScanner.cpp
     src/algo_engine/CandleDataFetcher.cpp
+    src/algo_engine/BacktestEngine.cpp
 )
 
 # Services
@@ -1281,7 +1306,9 @@ set(UI_SOURCES
 
     # Algo Trading visual strategy builder widgets
     src/ui/widgets/algo/ConditionBlock.cpp
-    src/ui/widgets/algo/LogicConnectorWidget.cpp
+    src/ui/widgets/algo/OperandEditor.cpp
+    src/ui/widgets/algo/GroupBlock.cpp
+    src/ui/widgets/algo/BacktestReportPanel.cpp
     src/ui/widgets/algo/ConditionSection.cpp
     src/ui/widgets/algo/RiskManagementPanel.cpp
     src/ui/widgets/algo/SymbolSearchCombo.cpp
@@ -2235,6 +2262,8 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v032_pending_orders.cpp
     src/storage/sqlite/migrations/v033_historify.cpp
     src/storage/sqlite/migrations/v034_strategy_portfolio.cpp
+    src/storage/sqlite/migrations/v035_news_analysis.cpp
+    src/storage/sqlite/migrations/v036_instrument_broker_token.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
@@ -2277,6 +2306,7 @@ set_source_files_properties(
     src/trading/brokers/flattrade/FlattradeBroker.cpp
     src/trading/brokers/paytm/PaytmBroker.cpp
     src/trading/brokers/tradejini/TradejiniBroker.cpp
+    src/trading/brokers/icicidirect/IciciDirectBroker.cpp
     src/trading/brokers/alpaca/AlpacaBroker.cpp
     src/trading/brokers/alpaca/AlpacaWebSocket.cpp
     src/trading/brokers/ibkr/IBKRBroker.cpp
@@ -2403,6 +2433,7 @@ set_source_files_properties(
     src/trading/brokers/flattrade/FlattradeBroker.cpp
     src/trading/brokers/paytm/PaytmBroker.cpp
     src/trading/brokers/tradejini/TradejiniBroker.cpp
+    src/trading/brokers/icicidirect/IciciDirectBroker.cpp
     src/trading/brokers/alpaca/AlpacaBroker.cpp
     src/trading/brokers/alpaca/AlpacaWebSocket.cpp
     src/trading/brokers/ibkr/IBKRBroker.cpp
@@ -2423,6 +2454,7 @@ set_source_files_properties(
     src/trading/websocket/UpstoxWebSocket.cpp
     src/trading/websocket/KotakWebSocket.cpp
     src/trading/websocket/IIFLWebSocket.cpp
+    src/trading/websocket/IciciDirectWebSocket.cpp
     # Phase 3 trading services — file-scope kLog / anonymous-namespace helpers
     src/trading/ActionCenter.cpp
     src/trading/StrategyPortfolio.cpp
@@ -2431,6 +2463,29 @@ set_source_files_properties(
     # Phase 3 storage/core — file-scope kLog / anonymous-namespace helpers
     src/storage/HistoricalDataStore.cpp
     src/core/HealthMonitor.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
+)
+
+# Instrument subsystem — shared normalizer + per-broker parsers each carry
+# file-scope anonymous-namespace helpers/maps (map_exchange, *_index_map, …);
+# keep out of unity to avoid ODR/redefinition clashes when batched together.
+set_source_files_properties(
+    src/trading/instruments/InstrumentNormalize.cpp
+    src/trading/instruments/InstrumentDecompress.cpp
+    src/trading/instruments/InstrumentDownload.cpp
+    src/trading/instruments/InstrumentSources.cpp
+    src/trading/instruments/parsers/NorenSymbolParser.cpp
+    src/trading/instruments/parsers/ShoonyaInstrumentSource.cpp
+    src/trading/instruments/parsers/FlattradeInstrumentSource.cpp
+    src/trading/instruments/parsers/XtsInstrumentParser.cpp
+    src/trading/instruments/parsers/UpstoxInstrumentParser.cpp
+    src/trading/instruments/parsers/FivePaisaInstrumentParser.cpp
+    src/trading/instruments/parsers/KotakInstrumentParser.cpp
+    src/trading/instruments/parsers/MotilalInstrumentParser.cpp
+    src/trading/instruments/parsers/PaytmInstrumentParser.cpp
+    src/trading/instruments/parsers/AliceBlueInstrumentParser.cpp
+    src/trading/instruments/parsers/SamcoInstrumentParser.cpp
+    src/trading/instruments/parsers/TradejiniInstrumentParser.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
@@ -2783,6 +2838,12 @@ endif()
 find_package(OpenSSL REQUIRED)
 message(STATUS "OpenSSL found: ${OPENSSL_VERSION} — include: ${OPENSSL_INCLUDE_DIR}")
 
+# zlib: gzip (Upstox master) + zip (Shoonya symbol masters) decompression.
+# See trading/instruments/InstrumentDecompress.cpp. System zlib on macOS/Linux,
+# Qt-bundled on Windows.
+find_package(ZLIB REQUIRED)
+message(STATUS "ZLIB found: ${ZLIB_VERSION_STRING}")
+
 # ── macOS: make Qt's openssl TLS plugin discoverable ─────────────────────────
 # Qt's libqopensslbackend.dylib only searches /usr/local/lib, /opt/local/lib,
 # /sw/lib, /usr/lib and Qt's own lib dir for libssl/libcrypto. Homebrew on
@@ -2836,6 +2897,7 @@ target_link_libraries(FinceptTerminal PRIVATE
     qtadvanceddocking-qt6
     OpenSSL::SSL
     OpenSSL::Crypto
+    ZLIB::ZLIB
     fincept_ed25519
 )
 

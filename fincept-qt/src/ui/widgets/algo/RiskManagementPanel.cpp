@@ -25,6 +25,7 @@ RiskManagementPanel::RiskManagementPanel(QWidget* parent)
     stop_loss_ = create_row(tr("Stop Loss %"), 0, 50, 2.0, 1, this);
     take_profit_ = create_row(tr("Take Profit %"), 0, 100, 5.0, 1, this);
     trailing_stop_ = create_row(tr("Trailing Stop %"), 0, 50, 0, 1, this);
+    capital_pct_ = create_row(tr("Capital Alloc %"), 1, 100, 100, 0, this);
 
     grid->addWidget(stop_loss_.label, 0, 0);
     grid->addWidget(stop_loss_.slider, 0, 1);
@@ -35,6 +36,9 @@ RiskManagementPanel::RiskManagementPanel(QWidget* parent)
     grid->addWidget(trailing_stop_.label, 2, 0);
     grid->addWidget(trailing_stop_.slider, 2, 1);
     grid->addWidget(trailing_stop_.spin, 2, 2);
+    grid->addWidget(capital_pct_.label, 3, 0);
+    grid->addWidget(capital_pct_.slider, 3, 1);
+    grid->addWidget(capital_pct_.spin, 3, 2);
 
     // Quantity
     auto* qty_label = new QLabel(tr("Quantity"), this);
@@ -43,8 +47,8 @@ RiskManagementPanel::RiskManagementPanel(QWidget* parent)
     quantity_spin_->setRange(1, 100000);
     quantity_spin_->setDecimals(0);
     quantity_spin_->setValue(1);
-    grid->addWidget(qty_label, 3, 0);
-    grid->addWidget(quantity_spin_, 3, 1, 1, 2);
+    grid->addWidget(qty_label, 4, 0);
+    grid->addWidget(quantity_spin_, 4, 1, 1, 2);
 
     // Max order value
     auto* mov_label = new QLabel(tr("Max Order Value"), this);
@@ -54,8 +58,8 @@ RiskManagementPanel::RiskManagementPanel(QWidget* parent)
     max_order_spin_->setDecimals(0);
     max_order_spin_->setValue(0);
     max_order_spin_->setSpecialValueText(tr("No Limit"));
-    grid->addWidget(mov_label, 4, 0);
-    grid->addWidget(max_order_spin_, 4, 1, 1, 2);
+    grid->addWidget(mov_label, 5, 0);
+    grid->addWidget(max_order_spin_, 5, 1, 1, 2);
 
     layout->addLayout(grid);
 
@@ -96,13 +100,15 @@ double RiskManagementPanel::take_profit() const { return take_profit_.spin->valu
 double RiskManagementPanel::trailing_stop() const { return trailing_stop_.spin->value(); }
 double RiskManagementPanel::quantity() const { return quantity_spin_->value(); }
 double RiskManagementPanel::max_order_value() const { return max_order_spin_->value(); }
+double RiskManagementPanel::capital_pct() const { return capital_pct_.spin->value(); }
 
-void RiskManagementPanel::set_values(double sl, double tp, double ts, double qty, double mov) {
+void RiskManagementPanel::set_values(double sl, double tp, double ts, double qty, double mov, double capital_pct) {
     stop_loss_.spin->setValue(sl);
     take_profit_.spin->setValue(tp);
     trailing_stop_.spin->setValue(ts);
     quantity_spin_->setValue(qty);
     max_order_spin_->setValue(mov);
+    capital_pct_.spin->setValue(capital_pct);
 }
 
 } // namespace fincept::ui::algo

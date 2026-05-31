@@ -35,7 +35,10 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QPoint>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 #include <DockAreaWidget.h>
 #include <DockManager.h>
@@ -357,20 +360,47 @@ void DockScreenRouter::show_tab_context_menu(const QString& id, const QPoint& gl
 }
 
 void DockScreenRouter::tile_2x2() {
-    // Phase 6 final / decision 5.5. Detach every open dock widget then
-    // re-add with explicit ADS area hints to force the 2x2 grid.
+    // Public `layout.tile_2x2` command: re-grid every open panel in its current
+    // reading order. Delegates to the shared auto-grid implementation.
+    retile_grid(nullptr);
+}
+
+void DockScreenRouter::retile_grid(ads::CDockWidget* newest) {
+    // Detach every open dock widget then re-add with explicit ADS area hints to
+    // force the product's auto-grid. Quadrant fill order:
+    //   1 panel  → full
+    //   2 panels → left | right
+    //   3 panels → top row [left | right] + full-width bottom
+    //   4 panels → 2x2 (3rd → bottom-left, 4th → bottom-right)
+    //   5+       → tab into bottom-right
     if (!manager_)
         return;
+
+    // Collect open panels, excluding `newest` (appended last so it lands in the
+    // next/last slot). Existing panels are ordered by current on-screen position
+    // (top→bottom, then left→right) so a re-tile preserves their reading order
+    // instead of reshuffling them alphabetically by id.
     QList<ads::CDockWidget*> open;
     for (auto* dw : manager_->dockWidgetsMap()) {
-        if (dw && !dw->isClosed())
+        if (dw && !dw->isClosed() && dw != newest)
             open.append(dw);
     }
+    std::sort(open.begin(), open.end(), [](ads::CDockWidget* a, ads::CDockWidget* b) {
+        const QPoint pa = a->dockAreaWidget() ? a->dockAreaWidget()->mapToGlobal(QPoint(0, 0)) : QPoint();
+        const QPoint pb = b->dockAreaWidget() ? b->dockAreaWidget()->mapToGlobal(QPoint(0, 0)) : QPoint();
+        if (pa.y() != pb.y())
+            return pa.y() < pb.y();
+        return pa.x() < pb.x();
+    });
+    if (newest && !newest->isClosed())
+        open.append(newest);
+
     if (open.isEmpty()) {
-        LOG_DEBUG("DockRouter", "tile_2x2: no open panels");
+        LOG_DEBUG("DockRouter", "retile_grid: no open panels");
         return;
     }
-    LOG_INFO("DockRouter", QString("tile_2x2: rearranging %1 panel(s)").arg(open.size()));
+    const int n = open.size();
+    LOG_INFO("DockRouter", QString("retile_grid: arranging %1 panel(s)").arg(n));
 
     for (auto* dw : open)
         manager_->removeDockWidget(dw);
@@ -379,19 +409,23 @@ void DockScreenRouter::tile_2x2() {
     ads::CDockAreaWidget* tr = nullptr;
     ads::CDockAreaWidget* bl = nullptr;
     ads::CDockAreaWidget* br = nullptr;
+    ads::CDockAreaWidget* bottom = nullptr;
 
-    for (int i = 0; i < open.size(); ++i) {
+    for (int i = 0; i < n; ++i) {
         ads::CDockWidget* dw = open.at(i);
         if (i == 0) {
             tl = manager_->addDockWidget(ads::CenterDockWidgetArea, dw);
         } else if (i == 1) {
             tr = manager_->addDockWidget(ads::RightDockWidgetArea, dw, tl);
         } else if (i == 2) {
-            bl = manager_->addDockWidget(ads::BottomDockWidgetArea, dw, tl);
+            if (n == 3)
+                bottom = manager_->addDockWidget(ads::BottomDockWidgetArea, dw); // full-width bottom
+            else
+                bl = manager_->addDockWidget(ads::BottomDockWidgetArea, dw, tl); // bottom-left
         } else if (i == 3) {
-            br = manager_->addDockWidget(ads::RightDockWidgetArea, dw, bl);
+            br = manager_->addDockWidget(ads::RightDockWidgetArea, dw, bl); // bottom-right
         } else {
-            ads::CDockAreaWidget* target = br ? br : (bl ? bl : (tr ? tr : tl));
+            ads::CDockAreaWidget* target = br ? br : (bottom ? bottom : (bl ? bl : (tr ? tr : tl)));
             if (target)
                 manager_->addDockWidget(ads::CenterDockWidgetArea, dw, target);
             else
@@ -399,7 +433,8 @@ void DockScreenRouter::tile_2x2() {
         }
         dw->toggleView(true);
     }
-    (void) tr; // suppress unused-variable warnings if compiler is strict
+    (void) tr;
+    (void) bottom;
 }
 
 // ── Phase 5: tear-off + cross-frame move ────────────────────────────────────

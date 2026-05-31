@@ -5,6 +5,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QEvent>
+#include <QTabBar>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -24,6 +25,9 @@ void ReportsView::build_ui() {
     layout->setContentsMargins(0, 0, 0, 0);
 
     tabs_ = new QTabWidget;
+    tabs_->tabBar()->setElideMode(Qt::ElideNone);
+    tabs_->tabBar()->setExpanding(false);
+    tabs_->tabBar()->setUsesScrollButtons(false);
     tabs_->setDocumentMode(true);
     tabs_->setStyleSheet(QString("QTabWidget::pane { border:0; background:%1; }"
                                  "QTabBar::tab { background:%2; color:%3; padding:6px 14px; border:0;"

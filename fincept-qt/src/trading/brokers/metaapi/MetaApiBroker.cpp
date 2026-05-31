@@ -3,11 +3,14 @@
 
 #include "trading/brokers/BrokerHttp.h"
 
+#include <QDate>
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QThread>
+#include <QTimeZone>
 
+#include <algorithm>
 #include <cmath>
 
 namespace fincept::trading {
@@ -653,52 +656,179 @@ ApiResponse<QVector<BrokerCandle>> MetaApiBroker::get_history(const BrokerCreden
     const QString region = region_from_creds(creds);
     const QString tf = map_timeframe(resolution);
 
-    QString start_time;
-    if (!from_date.isEmpty()) {
-        const auto dt = QDateTime::fromString(from_date, Qt::ISODate);
-        if (dt.isValid())
-            start_time = dt.toUTC().toString(Qt::ISODate);
-    }
-    if (start_time.isEmpty())
-        start_time = QDateTime::currentDateTimeUtc().addDays(-30).toUTC().toString(Qt::ISODate);
+    // Parse a flexible date string (ISO / yyyy-MM-dd / yyyy-MM-dd HH:mm) into a
+    // UTC QDateTime. Returns an invalid QDateTime if none of the forms match.
+    const auto parse_dt = [](const QString& s) -> QDateTime {
+        if (s.isEmpty())
+            return {};
+        QDateTime dt = QDateTime::fromString(s, Qt::ISODate);
+        if (!dt.isValid()) {
+            const QDate d = QDate::fromString(s, "yyyy-MM-dd");
+            if (d.isValid()) dt = QDateTime(d, QTime(0, 0), QTimeZone::utc());
+        }
+        if (!dt.isValid()) {
+            dt = QDateTime::fromString(s, "yyyy-MM-dd HH:mm");
+            if (dt.isValid()) dt.setTimeZone(QTimeZone::utc());
+        }
+        return dt.isValid() ? dt.toUTC() : QDateTime();
+    };
 
-    QString url = market_data_url(region) +
-                  QStringLiteral(
-                      "/users/current/accounts/%1/historical-market-data/symbols/%2/timeframes/%3/candles"
-                      "?startTime=%4&limit=500")
-                      .arg(account_id, symbol, tf, start_time);
+    // MetaAPI loads candles BACKWARD from startTime (the latest time of the
+    // window). There is no endTime parameter, so map to_date -> startTime.
+    QDateTime start_dt = parse_dt(to_date);
+    if (!start_dt.isValid())
+        start_dt = QDateTime::currentDateTimeUtc();
 
-    if (!to_date.isEmpty()) {
-        const auto dt = QDateTime::fromString(to_date, Qt::ISODate);
-        if (dt.isValid())
-            url += QStringLiteral("&endTime=%1").arg(dt.toUTC().toString(Qt::ISODate));
-    }
+    // Lower bound for the requested window. When invalid we keep today's
+    // single-request behaviour (no paging, no lower-bound trimming).
+    const QDateTime from_dt = parse_dt(from_date);
+    const bool from_valid = from_dt.isValid();
 
-    auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
-    if (!resp.success)
-        return {false, std::nullopt, checked_error(resp, "Failed to fetch candles.")};
+    constexpr int kLimit = 1000;
 
-    const auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
-    const auto arr = doc.array();
-
+    // One backward fetch ending at `startTime` (the latest time of the page).
+    // Appends parsed candles to `out`, sets `page_count` to the number of
+    // candles returned, and records the millisecond-precision time of the
+    // OLDEST candle in the page. Returns false only on HTTP failure.
     QVector<BrokerCandle> candles;
-    candles.reserve(arr.size());
+    const auto fetch_page = [&](const QDateTime& startTime,
+                                int& page_count,
+                                QDateTime& oldest_dt) -> bool {
+        const QString start_str = startTime.toUTC().toString(Qt::ISODateWithMs);
+        const QString url =
+            market_data_url(region) +
+            QStringLiteral(
+                "/users/current/accounts/%1/historical-market-data/symbols/%2/timeframes/%3/candles"
+                "?startTime=%4&limit=%5")
+                .arg(account_id, symbol, tf, start_str)
+                .arg(kLimit);
 
-    for (const auto& item : arr) {
-        const auto c = item.toObject();
-        BrokerCandle candle;
+        auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
+        if (!resp.success) {
+            page_count = 0;
+            oldest_dt = QDateTime();
+            return false;
+        }
 
-        const QString time_str = c.value("time").toString();
-        const auto dt = QDateTime::fromString(time_str, Qt::ISODate);
-        candle.timestamp = dt.isValid() ? dt.toSecsSinceEpoch() : 0;
+        const auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
+        const auto arr = doc.array();
+        page_count = arr.size();
+        oldest_dt = QDateTime();
 
-        candle.open = c.value("open").toDouble();
-        candle.high = c.value("high").toDouble();
-        candle.low = c.value("low").toDouble();
-        candle.close = c.value("close").toDouble();
-        candle.volume = c.value("tickVolume").toDouble(c.value("volume").toDouble());
+        for (const auto& item : arr) {
+            const auto c = item.toObject();
+            BrokerCandle candle;
 
-        candles.append(candle);
+            const QString time_str = c.value("time").toString();
+            const auto dt = QDateTime::fromString(time_str, Qt::ISODate);
+            candle.timestamp = dt.isValid() ? dt.toSecsSinceEpoch() : 0;
+
+            candle.open = c.value("open").toDouble();
+            candle.high = c.value("high").toDouble();
+            candle.low = c.value("low").toDouble();
+            candle.close = c.value("close").toDouble();
+            candle.volume = c.value("tickVolume").toDouble(c.value("volume").toDouble());
+
+            // Track oldest candle (ms precision) to seed the next page's
+            // startTime. The API may return the page in any order, so compare.
+            if (dt.isValid() && (!oldest_dt.isValid() || dt < oldest_dt))
+                oldest_dt = dt.toUTC();
+
+            candles.append(candle);
+        }
+        return true;
+    };
+
+    // --- Page 1 (preserves single-request behaviour for short ranges) -------
+    int page_count = 0;
+    QDateTime oldest;
+    {
+        const QString start_str = start_dt.toUTC().toString(Qt::ISODateWithMs);
+        const QString url =
+            market_data_url(region) +
+            QStringLiteral(
+                "/users/current/accounts/%1/historical-market-data/symbols/%2/timeframes/%3/candles"
+                "?startTime=%4&limit=%5")
+                .arg(account_id, symbol, tf, start_str)
+                .arg(kLimit);
+
+        auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
+        if (!resp.success)
+            return {false, std::nullopt, checked_error(resp, "Failed to fetch candles.")};
+
+        const auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
+        const auto arr = doc.array();
+        page_count = arr.size();
+
+        for (const auto& item : arr) {
+            const auto c = item.toObject();
+            BrokerCandle candle;
+
+            const QString time_str = c.value("time").toString();
+            const auto dt = QDateTime::fromString(time_str, Qt::ISODate);
+            candle.timestamp = dt.isValid() ? dt.toSecsSinceEpoch() : 0;
+
+            candle.open = c.value("open").toDouble();
+            candle.high = c.value("high").toDouble();
+            candle.low = c.value("low").toDouble();
+            candle.close = c.value("close").toDouble();
+            candle.volume = c.value("tickVolume").toDouble(c.value("volume").toDouble());
+
+            if (dt.isValid() && (!oldest.isValid() || dt < oldest))
+                oldest = dt.toUTC();
+
+            candles.append(candle);
+        }
+    }
+
+    // --- Backward paging ----------------------------------------------------
+    // Only page when from_date is valid (otherwise: single request as before),
+    // the page was full (== limit), and the oldest candle is still newer than
+    // the requested lower bound.
+    if (from_valid) {
+        constexpr int kMaxIterations = 30;
+        int iterations = 0;
+        while (page_count == kLimit && oldest.isValid() && oldest > from_dt &&
+               iterations < kMaxIterations) {
+            ++iterations;
+
+            // Next page ends 1 ms before the oldest candle we already have.
+            const QDateTime next_start = oldest.addMSecs(-1);
+            const QDateTime prev_oldest = oldest;
+
+            int next_count = 0;
+            QDateTime page_oldest;
+            if (!fetch_page(next_start, next_count, page_oldest))
+                break;  // later-page failure: stop, return what we collected
+
+            page_count = next_count;
+            if (next_count == 0 || !page_oldest.isValid())
+                break;  // empty / unparseable page: stop
+            if (!(page_oldest < prev_oldest))
+                break;  // no backward progress: avoid infinite loop
+            oldest = page_oldest;
+        }
+    }
+
+    // --- Merge: sort ascending by time, dedupe identical timestamps ---------
+    std::sort(candles.begin(), candles.end(),
+              [](const BrokerCandle& a, const BrokerCandle& b) {
+                  return a.timestamp < b.timestamp;
+              });
+    candles.erase(std::unique(candles.begin(), candles.end(),
+                              [](const BrokerCandle& a, const BrokerCandle& b) {
+                                  return a.timestamp == b.timestamp;
+                              }),
+                  candles.end());
+
+    // Drop candles older than the requested lower bound (only when valid).
+    if (from_valid) {
+        const int64_t from_ts = from_dt.toSecsSinceEpoch();
+        candles.erase(std::remove_if(candles.begin(), candles.end(),
+                                     [from_ts](const BrokerCandle& c) {
+                                         return c.timestamp < from_ts;
+                                     }),
+                      candles.end());
     }
 
     return {true, candles, ""};
