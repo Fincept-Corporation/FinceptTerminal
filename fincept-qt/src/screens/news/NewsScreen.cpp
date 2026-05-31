@@ -52,6 +52,14 @@ NewsScreen::NewsScreen(QWidget* parent) : QWidget(parent) {
     build_ui();
     connect_signals();
 
+    // Push the persisted preferences into the command bar so the pill
+    // highlights (category / time / REL-NEW sort / WIRE-CLST view) reflect the
+    // restored state on first paint instead of their hardcoded defaults.
+    command_bar_->set_active_category(active_category_);
+    command_bar_->set_active_time_range(time_range_);
+    command_bar_->set_active_sort(sort_mode_);
+    command_bar_->set_active_view(view_mode_);
+
     // Drop a symbol anywhere on the News screen to filter the feed by that
     // ticker. Reuses the search-query pipeline so caching/highlighting stay
     // coherent with keyword search.
@@ -1207,8 +1215,12 @@ void NewsScreen::restore_state(const QVariantMap& state) {
     search_query_.clear();
     active_variant_ = state.value("variant", "FULL").toString();
 
-    if (command_bar_)
+    if (command_bar_) {
         command_bar_->set_active_category(active_category_);
+        command_bar_->set_active_time_range(time_range_);
+        command_bar_->set_active_sort(sort_mode_);
+        command_bar_->set_active_view(view_mode_);
+    }
 }
 
 } // namespace fincept::screens
