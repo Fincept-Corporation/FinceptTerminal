@@ -107,15 +107,15 @@ void NewsCommandBar::build_command_row(QVBoxLayout* root) {
     sort_newest_ = make_pill("NEW", "NEWEST", hl);
     connect(sort_relevance_, &QPushButton::clicked, this, [this]() {
         active_sort_ = "RELEVANCE";
-        update_pill_group({sort_relevance_, sort_newest_}, "REL");
+        update_pill_group({sort_relevance_, sort_newest_}, active_sort_);
         emit sort_changed("RELEVANCE");
     });
     connect(sort_newest_, &QPushButton::clicked, this, [this]() {
         active_sort_ = "NEWEST";
-        update_pill_group({sort_relevance_, sort_newest_}, "NEW");
+        update_pill_group({sort_relevance_, sort_newest_}, active_sort_);
         emit sort_changed("NEWEST");
     });
-    update_pill_group({sort_relevance_, sort_newest_}, "REL");
+    update_pill_group({sort_relevance_, sort_newest_}, active_sort_);
 
     hl->addSpacing(2);
 
@@ -124,15 +124,15 @@ void NewsCommandBar::build_command_row(QVBoxLayout* root) {
     view_clusters_ = make_pill("CLST", "CLUSTERS", hl);
     connect(view_wire_, &QPushButton::clicked, this, [this]() {
         active_view_ = "WIRE";
-        update_pill_group({view_wire_, view_clusters_}, "WIRE");
+        update_pill_group({view_wire_, view_clusters_}, active_view_);
         emit view_mode_changed("WIRE");
     });
     connect(view_clusters_, &QPushButton::clicked, this, [this]() {
         active_view_ = "CLUSTERS";
-        update_pill_group({view_wire_, view_clusters_}, "CLST");
+        update_pill_group({view_wire_, view_clusters_}, active_view_);
         emit view_mode_changed("CLUSTERS");
     });
-    update_pill_group({view_wire_, view_clusters_}, "WIRE");
+    update_pill_group({view_wire_, view_clusters_}, active_view_);
 
     hl->addStretch();
 
@@ -339,18 +339,24 @@ void NewsCommandBar::build_intel_row(QVBoxLayout* root) {
 }
 
 QPushButton* NewsCommandBar::make_pill(const QString& text, const QString& value, QHBoxLayout* layout) {
-    Q_UNUSED(value);
     auto* btn = new QPushButton(text, this);
     btn->setObjectName("newsCommandBarPill");
     btn->setFixedHeight(18);
     btn->setCursor(Qt::PointingHandCursor);
+    // Carry the logical value (e.g. "RELEVANCE" for the "REL" pill) as a
+    // property so update_pill_group can match on intent rather than the
+    // abbreviated label — lets callers pass the canonical value.
+    btn->setProperty("pillValue", value);
     layout->addWidget(btn);
     return btn;
 }
 
 void NewsCommandBar::update_pill_group(const QVector<QPushButton*>& btns, const QString& active_value) {
     for (auto* btn : btns) {
-        bool active = (btn->text() == active_value);
+        // Match against the pill's logical value, falling back to its label so
+        // groups created before pillValue was set still behave.
+        const QString value = btn->property("pillValue").toString();
+        bool active = (value == active_value) || (btn->text() == active_value);
         btn->setProperty("active", active);
         btn->style()->unpolish(btn);
         btn->style()->polish(btn);
@@ -360,6 +366,21 @@ void NewsCommandBar::update_pill_group(const QVector<QPushButton*>& btns, const 
 void NewsCommandBar::set_active_category(const QString& cat) {
     active_category_ = cat;
     update_pill_group(category_btns_, active_category_);
+}
+
+void NewsCommandBar::set_active_sort(const QString& sort) {
+    active_sort_ = sort;
+    update_pill_group({sort_relevance_, sort_newest_}, active_sort_);
+}
+
+void NewsCommandBar::set_active_view(const QString& view) {
+    active_view_ = view;
+    update_pill_group({view_wire_, view_clusters_}, active_view_);
+}
+
+void NewsCommandBar::set_active_time_range(const QString& range) {
+    active_time_ = range;
+    update_pill_group(time_btns_, active_time_);
 }
 
 void NewsCommandBar::set_loading(bool loading) {

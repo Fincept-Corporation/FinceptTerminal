@@ -20,6 +20,14 @@ class NewsCommandBar : public QWidget {
     explicit NewsCommandBar(QWidget* parent = nullptr);
 
     void set_active_category(const QString& cat);
+    /// Re-highlight the REL/NEW sort pills to match `sort` ("RELEVANCE" /
+    /// "NEWEST"). Used to sync the UI with persisted/restored state without
+    /// emitting sort_changed.
+    void set_active_sort(const QString& sort);
+    /// Re-highlight the WIRE/CLST view pills ("WIRE" / "CLUSTERS").
+    void set_active_view(const QString& view);
+    /// Re-highlight the time-range pills ("1H".."30D").
+    void set_active_time_range(const QString& range);
     void set_loading(bool loading);
     void set_loading_progress(int done, int total);
     void set_article_count(int count);
