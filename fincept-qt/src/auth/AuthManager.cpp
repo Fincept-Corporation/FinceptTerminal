@@ -515,8 +515,8 @@ void AuthManager::auto_configure_fincept_llm() {
     if (session_.api_key.isEmpty())
         return;
 
-    // Always store API key in settings — LlmService resolves it at runtime
-    fincept::SettingsRepository::instance().set("fincept_api_key", session_.api_key, "auth");
+    // Durable copy in OS-native encrypted storage (DPAPI / Keychain) — SQLite no longer holds the secret.
+    fincept::SecureStorage::instance().store("api_key", session_.api_key);
 
     // Only create the fincept provider row if it doesn't already exist.
     // This prevents overwriting the user's model/settings choice on every
