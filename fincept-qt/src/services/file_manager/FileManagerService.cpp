@@ -16,6 +16,21 @@
 namespace fincept::services {
 
 static constexpr const char* kFileManagerTag = "FileManagerService";
+static bool is_safe_basename(const QString& s) {
+    if (s.isEmpty() || s == "." || s == "..")
+        return false;
+
+    if (s.contains('/') || s.contains('\\'))
+        return false;
+
+    if (s.contains(QLatin1String("..")))
+        return false;
+
+    if (QFileInfo(s).fileName() != s)
+        return false;
+
+    return true;
+}
 
 // ── Singleton ────────────────────────────────────────────────────────────────
 
@@ -37,7 +52,19 @@ QString FileManagerService::storage_dir() const {
 }
 
 QString FileManagerService::full_path(const QString& stored_name) const {
-    return storage_dir() + "/" + stored_name;
+    if (!is_safe_basename(stored_name))
+        return {};
+
+    const QString resolved =
+        QDir(storage_dir()).absoluteFilePath(stored_name);
+
+    const QString root =
+        QDir(storage_dir()).absolutePath() + '/';
+
+    if (!resolved.startsWith(root))
+        return {};
+
+    return resolved;
 }
 
 QString FileManagerService::metadata_path() const {
@@ -171,6 +198,12 @@ QString FileManagerService::import_file(const QString& source_path, const QStrin
 
 QString FileManagerService::register_file(const QString& stored_name, const QString& original_name, qint64 size,
                                           const QString& mime_type, const QString& source_screen) {
+    if (!is_safe_basename(stored_name)) {
+        LOG_WARN(kFileManagerTag,
+                 QString("Rejected unsafe stored_name: %1").arg(stored_name));
+        return {};
+    }
+
     QString id =
         QString::number(QDateTime::currentMSecsSinceEpoch()) + "_" + QUuid::createUuid().toString(QUuid::Id128).left(8);
 
