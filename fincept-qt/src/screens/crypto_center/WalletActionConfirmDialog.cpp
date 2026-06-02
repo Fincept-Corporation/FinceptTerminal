@@ -71,9 +71,9 @@ void WalletActionConfirmDialog::build_ui() {
     title_label_->setObjectName(QStringLiteral("walletActionDialogTitle"));
     hl->addWidget(title_label_);
     hl->addStretch();
-    auto* head_status = new QLabel(QStringLiteral("AWAITING CONFIRMATION"), header);
-    head_status->setObjectName(QStringLiteral("walletActionDialogHeadStatus"));
-    hl->addWidget(head_status);
+    head_status_label_ = new QLabel(tr("AWAITING CONFIRMATION"), header);
+    head_status_label_->setObjectName(QStringLiteral("walletActionDialogHeadStatus"));
+    hl->addWidget(head_status_label_);
     root->addWidget(header);
 
     // Body wrapper
@@ -261,6 +261,20 @@ void WalletActionConfirmDialog::apply_theme() {
     setStyleSheet(ss);
 }
 
+void WalletActionConfirmDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void WalletActionConfirmDialog::retranslateUi() {
+    // Window title + primary-button text are caller-supplied summary data,
+    // not translatable UI literals. Only fixed chrome is retranslated here.
+    if (summary_.title.isEmpty()) setWindowTitle(tr("Confirm"));
+    if (head_status_label_) head_status_label_->setText(tr("AWAITING CONFIRMATION"));
+    if (cancel_button_) cancel_button_->setText(tr("CANCEL"));
+}
+
 void WalletActionConfirmDialog::showEvent(QShowEvent* e) {
     QDialog::showEvent(e);
     arm_remaining_ms_ = summary_.arm_delay_ms;
@@ -270,7 +284,7 @@ void WalletActionConfirmDialog::showEvent(QShowEvent* e) {
         return;
     }
     primary_button_->setEnabled(false);
-    primary_button_->setText(QStringLiteral("%1 in %2")
+    primary_button_->setText(tr("%1 in %2")
                                  .arg(summary_.primary_button_text,
                                       format_remaining(arm_remaining_ms_)));
     arm_timer_->start();
@@ -284,7 +298,7 @@ void WalletActionConfirmDialog::on_arm_tick() {
         primary_button_->setText(summary_.primary_button_text);
         return;
     }
-    primary_button_->setText(QStringLiteral("%1 in %2")
+    primary_button_->setText(tr("%1 in %2")
                                  .arg(summary_.primary_button_text,
                                       format_remaining(arm_remaining_ms_)));
 }

@@ -55,13 +55,13 @@ BcbPanel::BcbPanel(QWidget* parent) : EconPanelBase(kBcbSourceId, kBcbColor, par
 }
 
 void BcbPanel::activate() {
-    show_empty("Select a series and click FETCH\n"
-               "Source: Banco Central do Brasil — no API key required");
+    show_empty(tr("Select a series and click FETCH\n"
+                  "Source: Banco Central do Brasil — no API key required"));
 }
 
 void BcbPanel::build_controls(QHBoxLayout* thl) {
-    auto* lbl = new QLabel("SERIES");
-    lbl->setStyleSheet(ctrl_label_style());
+    series_lbl_ = new QLabel(tr("SERIES"));
+    series_lbl_->setStyleSheet(ctrl_label_style());
 
     series_combo_ = new QComboBox;
     for (const auto& s : kBcbSeries)
@@ -69,7 +69,7 @@ void BcbPanel::build_controls(QHBoxLayout* thl) {
     series_combo_->setFixedHeight(26);
     series_combo_->setMinimumWidth(260);
 
-    thl->addWidget(lbl);
+    thl->addWidget(series_lbl_);
     thl->addWidget(series_combo_);
 }
 
@@ -77,7 +77,7 @@ void BcbPanel::on_fetch() {
     const int idx = series_combo_->currentIndex();
     const auto& series = kBcbSeries[idx];
 
-    show_loading("Fetching BCB: " + series.label + "…");
+    show_loading(tr("Fetching BCB: %1…").arg(series.label));
     services::EconomicsService::instance().execute(kBcbSourceId, kBcbScript, series.command, {},
                                                    "bcb_" + series.command);
 }
@@ -105,7 +105,7 @@ void BcbPanel::on_result(const QString& request_id, const services::EconomicsRes
     QJsonArray raw = result.data["data"].toArray();
 
     if (raw.isEmpty()) {
-        show_error("No data returned for this series");
+        show_error(tr("No data returned for this series"));
         return;
     }
 
@@ -136,6 +136,20 @@ void BcbPanel::on_result(const QString& request_id, const services::EconomicsRes
 
     display(rows, title);
     LOG_INFO("BcbPanel", QString("Displayed %1 records: %2").arg(rows.size()).arg(title));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void BcbPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void BcbPanel::retranslateUi() {
+    if (series_lbl_)
+        series_lbl_->setText(tr("SERIES"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QEvent>
+#include <QLabel>
 #include <QLineEdit>
 #include <QMap>
 #include <QVBoxLayout>
@@ -16,11 +18,16 @@ class NodePalette : public QWidget {
   signals:
     void node_type_selected(const QString& type_id);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
     void rebuild_categories(const QString& filter = {});
     void start_drag(const QString& type_id);
+    void retranslateUi();
 
+    QLabel* header_title_ = nullptr;
     QLineEdit* search_input_ = nullptr;
     QVBoxLayout* categories_layout_ = nullptr;
     QWidget* categories_container_ = nullptr;

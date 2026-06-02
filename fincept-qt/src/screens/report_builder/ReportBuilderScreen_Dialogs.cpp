@@ -51,7 +51,7 @@ void ReportBuilderScreen::show_recent_dialog() {
     QStringList recent = Service::instance().recent_files();
 
     auto* dlg = new QDialog(this);
-    dlg->setWindowTitle("Recent Reports");
+    dlg->setWindowTitle(tr("Recent Reports"));
     dlg->setMinimumWidth(500);
     dlg->setStyleSheet(
         QString("QDialog { background: %1; color: %2; }"
@@ -64,13 +64,13 @@ void ReportBuilderScreen::show_recent_dialog() {
                  ui::colors::BG_RAISED()));
 
     auto* vl = new QVBoxLayout(dlg);
-    auto* lbl = new QLabel("Select a report to open:");
+    auto* lbl = new QLabel(tr("Select a report to open:"));
     lbl->setStyleSheet(QString("color: %1;").arg(ui::colors::MUTED()));
     vl->addWidget(lbl);
 
     auto* list = new QListWidget;
     if (recent.isEmpty()) {
-        list->addItem("(No recent reports)");
+        list->addItem(tr("(No recent reports)"));
     } else {
         list->addItems(recent);
     }
@@ -84,9 +84,9 @@ void ReportBuilderScreen::show_recent_dialog() {
         if (row >= 0 && row < recent.size()) {
             auto r = Service::instance().load_from(recent[row]);
             if (r.is_err())
-                QMessageBox::warning(this, "Open Report",
-                                     "Could not open file:\n" + recent[row] + "\n\n" +
-                                         QString::fromStdString(r.error()));
+                QMessageBox::warning(this, tr("Open Report"),
+                                     tr("Could not open file:\n%1\n\n%2")
+                                         .arg(recent[row], QString::fromStdString(r.error())));
         }
         dlg->accept();
     };
@@ -109,48 +109,51 @@ void ReportBuilderScreen::show_template_dialog() {
         QVector<TemplateEntry> entries;
     };
 
+    // Template names (TemplateEntry::name) are stable lookup keys passed to
+    // apply_template() — left untranslated. Category labels and descriptions are
+    // display-only and localized.
     const QVector<Category> categories = {
-        {"General Purpose",
-         {{"Blank Report", "Empty document with title and date — start from scratch."},
-          {"Meeting Notes", "Agenda, attendees, discussion points, action items, next steps."},
-          {"Investment Memo", "Executive summary, thesis, opportunity, risks, recommendation."}}},
-        {"Retail Investor",
-         {{"Stock Research", "Company overview, financials, valuation, thesis, and risks."},
-          {"Portfolio Review", "Holdings, performance, allocation pie, risk metrics, notes."},
-          {"Watchlist Report", "Tracked tickers with price, change, target, and notes columns."},
-          {"Dividend Income Report", "Dividend stocks table, yield chart, income projection, calendar."}}},
-        {"Trader",
-         {{"Daily Market Brief", "Indices snapshot, top movers, news highlights, watchlist."},
-          {"Trade Journal", "Trade log table, P&L chart, win rate stats, lessons learned."},
-          {"Technical Analysis", "Price chart placeholder, indicators table, S/R levels, setup."},
-          {"Pre-Market Checklist", "Macro events, key levels, planned trades, risk per trade."}}},
-        {"Institutional / Analyst",
-         {{"Equity Research Report", "Full buy-side template: overview, financials, DCF, comparables."},
-          {"Earnings Review", "Revenue/EPS vs estimates, guidance, segment breakdown, outlook."},
-          {"M&A Deal Summary", "Deal overview, rationale, comparables, synergies, valuation."},
-          {"Sector Deep Dive", "Sector overview, sub-industries, key players, trends, risks."}}},
-        {"Economist / Macro",
-         {{"Macro Economic Summary", "GDP, inflation, unemployment, central bank policy, outlook."},
-          {"Country Risk Report", "Political, economic, financial, market risk tables and charts."},
-          {"Central Bank Monitor", "Rate decisions, forward guidance, balance sheet, implications."}}},
-        {"Crypto / Digital Assets",
-         {{"Crypto Research Report", "Project overview, tokenomics, on-chain metrics, price chart."},
-          {"DeFi Protocol Analysis", "Protocol overview, TVL, revenue, risks, token valuation."},
-          {"Crypto Portfolio Review", "Holdings, allocation, cost basis table, P&L, risk exposure."}}},
-        {"Fixed Income",
-         {{"Bond Research Report", "Issuer overview, credit profile, yield analysis, recommendation."},
-          {"Yield Curve Analysis", "Curve chart, spread table, duration/convexity, macro drivers."}}},
-        {"Quant / Risk",
-         {{"Quant Strategy Report", "Strategy description, backtest results, stats, drawdown chart."},
-          {"Risk Management Report", "VaR, CVaR, stress tests, correlation matrix, recommendations."}}},
-        {"Corporate / Business",
-         {{"Business Performance", "KPI dashboard, revenue chart, cost breakdown, targets vs actual."},
-          {"Project Status Report", "Objectives, milestones table, status, risks, next actions."},
-          {"Financial Statement", "Income statement, balance sheet, cash flow tables."}}},
+        {tr("General Purpose"),
+         {{"Blank Report", tr("Empty document with title and date — start from scratch.")},
+          {"Meeting Notes", tr("Agenda, attendees, discussion points, action items, next steps.")},
+          {"Investment Memo", tr("Executive summary, thesis, opportunity, risks, recommendation.")}}},
+        {tr("Retail Investor"),
+         {{"Stock Research", tr("Company overview, financials, valuation, thesis, and risks.")},
+          {"Portfolio Review", tr("Holdings, performance, allocation pie, risk metrics, notes.")},
+          {"Watchlist Report", tr("Tracked tickers with price, change, target, and notes columns.")},
+          {"Dividend Income Report", tr("Dividend stocks table, yield chart, income projection, calendar.")}}},
+        {tr("Trader"),
+         {{"Daily Market Brief", tr("Indices snapshot, top movers, news highlights, watchlist.")},
+          {"Trade Journal", tr("Trade log table, P&L chart, win rate stats, lessons learned.")},
+          {"Technical Analysis", tr("Price chart placeholder, indicators table, S/R levels, setup.")},
+          {"Pre-Market Checklist", tr("Macro events, key levels, planned trades, risk per trade.")}}},
+        {tr("Institutional / Analyst"),
+         {{"Equity Research Report", tr("Full buy-side template: overview, financials, DCF, comparables.")},
+          {"Earnings Review", tr("Revenue/EPS vs estimates, guidance, segment breakdown, outlook.")},
+          {"M&A Deal Summary", tr("Deal overview, rationale, comparables, synergies, valuation.")},
+          {"Sector Deep Dive", tr("Sector overview, sub-industries, key players, trends, risks.")}}},
+        {tr("Economist / Macro"),
+         {{"Macro Economic Summary", tr("GDP, inflation, unemployment, central bank policy, outlook.")},
+          {"Country Risk Report", tr("Political, economic, financial, market risk tables and charts.")},
+          {"Central Bank Monitor", tr("Rate decisions, forward guidance, balance sheet, implications.")}}},
+        {tr("Crypto / Digital Assets"),
+         {{"Crypto Research Report", tr("Project overview, tokenomics, on-chain metrics, price chart.")},
+          {"DeFi Protocol Analysis", tr("Protocol overview, TVL, revenue, risks, token valuation.")},
+          {"Crypto Portfolio Review", tr("Holdings, allocation, cost basis table, P&L, risk exposure.")}}},
+        {tr("Fixed Income"),
+         {{"Bond Research Report", tr("Issuer overview, credit profile, yield analysis, recommendation.")},
+          {"Yield Curve Analysis", tr("Curve chart, spread table, duration/convexity, macro drivers.")}}},
+        {tr("Quant / Risk"),
+         {{"Quant Strategy Report", tr("Strategy description, backtest results, stats, drawdown chart.")},
+          {"Risk Management Report", tr("VaR, CVaR, stress tests, correlation matrix, recommendations.")}}},
+        {tr("Corporate / Business"),
+         {{"Business Performance", tr("KPI dashboard, revenue chart, cost breakdown, targets vs actual.")},
+          {"Project Status Report", tr("Objectives, milestones table, status, risks, next actions.")},
+          {"Financial Statement", tr("Income statement, balance sheet, cash flow tables.")}}},
     };
 
     auto* dlg = new QDialog(this);
-    dlg->setWindowTitle("Report Templates");
+    dlg->setWindowTitle(tr("Report Templates"));
     dlg->setMinimumSize(680, 520);
     dlg->setStyleSheet(QString("QDialog    { background: %1; color: %2; }"
                                "QListWidget { background: %3; color: %2; border: 1px solid %4; }"
@@ -172,7 +175,7 @@ void ReportBuilderScreen::show_template_dialog() {
     lvl->setContentsMargins(12, 12, 8, 12);
     lvl->setSpacing(6);
 
-    auto* pick_lbl = new QLabel("Choose a template:");
+    auto* pick_lbl = new QLabel(tr("Choose a template:"));
     pick_lbl->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold;").arg(ui::colors::MUTED()));
     lvl->addWidget(pick_lbl);
 
@@ -209,12 +212,12 @@ void ReportBuilderScreen::show_template_dialog() {
     rvl->setContentsMargins(12, 12, 12, 12);
     rvl->setSpacing(8);
 
-    auto* tmpl_name_lbl = new QLabel("Select a template");
+    auto* tmpl_name_lbl = new QLabel(tr("Select a template"));
     tmpl_name_lbl->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: bold;").arg(ui::colors::AMBER()));
     tmpl_name_lbl->setWordWrap(true);
     rvl->addWidget(tmpl_name_lbl);
 
-    auto* desc_lbl = new QLabel("Pick a template from the list to see a description.");
+    auto* desc_lbl = new QLabel(tr("Pick a template from the list to see a description."));
     desc_lbl->setWordWrap(true);
     desc_lbl->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     desc_lbl->setStyleSheet(QString("color: %1; font-size: 12px; line-height: 160%;").arg(ui::colors::GRAY()));
@@ -254,7 +257,7 @@ void ReportBuilderScreen::show_theme_dialog() {
     const QStringList theme_names = rep::themes::all_names();
 
     auto* dlg = new QDialog(this);
-    dlg->setWindowTitle("Report Theme");
+    dlg->setWindowTitle(tr("Report Theme"));
     dlg->setMinimumWidth(380);
     dlg->setStyleSheet(
         QString("QDialog { background: %1; color: %2; }"
@@ -263,7 +266,7 @@ void ReportBuilderScreen::show_theme_dialog() {
             .arg(ui::colors::DARK(), ui::colors::WHITE(), ui::colors::PANEL(), ui::colors::BORDER()));
 
     auto* vl = new QVBoxLayout(dlg);
-    vl->addWidget(new QLabel("Select a color theme for your report:"));
+    vl->addWidget(new QLabel(tr("Select a color theme for your report:")));
 
     auto* combo = new QComboBox;
     for (const auto& n : theme_names)
@@ -281,7 +284,7 @@ void ReportBuilderScreen::show_theme_dialog() {
         const auto t = rep::themes::by_name(theme_names.value(idx));
         preview_lbl->setStyleSheet(QString("background: %1; color: %2; border: 2px solid %3; font-weight: bold;")
                                        .arg(t.page_bg, t.heading_color, t.accent_color));
-        preview_lbl->setText(t.name + " — Sample Text");
+        preview_lbl->setText(tr("%1 — Sample Text").arg(t.name));
     };
     connect(combo, &QComboBox::currentIndexChanged, this, update_preview);
     update_preview(combo->currentIndex());
@@ -304,7 +307,7 @@ void ReportBuilderScreen::show_metadata_dialog() {
     auto m = Service::instance().metadata();
 
     auto* dlg = new QDialog(this);
-    dlg->setWindowTitle("Report Metadata");
+    dlg->setWindowTitle(tr("Report Metadata"));
     dlg->setMinimumWidth(420);
     dlg->setStyleSheet(
         QString("QDialog { background: %1; color: %2; }"
@@ -326,18 +329,18 @@ void ReportBuilderScreen::show_metadata_dialog() {
     date_edit->setPlaceholderText("yyyy-MM-dd");
 
     auto lbl_style = QString("color: %1;").arg(ui::colors::GRAY());
-    auto add_row = [&](const char* text, QLineEdit* edit) {
+    auto add_row = [&](const QString& text, QLineEdit* edit) {
         auto* lbl = new QLabel(text);
         lbl->setStyleSheet(lbl_style);
         form->addRow(lbl, edit);
     };
-    add_row("Title:", title_edit);
-    add_row("Author:", author_edit);
-    add_row("Company:", company_edit);
-    add_row("Date:", date_edit);
+    add_row(tr("Title:"), title_edit);
+    add_row(tr("Author:"), author_edit);
+    add_row(tr("Company:"), company_edit);
+    add_row(tr("Date:"), date_edit);
     vl->addLayout(form);
 
-    auto* hf_lbl = new QLabel("HEADER / FOOTER");
+    auto* hf_lbl = new QLabel(tr("HEADER / FOOTER"));
     hf_lbl->setStyleSheet(
         QString("color: %1; font-size: 11px; font-weight: bold; padding-top: 10px;").arg(ui::colors::MUTED()));
     vl->addWidget(hf_lbl);
@@ -352,14 +355,14 @@ void ReportBuilderScreen::show_metadata_dialog() {
     auto* fc_edit = new QLineEdit(m.footer_center);
     auto* fr_edit = new QLineEdit(m.footer_right);
 
-    hl_edit->setPlaceholderText("Left");
-    hc_edit->setPlaceholderText("Center");
-    hr_edit->setPlaceholderText("Right");
-    fl_edit->setPlaceholderText("Left");
-    fc_edit->setPlaceholderText("Center (use {page})");
-    fr_edit->setPlaceholderText("Right");
+    hl_edit->setPlaceholderText(tr("Left"));
+    hc_edit->setPlaceholderText(tr("Center"));
+    hr_edit->setPlaceholderText(tr("Right"));
+    fl_edit->setPlaceholderText(tr("Left"));
+    fc_edit->setPlaceholderText(tr("Center (use {page})"));
+    fr_edit->setPlaceholderText(tr("Right"));
 
-    auto f_row = [&](const char* left_text, QLineEdit* l, QLineEdit* c, QLineEdit* r) {
+    auto f_row = [&](const QString& left_text, QLineEdit* l, QLineEdit* c, QLineEdit* r) {
         auto* row = new QWidget(this);
         row->setStyleSheet("background: transparent;");
         auto* rl = new QHBoxLayout(row);
@@ -371,8 +374,8 @@ void ReportBuilderScreen::show_metadata_dialog() {
         lbl2->setStyleSheet(lbl_style);
         hf_form->addRow(lbl2, row);
     };
-    f_row("Header:", hl_edit, hc_edit, hr_edit);
-    f_row("Footer:", fl_edit, fc_edit, fr_edit);
+    f_row(tr("Header:"), hl_edit, hc_edit, hr_edit);
+    f_row(tr("Footer:"), fl_edit, fc_edit, fr_edit);
     vl->addLayout(hf_form);
 
     auto* bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
@@ -402,7 +405,7 @@ void ReportBuilderScreen::show_metadata_dialog() {
 // ── File operations ──────────────────────────────────────────────────────────
 
 void ReportBuilderScreen::on_new() {
-    auto answer = QMessageBox::question(this, "New Report", "Create a new report? Unsaved changes will be lost.",
+    auto answer = QMessageBox::question(this, tr("New Report"), tr("Create a new report? Unsaved changes will be lost."),
                                         QMessageBox::Yes | QMessageBox::No);
     if (answer != QMessageBox::Yes)
         return;
@@ -413,28 +416,28 @@ void ReportBuilderScreen::on_new() {
 
 void ReportBuilderScreen::on_open() {
     QString path =
-        QFileDialog::getOpenFileName(this, "Open Report", "", "Fincept Report (*.fincept);;JSON (*.json)");
+        QFileDialog::getOpenFileName(this, tr("Open Report"), "", tr("Fincept Report (*.fincept);;JSON (*.json)"));
     if (path.isEmpty())
         return;
     auto r = Service::instance().load_from(path);
     if (r.is_err())
-        QMessageBox::warning(this, "Open Report", "Could not open file:\n" + path + "\n\n" +
-                                                       QString::fromStdString(r.error()));
+        QMessageBox::warning(this, tr("Open Report"),
+                             tr("Could not open file:\n%1\n\n%2").arg(path, QString::fromStdString(r.error())));
 }
 
 void ReportBuilderScreen::on_save() {
     auto& svc = Service::instance();
     QString path = svc.current_file();
     if (path.isEmpty()) {
-        path = QFileDialog::getSaveFileName(this, "Save Report", svc.metadata().title,
-                                            "Fincept Report (*.fincept);;JSON (*.json)");
+        path = QFileDialog::getSaveFileName(this, tr("Save Report"), svc.metadata().title,
+                                            tr("Fincept Report (*.fincept);;JSON (*.json)"));
         if (path.isEmpty())
             return;
     }
     auto r = svc.save_to(path);
     if (r.is_err()) {
-        QMessageBox::warning(this, "Save Report", "Could not save to:\n" + path + "\n\n" +
-                                                      QString::fromStdString(r.error()));
+        QMessageBox::warning(this, tr("Save Report"),
+                             tr("Could not save to:\n%1\n\n%2").arg(path, QString::fromStdString(r.error())));
         return;
     }
     services::FileManagerService::instance().import_file(path, "report_builder");
@@ -442,11 +445,11 @@ void ReportBuilderScreen::on_save() {
 
 void ReportBuilderScreen::on_export_pdf() {
     auto m = Service::instance().metadata();
-    QString path = QFileDialog::getSaveFileName(this, "Export PDF", m.title, "PDF (*.pdf)");
+    QString path = QFileDialog::getSaveFileName(this, tr("Export PDF"), m.title, tr("PDF (*.pdf)"));
     if (path.isEmpty())
         return;
     export_pdf_to(path);
-    QMessageBox::information(this, "Export PDF", "Report exported successfully to:\n" + path);
+    QMessageBox::information(this, tr("Export PDF"), tr("Report exported successfully to:\n%1").arg(path));
 }
 
 void ReportBuilderScreen::export_pdf_to(const QString& path) {
@@ -476,7 +479,7 @@ void ReportBuilderScreen::export_pdf_to(const QString& path) {
 
         QPainter painter;
         if (!painter.begin(&printer)) {
-            QMessageBox::warning(this, "Export PDF", "Failed to start PDF painter.");
+            QMessageBox::warning(this, tr("Export PDF"), tr("Failed to start PDF painter."));
             doc->deleteLater();
             return;
         }

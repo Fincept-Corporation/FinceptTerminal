@@ -76,12 +76,12 @@ void CreateAgentPanel::setup_connections() {
 
     auto& svc = services::AgentService::instance();
     connect(&svc, &services::AgentService::config_saved, this, [this]() {
-        status_lbl_->setText("Saved successfully");
+        status_lbl_->setText(tr("Saved successfully"));
         status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::POSITIVE()));
         load_saved_agents();
     });
     connect(&svc, &services::AgentService::config_deleted, this, [this]() {
-        status_lbl_->setText("Agent deleted");
+        status_lbl_->setText(tr("Agent deleted"));
         status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::WARNING()));
         editing_id_.clear();
         load_saved_agents();
@@ -109,12 +109,12 @@ void CreateAgentPanel::setup_connections() {
         test_btn_->setText(tr("RUN TEST"));
         if (r.success) {
             test_result_->setPlainText(r.response);
-            test_status_lbl_->setText(QString("Done in %1ms").arg(r.execution_time_ms));
+            test_status_lbl_->setText(tr("Done in %1ms").arg(r.execution_time_ms));
             test_status_lbl_->setStyleSheet(
                 QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
         } else {
-            test_result_->setPlainText("Error: " + r.error);
-            test_status_lbl_->setText("Failed");
+            test_result_->setPlainText(tr("Error: %1").arg(r.error));
+            test_status_lbl_->setText(tr("Failed"));
             test_status_lbl_->setStyleSheet(
                 QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
         }
@@ -127,12 +127,12 @@ void CreateAgentPanel::setup_connections() {
         test_btn_->setText(tr("RUN TEST"));
         if (r.success) {
             test_result_->setPlainText(r.response);
-            test_status_lbl_->setText(QString("Done in %1ms").arg(r.execution_time_ms));
+            test_status_lbl_->setText(tr("Done in %1ms").arg(r.execution_time_ms));
             test_status_lbl_->setStyleSheet(
                 QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
         } else {
-            test_result_->setPlainText("Error: " + r.error);
-            test_status_lbl_->setText("Failed");
+            test_result_->setPlainText(tr("Error: %1").arg(r.error));
+            test_status_lbl_->setText(tr("Failed"));
             test_status_lbl_->setStyleSheet(
                 QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
         }
@@ -172,14 +172,14 @@ void CreateAgentPanel::load_profile_combo() {
     const QString prev_id = llm_profile_combo_->currentData().toString();
     llm_profile_combo_->blockSignals(true);
     llm_profile_combo_->clear();
-    llm_profile_combo_->addItem("Default (Global)", QString{});
+    llm_profile_combo_->addItem(tr("Default (Global)"), QString{});
 
     const auto pr = LlmProfileRepository::instance().list_profiles();
     const auto profiles = pr.is_ok() ? pr.value() : QVector<LlmProfile>{};
     for (const auto& p : profiles) {
         QString label = p.name;
         if (p.is_default)
-            label += " [default]";
+            label += tr(" [default]");
         llm_profile_combo_->addItem(label, p.id);
     }
     int restore = 0;
@@ -225,12 +225,12 @@ void CreateAgentPanel::refresh_llm_pill() {
         if (text.length() > 55)
             text = text.left(53) + "..";
         if (profile_id.isEmpty())
-            text += " (inherited)";
+            text += tr(" (inherited)");
         llm_resolved_lbl_->setText(text);
         llm_resolved_lbl_->setStyleSheet(
             QString("color:%1;font-size:10px;padding:1px 0 4px 0;").arg(ui::colors::TEXT_TERTIARY()));
     } else {
-        llm_resolved_lbl_->setText("No provider — Settings > LLM Config");
+        llm_resolved_lbl_->setText(tr("No provider — Settings > LLM Config"));
         llm_resolved_lbl_->setStyleSheet(
             QString("color:%1;font-size:10px;padding:1px 0 4px 0;").arg(ui::colors::NEGATIVE()));
     }
@@ -257,6 +257,115 @@ void CreateAgentPanel::showEvent(QShowEvent* event) {
                 mcp_servers_list_->addItem(s.name);
         }
     }
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+// Covers widgets built in both this TU and the CreateAgentPanel_Layout.cpp split
+// TU (members are shared via the class). The split TU has no own retranslateUi.
+
+void CreateAgentPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void CreateAgentPanel::retranslateUi() {
+    // ── Left: saved agents ────────────────────────────────────────────────────
+    if (saved_title_) saved_title_->setText(tr("SAVED AGENTS"));
+    if (load_btn_)    load_btn_->setText(tr("LOAD"));
+    if (del_btn_)     del_btn_->setText(tr("DEL"));
+    if (exp_btn_)     exp_btn_->setText(tr("EXP"));
+    if (imp_btn_)     imp_btn_->setText(tr("IMP"));
+
+    // ── Center: form section headers ──────────────────────────────────────────
+    if (identity_hdr_)       identity_hdr_->setText(tr("IDENTITY"));
+    if (name_field_lbl_)     name_field_lbl_->setText(tr("Name"));
+    if (category_field_lbl_) category_field_lbl_->setText(tr("Category"));
+    if (model_hdr_)          model_hdr_->setText(tr("MODEL"));
+    if (instructions_hdr_)   instructions_hdr_->setText(tr("INSTRUCTIONS"));
+    if (tools_hdr_)          tools_hdr_->setText(tr("TOOLS"));
+    if (terminal_tools_hdr_) terminal_tools_hdr_->setText(tr("TERMINAL TOOLS"));
+    if (features_hdr_)       features_hdr_->setText(tr("FEATURES"));
+    if (mcp_servers_hdr_)    mcp_servers_hdr_->setText(tr("MCP SERVERS"));
+
+    // Placeholders + tooltips.
+    if (name_edit_)         name_edit_->setPlaceholderText(tr("e.g. My Equity Analyst"));
+    if (desc_edit_)         desc_edit_->setPlaceholderText(tr("Brief description of what this agent does..."));
+    if (llm_profile_combo_) llm_profile_combo_->setToolTip(tr("LLM profile for this agent. Configure profiles in Settings > LLM Config."));
+    if (instructions_edit_) instructions_edit_->setPlaceholderText(tr("System prompt — role, goals, constraints, persona..."));
+    if (tool_search_edit_)  tool_search_edit_->setPlaceholderText(tr("Filter tools..."));
+
+    // Terminal tools sub-section.
+    if (terminal_tools_check_)
+        terminal_tools_check_->setText(tr("Enable internal terminal tools (markets, portfolio, news, edgar...)"));
+    if (terminal_destructive_check_)
+        terminal_destructive_check_->setText(tr("Allow destructive tools (place_order, delete_*, set_*, file ops)"));
+    if (terminal_external_check_)
+        terminal_external_check_->setText(tr("Include external MCP servers (Notion, Slack, etc., from MCP Servers tab)"));
+    if (terminal_dry_run_check_)
+        terminal_dry_run_check_->setText(tr("Dry-run mode (return synthetic results — no real execution)"));
+    if (terminal_cat_lbl_)
+        terminal_cat_lbl_->setText(tr("Category whitelist (none checked = all enabled categories except UI-only)"));
+    if (terminal_exclude_cats_edit_)
+        terminal_exclude_cats_edit_->setPlaceholderText(tr("Exclude categories (comma-separated, on top of UI-only defaults)"));
+    if (terminal_name_include_edit_)
+        terminal_name_include_edit_->setPlaceholderText(tr("Tool name include regex (optional, e.g. ^get_)"));
+    if (terminal_name_exclude_edit_)
+        terminal_name_exclude_edit_->setPlaceholderText(tr("Tool name exclude regex (optional, e.g. ^delete_)"));
+    if (terminal_max_lbl_)
+        terminal_max_lbl_->setText(tr("Max tools (0 = no cap)"));
+
+    // Feature toggles.
+    if (reasoning_check_)      reasoning_check_->setText(tr("Reasoning"));
+    if (memory_check_)         memory_check_->setText(tr("Memory"));
+    if (knowledge_check_)      knowledge_check_->setText(tr("Knowledge"));
+    if (guardrails_check_)     guardrails_check_->setText(tr("Guardrails"));
+    if (agentic_memory_check_) agentic_memory_check_->setText(tr("Agentic Memory"));
+    if (storage_check_)        storage_check_->setText(tr("Storage"));
+    if (tracing_check_)        tracing_check_->setText(tr("Tracing"));
+    if (compression_check_)    compression_check_->setText(tr("Compression"));
+    if (hooks_check_)          hooks_check_->setText(tr("Hooks"));
+    if (evaluation_check_)     evaluation_check_->setText(tr("Evaluation"));
+
+    // Knowledge sub-fields.
+    if (knowledge_type_lbl_)     knowledge_type_lbl_->setText(tr("Type"));
+    if (knowledge_urls_edit_)    knowledge_urls_edit_->setPlaceholderText(tr("URLs (one per line)"));
+    if (knowledge_vectordb_lbl_) knowledge_vectordb_lbl_->setText(tr("Vector DB"));
+    if (knowledge_embedder_lbl_) knowledge_embedder_lbl_->setText(tr("Embedder"));
+
+    // Guardrails sub-fields.
+    if (guardrails_pii_check_)        guardrails_pii_check_->setText(tr("PII Detection"));
+    if (guardrails_injection_check_)  guardrails_injection_check_->setText(tr("Injection Prevention"));
+    if (guardrails_compliance_check_) guardrails_compliance_check_->setText(tr("Financial Compliance"));
+
+    // Memory sub-fields.
+    if (memory_dbpath_lbl_)          memory_dbpath_lbl_->setText(tr("DB Path"));
+    if (memory_table_lbl_)           memory_table_lbl_->setText(tr("Table"));
+    if (memory_user_memories_check_) memory_user_memories_check_->setText(tr("User Memories"));
+    if (memory_session_summary_check_) memory_session_summary_check_->setText(tr("Session Summary"));
+
+    // Storage sub-fields.
+    if (storage_type_lbl_)   storage_type_lbl_->setText(tr("Type"));
+    if (storage_dbpath_lbl_) storage_dbpath_lbl_->setText(tr("DB Path"));
+    if (storage_table_lbl_)  storage_table_lbl_->setText(tr("Table"));
+
+    // Agentic memory sub-field.
+    if (agentic_userid_lbl_) agentic_userid_lbl_->setText(tr("User ID"));
+
+    // Form actions (status_lbl_ holds live state — not re-applied).
+    if (save_btn_)  save_btn_->setText(tr("SAVE AGENT"));
+    if (clear_btn_) clear_btn_->setText(tr("CLEAR"));
+
+    // ── Right: test panel ─────────────────────────────────────────────────────
+    if (test_panel_hdr_)  test_panel_hdr_->setText(tr("LIVE TEST"));
+    if (test_query_hdr_)  test_query_hdr_->setText(tr("QUERY"));
+    if (test_output_hdr_) test_output_hdr_->setText(tr("OUTPUT"));
+    if (test_query_edit_) test_query_edit_->setPlaceholderText(tr("Enter test query..."));
+    // test_btn_ flips to "RUNNING..." mid-test — only re-apply the idle label.
+    if (test_btn_ && pending_request_id_.isEmpty()) test_btn_->setText(tr("RUN TEST"));
+
+    // The LLM profile combo / resolved pill re-derive their text from data.
+    refresh_llm_pill();
 }
 
 } // namespace fincept::screens

@@ -53,13 +53,13 @@ FredAnalyticsPanel::FredAnalyticsPanel(QWidget* parent)
 }
 
 void FredAnalyticsPanel::activate() {
-    show_empty("Set FRED_API_KEY environment variable, then select a dataset and click FETCH\n"
-               "Uses the same key as the FRED panel — fred.stlouisfed.org/docs/api/api_key.html");
+    show_empty(tr("Set FRED_API_KEY environment variable, then select a dataset and click FETCH\n"
+                  "Uses the same key as the FRED panel — fred.stlouisfed.org/docs/api/api_key.html"));
 }
 
 void FredAnalyticsPanel::build_controls(QHBoxLayout* thl) {
-    auto* lbl = new QLabel("DATASET");
-    lbl->setStyleSheet(ctrl_label_style());
+    dataset_lbl_ = new QLabel(tr("DATASET"));
+    dataset_lbl_->setStyleSheet(ctrl_label_style());
 
     dataset_combo_ = new QComboBox;
     for (const auto& d : kFredAnalDatasets)
@@ -67,7 +67,7 @@ void FredAnalyticsPanel::build_controls(QHBoxLayout* thl) {
     dataset_combo_->setFixedHeight(26);
     dataset_combo_->setMinimumWidth(240);
 
-    thl->addWidget(lbl);
+    thl->addWidget(dataset_lbl_);
     thl->addWidget(dataset_combo_);
 }
 
@@ -75,7 +75,7 @@ void FredAnalyticsPanel::on_fetch() {
     const int idx = dataset_combo_->currentIndex();
     const auto& dataset = kFredAnalDatasets[idx];
 
-    show_loading("Fetching FRED Analytics: " + dataset.label + "…");
+    show_loading(tr("Fetching FRED Analytics: %1…").arg(dataset.label));
 
     QStringList args = {dataset.command};
     args << dataset.args;
@@ -111,9 +111,9 @@ void FredAnalyticsPanel::on_result(const QString& request_id, const services::Ec
     if (!result.success) {
         const QString msg = result.error;
         if (msg.contains("FRED_API_KEY") || msg.contains("api_key") || msg.contains("API key")) {
-            show_error("FRED API key not configured.\n"
-                       "Set FRED_API_KEY environment variable.\n"
-                       "Free key at: fred.stlouisfed.org/docs/api/api_key.html");
+            show_error(tr("FRED API key not configured.\n"
+                          "Set FRED_API_KEY environment variable.\n"
+                          "Free key at: fred.stlouisfed.org/docs/api/api_key.html"));
         } else {
             show_error(msg);
         }
@@ -124,9 +124,9 @@ void FredAnalyticsPanel::on_result(const QString& request_id, const services::Ec
     const QString inline_err = result.data["error"].toString();
     if (!inline_err.isEmpty()) {
         if (inline_err.contains("FRED_API_KEY") || inline_err.contains("not set")) {
-            show_error("FRED API key not configured.\n"
-                       "Set FRED_API_KEY environment variable.\n"
-                       "Free key at: fred.stlouisfed.org/docs/api/api_key.html");
+            show_error(tr("FRED API key not configured.\n"
+                          "Set FRED_API_KEY environment variable.\n"
+                          "Free key at: fred.stlouisfed.org/docs/api/api_key.html"));
         } else {
             show_error(inline_err);
         }
@@ -145,7 +145,7 @@ void FredAnalyticsPanel::on_result(const QString& request_id, const services::Ec
     }
 
     if (rows.isEmpty()) {
-        show_error("No data returned — check FRED_API_KEY is set");
+        show_error(tr("No data returned — check FRED_API_KEY is set"));
         return;
     }
 
@@ -156,6 +156,20 @@ void FredAnalyticsPanel::on_result(const QString& request_id, const services::Ec
 
     display(rows, title);
     LOG_INFO("FredAnalyticsPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void FredAnalyticsPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void FredAnalyticsPanel::retranslateUi() {
+    if (dataset_lbl_)
+        dataset_lbl_->setText(tr("DATASET"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

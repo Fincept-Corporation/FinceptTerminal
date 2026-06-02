@@ -2,8 +2,11 @@
 #include "screens/common/IStatefulScreen.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QHideEvent>
 #include <QLabel>
+#include <QList>
+#include <QPointer>
 #include <QShowEvent>
 #include <QTableWidget>
 #include <QTimer>
@@ -27,9 +30,11 @@ class TradeVizScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void setup_ui();
+    void retranslateUi();
 
     // ── Sub-builders ─────────────────────────────────────────────────────────
     QWidget* build_tab_bar();
@@ -46,6 +51,14 @@ class TradeVizScreen : public QWidget, public IStatefulScreen {
     QComboBox* order_combo_ = nullptr;
     QComboBox* period_combo_ = nullptr;
     QComboBox* year_combo_ = nullptr;
+
+    // Text-bearing widgets cached for retranslateUi.
+    QList<QLabel*> tab_labels_;   // Table / Settings / Export / Notes
+    QLabel* flow_title_ = nullptr;
+    QLabel* browse_label_ = nullptr;
+    QLabel* order_caption_ = nullptr;
+    QLabel* period_caption_ = nullptr;
+    QPointer<QWidget> chord_widget_; // chord diagram (painter text re-rendered on update())
 
     // ── Timers ───────────────────────────────────────────────────────────────
     QTimer* clock_timer_ = nullptr;

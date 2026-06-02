@@ -35,7 +35,8 @@ AlgoTradingScreen::AlgoTradingScreen(QWidget* parent) : QWidget(parent) {
                     if (d.status == "running" || d.status == "starting")
                         ++active;
                 }
-                deploy_count_label_->setText(QString("%1 LIVE").arg(active));
+                active_deployments_ = active;
+                deploy_count_label_->setText(tr("%1 LIVE").arg(active));
             });
 
     LOG_INFO("AlgoTrading", "Screen constructed");
@@ -103,11 +104,11 @@ QWidget* AlgoTradingScreen::build_top_bar() {
     hl->setSpacing(8);
 
     // Title + subtitle matching Economics header style
-    auto* title = new QLabel("ALGO TRADING", bar);
-    title->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700;"
-                                 "letter-spacing:1.5px; background:transparent;")
-                             .arg(ui::colors::TEXT_PRIMARY()));
-    hl->addWidget(title);
+    title_label_ = new QLabel(tr("ALGO TRADING"), bar);
+    title_label_->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700;"
+                                         "letter-spacing:1.5px; background:transparent;")
+                                    .arg(ui::colors::TEXT_PRIMARY()));
+    hl->addWidget(title_label_);
 
     auto* div = new QWidget(bar);
     div->setFixedSize(1, 20);
@@ -115,7 +116,7 @@ QWidget* AlgoTradingScreen::build_top_bar() {
     hl->addWidget(div);
 
     // Tab buttons
-    QStringList tabs   = {"BUILDER", "MY STRATEGIES", "SCANNER", "DASHBOARD"};
+    QStringList tabs   = {tr("BUILDER"), tr("MY STRATEGIES"), tr("SCANNER"), tr("DASHBOARD")};
     QStringList colors = {"#FF6B35", "#00E5FF", "#FFC400", "#00D66F"};
 
     for (int i = 0; i < tabs.size(); ++i) {
@@ -136,7 +137,7 @@ QWidget* AlgoTradingScreen::build_top_bar() {
     hl->addStretch(1);
 
     // Deployment count badge
-    deploy_count_label_ = new QLabel("0 LIVE", bar);
+    deploy_count_label_ = new QLabel(tr("%1 LIVE").arg(0), bar);
     deploy_count_label_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
                                                "padding:3px 8px; background:rgba(22,163,74,0.08);"
                                                "border:1px solid rgba(22,163,74,0.25); border-radius:2px;")
@@ -157,16 +158,16 @@ QWidget* AlgoTradingScreen::build_status_bar() {
     hl->setSpacing(16);
     auto s =
         QString("color:%1; font-size:8px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY()).arg(ui::fonts::DATA_FAMILY);
-    auto* l1 = new QLabel("ENGINE:", bar);
-    l1->setStyleSheet(s);
+    engine_caption_ = new QLabel(tr("ENGINE:"), bar);
+    engine_caption_->setStyleSheet(s);
     auto* v1 = new QLabel("ALGO v1.0", bar);
     v1->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
                           .arg(ui::colors::TEXT_PRIMARY())
                           .arg(ui::fonts::DATA_FAMILY));
-    hl->addWidget(l1);
+    hl->addWidget(engine_caption_);
     hl->addWidget(v1);
     hl->addStretch();
-    status_label_ = new QLabel("IDLE", bar);
+    status_label_ = new QLabel(tr("IDLE"), bar);
     status_label_->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
                                      .arg(ui::colors::POSITIVE())
                                      .arg(ui::fonts::DATA_FAMILY));
@@ -207,6 +208,27 @@ void AlgoTradingScreen::update_tab_buttons() {
                       .arg(ui::colors::TEXT_TERTIARY())
                       .arg(ui::fonts::DATA_FAMILY())
                       .arg(colors[i]));
+    }
+}
+
+void AlgoTradingScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void AlgoTradingScreen::retranslateUi() {
+    if (title_label_)   title_label_->setText(tr("ALGO TRADING"));
+    if (engine_caption_) engine_caption_->setText(tr("ENGINE:"));
+    if (status_label_)  status_label_->setText(tr("IDLE"));
+    if (deploy_count_label_) deploy_count_label_->setText(tr("%1 LIVE").arg(active_deployments_));
+
+    // Tab button labels — fixed order matches build_top_bar().
+    if (tab_buttons_.size() == 4) {
+        tab_buttons_[0]->setText(tr("BUILDER"));
+        tab_buttons_[1]->setText(tr("MY STRATEGIES"));
+        tab_buttons_[2]->setText(tr("SCANNER"));
+        tab_buttons_[3]->setText(tr("DASHBOARD"));
     }
 }
 

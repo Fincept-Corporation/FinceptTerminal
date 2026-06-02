@@ -1,8 +1,11 @@
 #pragma once
 
 #include <QDialog>
+#include <QEvent>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
+#include <QPushButton>
 
 namespace fincept::workflow {
 
@@ -16,11 +19,21 @@ class DeployDialog : public QDialog {
     QString workflow_description() const;
     bool is_deploy() const { return deploy_; }
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui(const QString& current_name);
+    void retranslateUi();
 
+    QLabel* title_label_ = nullptr;
+    QLabel* name_label_ = nullptr;
+    QLabel* desc_label_ = nullptr;
     QLineEdit* name_edit_ = nullptr;
     QPlainTextEdit* desc_edit_ = nullptr;
+    QPushButton* cancel_btn_ = nullptr;
+    QPushButton* draft_btn_ = nullptr;
+    QPushButton* deploy_btn_ = nullptr;
     bool deploy_ = false;
 };
 

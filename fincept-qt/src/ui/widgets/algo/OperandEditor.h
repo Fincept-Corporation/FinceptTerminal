@@ -4,6 +4,7 @@
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QJsonObject>
 #include <QLabel>
@@ -43,6 +44,9 @@ public:
 signals:
     void changed();
 
+protected:
+    void changeEvent(QEvent* event) override;
+
 private:
     void build_ui();
     void populate_indicators();
@@ -51,6 +55,10 @@ private:
     void rebuild_params();
     services::algo::IndicatorDef current_def() const;
     void apply_mode_visibility();
+
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
 
     bool allow_value_;
 

@@ -1,4 +1,5 @@
 #pragma once
+#include <QEvent>
 #include <QFrame>
 #include <QLabel>
 #include <QLineEdit>
@@ -44,6 +45,7 @@ class CommandBar : public QWidget {
 
   protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_text_changed(const QString& text);
@@ -98,6 +100,11 @@ class CommandBar : public QWidget {
 
     // ── Theme ─────────────────────────────────────────────────────────────────
     void refresh_theme();
+
+    // ── i18n ──────────────────────────────────────────────────────────────────
+    // Re-apply tr() strings to persistent widgets (the input placeholder). The
+    // dropdown rebuilds on every keystroke, so its rows re-translate naturally.
+    void retranslateUi();
 
     // ── Draft persistence (cache.db screen_state[key="command_bar"]) ─────────
     // Persists the in-progress command text and parser mode so a restart

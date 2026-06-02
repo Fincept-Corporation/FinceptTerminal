@@ -53,8 +53,8 @@ BisPanel::BisPanel(QWidget* parent) : EconPanelBase(kBisSourceId, kBisColor, par
 }
 
 void BisPanel::activate() {
-    show_empty("Select a dataset and country code, then click FETCH\n"
-               "BIS data is free — no API key required");
+    show_empty(tr("Select a dataset and country code, then click FETCH\n"
+                  "BIS data is free — no API key required"));
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -74,28 +74,28 @@ void BisPanel::build_controls(QHBoxLayout* thl) {
     connect(dataset_combo_, &QComboBox::currentIndexChanged, this, &BisPanel::on_dataset_changed);
 
     country_input_ = new QLineEdit;
-    country_input_->setPlaceholderText("Country code");
+    country_input_->setPlaceholderText(tr("Country code"));
     country_input_->setText("US");
     country_input_->setFixedHeight(26);
     country_input_->setFixedWidth(70);
 
     start_input_ = new QLineEdit;
-    start_input_->setPlaceholderText("Start year");
+    start_input_->setPlaceholderText(tr("Start year"));
     start_input_->setFixedHeight(26);
     start_input_->setFixedWidth(70);
 
     end_input_ = new QLineEdit;
-    end_input_->setPlaceholderText("End year");
+    end_input_->setPlaceholderText(tr("End year"));
     end_input_->setFixedHeight(26);
     end_input_->setFixedWidth(70);
 
-    thl->addWidget(make_lbl("DATASET"));
+    thl->addWidget(dataset_lbl_ = make_lbl(tr("DATASET")));
     thl->addWidget(dataset_combo_);
-    thl->addWidget(make_lbl("COUNTRY"));
+    thl->addWidget(country_lbl_ = make_lbl(tr("COUNTRY")));
     thl->addWidget(country_input_);
-    thl->addWidget(make_lbl("FROM"));
+    thl->addWidget(from_lbl_ = make_lbl(tr("FROM")));
     thl->addWidget(start_input_);
-    thl->addWidget(make_lbl("TO"));
+    thl->addWidget(to_lbl_ = make_lbl(tr("TO")));
     thl->addWidget(end_input_);
 }
 
@@ -129,7 +129,7 @@ void BisPanel::on_fetch() {
     // economic_overview doesn't take country/date args
     if (ds.command != "get_economic_overview") {
         if (country.isEmpty()) {
-            show_empty("Enter a country code (e.g. US, GB, JP)");
+            show_empty(tr("Enter a country code (e.g. US, GB, JP)"));
             return;
         }
         args << country;
@@ -139,7 +139,7 @@ void BisPanel::on_fetch() {
             args << end;
     }
 
-    show_loading("Fetching BIS " + ds.label + "…");
+    show_loading(tr("Fetching BIS %1…").arg(ds.label));
     services::EconomicsService::instance().execute(kBisSourceId, kBisScript, ds.command, args,
                                                    "bis_" + ds.command + "_" + country);
 }
@@ -173,7 +173,7 @@ void BisPanel::on_result(const QString& request_id, const services::EconomicsRes
     }
 
     if (rows.isEmpty()) {
-        show_empty("No data returned — try a different country or date range");
+        show_empty(tr("No data returned — try a different country or date range"));
         return;
     }
 
@@ -182,6 +182,32 @@ void BisPanel::on_result(const QString& request_id, const services::EconomicsRes
 
     display(rows, title);
     LOG_INFO("BisPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(request_id));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void BisPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void BisPanel::retranslateUi() {
+    if (dataset_lbl_)
+        dataset_lbl_->setText(tr("DATASET"));
+    if (country_lbl_)
+        country_lbl_->setText(tr("COUNTRY"));
+    if (from_lbl_)
+        from_lbl_->setText(tr("FROM"));
+    if (to_lbl_)
+        to_lbl_->setText(tr("TO"));
+    // country_input_ placeholder is replaced with a per-dataset hint (data) on
+    // selection, so it is not re-applied here.
+    if (start_input_)
+        start_input_->setPlaceholderText(tr("Start year"));
+    if (end_input_)
+        end_input_->setPlaceholderText(tr("End year"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

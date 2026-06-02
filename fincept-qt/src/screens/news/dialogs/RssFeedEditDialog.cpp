@@ -43,12 +43,49 @@ RssFeedEditDialog::RssFeedEditDialog(const services::RSSFeed& initial, bool is_b
     build_ui();
 }
 
+void RssFeedEditDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void RssFeedEditDialog::retranslateUi() {
+    setWindowTitle(initial_.id.isEmpty() ? tr("Add RSS Feed") : tr("Edit RSS Feed"));
+
+    // QFormLayout owns the row caption labels — re-apply via labelForField.
+    auto set_label = [this](QWidget* field, const QString& text) {
+        if (!form_ || !field)
+            return;
+        if (auto* lbl = qobject_cast<QLabel*>(form_->labelForField(field)))
+            lbl->setText(text);
+    };
+    set_label(id_input_, tr("ID"));
+    set_label(source_input_, tr("Source"));
+    set_label(name_input_, tr("Name"));
+    set_label(url_input_, tr("URL"));
+    set_label(category_combo_, tr("Category"));
+    set_label(region_combo_, tr("Region"));
+    set_label(tier_spin_, tr("Tier"));
+
+    if (id_input_ && is_builtin_id_)
+        id_input_->setToolTip(tr("Built-in feed ID is fixed."));
+    if (source_input_) source_input_->setPlaceholderText(tr("e.g. BLOOMBERG"));
+    if (name_input_)   name_input_->setPlaceholderText(tr("e.g. Bloomberg Markets"));
+    if (tier_spin_)    tier_spin_->setToolTip(tr("1=wire, 2=major, 3=specialty, 4=blog"));
+
+    if (test_btn_)   test_btn_->setText(tr("Test URL"));
+    if (cancel_btn_) cancel_btn_->setText(tr("Cancel"));
+    if (ok_btn_)     ok_btn_->setText(tr("Save"));
+    // test_status_ reflects the last async test result — refreshed on next test.
+}
+
 void RssFeedEditDialog::build_ui() {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(16, 16, 16, 12);
     root->setSpacing(10);
 
-    auto* form = new QFormLayout();
+    form_ = new QFormLayout();
+    QFormLayout* form = form_;
     form->setLabelAlignment(Qt::AlignRight);
     form->setFormAlignment(Qt::AlignLeft | Qt::AlignTop);
 

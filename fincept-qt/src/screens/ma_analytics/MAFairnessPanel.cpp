@@ -43,23 +43,23 @@ QWidget* MAModulePanel::build_fairness_panel() {
 
     auto* offer = make_double_spin(0, 1e6, 50, 2, "", fa);
     double_inputs_["fo_offer_price"] = offer;
-    fa_vl->addWidget(build_input_row("Offer Price ($)", offer, fa));
+    fa_vl->addWidget(build_input_row(tr("Offer Price") + " ($)", offer, fa));
 
     auto* dcf_val = make_double_spin(0, 1e6, 48, 2, "", fa);
     double_inputs_["fo_dcf_val"] = dcf_val;
-    fa_vl->addWidget(build_input_row("DCF Valuation ($)", dcf_val, fa));
+    fa_vl->addWidget(build_input_row(tr("DCF Valuation") + " ($)", dcf_val, fa));
 
     auto* comps_val = make_double_spin(0, 1e6, 45, 2, "", fa);
     double_inputs_["fo_comps_val"] = comps_val;
-    fa_vl->addWidget(build_input_row("Comps Valuation ($)", comps_val, fa));
+    fa_vl->addWidget(build_input_row(tr("Comps Valuation") + " ($)", comps_val, fa));
 
     auto* prec_val = make_double_spin(0, 1e6, 52, 2, "", fa);
     double_inputs_["fo_prec_val"] = prec_val;
-    fa_vl->addWidget(build_input_row("Precedent Valuation ($)", prec_val, fa));
+    fa_vl->addWidget(build_input_row(tr("Precedent Valuation") + " ($)", prec_val, fa));
 
-    auto* fa_run = make_run_button("GENERATE FAIRNESS OPINION", fa);
+    auto* fa_run = make_run_button(tr("GENERATE FAIRNESS OPINION"), fa);
     connect(fa_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Generating Fairness Opinion...");
+        status_label_->setText(tr("Generating Fairness Opinion..."));
         QJsonObject params;
         params["offer_price"] = double_inputs_["fo_offer_price"]->value();
         QJsonArray methods;
@@ -78,7 +78,7 @@ QWidget* MAModulePanel::build_fairness_panel() {
     });
     fa_vl->addWidget(fa_run);
     fa_vl->addStretch();
-    sub_tabs_->addTab(fa, "Fairness Analysis");
+    add_sub_tab(fa, QT_TR_NOOP("Fairness Analysis"));
 
     // ── Premium Analysis ──
     auto* pa = new QWidget(this);
@@ -88,23 +88,23 @@ QWidget* MAModulePanel::build_fairness_panel() {
 
     auto* pa_offer = make_double_spin(0, 1e6, 50, 2, "", pa);
     double_inputs_["pa_offer"] = pa_offer;
-    pa_vl->addWidget(build_input_row("Offer Price ($)", pa_offer, pa));
+    pa_vl->addWidget(build_input_row(tr("Offer Price") + " ($)", pa_offer, pa));
 
     auto* pa_1d = make_double_spin(0, 1e6, 42, 2, "", pa);
     double_inputs_["pa_price_1d"] = pa_1d;
-    pa_vl->addWidget(build_input_row("1-Day Prior Price ($)", pa_1d, pa));
+    pa_vl->addWidget(build_input_row(tr("1-Day Prior Price") + " ($)", pa_1d, pa));
 
     auto* pa_4w = make_double_spin(0, 1e6, 38, 2, "", pa);
     double_inputs_["pa_price_4w"] = pa_4w;
-    pa_vl->addWidget(build_input_row("4-Week Avg Price ($)", pa_4w, pa));
+    pa_vl->addWidget(build_input_row(tr("4-Week Avg Price") + " ($)", pa_4w, pa));
 
     auto* pa_52w = make_double_spin(0, 1e6, 35, 2, "", pa);
     double_inputs_["pa_price_52w"] = pa_52w;
-    pa_vl->addWidget(build_input_row("52-Week High ($)", pa_52w, pa));
+    pa_vl->addWidget(build_input_row(tr("52-Week High") + " ($)", pa_52w, pa));
 
-    auto* pa_run = make_run_button("ANALYZE PREMIUM", pa);
+    auto* pa_run = make_run_button(tr("ANALYZE PREMIUM"), pa);
     connect(pa_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Analyzing Premium...");
+        status_label_->setText(tr("Analyzing Premium..."));
         QJsonObject params;
         params["offer_price"] = double_inputs_["pa_offer"]->value();
         params["price_1d"] = double_inputs_["pa_price_1d"]->value();
@@ -114,7 +114,7 @@ QWidget* MAModulePanel::build_fairness_panel() {
     });
     pa_vl->addWidget(pa_run);
     pa_vl->addStretch();
-    sub_tabs_->addTab(pa, "Premium Analysis");
+    add_sub_tab(pa, QT_TR_NOOP("Premium Analysis"));
 
     // ── Process Quality ──
     auto* pq = new QWidget(this);
@@ -122,17 +122,18 @@ QWidget* MAModulePanel::build_fairness_panel() {
     pq_vl->setContentsMargins(12, 12, 12, 12);
     pq_vl->setSpacing(8);
 
-    QStringList pq_factors = {"Board Independence",  "Special Committee", "Independent Advisor", "Market Check",
-                              "Negotiation Process", "Due Diligence",     "Disclosure Quality",  "Timing Adequacy"};
+    QStringList pq_factors = {tr("Board Independence"),  tr("Special Committee"), tr("Independent Advisor"),
+                              tr("Market Check"),        tr("Negotiation Process"), tr("Due Diligence"),
+                              tr("Disclosure Quality"),  tr("Timing Adequacy")};
     for (int i = 0; i < pq_factors.size(); ++i) {
         auto* spin = make_int_spin(1, 5, 3, pq);
         int_inputs_[QString("pq_%1").arg(i)] = spin;
         pq_vl->addWidget(build_input_row(pq_factors[i] + " (1-5)", spin, pq));
     }
 
-    auto* pq_run = make_run_button("ASSESS PROCESS QUALITY", pq);
+    auto* pq_run = make_run_button(tr("ASSESS PROCESS QUALITY"), pq);
     connect(pq_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Assessing Process Quality...");
+        status_label_->setText(tr("Assessing Process Quality..."));
         QJsonObject params;
         QJsonArray factors;
         for (int i = 0; i < 8; ++i)
@@ -142,7 +143,7 @@ QWidget* MAModulePanel::build_fairness_panel() {
     });
     pq_vl->addWidget(pq_run);
     pq_vl->addStretch();
-    sub_tabs_->addTab(pq, "Process Quality");
+    add_sub_tab(pq, QT_TR_NOOP("Process Quality"));
 
     vl->addWidget(sub_tabs_);
 

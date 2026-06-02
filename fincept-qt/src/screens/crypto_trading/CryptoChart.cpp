@@ -175,9 +175,9 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
     h_layout->setContentsMargins(10, 4, 10, 4);
     h_layout->setSpacing(2);
 
-    auto* title = new QLabel(QStringLiteral("CHART"));
-    title->setObjectName("cryptoChartTitle");
-    h_layout->addWidget(title);
+    title_label_ = new QLabel(tr("CHART"));
+    title_label_->setObjectName("cryptoChartTitle");
+    h_layout->addWidget(title_label_);
     h_layout->addSpacing(8);
 
     for (int i = 0; i < 6; ++i) {
@@ -343,6 +343,17 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
             this, [this](const QString& id) {
         overlay_mgr_->remove_layer(id);
     });
+}
+
+void CryptoChart::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void CryptoChart::retranslateUi() {
+    if (title_label_) title_label_->setText(tr("CHART"));
+    // Timeframe button labels (1m/5m/…) are fixed codes, not translatable.
 }
 
 void CryptoChart::set_active_tf(int idx) {

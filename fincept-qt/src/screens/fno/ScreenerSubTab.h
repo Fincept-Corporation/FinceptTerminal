@@ -16,6 +16,7 @@
 #include "services/options/OptionChainTypes.h"
 
 #include <QAbstractTableModel>
+#include <QEvent>
 #include <QPointer>
 #include <QString>
 #include <QVariantMap>
@@ -68,12 +69,14 @@ class ScreenerSubTab : public QWidget {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_filter_changed();
 
   private:
     void setup_ui();
+    void retranslateUi();
     void on_chain_published(const QVariant& v);
     void apply_filters();
 
@@ -83,6 +86,13 @@ class ScreenerSubTab : public QWidget {
     QSpinBox* distance_ = nullptr;
     QSpinBox* ce_oi_min_ = nullptr;
     QSpinBox* pe_oi_min_ = nullptr;
+
+    // Filter field labels (cached for retranslateUi)
+    QLabel* iv_min_label_ = nullptr;
+    QLabel* iv_max_label_ = nullptr;
+    QLabel* distance_label_ = nullptr;
+    QLabel* ce_oi_label_ = nullptr;
+    QLabel* pe_oi_label_ = nullptr;
 
     QTableView* table_ = nullptr;
     ScreenedChainModel* model_ = nullptr;

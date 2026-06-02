@@ -114,8 +114,8 @@ EurostatPanel::EurostatPanel(QWidget* parent) : EconPanelBase(kEurostatSourceId,
 }
 
 void EurostatPanel::activate() {
-    show_empty("Select a dataset and country, then click FETCH\n"
-               "Source: Eurostat — EU statistical office");
+    show_empty(tr("Select a dataset and country, then click FETCH\n"
+                  "Source: Eurostat — EU statistical office"));
 }
 
 void EurostatPanel::build_controls(QHBoxLayout* thl) {
@@ -136,9 +136,9 @@ void EurostatPanel::build_controls(QHBoxLayout* thl) {
         country_combo_->addItem(c.first, c.second);
     country_combo_->setFixedHeight(26);
 
-    thl->addWidget(lbl("DATASET"));
+    thl->addWidget(dataset_lbl_ = lbl(tr("DATASET")));
     thl->addWidget(dataset_combo_);
-    thl->addWidget(lbl("COUNTRY"));
+    thl->addWidget(country_lbl_ = lbl(tr("COUNTRY")));
     thl->addWidget(country_combo_);
 }
 
@@ -147,7 +147,7 @@ void EurostatPanel::on_fetch() {
     const auto& dataset = kEurostatDatasets[ds_idx];
     const QString country = country_combo_->currentData().toString();
 
-    show_loading("Fetching Eurostat: " + dataset.label + " — " + country_combo_->currentText() + "…");
+    show_loading(tr("Fetching Eurostat: %1 — %2…").arg(dataset.label, country_combo_->currentText()));
 
     QStringList args = {dataset.command};
     if (dataset.has_country)
@@ -183,13 +183,29 @@ void EurostatPanel::on_result(const QString& request_id, const services::Economi
     if (rows.isEmpty()) {
         // Check for explicit error in data
         const QString err = result.data["error"].toString();
-        show_error(err.isEmpty() ? "No data returned for this selection" : err);
+        show_error(err.isEmpty() ? tr("No data returned for this selection") : err);
         return;
     }
 
     const QString title = "Eurostat: " + dataset.label + " — " + country_combo_->currentText();
     display(rows, title);
     LOG_INFO("EurostatPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(title));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void EurostatPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void EurostatPanel::retranslateUi() {
+    if (dataset_lbl_)
+        dataset_lbl_->setText(tr("DATASET"));
+    if (country_lbl_)
+        country_lbl_->setText(tr("COUNTRY"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

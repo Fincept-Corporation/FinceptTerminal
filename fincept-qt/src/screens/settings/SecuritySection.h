@@ -4,6 +4,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -22,10 +23,15 @@ class SecuritySection : public QWidget {
 
   protected:
     void showEvent(QShowEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
     void refresh_audit_log();
+
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
 
     QLabel*      sec_pin_status_       = nullptr;
     QComboBox*   sec_lock_timeout_     = nullptr;
@@ -42,6 +48,25 @@ class SecuritySection : public QWidget {
     QLineEdit* sec_confirm_pin_    = nullptr;
     QLabel*    sec_pin_error_      = nullptr;
     QLabel*    sec_pin_success_    = nullptr;
+
+    // Section titles, buttons, and row labels (cached for retranslateUi).
+    QLabel* title_pin_    = nullptr;
+    QLabel* title_change_ = nullptr;
+    QLabel* title_lock_   = nullptr;
+    QLabel* title_audit_  = nullptr;
+    QLabel* audit_note_   = nullptr;
+    QPushButton* save_pin_btn_      = nullptr;
+    QPushButton* save_btn_          = nullptr;
+    QPushButton* refresh_audit_btn_ = nullptr;
+
+    QLabel* row_pin_status_lbl_  = nullptr;  QLabel* row_pin_status_desc_  = nullptr;
+    QLabel* row_attempts_lbl_    = nullptr;  QLabel* row_attempts_desc_    = nullptr;
+    QLabel* row_current_lbl_     = nullptr;
+    QLabel* row_new_lbl_         = nullptr;
+    QLabel* row_confirm_lbl_     = nullptr;
+    QLabel* row_autolock_lbl_    = nullptr;  QLabel* row_autolock_desc_    = nullptr;
+    QLabel* row_timeout_lbl_     = nullptr;  QLabel* row_timeout_desc_     = nullptr;
+    QLabel* row_minimize_lbl_    = nullptr;  QLabel* row_minimize_desc_    = nullptr;
 };
 
 } // namespace fincept::screens

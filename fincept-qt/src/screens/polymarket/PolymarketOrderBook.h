@@ -2,6 +2,7 @@
 
 #include "services/prediction/PredictionTypes.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QMutex>
 #include <QPixmap>
@@ -29,6 +30,7 @@ class PolymarketOrderBook : public QWidget {
     void mousePressEvent(QMouseEvent* event) override;
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void rebuild_cache();

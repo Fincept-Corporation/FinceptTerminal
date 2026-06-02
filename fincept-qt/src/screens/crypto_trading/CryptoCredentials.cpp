@@ -62,7 +62,7 @@ namespace fincept::screens::crypto {
 
 CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent)
     : QDialog(parent), exchange_id_(exchange_id) {
-    setWindowTitle(QString("API Credentials — %1").arg(exchange_id.toUpper()));
+    setWindowTitle(tr("API Credentials — %1").arg(exchange_id.toUpper()));
     setMinimumWidth(400);
     // ONE dialog-level stylesheet drives all widgets via objectName selectors.
     setStyleSheet(kDialogStyle());
@@ -72,55 +72,55 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
     layout->setContentsMargins(14, 14, 14, 14);
 
     // Header
-    auto* title = new QLabel(QString("API CREDENTIALS  %1").arg(exchange_id.toUpper()));
-    title->setObjectName("credTitle");
-    layout->addWidget(title);
+    title_label_ = new QLabel(tr("API CREDENTIALS  %1").arg(exchange_id.toUpper()));
+    title_label_->setObjectName("credTitle");
+    layout->addWidget(title_label_);
 
-    auto* info = new QLabel("Enter your exchange API credentials for live trading.\n"
-                            "Keys are stored locally in encrypted secure storage.");
-    info->setObjectName("credInfo");
-    info->setWordWrap(true);
-    layout->addWidget(info);
+    info_label_ = new QLabel(tr("Enter your exchange API credentials for live trading.\n"
+                                "Keys are stored locally in encrypted secure storage."));
+    info_label_->setObjectName("credInfo");
+    info_label_->setWordWrap(true);
+    layout->addWidget(info_label_);
 
     layout->addSpacing(4);
 
     // API Key
-    auto* key_lbl = new QLabel("API KEY");
-    key_lbl->setObjectName("credFieldLabel");
-    layout->addWidget(key_lbl);
+    key_field_label_ = new QLabel(tr("API KEY"));
+    key_field_label_->setObjectName("credFieldLabel");
+    layout->addWidget(key_field_label_);
     key_edit_ = new QLineEdit;
-    key_edit_->setPlaceholderText("Enter API key");
+    key_edit_->setPlaceholderText(tr("Enter API key"));
     key_edit_->setFixedHeight(28);
     layout->addWidget(key_edit_);
 
     // API Secret
-    auto* secret_lbl = new QLabel("API SECRET");
-    secret_lbl->setObjectName("credFieldLabel");
-    layout->addWidget(secret_lbl);
+    secret_field_label_ = new QLabel(tr("API SECRET"));
+    secret_field_label_->setObjectName("credFieldLabel");
+    layout->addWidget(secret_field_label_);
     secret_edit_ = new QLineEdit;
-    secret_edit_->setPlaceholderText("Enter API secret");
+    secret_edit_->setPlaceholderText(tr("Enter API secret"));
     secret_edit_->setEchoMode(QLineEdit::Password);
     secret_edit_->setFixedHeight(28);
     layout->addWidget(secret_edit_);
 
-    // Password
-    auto* pw_lbl = new QLabel("PASSWORD (OKX/KUCOIN)");
-    pw_lbl->setObjectName("credFieldLabel");
-    layout->addWidget(pw_lbl);
+    // Password / API passphrase — required by OKX, KuCoin, Bitget, Coinbase.
+    password_field_label_ = new QLabel(tr("PASSPHRASE (OKX/KUCOIN/BITGET/COINBASE)"));
+    password_field_label_->setObjectName("credFieldLabel");
+    layout->addWidget(password_field_label_);
     password_edit_ = new QLineEdit;
-    password_edit_->setPlaceholderText("Optional");
+    password_edit_->setPlaceholderText(tr("Optional"));
     password_edit_->setEchoMode(QLineEdit::Password);
     password_edit_->setFixedHeight(28);
     layout->addWidget(password_edit_);
 
     // TOTP section
     layout->addSpacing(4);
-    auto* totp_lbl = new QLabel("TOTP SECRET (2FA)");
-    totp_lbl->setObjectName("credFieldLabel");
-    layout->addWidget(totp_lbl);
+    totp_field_label_ = new QLabel(tr("TOTP SECRET (2FA)"));
+    totp_field_label_->setObjectName("credFieldLabel");
+    layout->addWidget(totp_field_label_);
 
     totp_secret_edit_ = new QLineEdit;
-    totp_secret_edit_->setPlaceholderText("Base32 secret (optional)");
+    totp_secret_edit_->setPlaceholderText(tr("Base32 secret (optional)"));
     totp_secret_edit_->setEchoMode(QLineEdit::Password);
     totp_secret_edit_->setFixedHeight(28);
     layout->addWidget(totp_secret_edit_);
@@ -128,7 +128,7 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
     auto* totp_row = new QHBoxLayout;
     totp_row->setSpacing(8);
 
-    totp_code_label_ = new QLabel("CODE: --");
+    totp_code_label_ = new QLabel(tr("CODE: --"));
     totp_code_label_->setObjectName("credTotpCode");
     totp_row->addWidget(totp_code_label_);
 
@@ -144,7 +144,7 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
     connect(totp_secret_edit_, &QLineEdit::textChanged, this, [this](const QString& text) {
         if (text.trimmed().isEmpty()) {
             totp_timer_->stop();
-            totp_code_label_->setText("CODE: --");
+            totp_code_label_->setText(tr("CODE: --"));
             totp_countdown_label_->setText("");
         } else {
             refresh_totp();
@@ -160,19 +160,46 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
     // Buttons — Obsidian danger + accent
     auto* btn_row = new QHBoxLayout;
 
-    auto* clear_btn = new QPushButton("CLEAR");
-    clear_btn->setObjectName("credClearBtn");
-    connect(clear_btn, &QPushButton::clicked, this, &CryptoCredentials::on_clear);
-    btn_row->addWidget(clear_btn);
+    clear_btn_ = new QPushButton(tr("CLEAR"));
+    clear_btn_->setObjectName("credClearBtn");
+    connect(clear_btn_, &QPushButton::clicked, this, &CryptoCredentials::on_clear);
+    btn_row->addWidget(clear_btn_);
 
     btn_row->addStretch();
 
-    auto* save_btn = new QPushButton("SAVE & CONNECT");
-    save_btn->setObjectName("credSaveBtn");
-    connect(save_btn, &QPushButton::clicked, this, &CryptoCredentials::on_save);
-    btn_row->addWidget(save_btn);
+    save_btn_ = new QPushButton(tr("SAVE & CONNECT"));
+    save_btn_->setObjectName("credSaveBtn");
+    connect(save_btn_, &QPushButton::clicked, this, &CryptoCredentials::on_save);
+    btn_row->addWidget(save_btn_);
 
     layout->addLayout(btn_row);
+}
+
+void CryptoCredentials::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void CryptoCredentials::retranslateUi() {
+    setWindowTitle(tr("API Credentials — %1").arg(exchange_id_.toUpper()));
+    if (title_label_)          title_label_->setText(tr("API CREDENTIALS  %1").arg(exchange_id_.toUpper()));
+    if (info_label_)           info_label_->setText(tr("Enter your exchange API credentials for live trading.\n"
+                                                       "Keys are stored locally in encrypted secure storage."));
+    if (key_field_label_)      key_field_label_->setText(tr("API KEY"));
+    if (key_edit_)             key_edit_->setPlaceholderText(tr("Enter API key"));
+    if (secret_field_label_)   secret_field_label_->setText(tr("API SECRET"));
+    if (secret_edit_)          secret_edit_->setPlaceholderText(tr("Enter API secret"));
+    if (password_field_label_) password_field_label_->setText(tr("PASSPHRASE (OKX/KUCOIN/BITGET/COINBASE)"));
+    if (password_edit_)        password_edit_->setPlaceholderText(tr("Optional"));
+    if (totp_field_label_)     totp_field_label_->setText(tr("TOTP SECRET (2FA)"));
+    if (totp_secret_edit_)     totp_secret_edit_->setPlaceholderText(tr("Base32 secret (optional)"));
+    if (clear_btn_)            clear_btn_->setText(tr("CLEAR"));
+    if (save_btn_)             save_btn_->setText(tr("SAVE & CONNECT"));
+    // TOTP code label only resets to the idle placeholder when no secret is set;
+    // a live code is data and is left untouched.
+    if (totp_code_label_ && totp_secret_edit_ && totp_secret_edit_->text().trimmed().isEmpty())
+        totp_code_label_->setText(tr("CODE: --"));
 }
 
 QString CryptoCredentials::api_key() const {
@@ -193,11 +220,11 @@ void CryptoCredentials::set_values(const QString& key, const QString& secret, co
 
 void CryptoCredentials::on_save() {
     if (api_key().isEmpty() || api_secret().isEmpty()) {
-        set_status("API key and secret are required", "credStatusErr");
+        set_status(tr("API key and secret are required"), "credStatusErr");
         return;
     }
     emit credentials_saved(api_key(), api_secret(), password());
-    set_status("Credentials saved", "credStatusOk");
+    set_status(tr("Credentials saved"), "credStatusOk");
     accept();
 }
 
@@ -205,7 +232,7 @@ void CryptoCredentials::on_clear() {
     key_edit_->clear();
     secret_edit_->clear();
     password_edit_->clear();
-    set_status("Credentials cleared", "credStatusWarn");
+    set_status(tr("Credentials cleared"), "credStatusWarn");
 }
 
 void CryptoCredentials::set_status(const QString& text, const QString& object_name) {
@@ -233,11 +260,11 @@ void CryptoCredentials::refresh_totp() {
             if (!self)
                 return;
             if (!r.success) {
-                self->totp_code_label_->setText("CODE: ERR");
+                self->totp_code_label_->setText(tr("CODE: ERR"));
                 self->totp_countdown_label_->setText("");
                 return;
             }
-            self->totp_code_label_->setText(QString("CODE: %1").arg(r.code));
+            self->totp_code_label_->setText(tr("CODE: %1").arg(r.code));
             self->totp_countdown_label_->setText(QString("(%1s)").arg(r.valid_for));
         });
 }

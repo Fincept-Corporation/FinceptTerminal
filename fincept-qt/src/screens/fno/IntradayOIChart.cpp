@@ -37,7 +37,7 @@ IntradayOIChart::IntradayOIChart(QWidget* parent) : QChartView(parent) {
     chart_->setPlotAreaBackgroundBrush(QColor(colors::BG_BASE()));
     chart_->setPlotAreaBackgroundVisible(true);
     chart_->setMargins(QMargins(0, 4, 0, 0));
-    chart_->setTitle(QStringLiteral("Intraday OI"));
+    chart_->setTitle(tr("Intraday OI"));
     chart_->setTitleBrush(QColor(colors::TEXT_SECONDARY()));
     QFont title_font = chart_->titleFont();
     title_font.setPointSize(9);
@@ -49,14 +49,14 @@ IntradayOIChart::IntradayOIChart(QWidget* parent) : QChartView(parent) {
     setChart(chart_);
 
     ce_series_ = new QLineSeries();
-    ce_series_->setName(QStringLiteral("CE OI"));
+    ce_series_->setName(tr("CE OI"));
     // Brace-init dodges the vexing-parse on single-arg QColor temporaries.
     QPen ce_pen{QColor(colors::POSITIVE())};
     ce_pen.setWidth(2);
     ce_series_->setPen(ce_pen);
 
     pe_series_ = new QLineSeries();
-    pe_series_->setName(QStringLiteral("PE OI"));
+    pe_series_->setName(tr("PE OI"));
     QPen pe_pen{QColor(colors::NEGATIVE())};
     pe_pen.setWidth(2);
     pe_series_->setPen(pe_pen);
@@ -194,6 +194,18 @@ void IntradayOIChart::showEvent(QShowEvent* e) {
 void IntradayOIChart::hideEvent(QHideEvent* e) {
     QChartView::hideEvent(e);
     poll_timer_.stop();
+}
+
+void IntradayOIChart::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QChartView::changeEvent(event);
+}
+
+void IntradayOIChart::retranslateUi() {
+    if (chart_) chart_->setTitle(tr("Intraday OI"));
+    if (ce_series_) ce_series_->setName(tr("CE OI"));
+    if (pe_series_) pe_series_->setName(tr("PE OI"));
 }
 
 } // namespace fincept::screens::fno

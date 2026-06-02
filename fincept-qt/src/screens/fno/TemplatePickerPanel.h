@@ -20,6 +20,8 @@
 
 #include "services/options/StrategyTemplates.h"
 
+#include <QEvent>
+#include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
 #include <QString>
@@ -39,6 +41,9 @@ class TemplatePickerPanel : public QWidget {
     void template_chosen(const QString& template_id,
                          const fincept::services::options::StrategyInstantiationOptions& options);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_category_changed(int index);
     void on_template_selected();
@@ -46,6 +51,7 @@ class TemplatePickerPanel : public QWidget {
 
   private:
     void setup_ui();
+    void retranslateUi();
     void rebuild_list_for_category(fincept::services::options::StrategyCategory cat);
     void apply_template_to_controls(const fincept::services::options::StrategyTemplate& tpl);
 
@@ -58,6 +64,11 @@ class TemplatePickerPanel : public QWidget {
     QSpinBox* shift_spin_ = nullptr;
     QSpinBox* lots_spin_ = nullptr;
     QPushButton* use_btn_ = nullptr;
+
+    // Spin-box field labels (cached for retranslateUi)
+    QLabel* width_label_ = nullptr;
+    QLabel* shift_label_ = nullptr;
+    QLabel* lots_label_ = nullptr;
 
     /// Current selection — null until the user clicks a row.
     const fincept::services::options::StrategyTemplate* selected_ = nullptr;

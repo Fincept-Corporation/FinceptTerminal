@@ -18,7 +18,7 @@ using namespace fincept::services::algo;
 
 AlgoDeployDialog::AlgoDeployDialog(const QString& strategy_id, const QString& strategy_name, QWidget* parent)
     : QDialog(parent), strategy_id_(strategy_id), strategy_name_(strategy_name) {
-    setWindowTitle("Deploy Strategy");
+    setWindowTitle(tr("Deploy Strategy"));
     setMinimumWidth(420);
     setStyleSheet(QString("QDialog { background: %1; color: %2; }"
                           "QLabel { color: %3; font-size: 11px; background: transparent; }"
@@ -42,10 +42,11 @@ void AlgoDeployDialog::build_ui() {
     root->setSpacing(12);
     root->setContentsMargins(16, 16, 16, 16);
 
-    auto* title = new QLabel(QString("DEPLOY: %1").arg(strategy_name_), this);
-    title->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: 700; font-family: %2;")
-                             .arg(colors::AMBER(), fonts::DATA_FAMILY()));
-    root->addWidget(title);
+    // strategy_name_ is user data; only the "DEPLOY:" prefix is translatable.
+    title_label_ = new QLabel(tr("DEPLOY: %1").arg(strategy_name_), this);
+    title_label_->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: 700; font-family: %2;")
+                                    .arg(colors::AMBER(), fonts::DATA_FAMILY()));
+    root->addWidget(title_label_);
 
     auto* id_label = new QLabel(strategy_id_, this);
     id_label->setStyleSheet(QString("color: %1; font-size: 9px; font-family: %2;")
@@ -57,31 +58,35 @@ void AlgoDeployDialog::build_ui() {
     form->setLabelAlignment(Qt::AlignRight);
 
     symbol_edit_ = new QLineEdit(this);
-    symbol_edit_->setPlaceholderText("e.g. RELIANCE");
-    form->addRow("Symbol:", symbol_edit_);
+    symbol_edit_->setPlaceholderText(tr("e.g. RELIANCE"));
+    symbol_label_ = new QLabel(tr("Symbol:"), this);
+    form->addRow(symbol_label_, symbol_edit_);
 
     mode_combo_ = new QComboBox(this);
-    mode_combo_->addItem("Paper", "paper");
-    mode_combo_->addItem("Live", "live");
+    // Visible labels translatable; userData ("paper"/"live") drives logic.
+    mode_combo_->addItem(tr("Paper"), "paper");
+    mode_combo_->addItem(tr("Live"), "live");
     connect(mode_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AlgoDeployDialog::on_mode_changed);
-    form->addRow("Mode:", mode_combo_);
+    mode_label_ = new QLabel(tr("Mode:"), this);
+    form->addRow(mode_label_, mode_combo_);
 
-    // Entry Side
+    // Entry Side — userData ("BUY"/"SELL") is the order side passed to the engine.
     side_combo_ = new QComboBox(this);
-    side_combo_->addItem("BUY", "BUY");
-    side_combo_->addItem("SELL", "SELL");
-    form->addRow("Entry Side:", side_combo_);
+    side_combo_->addItem(tr("BUY"), "BUY");
+    side_combo_->addItem(tr("SELL"), "SELL");
+    side_label_ = new QLabel(tr("Entry Side:"), this);
+    form->addRow(side_label_, side_combo_);
 
-    account_label_ = new QLabel("Account:", this);
+    account_label_ = new QLabel(tr("Account:"), this);
     account_combo_ = new QComboBox(this);
     connect(account_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AlgoDeployDialog::on_account_changed);
     form->addRow(account_label_, account_combo_);
 
-    exchange_label_ = new QLabel("Exchange:", this);
+    exchange_label_ = new QLabel(tr("Exchange:"), this);
     exchange_combo_ = new QComboBox(this);
     form->addRow(exchange_label_, exchange_combo_);
 
-    product_type_label_ = new QLabel("Product Type:", this);
+    product_type_label_ = new QLabel(tr("Product Type:"), this);
     product_type_combo_ = new QComboBox(this);
     form->addRow(product_type_label_, product_type_combo_);
 
@@ -89,40 +94,44 @@ void AlgoDeployDialog::build_ui() {
     for (const auto& tf : algo_timeframes())
         timeframe_combo_->addItem(tf);
     timeframe_combo_->setCurrentIndex(4);
-    form->addRow("Timeframe:", timeframe_combo_);
+    timeframe_label_ = new QLabel(tr("Timeframe:"), this);
+    form->addRow(timeframe_label_, timeframe_combo_);
 
     quantity_spin_ = new QDoubleSpinBox(this);
     quantity_spin_->setRange(0.01, 999999);
     quantity_spin_->setValue(1.0);
     quantity_spin_->setDecimals(2);
-    form->addRow("Quantity:", quantity_spin_);
+    quantity_label_ = new QLabel(tr("Quantity:"), this);
+    form->addRow(quantity_label_, quantity_spin_);
 
     max_order_spin_ = new QDoubleSpinBox(this);
     max_order_spin_->setRange(0, 99999999);
     max_order_spin_->setValue(0);
     max_order_spin_->setDecimals(0);
-    max_order_spin_->setSpecialValueText("No limit");
-    form->addRow("Max Order Value:", max_order_spin_);
+    max_order_spin_->setSpecialValueText(tr("No limit"));
+    max_order_label_ = new QLabel(tr("Max Order Value:"), this);
+    form->addRow(max_order_label_, max_order_spin_);
 
     max_loss_spin_ = new QDoubleSpinBox(this);
     max_loss_spin_->setRange(0, 99999999);
     max_loss_spin_->setValue(0);
     max_loss_spin_->setDecimals(0);
-    max_loss_spin_->setSpecialValueText("No limit");
-    form->addRow("Max Daily Loss:", max_loss_spin_);
+    max_loss_spin_->setSpecialValueText(tr("No limit"));
+    max_loss_label_ = new QLabel(tr("Max Daily Loss:"), this);
+    form->addRow(max_loss_label_, max_loss_spin_);
 
     root->addLayout(form);
 
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    buttons->button(QDialogButtonBox::Ok)->setText("DEPLOY");
-    buttons->setStyleSheet(
+    buttons_ = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    buttons_->button(QDialogButtonBox::Ok)->setText(tr("DEPLOY"));
+    buttons_->setStyleSheet(
         QString("QPushButton { background: %1; color: %2; border: 1px solid %3;"
                 " font-size: 11px; font-weight: 700; padding: 6px 20px; }"
                 "QPushButton:hover { border-color: %4; color: %4; }")
             .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), colors::CYAN()));
-    connect(buttons, &QDialogButtonBox::accepted, this, &AlgoDeployDialog::on_ok);
-    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    root->addWidget(buttons);
+    connect(buttons_, &QDialogButtonBox::accepted, this, &AlgoDeployDialog::on_ok);
+    connect(buttons_, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    root->addWidget(buttons_);
 
     on_mode_changed(0);
     populate_accounts();
@@ -147,7 +156,7 @@ void AlgoDeployDialog::populate_accounts() {
         }
     }
     if (account_combo_->count() == 0) {
-        account_combo_->addItem("No connected accounts", "");
+        account_combo_->addItem(tr("No connected accounts"), "");
     }
 }
 
@@ -177,11 +186,11 @@ void AlgoDeployDialog::populate_broker_fields(const QString& account_id) {
 
 void AlgoDeployDialog::on_ok() {
     if (symbol_edit_->text().trimmed().isEmpty()) {
-        QMessageBox::warning(this, "Validation", "Symbol is required.");
+        QMessageBox::warning(this, tr("Validation"), tr("Symbol is required."));
         return;
     }
     if (quantity_spin_->value() <= 0) {
-        QMessageBox::warning(this, "Validation", "Quantity must be > 0.");
+        QMessageBox::warning(this, tr("Validation"), tr("Quantity must be > 0."));
         return;
     }
 
@@ -189,12 +198,12 @@ void AlgoDeployDialog::on_ok() {
     if (mode == "live") {
         QString account_id = account_combo_->currentData().toString();
         if (account_id.isEmpty()) {
-            QMessageBox::warning(this, "Validation", "Select a connected broker account for live mode.");
+            QMessageBox::warning(this, tr("Validation"), tr("Select a connected broker account for live mode."));
             return;
         }
         auto creds = AccountManager::instance().load_credentials(account_id);
         if (creds.access_token.isEmpty()) {
-            QMessageBox::warning(this, "Validation", "Account credentials expired. Re-authenticate in Equity Trading.");
+            QMessageBox::warning(this, tr("Validation"), tr("Account credentials expired. Re-authenticate in Equity Trading."));
             return;
         }
     }
@@ -224,6 +233,43 @@ void AlgoDeployDialog::on_ok() {
     }
 
     accept();
+}
+
+void AlgoDeployDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void AlgoDeployDialog::retranslateUi() {
+    setWindowTitle(tr("Deploy Strategy"));
+    if (title_label_)        title_label_->setText(tr("DEPLOY: %1").arg(strategy_name_));
+    if (symbol_edit_)        symbol_edit_->setPlaceholderText(tr("e.g. RELIANCE"));
+    if (symbol_label_)       symbol_label_->setText(tr("Symbol:"));
+    if (mode_label_)         mode_label_->setText(tr("Mode:"));
+    if (side_label_)         side_label_->setText(tr("Entry Side:"));
+    if (account_label_)      account_label_->setText(tr("Account:"));
+    if (exchange_label_)     exchange_label_->setText(tr("Exchange:"));
+    if (product_type_label_) product_type_label_->setText(tr("Product Type:"));
+    if (timeframe_label_)    timeframe_label_->setText(tr("Timeframe:"));
+    if (quantity_label_)     quantity_label_->setText(tr("Quantity:"));
+    if (max_order_label_)    max_order_label_->setText(tr("Max Order Value:"));
+    if (max_loss_label_)     max_loss_label_->setText(tr("Max Daily Loss:"));
+
+    // Combo visible labels (userData keys unchanged).
+    if (mode_combo_ && mode_combo_->count() >= 2) {
+        mode_combo_->setItemText(0, tr("Paper"));
+        mode_combo_->setItemText(1, tr("Live"));
+    }
+    if (side_combo_ && side_combo_->count() >= 2) {
+        side_combo_->setItemText(0, tr("BUY"));
+        side_combo_->setItemText(1, tr("SELL"));
+    }
+    if (max_order_spin_) max_order_spin_->setSpecialValueText(tr("No limit"));
+    if (max_loss_spin_)  max_loss_spin_->setSpecialValueText(tr("No limit"));
+    if (buttons_)
+        buttons_->button(QDialogButtonBox::Ok)->setText(tr("DEPLOY"));
+    // account_combo_ "No connected accounts" placeholder is rebuilt by populate_accounts().
 }
 
 AlgoDeployment AlgoDeployDialog::result() const {

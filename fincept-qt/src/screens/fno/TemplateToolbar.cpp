@@ -23,9 +23,9 @@ TemplateToolbar::TemplateToolbar(QWidget* parent) : QWidget(parent) {
     lay->setContentsMargins(8, 0, 8, 0);
     lay->setSpacing(6);
 
-    auto* label = new QLabel("TEMPLATE", this);
-    label->setObjectName("fnoToolbarLabel");
-    lay->addWidget(label);
+    template_label_ = new QLabel(tr("TEMPLATE"), this);
+    template_label_->setObjectName("fnoToolbarLabel");
+    lay->addWidget(template_label_);
 
     template_combo_ = new QComboBox(this);
     template_combo_->setObjectName("fnoToolbarCombo");
@@ -44,9 +44,9 @@ TemplateToolbar::TemplateToolbar(QWidget* parent) : QWidget(parent) {
     }
     lay->addWidget(template_combo_);
 
-    auto* w_label = new QLabel("W:", this);
-    w_label->setObjectName("fnoToolbarLabel");
-    lay->addWidget(w_label);
+    width_label_ = new QLabel(tr("W:"), this);
+    width_label_->setObjectName("fnoToolbarLabel");
+    lay->addWidget(width_label_);
     width_spin_ = new QSpinBox(this);
     width_spin_->setObjectName("fnoToolbarSpin");
     width_spin_->setRange(1, 10);
@@ -54,9 +54,9 @@ TemplateToolbar::TemplateToolbar(QWidget* parent) : QWidget(parent) {
     width_spin_->setFixedWidth(50);
     lay->addWidget(width_spin_);
 
-    auto* s_label = new QLabel("S:", this);
-    s_label->setObjectName("fnoToolbarLabel");
-    lay->addWidget(s_label);
+    shift_label_ = new QLabel(tr("S:"), this);
+    shift_label_->setObjectName("fnoToolbarLabel");
+    lay->addWidget(shift_label_);
     shift_spin_ = new QSpinBox(this);
     shift_spin_->setObjectName("fnoToolbarSpin");
     shift_spin_->setRange(-20, 20);
@@ -64,9 +64,9 @@ TemplateToolbar::TemplateToolbar(QWidget* parent) : QWidget(parent) {
     shift_spin_->setFixedWidth(50);
     lay->addWidget(shift_spin_);
 
-    auto* l_label = new QLabel("L:", this);
-    l_label->setObjectName("fnoToolbarLabel");
-    lay->addWidget(l_label);
+    lots_label_ = new QLabel(tr("L:"), this);
+    lots_label_->setObjectName("fnoToolbarLabel");
+    lay->addWidget(lots_label_);
     lots_spin_ = new QSpinBox(this);
     lots_spin_->setObjectName("fnoToolbarSpin");
     lots_spin_->setRange(1, 100);
@@ -76,17 +76,17 @@ TemplateToolbar::TemplateToolbar(QWidget* parent) : QWidget(parent) {
 
     lay->addStretch(1);
 
-    auto* add_btn = new QPushButton("+ ADD LEG", this);
-    add_btn->setObjectName("fnoToolbarAccentBtn");
-    add_btn->setCursor(Qt::PointingHandCursor);
-    connect(add_btn, &QPushButton::clicked, this, &TemplateToolbar::add_leg_requested);
-    lay->addWidget(add_btn);
+    add_btn_ = new QPushButton(tr("+ ADD LEG"), this);
+    add_btn_->setObjectName("fnoToolbarAccentBtn");
+    add_btn_->setCursor(Qt::PointingHandCursor);
+    connect(add_btn_, &QPushButton::clicked, this, &TemplateToolbar::add_leg_requested);
+    lay->addWidget(add_btn_);
 
-    auto* use_btn = new QPushButton("USE", this);
-    use_btn->setObjectName("fnoToolbarAccentBtn");
-    use_btn->setCursor(Qt::PointingHandCursor);
-    connect(use_btn, &QPushButton::clicked, this, &TemplateToolbar::on_use_clicked);
-    lay->addWidget(use_btn);
+    use_btn_ = new QPushButton(tr("USE"), this);
+    use_btn_->setObjectName("fnoToolbarAccentBtn");
+    use_btn_->setCursor(Qt::PointingHandCursor);
+    connect(use_btn_, &QPushButton::clicked, this, &TemplateToolbar::on_use_clicked);
+    lay->addWidget(use_btn_);
 
     setStyleSheet(QString(
         "#fnoTemplateToolbar { background:%1; border-bottom:1px solid %2; }"
@@ -119,6 +119,21 @@ void TemplateToolbar::on_use_clicked() {
     opts.shift = shift_spin_->value();
     opts.default_lots = lots_spin_->value();
     emit template_chosen(template_id, opts);
+}
+
+void TemplateToolbar::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void TemplateToolbar::retranslateUi() {
+    if (template_label_) template_label_->setText(tr("TEMPLATE"));
+    if (width_label_)    width_label_->setText(tr("W:"));
+    if (shift_label_)    shift_label_->setText(tr("S:"));
+    if (lots_label_)     lots_label_->setText(tr("L:"));
+    if (add_btn_)        add_btn_->setText(tr("+ ADD LEG"));
+    if (use_btn_)        use_btn_->setText(tr("USE"));
 }
 
 } // namespace fincept::screens::fno

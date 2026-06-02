@@ -53,6 +53,12 @@ class FyersBroker : public IBroker {
 
     TokenExchangeResponse exchange_token(const QString& api_key, const QString& api_secret,
                                          const QString& auth_code) override;
+
+    // Fyers issues a refresh token valid for 15 days. Silent refresh additionally
+    // requires the user's trading PIN, stored in additional_data["pin"].
+    bool supports_silent_refresh() const override { return true; }
+    TokenExchangeResponse refresh_session(const BrokerCredentials& creds) override;
+
     OrderPlaceResponse place_order(const BrokerCredentials& creds, const UnifiedOrder& order) override;
     ApiResponse<QJsonObject> modify_order(const BrokerCredentials& creds, const QString& order_id,
                                           const QJsonObject& modifications) override;

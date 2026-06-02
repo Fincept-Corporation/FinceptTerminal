@@ -67,12 +67,12 @@ void RelationshipPanel::build_ui() {
     hhl->setContentsMargins(16, 0, 16, 0);
     hhl->setSpacing(12);
 
-    auto* title = new QLabel("GEOPOLITICAL RELATIONSHIP NETWORK", header);
-    title->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
+    title_lbl_ = new QLabel(tr("GEOPOLITICAL RELATIONSHIP NETWORK"), header);
+    title_lbl_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
                              .arg(ui::colors::INFO())
                              .arg(ui::fonts::TINY)
                              .arg(ui::fonts::DATA_FAMILY()));
-    hhl->addWidget(title);
+    hhl->addWidget(title_lbl_);
     hhl->addStretch();
 
     auto nodes = build_nodes();
@@ -83,17 +83,20 @@ void RelationshipPanel::build_ui() {
         if (n.type == "organization")
             orgs++;
     }
+    node_count_ = nodes.size();
+    conflict_count_ = conflicts;
+    org_count_ = orgs;
 
-    auto* stats = new QLabel(
-        QString("NODES: %1  |  CONFLICTS: %2  |  ORGANIZATIONS: %3").arg(nodes.size()).arg(conflicts).arg(orgs),
+    stats_lbl_ = new QLabel(
+        tr("NODES: %1  |  CONFLICTS: %2  |  ORGANIZATIONS: %3").arg(nodes.size()).arg(conflicts).arg(orgs),
         header);
-    stats->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:2px 8px;"
+    stats_lbl_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:2px 8px;"
                                  "background:rgba(255,255,255,0.04); border:1px solid %4;")
                              .arg(ui::colors::TEXT_TERTIARY())
                              .arg(ui::fonts::TINY)
                              .arg(ui::fonts::DATA_FAMILY)
                              .arg(ui::colors::BORDER_DIM()));
-    hhl->addWidget(stats);
+    hhl->addWidget(stats_lbl_);
     root->addWidget(header);
 
     // Network view
@@ -112,8 +115,9 @@ void RelationshipPanel::build_ui() {
     cvl->setSpacing(16);
 
     // Helper: add a titled section with a 3-column card grid
-    auto add_section = [&](const QString& title, const QString& color, const QString& type) {
+    auto add_section = [&](const QString& title, const QString& color, const QString& type, QLabel** out) {
         auto* sec_lbl = new QLabel(title, content);
+        if (out) *out = sec_lbl;
         sec_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                        "letter-spacing:2px; padding-bottom:4px; border-bottom:1px solid rgba(%4,0.3);")
                                    .arg(color)
@@ -151,9 +155,9 @@ void RelationshipPanel::build_ui() {
         cvl->addWidget(grid_w);
     };
 
-    add_section("ACTIVE CONFLICTS", ui::colors::NEGATIVE(), "conflict");
-    add_section("CRISIS TYPES", ui::colors::WARNING(), "crisis");
-    add_section("ORGANIZATIONS", ui::colors::INFO(), "organization");
+    add_section(tr("ACTIVE CONFLICTS"), ui::colors::NEGATIVE(), "conflict", &sec_conflicts_);
+    add_section(tr("CRISIS TYPES"), ui::colors::WARNING(), "crisis", &sec_crisis_);
+    add_section(tr("ORGANIZATIONS"), ui::colors::INFO(), "organization", &sec_orgs_);
 
     cvl->addStretch();
     scroll->setWidget(content);
@@ -225,7 +229,7 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
                               .arg(ui::fonts::DATA_FAMILY));
     ds_hl->addWidget(ds_num);
 
-    auto* ds_lbl = new QLabel("datasets", ds_row);
+    auto* ds_lbl = new QLabel(tr("datasets"), ds_row);
     ds_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                               .arg(ui::colors::TEXT_TERTIARY())
                               .arg(ui::fonts::SMALL)
@@ -272,6 +276,26 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
     }
 
     return card;
+}
+
+void RelationshipPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void RelationshipPanel::retranslateUi() {
+    if (title_lbl_) title_lbl_->setText(tr("GEOPOLITICAL RELATIONSHIP NETWORK"));
+    if (stats_lbl_)
+        stats_lbl_->setText(tr("NODES: %1  |  CONFLICTS: %2  |  ORGANIZATIONS: %3")
+                                .arg(node_count_)
+                                .arg(conflict_count_)
+                                .arg(org_count_));
+    if (sec_conflicts_) sec_conflicts_->setText(tr("ACTIVE CONFLICTS"));
+    if (sec_crisis_)    sec_crisis_->setText(tr("CRISIS TYPES"));
+    if (sec_orgs_)      sec_orgs_->setText(tr("ORGANIZATIONS"));
+    // Node-card entity names/types/connections are fixed data values (not
+    // translated); their "datasets" caption is set per-card at build time.
 }
 
 } // namespace fincept::screens

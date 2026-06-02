@@ -292,7 +292,7 @@ void show_message_dialog(QWidget* parent, const QString& title, const QString& b
     lbl->setStyleSheet(QString("color:%1;font-size:13px;background:transparent;").arg(col::TEXT_SECONDARY()));
     vl->addWidget(lbl);
     vl->addStretch();
-    auto* btn = new QPushButton("Close");
+    auto* btn = new QPushButton(QObject::tr("Close"));
     btn->setCursor(Qt::PointingHandCursor);
     QObject::connect(btn, &QPushButton::clicked, &dlg, &QDialog::accept);
     auto* row = new QHBoxLayout;
@@ -304,7 +304,7 @@ void show_message_dialog(QWidget* parent, const QString& title, const QString& b
 
 void show_result_dialog(QWidget* parent, const QString& display, bool success, const QString& message) {
     QDialog dlg(parent);
-    dlg.setWindowTitle(QString("Test: %1").arg(display));
+    dlg.setWindowTitle(QObject::tr("Test: %1").arg(display));
     dlg.resize(440, 190);
     dlg.setModal(true);
     dlg.setStyleSheet(simple_dialog_qss());
@@ -313,7 +313,7 @@ void show_result_dialog(QWidget* parent, const QString& display, bool success, c
     vl->setContentsMargins(24, 20, 24, 16);
     vl->setSpacing(10);
 
-    auto* status_lbl = new QLabel(success ? "Connection successful" : "Connection failed");
+    auto* status_lbl = new QLabel(success ? QObject::tr("Connection successful") : QObject::tr("Connection failed"));
     status_lbl->setStyleSheet(
         QString("color:%1;font-size:14px;font-weight:700;background:transparent;")
             .arg(success ? col::POSITIVE.operator QString() : col::NEGATIVE.operator QString()));
@@ -325,7 +325,7 @@ void show_result_dialog(QWidget* parent, const QString& display, bool success, c
     vl->addWidget(msg_lbl);
 
     if (success) {
-        auto* note = new QLabel("Note: TCP reachability confirmed. API key validity is not verified here.");
+        auto* note = new QLabel(QObject::tr("Note: TCP reachability confirmed. API key validity is not verified here."));
         note->setWordWrap(true);
         note->setStyleSheet(
             QString("color:%1;font-size:11px;font-style:italic;background:transparent;").arg(col::TEXT_TERTIARY()));
@@ -333,7 +333,7 @@ void show_result_dialog(QWidget* parent, const QString& display, bool success, c
     }
     vl->addStretch();
 
-    auto* close_btn = new QPushButton("Close");
+    auto* close_btn = new QPushButton(QObject::tr("Close"));
     close_btn->setCursor(Qt::PointingHandCursor);
     QObject::connect(close_btn, &QPushButton::clicked, &dlg, &QDialog::accept);
     auto* btn_row = new QHBoxLayout;
@@ -357,8 +357,8 @@ void test_connection(QWidget* parent, const QString& conn_id, const TestResultCa
 
     const auto* connector_cfg = find_connector_config(ds.provider);
     if (connector_cfg && !connector_cfg->testable) {
-        show_message_dialog(parent, QString("Test: %1").arg(ds.display_name),
-                            "This connector does not support connectivity testing.");
+        show_message_dialog(parent, QObject::tr("Test: %1").arg(ds.display_name),
+                            QObject::tr("This connector does not support connectivity testing."));
         return;
     }
 
@@ -489,9 +489,9 @@ void test_connection(QWidget* parent, const QString& conn_id, const TestResultCa
     }
 
     if (test_url.isEmpty() && (host.isEmpty() || port <= 0)) {
-        show_message_dialog(parent, QString("Test: %1").arg(display),
-                            "No testable endpoint found in the saved configuration.\n"
-                            "Ensure required fields (URL, host, or API key) are filled in.");
+        show_message_dialog(parent, QObject::tr("Test: %1").arg(display),
+                            QObject::tr("No testable endpoint found in the saved configuration.\n"
+                                        "Ensure required fields (URL, host, or API key) are filled in."));
         return;
     }
 
@@ -506,22 +506,22 @@ void test_connection(QWidget* parent, const QString& conn_id, const TestResultCa
     const auto test_future = QtConcurrent::run(
         [parent_guard, captured_conn_id, captured_display, captured_test_url, captured_host, captured_port, captured_cb]() {
             bool success = false;
-            QString message = "No testable endpoint found";
+            QString message = QObject::tr("No testable endpoint found");
 
             auto tcp_probe = [](const QString& h, int p, int timeout_ms) -> std::pair<bool, QString> {
                 QTcpSocket socket;
                 socket.connectToHost(h, static_cast<quint16>(p));
                 if (socket.waitForConnected(timeout_ms)) {
                     socket.disconnectFromHost();
-                    return {true, QString("TCP connected to %1:%2").arg(h).arg(p)};
+                    return {true, QObject::tr("TCP connected to %1:%2").arg(h).arg(p)};
                 }
-                return {false, QString("Cannot connect to %1:%2 — %3").arg(h).arg(p).arg(socket.errorString())};
+                return {false, QObject::tr("Cannot connect to %1:%2 — %3").arg(h).arg(p).arg(socket.errorString())};
             };
 
             if (!captured_test_url.isEmpty()) {
                 const QUrl url(captured_test_url);
                 if (!url.isValid() || url.host().isEmpty()) {
-                    message = QString("Invalid URL: %1").arg(captured_test_url);
+                    message = QObject::tr("Invalid URL: %1").arg(captured_test_url);
                 } else {
                     const QString url_host = url.host();
                     const QString scheme = url.scheme().toLower();
@@ -529,7 +529,7 @@ void test_connection(QWidget* parent, const QString& conn_id, const TestResultCa
                     const int url_port = url.port(default_port);
                     auto [ok, msg] = tcp_probe(url_host, url_port, 5000);
                     success = ok;
-                    message = ok ? QString("Endpoint reachable: %1").arg(captured_test_url) : msg;
+                    message = ok ? QObject::tr("Endpoint reachable: %1").arg(captured_test_url) : msg;
                 }
             } else if (!captured_host.isEmpty() && captured_port > 0) {
                 auto [ok, msg] = tcp_probe(captured_host, captured_port, 3000);

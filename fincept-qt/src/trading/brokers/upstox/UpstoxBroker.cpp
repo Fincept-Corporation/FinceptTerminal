@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 #include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 #include "trading/instruments/InstrumentService.h"
 
 #include <QDateTime>
@@ -173,8 +174,11 @@ TokenExchangeResponse UpstoxBroker::exchange_token(const QString& api_key, const
             const QString err = checked_error(resp, "Empty access_token in response");
             return {false, "", "", "", "", err};
         }
+        // Upstox tokens expire daily at 03:30 IST regardless of when issued.
+        // There is no OAuth refresh token, so on expiry the user must re-auth.
+        const QString extra = with_token_expiry({}, next_ist_flush_epoch(3, 30));
         LOG_INFO("Upstox", "Token exchange OK, user=" + user);
-        return {true, access, /*refresh*/ "", user, /*additional*/ "", ""};
+        return {true, access, /*refresh*/ "", user, /*additional*/ extra, ""};
     }
 
     const QString err = checked_error(resp, "Token exchange failed");

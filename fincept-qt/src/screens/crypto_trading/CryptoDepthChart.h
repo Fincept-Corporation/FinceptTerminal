@@ -1,6 +1,7 @@
 #pragma once
 // Depth Chart — custom-painted bid/ask cumulative area chart
 
+#include <QEvent>
 #include <QMutex>
 #include <QPair>
 #include <QPixmap>
@@ -23,6 +24,7 @@ class CryptoDepthChart : public QWidget {
     void resizeEvent(QResizeEvent* event) override;
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void rebuild_cache();

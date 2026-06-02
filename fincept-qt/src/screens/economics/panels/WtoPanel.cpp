@@ -58,9 +58,9 @@ WtoPanel::WtoPanel(QWidget* parent) : EconPanelBase(kWtoSourceId, kWtoColor, par
 }
 
 void WtoPanel::activate() {
-    show_empty("Select a section and click FETCH\n"
-               "QR Members & Notifications are free — no API key needed\n"
-               "Trade Statistics requires WTO_API_KEY (Ocp-Apim-Subscription-Key)");
+    show_empty(tr("Select a section and click FETCH\n"
+                  "QR Members & Notifications are free — no API key needed\n"
+                  "Trade Statistics requires WTO_API_KEY (Ocp-Apim-Subscription-Key)"));
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -73,9 +73,9 @@ void WtoPanel::build_controls(QHBoxLayout* thl) {
     };
 
     section_combo_ = new QComboBox;
-    section_combo_->addItem("Trade Statistics (API key)", "timeseries");
-    section_combo_->addItem("QR Members (free)", "qr_members");
-    section_combo_->addItem("QR Notifications (free)", "qr_notifications");
+    section_combo_->addItem(tr("Trade Statistics (API key)"), "timeseries");
+    section_combo_->addItem(tr("QR Members (free)"), "qr_members");
+    section_combo_->addItem(tr("QR Notifications (free)"), "qr_notifications");
     section_combo_->setFixedHeight(26);
     section_combo_->setMinimumWidth(200);
     connect(section_combo_, &QComboBox::currentIndexChanged, this, &WtoPanel::on_section_changed);
@@ -87,27 +87,27 @@ void WtoPanel::build_controls(QHBoxLayout* thl) {
     indicator_combo_->setMinimumWidth(270);
 
     reporter_input_ = new QLineEdit;
-    reporter_input_->setPlaceholderText("Reporter (e.g. US, CN, DE)");
+    reporter_input_->setPlaceholderText(tr("Reporter (e.g. US, CN, DE)"));
     reporter_input_->setText("US");
     reporter_input_->setFixedHeight(26);
     reporter_input_->setFixedWidth(130);
 
     years_input_ = new QLineEdit;
-    years_input_->setPlaceholderText("Years (e.g. 2015-2023)");
+    years_input_->setPlaceholderText(tr("Years (e.g. 2015-2023)"));
     years_input_->setText("2015-2023");
     years_input_->setFixedHeight(26);
     years_input_->setFixedWidth(110);
 
-    apikey_notice_ = new QLabel("Requires WTO_API_KEY");
+    apikey_notice_ = new QLabel(tr("Requires WTO_API_KEY"));
     apikey_notice_->setStyleSheet(notice_style());
 
-    thl->addWidget(make_lbl("SECTION"));
+    thl->addWidget(section_lbl_ = make_lbl(tr("SECTION")));
     thl->addWidget(section_combo_);
-    thl->addWidget(make_lbl("INDICATOR"));
+    thl->addWidget(indicator_lbl_ = make_lbl(tr("INDICATOR")));
     thl->addWidget(indicator_combo_);
-    thl->addWidget(make_lbl("REPORTER"));
+    thl->addWidget(reporter_lbl_ = make_lbl(tr("REPORTER")));
     thl->addWidget(reporter_input_);
-    thl->addWidget(make_lbl("YEARS"));
+    thl->addWidget(years_lbl_ = make_lbl(tr("YEARS")));
     thl->addWidget(years_input_);
     thl->addWidget(apikey_notice_);
 }
@@ -118,14 +118,14 @@ void WtoPanel::on_section_changed(int index) {
     years_input_->setEnabled(is_timeseries);
 
     if (is_timeseries) {
-        apikey_notice_->setText("Requires WTO_API_KEY");
+        apikey_notice_->setText(tr("Requires WTO_API_KEY"));
         apikey_notice_->setStyleSheet(notice_style());
-        reporter_input_->setPlaceholderText("Reporter (e.g. US, CN, DE)");
+        reporter_input_->setPlaceholderText(tr("Reporter (e.g. US, CN, DE)"));
     } else {
-        apikey_notice_->setText("Free — no API key");
+        apikey_notice_->setText(tr("Free — no API key"));
         apikey_notice_->setStyleSheet(
             QString("color:%1; font-size:9px; background:transparent;").arg(ui::colors::POSITIVE()));
-        reporter_input_->setPlaceholderText("Member code (e.g. US, CN)");
+        reporter_input_->setPlaceholderText(tr("Member code (e.g. US, CN)"));
     }
 }
 
@@ -140,17 +140,18 @@ void WtoPanel::on_fetch() {
         const QString years = years_input_->text().trimmed();
 
         if (indicator.isEmpty()) {
-            show_empty("Select a trade indicator");
+            show_empty(tr("Select a trade indicator"));
             return;
         }
         if (reporter.isEmpty()) {
-            show_empty("Enter a reporter code (e.g. US)");
+            show_empty(tr("Enter a reporter code (e.g. US)"));
             return;
         }
 
         // wto_data.py uses --flag=value style args
         // CLI: timeseries_data --i TP_A_0010 --r US --ps 2015-2023
-        show_loading("Fetching WTO Trade Statistics: " + indicator_combo_->currentText() + " for " + reporter + "…");
+        show_loading(
+            tr("Fetching WTO Trade Statistics: %1 for %2…").arg(indicator_combo_->currentText(), reporter));
         services::EconomicsService::instance().execute(
             kWtoSourceId, kWtoScript, "timeseries_data",
             {"--i=" + indicator, "--r=" + reporter, "--ps=" + (years.isEmpty() ? "default" : years)},
@@ -160,7 +161,7 @@ void WtoPanel::on_fetch() {
         QStringList args;
         if (!reporter.isEmpty())
             args << "--member_code=" + reporter;
-        show_loading("Fetching WTO QR Members…");
+        show_loading(tr("Fetching WTO QR Members…"));
         services::EconomicsService::instance().execute(kWtoSourceId, kWtoScript, "qr_members", args,
                                                        "wto_qrm_" + reporter);
 
@@ -169,7 +170,7 @@ void WtoPanel::on_fetch() {
         QStringList args;
         if (!reporter.isEmpty())
             args << "--reporter_member_code=" + reporter;
-        show_loading("Fetching WTO QR Notifications for " + reporter + "…");
+        show_loading(tr("Fetching WTO QR Notifications for %1…").arg(reporter));
         services::EconomicsService::instance().execute(kWtoSourceId, kWtoScript, "qr_notifications", args,
                                                        "wto_qrn_" + reporter);
     }
@@ -184,9 +185,9 @@ void WtoPanel::on_result(const QString& request_id, const services::EconomicsRes
     if (!result.success) {
         if (result.error.contains("subscription") || result.error.contains("API key") || result.error.contains("401") ||
             result.error.contains("403")) {
-            show_error("WTO API key not configured.\n"
-                       "Set WTO_API_KEY environment variable\n"
-                       "(Ocp-Apim-Subscription-Key from developer.wto.org)");
+            show_error(tr("WTO API key not configured.\n"
+                          "Set WTO_API_KEY environment variable\n"
+                          "(Ocp-Apim-Subscription-Key from developer.wto.org)"));
         } else {
             show_error(result.error);
         }
@@ -219,8 +220,8 @@ void WtoPanel::on_result(const QString& request_id, const services::EconomicsRes
         }
 
         if (rows.isEmpty()) {
-            show_empty("No data returned — check reporter code or years range\n"
-                       "Also verify WTO_API_KEY is set correctly");
+            show_empty(tr("No data returned — check reporter code or years range\n"
+                          "Also verify WTO_API_KEY is set correctly"));
             return;
         }
         display(rows, "WTO Trade Statistics: " + indicator_combo_->currentText());
@@ -229,22 +230,56 @@ void WtoPanel::on_result(const QString& request_id, const services::EconomicsRes
         // QR Members: data is array of { code, name, ... }
         rows = result.data["data"].toArray();
         if (rows.isEmpty()) {
-            show_empty("No members data returned");
+            show_empty(tr("No members data returned"));
             return;
         }
-        display(rows, "WTO Quantitative Restrictions — Members");
+        display(rows, tr("WTO Quantitative Restrictions — Members"));
 
     } else {
         // QR Notifications: data is array of notification objects
         rows = result.data["data"].toArray();
         if (rows.isEmpty()) {
-            show_empty("No notifications found for this member code");
+            show_empty(tr("No notifications found for this member code"));
             return;
         }
-        display(rows, "WTO QR Notifications — " + reporter_input_->text().toUpper());
+        display(rows, tr("WTO QR Notifications — %1").arg(reporter_input_->text().toUpper()));
     }
 
     LOG_INFO("WtoPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(request_id));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void WtoPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void WtoPanel::retranslateUi() {
+    if (section_lbl_)
+        section_lbl_->setText(tr("SECTION"));
+    if (indicator_lbl_)
+        indicator_lbl_->setText(tr("INDICATOR"));
+    if (reporter_lbl_)
+        reporter_lbl_->setText(tr("REPORTER"));
+    if (years_lbl_)
+        years_lbl_->setText(tr("YEARS"));
+    if (section_combo_ && section_combo_->count() >= 3) {
+        section_combo_->setItemText(0, tr("Trade Statistics (API key)"));
+        section_combo_->setItemText(1, tr("QR Members (free)"));
+        section_combo_->setItemText(2, tr("QR Notifications (free)"));
+    }
+    if (years_input_)
+        years_input_->setPlaceholderText(tr("Years (e.g. 2015-2023)"));
+    // Reporter placeholder + API-key notice depend on the active section.
+    const bool is_timeseries = section_combo_ && section_combo_->currentIndex() == 0;
+    if (reporter_input_)
+        reporter_input_->setPlaceholderText(is_timeseries ? tr("Reporter (e.g. US, CN, DE)")
+                                                          : tr("Member code (e.g. US, CN)"));
+    if (apikey_notice_)
+        apikey_notice_->setText(is_timeseries ? tr("Requires WTO_API_KEY") : tr("Free — no API key"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

@@ -319,9 +319,36 @@ def _handle_fetch_balance(req_id, exchange_id, args):
 def _handle_place_order(req_id, exchange_id, args):
     ex = _get_exchange(exchange_id, need_auth=True)
     _ensure_markets(ex, exchange_id)
+
+    otype = args["type"]
+    price = args.get("price")
+    params = {}
+
+    # Map non-native order types to ccxt's unified (type + params) form. ccxt
+    # createOrder only accepts "market"/"limit"; stops are expressed via a
+    # triggerPrice param. Most major venues normalise these unified params.
+    trigger = args.get("stop_price")
+    if otype in ("stop", "stop_market"):
+        otype = "market"
+        if trigger:
+            params["triggerPrice"] = trigger
+    elif otype in ("stop_limit", "stop_loss_limit"):
+        otype = "limit"
+        if trigger:
+            params["triggerPrice"] = trigger
+    elif trigger:
+        params["triggerPrice"] = trigger
+
+    if args.get("reduce_only"):
+        params["reduceOnly"] = True
+    if args.get("sl"):
+        params["stopLoss"] = {"triggerPrice": args["sl"]}
+    if args.get("tp"):
+        params["takeProfit"] = {"triggerPrice": args["tp"]}
+
     order = ex.create_order(
-        args["symbol"], args["type"], args["side"],
-        args["amount"], args.get("price"),
+        args["symbol"], otype, args["side"],
+        args["amount"], price, params,
     )
     _respond(req_id, True, {
         "id": order.get("id"),

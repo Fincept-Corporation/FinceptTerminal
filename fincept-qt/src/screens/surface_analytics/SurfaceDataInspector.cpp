@@ -95,11 +95,11 @@ void SurfaceDataInspector::setup_ui() {
     auto* col1_header_row = new QHBoxLayout();
     col1_header_row->setContentsMargins(0, 0, 0, 0);
     col1_header_row->setSpacing(0);
-    auto* col1_header = new QLabel("RAW DATA", col1);
-    col1_header->setStyleSheet(section_header_qss());
-    col1_header->setMinimumHeight(22);
-    col1_header_row->addWidget(col1_header, 1);
-    export_btn_ = new QPushButton("EXPORT CSV", col1);
+    col1_header_ = new QLabel(tr("RAW DATA"), col1);
+    col1_header_->setStyleSheet(section_header_qss());
+    col1_header_->setMinimumHeight(22);
+    col1_header_row->addWidget(col1_header_, 1);
+    export_btn_ = new QPushButton(tr("EXPORT CSV"), col1);
     export_btn_->setStyleSheet(small_btn_qss());
     connect(export_btn_, &QPushButton::clicked, this, &SurfaceDataInspector::on_export_csv_clicked);
     col1_header_row->addWidget(export_btn_);
@@ -133,23 +133,24 @@ void SurfaceDataInspector::setup_ui() {
     col2_layout->setContentsMargins(0, 0, 0, 0);
     col2_layout->setSpacing(0);
 
-    auto* col2_header = new QLabel("LINEAGE", col2);
-    col2_header->setStyleSheet(section_header_qss());
-    col2_header->setMinimumHeight(22);
-    col2_layout->addWidget(col2_header);
+    col2_header_ = new QLabel(tr("LINEAGE"), col2);
+    col2_header_->setStyleSheet(section_header_qss());
+    col2_header_->setMinimumHeight(22);
+    col2_layout->addWidget(col2_header_);
 
     auto* lin_body = new QWidget(col2);
     auto* lin_l = new QVBoxLayout(lin_body);
     lin_l->setContentsMargins(8, 8, 8, 8);
     lin_l->setSpacing(4);
 
-    auto add_row = [&](const QString& key, QLabel*& target) {
+    auto add_row = [&](const QString& key, QLabel*& target, QLabel*& key_out) {
         auto* row = new QHBoxLayout();
         row->setSpacing(6);
         auto* k = new QLabel(key, lin_body);
         k->setStyleSheet(QString("color:%1; font-size:9px; font-family:Consolas;")
                              .arg(colors::TEXT_DIM()));
         k->setMinimumWidth(72);
+        key_out = k;
         row->addWidget(k);
         target = new QLabel("—", lin_body);
         target->setStyleSheet(QString("color:%1; font-size:10px; font-family:Consolas;")
@@ -158,13 +159,13 @@ void SurfaceDataInspector::setup_ui() {
         row->addWidget(target, 1);
         lin_l->addLayout(row);
     };
-    add_row("dataset", lin_dataset_);
-    add_row("schema", lin_schema_);
-    add_row("symbology", lin_symbology_);
-    add_row("symbols", lin_symbols_);
-    add_row("range", lin_dates_);
-    add_row("rows", lin_count_);
-    add_row("cost", lin_cost_);
+    add_row(tr("dataset"), lin_dataset_, lin_keys_[0]);
+    add_row(tr("schema"), lin_schema_, lin_keys_[1]);
+    add_row(tr("symbology"), lin_symbology_, lin_keys_[2]);
+    add_row(tr("symbols"), lin_symbols_, lin_keys_[3]);
+    add_row(tr("range"), lin_dates_, lin_keys_[4]);
+    add_row(tr("rows"), lin_count_, lin_keys_[5]);
+    add_row(tr("cost"), lin_cost_, lin_keys_[6]);
     lin_l->addStretch();
     col2_layout->addWidget(lin_body, 1);
 
@@ -179,10 +180,10 @@ void SurfaceDataInspector::setup_ui() {
     col3_layout->setContentsMargins(0, 0, 0, 0);
     col3_layout->setSpacing(0);
 
-    auto* col3_header = new QLabel("STATUS / ERRORS", col3);
-    col3_header->setStyleSheet(section_header_qss());
-    col3_header->setMinimumHeight(22);
-    col3_layout->addWidget(col3_header);
+    col3_header_ = new QLabel(tr("STATUS / ERRORS"), col3);
+    col3_header_->setStyleSheet(section_header_qss());
+    col3_header_->setMinimumHeight(22);
+    col3_layout->addWidget(col3_header_);
 
     auto* status_body = new QWidget(col3);
     auto* status_l = new QVBoxLayout(status_body);
@@ -194,7 +195,7 @@ void SurfaceDataInspector::setup_ui() {
     status_dot_ = new QLabel("●", status_body);
     status_dot_->setStyleSheet(QString("color:%1; font-size:14px;").arg(colors::TEXT_DIM()));
     dot_row->addWidget(status_dot_);
-    status_label_ = new QLabel("Idle", status_body);
+    status_label_ = new QLabel(tr("Idle"), status_body);
     status_label_->setWordWrap(true);
     status_label_->setStyleSheet(QString("color:%1; font-size:10px;").arg(colors::TEXT_PRIMARY()));
     dot_row->addWidget(status_label_, 1);
@@ -206,7 +207,7 @@ void SurfaceDataInspector::setup_ui() {
                                     .arg(colors::NEGATIVE()));
     status_l->addWidget(error_label_);
 
-    view_raw_btn_ = new QPushButton("VIEW RAW RESPONSE", status_body);
+    view_raw_btn_ = new QPushButton(tr("VIEW RAW RESPONSE"), status_body);
     view_raw_btn_->setStyleSheet(small_btn_qss());
     connect(view_raw_btn_, &QPushButton::clicked, this, &SurfaceDataInspector::on_view_raw_clicked);
     status_l->addWidget(view_raw_btn_);
@@ -223,7 +224,7 @@ void SurfaceDataInspector::clear() {
     table_model_->clear();
     set_lineage("", "", "", "", "", 0, 0.0);
     error_label_->setText("");
-    set_status("Idle", true);
+    set_status(tr("Idle"), true);
     raw_output_.clear();
 }
 
@@ -304,7 +305,7 @@ void SurfaceDataInspector::set_raw_output(const QString& raw_stdout) {
 
 void SurfaceDataInspector::on_view_raw_clicked() {
     QDialog dlg(this);
-    dlg.setWindowTitle("Raw Databento response");
+    dlg.setWindowTitle(tr("Raw Databento response"));
     dlg.resize(720, 480);
     auto* lay = new QVBoxLayout(&dlg);
     auto* edit = new QPlainTextEdit(&dlg);
@@ -312,9 +313,9 @@ void SurfaceDataInspector::on_view_raw_clicked() {
     edit->setStyleSheet(QString("background:%1; color:%2; font-family:Consolas; font-size:10px;")
                             .arg(colors::BG_BASE())
                             .arg(colors::TEXT_PRIMARY()));
-    edit->setPlainText(raw_output_.isEmpty() ? "(no response captured yet)" : raw_output_);
+    edit->setPlainText(raw_output_.isEmpty() ? tr("(no response captured yet)") : raw_output_);
     lay->addWidget(edit);
-    auto* close_btn = new QPushButton("CLOSE", &dlg);
+    auto* close_btn = new QPushButton(tr("CLOSE"), &dlg);
     close_btn->setStyleSheet(small_btn_qss());
     connect(close_btn, &QPushButton::clicked, &dlg, &QDialog::accept);
     lay->addWidget(close_btn, 0, Qt::AlignRight);
@@ -330,8 +331,8 @@ void SurfaceDataInspector::on_export_csv_clicked() {
     const auto& snap = snapshots_[idx];
 
     QString suggested = QString("%1.csv").arg(snap.name);
-    QString path = QFileDialog::getSaveFileName(this, "Export CSV", suggested,
-                                                "CSV files (*.csv)");
+    QString path = QFileDialog::getSaveFileName(this, tr("Export CSV"), suggested,
+                                                tr("CSV files (*.csv)"));
     if (path.isEmpty())
         return;
     QFile f(path);
@@ -341,6 +342,29 @@ void SurfaceDataInspector::on_export_csv_clicked() {
     out << snap.headers.join(",") << "\n";
     for (const auto& r : snap.rows)
         out << r.join(",") << "\n";
+}
+
+// ── Live language switch ─────────────────────────────────────────────────────
+void SurfaceDataInspector::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void SurfaceDataInspector::retranslateUi() {
+    if (col1_header_) col1_header_->setText(tr("RAW DATA"));
+    if (col2_header_) col2_header_->setText(tr("LINEAGE"));
+    if (col3_header_) col3_header_->setText(tr("STATUS / ERRORS"));
+    if (export_btn_)  export_btn_->setText(tr("EXPORT CSV"));
+    if (view_raw_btn_) view_raw_btn_->setText(tr("VIEW RAW RESPONSE"));
+
+    // Lineage key labels (declared order)
+    const char* keys[7] = {QT_TR_NOOP("dataset"),  QT_TR_NOOP("schema"), QT_TR_NOOP("symbology"),
+                           QT_TR_NOOP("symbols"),  QT_TR_NOOP("range"),  QT_TR_NOOP("rows"),
+                           QT_TR_NOOP("cost")};
+    for (int i = 0; i < 7; ++i)
+        if (lin_keys_[i])
+            lin_keys_[i]->setText(tr(keys[i]));
 }
 
 } // namespace fincept::surface

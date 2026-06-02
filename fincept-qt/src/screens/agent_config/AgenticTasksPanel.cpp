@@ -56,23 +56,23 @@ void AgenticTasksPanel::build_ui() {
     auto* filter_bar = new QHBoxLayout;
     filter_bar->setSpacing(8);
 
-    auto* fl = new QLabel("FILTER:");
-    fl->setStyleSheet(QString("color:%1;font-size:10px;letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY()));
-    filter_bar->addWidget(fl);
+    filter_title_ = new QLabel(tr("FILTER:"));
+    filter_title_->setStyleSheet(QString("color:%1;font-size:10px;letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY()));
+    filter_bar->addWidget(filter_title_);
 
     filter_combo_ = new QComboBox;
-    filter_combo_->addItem("All", QString());
-    filter_combo_->addItem("Running", "running");
-    filter_combo_->addItem("Paused", "paused");
-    filter_combo_->addItem("Completed", "completed");
-    filter_combo_->addItem("Failed", "failed");
-    filter_combo_->addItem("Cancelled", "cancelled");
+    filter_combo_->addItem(tr("All"), QString());
+    filter_combo_->addItem(tr("Running"), "running");
+    filter_combo_->addItem(tr("Paused"), "paused");
+    filter_combo_->addItem(tr("Completed"), "completed");
+    filter_combo_->addItem(tr("Failed"), "failed");
+    filter_combo_->addItem(tr("Cancelled"), "cancelled");
     filter_combo_->setStyleSheet(
         QString("QComboBox { background:%1; color:%2; border:1px solid %3; padding:3px 8px; font-size:11px; }")
             .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM()));
     filter_bar->addWidget(filter_combo_);
 
-    refresh_btn_ = new QPushButton("REFRESH");
+    refresh_btn_ = new QPushButton(tr("REFRESH"));
     refresh_btn_->setCursor(Qt::PointingHandCursor);
     refresh_btn_->setStyleSheet(
         QString("QPushButton { background:%1; color:%2; border:1px solid %3; padding:4px 12px; font-size:10px; "
@@ -103,7 +103,7 @@ void AgenticTasksPanel::build_ui() {
     dv->setContentsMargins(8, 0, 0, 0);
     dv->setSpacing(6);
 
-    detail_header_ = new QLabel("Select a task to view details");
+    detail_header_ = new QLabel(tr("Select a task to view details"));
     detail_header_->setWordWrap(true);
     detail_header_->setStyleSheet(
         QString("color:%1;font-size:13px;font-weight:600;").arg(ui::colors::AMBER()));
@@ -114,11 +114,11 @@ void AgenticTasksPanel::build_ui() {
         QString("color:%1;font-size:10px;letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY()));
     dv->addWidget(detail_meta_);
 
-    auto* plan_label = new QLabel(tr("PLAN"));
-    plan_label->setStyleSheet(
+    plan_title_ = new QLabel(tr("PLAN"));
+    plan_title_->setStyleSheet(
         QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1px;margin-top:6px;")
             .arg(ui::colors::TEXT_TERTIARY()));
-    dv->addWidget(plan_label);
+    dv->addWidget(plan_title_);
 
     plan_view_ = new QPlainTextEdit;
     plan_view_->setReadOnly(true);
@@ -151,18 +151,19 @@ void AgenticTasksPanel::build_ui() {
     auto* budget_grid = new QGridLayout;
     budget_grid->setVerticalSpacing(2);
     budget_grid->setHorizontalSpacing(8);
-    auto add_bar_row = [&](int row, const QString& label, QProgressBar*& bar, const QString& color) {
-        auto* lbl = new QLabel(label);
-        lbl->setStyleSheet(QString("color:%1;font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
-        lbl->setFixedWidth(60);
+    auto add_bar_row = [&](int row, const QString& label, QLabel*& label_out, QProgressBar*& bar,
+                           const QString& color) {
+        label_out = new QLabel(label);
+        label_out->setStyleSheet(QString("color:%1;font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
+        label_out->setFixedWidth(60);
         bar = make_bar(color);
-        budget_grid->addWidget(lbl, row, 0);
+        budget_grid->addWidget(label_out, row, 0);
         budget_grid->addWidget(bar, row, 1);
     };
-    add_bar_row(0, "tokens", budget_tokens_bar_, ui::colors::AMBER());
-    add_bar_row(1, "cost",   budget_cost_bar_,   ui::colors::AMBER());
-    add_bar_row(2, "wall",   budget_wall_bar_,   ui::colors::AMBER());
-    add_bar_row(3, "steps",  budget_steps_bar_,  ui::colors::AMBER());
+    add_bar_row(0, tr("tokens"), budget_tokens_label_, budget_tokens_bar_, ui::colors::AMBER());
+    add_bar_row(1, tr("cost"),   budget_cost_label_,   budget_cost_bar_,   ui::colors::AMBER());
+    add_bar_row(2, tr("wall"),   budget_wall_label_,   budget_wall_bar_,   ui::colors::AMBER());
+    add_bar_row(3, tr("steps"),  budget_steps_label_,  budget_steps_bar_,  ui::colors::AMBER());
     dv->addLayout(budget_grid);
 
     // HITL question banner — hidden until task.status == paused_for_input.
@@ -174,10 +175,10 @@ void AgenticTasksPanel::build_ui() {
     auto* qbl = new QVBoxLayout(question_banner_);
     qbl->setContentsMargins(8, 8, 8, 8);
     qbl->setSpacing(6);
-    auto* qtitle = new QLabel(tr("AGENT NEEDS INPUT"));
-    qtitle->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1px;")
-                              .arg(ui::colors::AMBER()));
-    qbl->addWidget(qtitle);
+    question_title_ = new QLabel(tr("AGENT NEEDS INPUT"));
+    question_title_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1px;")
+                                       .arg(ui::colors::AMBER()));
+    qbl->addWidget(question_title_);
     question_label_ = new QLabel;
     question_label_->setWordWrap(true);
     question_label_->setStyleSheet(QString("color:%1;font-size:12px;").arg(ui::colors::TEXT_PRIMARY()));
@@ -201,11 +202,11 @@ void AgenticTasksPanel::build_ui() {
     question_banner_->setVisible(false);
     dv->addWidget(question_banner_);
 
-    auto* log_label = new QLabel(tr("STEP LOG"));
-    log_label->setStyleSheet(
+    step_log_title_ = new QLabel(tr("STEP LOG"));
+    step_log_title_->setStyleSheet(
         QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1px;margin-top:6px;")
             .arg(ui::colors::TEXT_TERTIARY()));
-    dv->addWidget(log_label);
+    dv->addWidget(step_log_title_);
 
     step_log_ = new QPlainTextEdit;
     step_log_->setReadOnly(true);
@@ -230,13 +231,13 @@ void AgenticTasksPanel::build_ui() {
                 .arg(ui::colors::BG_SURFACE(), color, ui::colors::TEXT_TERTIARY()));
         return b;
     };
-    pause_btn_ = make_btn("PAUSE", ui::colors::AMBER());
-    resume_btn_ = make_btn("RESUME", ui::colors::GREEN());
-    cancel_btn_ = make_btn("CANCEL", ui::colors::RED());
-    schedule_btn_ = make_btn("SCHEDULE…", ui::colors::AMBER());
-    libraries_btn_ = make_btn("LIBRARIES…", ui::colors::TEXT_SECONDARY());
+    pause_btn_ = make_btn(tr("PAUSE"), ui::colors::AMBER());
+    resume_btn_ = make_btn(tr("RESUME"), ui::colors::GREEN());
+    cancel_btn_ = make_btn(tr("CANCEL"), ui::colors::RED());
+    schedule_btn_ = make_btn(tr("SCHEDULE…"), ui::colors::AMBER());
+    libraries_btn_ = make_btn(tr("LIBRARIES…"), ui::colors::TEXT_SECONDARY());
     libraries_btn_->setEnabled(true);  // always enabled — inspects global stores
-    delete_btn_ = make_btn("DELETE", ui::colors::TEXT_SECONDARY());
+    delete_btn_ = make_btn(tr("DELETE"), ui::colors::TEXT_SECONDARY());
     btn_row->addWidget(pause_btn_);
     btn_row->addWidget(resume_btn_);
     btn_row->addWidget(cancel_btn_);
@@ -304,6 +305,52 @@ void AgenticTasksPanel::showEvent(QShowEvent* event) {
         first_show_ = false;
         refresh_list();
     }
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void AgenticTasksPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void AgenticTasksPanel::retranslateUi() {
+    // Filter bar.
+    if (filter_title_) filter_title_->setText(tr("FILTER:"));
+    if (filter_combo_ && filter_combo_->count() >= 6) {
+        // Re-apply display text by index; the data role (status code) is preserved.
+        filter_combo_->setItemText(0, tr("All"));
+        filter_combo_->setItemText(1, tr("Running"));
+        filter_combo_->setItemText(2, tr("Paused"));
+        filter_combo_->setItemText(3, tr("Completed"));
+        filter_combo_->setItemText(4, tr("Failed"));
+        filter_combo_->setItemText(5, tr("Cancelled"));
+    }
+    if (refresh_btn_) refresh_btn_->setText(tr("REFRESH"));
+
+    // Detail section titles (detail_header_ / detail_meta_ hold live task data).
+    if (plan_title_)     plan_title_->setText(tr("PLAN"));
+    if (step_log_title_) step_log_title_->setText(tr("STEP LOG"));
+
+    // Budget meter row labels (budget_label_ holds a live snapshot string).
+    if (budget_tokens_label_) budget_tokens_label_->setText(tr("tokens"));
+    if (budget_cost_label_)   budget_cost_label_->setText(tr("cost"));
+    if (budget_wall_label_)   budget_wall_label_->setText(tr("wall"));
+    if (budget_steps_label_)  budget_steps_label_->setText(tr("steps"));
+
+    // HITL banner (question_label_ holds the live question text).
+    if (question_title_) question_title_->setText(tr("AGENT NEEDS INPUT"));
+    if (reply_edit_)     reply_edit_->setPlaceholderText(tr("Type your reply…"));
+    if (reply_btn_)      reply_btn_->setText(tr("REPLY"));
+
+    // Action buttons.
+    if (pause_btn_)     pause_btn_->setText(tr("PAUSE"));
+    if (resume_btn_)    resume_btn_->setText(tr("RESUME"));
+    if (cancel_btn_)    cancel_btn_->setText(tr("CANCEL"));
+    if (schedule_btn_)  schedule_btn_->setText(tr("SCHEDULE…"));
+    if (libraries_btn_) libraries_btn_->setText(tr("LIBRARIES…"));
+    if (delete_btn_)    delete_btn_->setText(tr("DELETE"));
 }
 
 void AgenticTasksPanel::refresh_list() {
@@ -416,7 +463,7 @@ void AgenticTasksPanel::clear_question() {
 void AgenticTasksPanel::render_plan(const QJsonObject& plan) {
     plan_view_->clear();
     if (plan.isEmpty()) {
-        plan_view_->setPlainText("(no plan persisted)");
+        plan_view_->setPlainText(tr("(no plan persisted)"));
         return;
     }
     plan_view_->appendPlainText(plan.value("name").toString());
@@ -576,7 +623,7 @@ void fill_reflexion_table(QTableWidget* t, const QJsonArray& rows) {
 
 void AgenticTasksPanel::on_libraries_clicked() {
     QDialog dlg(this);
-    dlg.setWindowTitle("Agentic libraries");
+    dlg.setWindowTitle(tr("Agentic libraries"));
     dlg.setMinimumSize(900, 500);
 
     auto* tabs = new QTabWidget(&dlg);
@@ -585,29 +632,29 @@ void AgenticTasksPanel::on_libraries_clicked() {
     auto* skills_tab = new QWidget;
     auto* skills_layout = new QVBoxLayout(skills_tab);
     auto* skills_table = make_table(skills_tab,
-        {"name", "description", "successes", "last_used"});
-    auto* skills_del = new QPushButton("Delete selected");
+        {tr("name"), tr("description"), tr("successes"), tr("last_used")});
+    auto* skills_del = new QPushButton(tr("Delete selected"));
     skills_layout->addWidget(skills_table, 1);
     skills_layout->addWidget(skills_del);
-    tabs->addTab(skills_tab, "Skills");
+    tabs->addTab(skills_tab, tr("Skills"));
 
     // Memory tab
     auto* mem_tab = new QWidget;
     auto* mem_layout = new QVBoxLayout(mem_tab);
     auto* mem_table = make_table(mem_tab,
-        {"type", "user_id", "content", "created"});
-    auto* mem_del = new QPushButton("Delete selected");
+        {tr("type"), tr("user_id"), tr("content"), tr("created")});
+    auto* mem_del = new QPushButton(tr("Delete selected"));
     mem_layout->addWidget(mem_table, 1);
     mem_layout->addWidget(mem_del);
-    tabs->addTab(mem_tab, "Archival memory");
+    tabs->addTab(mem_tab, tr("Archival memory"));
 
     // Reflexion tab — read-only (no useful per-row delete; clear-all isn't worth a UI)
     auto* refl_tab = new QWidget;
     auto* refl_layout = new QVBoxLayout(refl_tab);
     auto* refl_table = make_table(refl_tab,
-        {"decision", "step", "query", "reason", "created"});
+        {tr("decision"), tr("step"), tr("query"), tr("reason"), tr("created")});
     refl_layout->addWidget(refl_table, 1);
-    tabs->addTab(refl_tab, "Reflexion");
+    tabs->addTab(refl_tab, tr("Reflexion"));
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dlg);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
@@ -671,30 +718,30 @@ void AgenticTasksPanel::on_schedule_clicked() {
     // Minimal modal — name + DSL expression + query (editable). DSL help is
     // inline so users don't need to read the README.
     QDialog dlg(this);
-    dlg.setWindowTitle("Schedule recurring task");
+    dlg.setWindowTitle(tr("Schedule recurring task"));
     dlg.setMinimumWidth(440);
 
     auto* name_edit = new QLineEdit(&dlg);
-    name_edit->setPlaceholderText("e.g. morning portfolio scan");
+    name_edit->setPlaceholderText(tr("e.g. morning portfolio scan"));
 
     auto* schedule_edit = new QLineEdit(&dlg);
-    schedule_edit->setPlaceholderText("every 30m | hourly | daily 09:30 | weekday 16:00");
+    schedule_edit->setPlaceholderText(tr("every 30m | hourly | daily 09:30 | weekday 16:00"));
 
     auto* query_edit = new QPlainTextEdit(&dlg);
     query_edit->setPlainText(seed_query);
     query_edit->setMinimumHeight(80);
 
     auto* help = new QLabel(
-        "Forms: <i>every Nm</i>, <i>every Nh</i>, <i>every Nd</i>, "
-        "<i>hourly</i>, <i>daily HH:MM</i>, <i>weekday HH:MM</i> (UTC)", &dlg);
+        tr("Forms: <i>every Nm</i>, <i>every Nh</i>, <i>every Nd</i>, "
+           "<i>hourly</i>, <i>daily HH:MM</i>, <i>weekday HH:MM</i> (UTC)"), &dlg);
     help->setWordWrap(true);
     help->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
 
     auto* form = new QFormLayout;
-    form->addRow("Name", name_edit);
-    form->addRow("Schedule", schedule_edit);
+    form->addRow(tr("Name"), name_edit);
+    form->addRow(tr("Schedule"), schedule_edit);
     form->addRow(help);
-    form->addRow("Query", query_edit);
+    form->addRow(tr("Query"), query_edit);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dlg);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
@@ -711,8 +758,8 @@ void AgenticTasksPanel::on_schedule_clicked() {
     const QString schedule_expr = schedule_edit->text().trimmed();
     const QString query = query_edit->toPlainText().trimmed();
     if (name.isEmpty() || schedule_expr.isEmpty() || query.isEmpty()) {
-        QMessageBox::warning(this, "Schedule",
-                             "Name, schedule, and query are all required.");
+        QMessageBox::warning(this, tr("Schedule"),
+                             tr("Name, schedule, and query are all required."));
         return;
     }
     // Wire through to AgentService; the schedule timer auto-arms.

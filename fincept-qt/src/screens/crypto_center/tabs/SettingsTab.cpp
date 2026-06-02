@@ -57,7 +57,9 @@ void SettingsTab::build_ui() {
     root->setSpacing(10);
 
     auto make_panel = [this](const QString& title_text,
-                             const QString& subtitle_text) -> std::pair<QFrame*, QVBoxLayout*> {
+                             const QString& subtitle_text,
+                             QLabel*& title_out,
+                             QLabel*& sub_out) -> std::pair<QFrame*, QVBoxLayout*> {
         auto* panel = new QFrame(this);
         panel->setObjectName(QStringLiteral("settingsTabPanel"));
         auto* outer = new QVBoxLayout(panel);
@@ -70,14 +72,14 @@ void SettingsTab::build_ui() {
         auto* head_l = new QHBoxLayout(head);
         head_l->setContentsMargins(12, 0, 12, 0);
         head_l->setSpacing(0);
-        auto* title = new QLabel(title_text, head);
-        title->setObjectName(QStringLiteral("settingsTabPanelTitle"));
-        head_l->addWidget(title);
+        title_out = new QLabel(title_text, head);
+        title_out->setObjectName(QStringLiteral("settingsTabPanelTitle"));
+        head_l->addWidget(title_out);
         head_l->addStretch();
         if (!subtitle_text.isEmpty()) {
-            auto* sub = new QLabel(subtitle_text, head);
-            sub->setObjectName(QStringLiteral("settingsTabPanelStatus"));
-            head_l->addWidget(sub);
+            sub_out = new QLabel(subtitle_text, head);
+            sub_out->setObjectName(QStringLiteral("settingsTabPanelStatus"));
+            head_l->addWidget(sub_out);
         }
         outer->addWidget(head);
 
@@ -91,25 +93,26 @@ void SettingsTab::build_ui() {
 
     // ── Balance refresh mode ──────────────────────────────────────────────
     {
-        auto [panel, body] = make_panel(QStringLiteral("BALANCE REFRESH"),
-                                        QStringLiteral("Mirrored on HOME"));
-        auto* hint = new QLabel(
+        auto [panel, body] = make_panel(tr("BALANCE REFRESH"),
+                                        tr("Mirrored on HOME"),
+                                        balance_panel_title_, balance_panel_sub_);
+        balance_hint_ = new QLabel(
             tr("POLL refreshes balances on a TTL via the configured RPC. "
                "STREAM opens a WebSocket account subscription — requires Helius "
                "or a private RPC."),
             panel);
-        hint->setObjectName(QStringLiteral("settingsTabHint"));
-        hint->setWordWrap(true);
-        body->addWidget(hint);
+        balance_hint_->setObjectName(QStringLiteral("settingsTabHint"));
+        balance_hint_->setWordWrap(true);
+        body->addWidget(balance_hint_);
 
         auto* row = new QHBoxLayout;
         row->setSpacing(6);
-        mode_poll_button_ = new QPushButton(QStringLiteral("POLL"), panel);
+        mode_poll_button_ = new QPushButton(tr("POLL"), panel);
         mode_poll_button_->setObjectName(QStringLiteral("settingsTabToggle"));
         mode_poll_button_->setCheckable(true);
         mode_poll_button_->setFixedHeight(28);
         mode_poll_button_->setCursor(Qt::PointingHandCursor);
-        mode_stream_button_ = new QPushButton(QStringLiteral("STREAM"), panel);
+        mode_stream_button_ = new QPushButton(tr("STREAM"), panel);
         mode_stream_button_->setObjectName(QStringLiteral("settingsTabToggle"));
         mode_stream_button_->setCheckable(true);
         mode_stream_button_->setFixedHeight(28);
@@ -137,16 +140,17 @@ void SettingsTab::build_ui() {
 
     // ── Helius API key ────────────────────────────────────────────────────
     {
-        auto [panel, body] = make_panel(QStringLiteral("HELIUS API KEY"),
-                                        QStringLiteral("optional"));
-        auto* hint = new QLabel(
+        auto [panel, body] = make_panel(tr("HELIUS API KEY"),
+                                        tr("optional"),
+                                        helius_panel_title_, helius_panel_sub_);
+        helius_hint_ = new QLabel(
             tr("Paste a Helius API key for reliable account-subscribe streaming "
                "and parsed transaction history. Stored in SecureStorage; never "
                "transmitted off-machine except in RPC requests to api.helius.xyz."),
             panel);
-        hint->setObjectName(QStringLiteral("settingsTabHint"));
-        hint->setWordWrap(true);
-        body->addWidget(hint);
+        helius_hint_->setObjectName(QStringLiteral("settingsTabHint"));
+        helius_hint_->setWordWrap(true);
+        body->addWidget(helius_hint_);
 
         auto* row = new QHBoxLayout;
         row->setSpacing(6);
@@ -184,16 +188,17 @@ void SettingsTab::build_ui() {
 
     // ── Default slippage ──────────────────────────────────────────────────
     {
-        auto [panel, body] = make_panel(QStringLiteral("DEFAULT SLIPPAGE"),
-                                        QStringLiteral("1% – 5%"));
-        auto* hint = new QLabel(
+        auto [panel, body] = make_panel(tr("DEFAULT SLIPPAGE"),
+                                        tr("1% – 5%"),
+                                        slippage_panel_title_, slippage_panel_sub_);
+        slippage_hint_ = new QLabel(
             tr("Default slippage tolerance for swaps. Quotes whose route "
                "impact exceeds this value are blocked. Adjustable per-swap on "
                "the TRADE tab."),
             panel);
-        hint->setObjectName(QStringLiteral("settingsTabHint"));
-        hint->setWordWrap(true);
-        body->addWidget(hint);
+        slippage_hint_->setObjectName(QStringLiteral("settingsTabHint"));
+        slippage_hint_->setWordWrap(true);
+        body->addWidget(slippage_hint_);
 
         auto* row = new QHBoxLayout;
         row->setSpacing(8);
@@ -221,17 +226,18 @@ void SettingsTab::build_ui() {
 
     // ── Asset filters ─────────────────────────────────────────────────────
     {
-        auto [panel, body] = make_panel(QStringLiteral("ASSET FILTERS"),
-                                        QStringLiteral("affects holdings"));
-        auto* hint = new QLabel(
+        auto [panel, body] = make_panel(tr("ASSET FILTERS"),
+                                        tr("affects holdings"),
+                                        filters_panel_title_, filters_panel_sub_);
+        filters_hint_ = new QLabel(
             tr("Pump.fun-launched wallets accumulate airdropped junk over time. "
                "By default the holdings panel hides tokens that aren't in "
                "Jupiter's verified-tagged list. Toggle this on to see every "
                "SPL token account in the wallet."),
             panel);
-        hint->setObjectName(QStringLiteral("settingsTabHint"));
-        hint->setWordWrap(true);
-        body->addWidget(hint);
+        filters_hint_->setObjectName(QStringLiteral("settingsTabHint"));
+        filters_hint_->setWordWrap(true);
+        body->addWidget(filters_hint_);
 
         show_unverified_checkbox_ = new QCheckBox(
             tr("Show unverified tokens in the holdings panel"), panel);
@@ -408,6 +414,70 @@ void SettingsTab::apply_mode_to_buttons(bool is_stream) {
     QSignalBlocker b2(mode_stream_button_);
     mode_poll_button_->setChecked(!is_stream);
     mode_stream_button_->setChecked(is_stream);
+}
+
+void SettingsTab::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void SettingsTab::retranslateUi() {
+    // Balance refresh panel
+    if (balance_panel_title_) balance_panel_title_->setText(tr("BALANCE REFRESH"));
+    if (balance_panel_sub_)   balance_panel_sub_->setText(tr("Mirrored on HOME"));
+    if (balance_hint_)
+        balance_hint_->setText(
+            tr("POLL refreshes balances on a TTL via the configured RPC. "
+               "STREAM opens a WebSocket account subscription — requires Helius "
+               "or a private RPC."));
+    if (mode_poll_button_)   mode_poll_button_->setText(tr("POLL"));
+    if (mode_stream_button_) mode_stream_button_->setText(tr("STREAM"));
+
+    // Helius panel
+    if (helius_panel_title_) helius_panel_title_->setText(tr("HELIUS API KEY"));
+    if (helius_panel_sub_)   helius_panel_sub_->setText(tr("optional"));
+    if (helius_hint_)
+        helius_hint_->setText(
+            tr("Paste a Helius API key for reliable account-subscribe streaming "
+               "and parsed transaction history. Stored in SecureStorage; never "
+               "transmitted off-machine except in RPC requests to api.helius.xyz."));
+    if (helius_input_) helius_input_->setPlaceholderText(tr("paste API key…"));
+    if (helius_save_button_)  helius_save_button_->setText(tr("SAVE"));
+    if (helius_clear_button_) helius_clear_button_->setText(tr("CLEAR"));
+    // Re-derive the stored/not-stored status message in the new locale without
+    // touching the slider or unsaved input.
+    if (helius_status_) {
+        auto helius_res =
+            SecureStorage::instance().retrieve(QString::fromLatin1(kHeliusKey));
+        if (helius_res.is_ok() && !helius_res.value().isEmpty()) {
+            helius_status_->setText(tr("Stored — input is hidden. Type to replace."));
+        } else {
+            helius_status_->setText(tr("No key stored. Public RPC will be used."));
+        }
+    }
+
+    // Slippage panel
+    if (slippage_panel_title_) slippage_panel_title_->setText(tr("DEFAULT SLIPPAGE"));
+    if (slippage_panel_sub_)   slippage_panel_sub_->setText(tr("1% – 5%"));
+    if (slippage_hint_)
+        slippage_hint_->setText(
+            tr("Default slippage tolerance for swaps. Quotes whose route "
+               "impact exceeds this value are blocked. Adjustable per-swap on "
+               "the TRADE tab."));
+
+    // Asset filters panel
+    if (filters_panel_title_) filters_panel_title_->setText(tr("ASSET FILTERS"));
+    if (filters_panel_sub_)   filters_panel_sub_->setText(tr("affects holdings"));
+    if (filters_hint_)
+        filters_hint_->setText(
+            tr("Pump.fun-launched wallets accumulate airdropped junk over time. "
+               "By default the holdings panel hides tokens that aren't in "
+               "Jupiter's verified-tagged list. Toggle this on to see every "
+               "SPL token account in the wallet."));
+    if (show_unverified_checkbox_)
+        show_unverified_checkbox_->setText(
+            tr("Show unverified tokens in the holdings panel"));
 }
 
 } // namespace fincept::screens

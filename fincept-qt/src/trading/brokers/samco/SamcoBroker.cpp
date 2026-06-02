@@ -1,6 +1,7 @@
 #include "trading/brokers/samco/SamcoBroker.h"
 
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -146,7 +147,24 @@ TokenExchangeResponse SamcoBroker::exchange_token(const QString& api_key, const 
     if (session.isEmpty())
         return {false, "", "", "", "Login: no sessionToken in response", ""};
 
-    return {true, session, "", api_key, "", ""};
+    // Samco's secretApiKey (auth_code) is permanent, and uid/password are stored
+    // — persist the secret so the daily session can be silently re-minted. Token
+    // lapses at the daily reset.
+    QJsonObject extra_obj{{"secret_api_key", auth_code}};
+    const QString extra =
+        with_token_expiry(QString::fromUtf8(QJsonDocument(extra_obj).toJson(QJsonDocument::Compact)),
+                          next_ist_flush_epoch(6, 0));
+    return {true, session, "", api_key, extra, ""};
+}
+
+// Silent refresh = replay the two-step login using the stored uid/password and
+// the persisted permanent secretApiKey.
+TokenExchangeResponse SamcoBroker::refresh_session(const BrokerCredentials& creds) {
+    const auto extra = QJsonDocument::fromJson(creds.additional_data.toUtf8()).object();
+    const QString secret_api_key = extra.value("secret_api_key").toString();
+    if (creds.api_key.isEmpty() || creds.api_secret.isEmpty() || secret_api_key.isEmpty())
+        return {false, "", "", "", "", "Samco silent refresh requires stored user id, password and secret API key"};
+    return exchange_token(creds.api_key, creds.api_secret, secret_api_key);
 }
 
 // ---------- place_order ----------

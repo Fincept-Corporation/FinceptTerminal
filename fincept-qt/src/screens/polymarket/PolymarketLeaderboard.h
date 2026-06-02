@@ -2,6 +2,8 @@
 
 #include "services/polymarket/PolymarketTypes.h"
 
+#include <QEvent>
+#include <QLabel>
 #include <QTableWidget>
 #include <QWidget>
 
@@ -19,7 +21,13 @@ class PolymarketLeaderboard : public QWidget {
   signals:
     void trader_clicked(const QString& address);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    void retranslateUi();
+
+    QLabel* header_ = nullptr;
     QTableWidget* table_ = nullptr;
 };
 

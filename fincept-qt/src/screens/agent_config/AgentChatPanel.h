@@ -3,6 +3,7 @@
 #include "services/agents/AgentTypes.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QFrame>
 #include <QLabel>
 #include <QPointer>
@@ -26,11 +27,16 @@ class AgentChatPanel : public QWidget {
   protected:
     void showEvent(QShowEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void changeEvent(QEvent* event) override;
     bool eventFilter(QObject* obj, QEvent* event) override;
 
   private:
     void build_ui();
     void setup_connections();
+
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
 
     // Portfolio context helpers
     QString build_portfolio_context() const; // returns enriched context string
@@ -54,6 +60,8 @@ class AgentChatPanel : public QWidget {
 
     // ── UI ─────────────────────────────────────────────────────────────────────
     // Header
+    QLabel* header_title_ = nullptr;   // "AGENT CHAT"
+    QLabel* agent_caption_ = nullptr;  // "AGENT:" caption
     QLabel* hdr_model_lbl_ = nullptr;  // active model pill
     QLabel* hdr_status_lbl_ = nullptr; // Ready / Streaming…
     QLabel* hdr_agent_lbl_ = nullptr;  // selected agent badge
@@ -67,10 +75,13 @@ class AgentChatPanel : public QWidget {
     QWidget* messages_container_ = nullptr;
     QVBoxLayout* messages_layout_ = nullptr;
     QWidget* welcome_panel_ = nullptr;
+    QLabel* welcome_title_ = nullptr;
+    QLabel* welcome_subtitle_ = nullptr;
     QWidget* typing_indicator_ = nullptr;
     QLabel* typing_dots_lbl_ = nullptr;
 
     // Portfolio context bar
+    QLabel* portfolio_caption_ = nullptr; // "PORTFOLIO:" caption
     QComboBox* portfolio_combo_ = nullptr;
     QPushButton* analyze_btn_ = nullptr;
     QPushButton* rebalance_btn_ = nullptr;

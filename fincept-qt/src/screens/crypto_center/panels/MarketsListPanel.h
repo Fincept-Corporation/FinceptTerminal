@@ -2,6 +2,7 @@
 
 #include "services/prediction/PredictionTypes.h"
 
+#include <QEvent>
 #include <QString>
 #include <QVector>
 #include <QWidget>
@@ -39,10 +40,12 @@ class MarketsListPanel : public QWidget {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
     void apply_theme();
+    void retranslateUi();
 
     void on_markets_ready(
         const QVector<fincept::services::prediction::PredictionMarket>& markets);

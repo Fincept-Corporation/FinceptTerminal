@@ -6,6 +6,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -29,6 +30,7 @@ class CreateAgentPanel : public QWidget {
 
   protected:
     void showEvent(QShowEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   public slots:
     void apply_tools_selection(const QStringList& tools);
@@ -39,6 +41,11 @@ class CreateAgentPanel : public QWidget {
     QWidget* build_form_panel();
     QWidget* build_test_panel();
     void setup_connections();
+
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange. Covers widgets built
+    /// in both CreateAgentPanel.cpp and the CreateAgentPanel_Layout.cpp split TU.
+    void retranslateUi();
 
     void load_saved_agents();
     void load_agent_into_form(const AgentConfig& config);
@@ -53,10 +60,38 @@ class CreateAgentPanel : public QWidget {
     QJsonObject build_config_json() const;
 
     // ── Left: saved list ─────────────────────────────────────────────────────
+    QLabel* saved_title_ = nullptr;
     QListWidget* saved_list_ = nullptr;
     QLabel* saved_count_ = nullptr;
+    QPushButton* load_btn_ = nullptr;
+    QPushButton* del_btn_ = nullptr;
+    QPushButton* exp_btn_ = nullptr;
+    QPushButton* imp_btn_ = nullptr;
 
     // ── Center: form ─────────────────────────────────────────────────────────
+    // Section headers + field labels (built in the _Layout split TU).
+    QLabel* identity_hdr_ = nullptr;
+    QLabel* name_field_lbl_ = nullptr;
+    QLabel* category_field_lbl_ = nullptr;
+    QLabel* model_hdr_ = nullptr;
+    QLabel* instructions_hdr_ = nullptr;
+    QLabel* tools_hdr_ = nullptr;
+    QLabel* terminal_tools_hdr_ = nullptr;
+    QLabel* terminal_cat_lbl_ = nullptr;
+    QLabel* terminal_max_lbl_ = nullptr;
+    QLabel* features_hdr_ = nullptr;
+    QLabel* knowledge_type_lbl_ = nullptr;
+    QLabel* knowledge_vectordb_lbl_ = nullptr;
+    QLabel* knowledge_embedder_lbl_ = nullptr;
+    QLabel* memory_dbpath_lbl_ = nullptr;
+    QLabel* memory_table_lbl_ = nullptr;
+    QLabel* storage_type_lbl_ = nullptr;
+    QLabel* storage_dbpath_lbl_ = nullptr;
+    QLabel* storage_table_lbl_ = nullptr;
+    QLabel* agentic_userid_lbl_ = nullptr;
+    QLabel* mcp_servers_hdr_ = nullptr;
+    QPushButton* clear_btn_ = nullptr;
+
     QLineEdit* name_edit_ = nullptr;
     QComboBox* category_combo_ = nullptr;
     QPlainTextEdit* desc_edit_ = nullptr;
@@ -130,6 +165,9 @@ class CreateAgentPanel : public QWidget {
     QLabel* status_lbl_ = nullptr;
 
     // ── Right: test panel ────────────────────────────────────────────────────
+    QLabel* test_panel_hdr_ = nullptr;
+    QLabel* test_query_hdr_ = nullptr;
+    QLabel* test_output_hdr_ = nullptr;
     QPlainTextEdit* test_query_edit_ = nullptr;
     QPushButton* test_btn_ = nullptr;
     QLabel* test_status_lbl_ = nullptr;

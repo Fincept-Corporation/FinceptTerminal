@@ -70,6 +70,7 @@ class LoadingOverlay : public QWidget {
     void paintEvent(QPaintEvent* e) override;
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* e) override;
     bool eventFilter(QObject* obj, QEvent* e) override;
 
   private:

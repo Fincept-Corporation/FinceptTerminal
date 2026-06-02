@@ -8,6 +8,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QButtonGroup>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QHBoxLayout>
@@ -39,12 +40,12 @@ QString format_time(qint64 ts_ms) {
 QString kind_label(fincept::wallet::ParsedActivity::Kind k) {
     using K = fincept::wallet::ParsedActivity::Kind;
     switch (k) {
-        case K::Swap:    return QStringLiteral("SWAP");
-        case K::Receive: return QStringLiteral("RECEIVE");
-        case K::Send:    return QStringLiteral("SEND");
-        case K::Other:   return QStringLiteral("OTHER");
+        case K::Swap:    return QCoreApplication::translate("ActivityTab", "SWAP");
+        case K::Receive: return QCoreApplication::translate("ActivityTab", "RECEIVE");
+        case K::Send:    return QCoreApplication::translate("ActivityTab", "SEND");
+        case K::Other:   return QCoreApplication::translate("ActivityTab", "OTHER");
     }
-    return QStringLiteral("OTHER");
+    return QCoreApplication::translate("ActivityTab", "OTHER");
 }
 
 QString shorten_sig(const QString& sig) {
@@ -120,9 +121,9 @@ void ActivityTab::build_ui() {
     table_->setObjectName(QStringLiteral("activityTabTable"));
     table_->setColumnCount(6);
     table_->setHorizontalHeaderLabels(
-        {QStringLiteral("TIMESTAMP"), QStringLiteral("EVENT"),
-         QStringLiteral("ASSET"), QStringLiteral("AMOUNT"),
-         QStringLiteral("STATUS"), QStringLiteral("SIGNATURE")});
+        {tr("TIMESTAMP"), tr("EVENT"),
+         tr("ASSET"), tr("AMOUNT"),
+         tr("STATUS"), tr("SIGNATURE")});
     table_->verticalHeader()->setVisible(false);
     table_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
@@ -307,6 +308,28 @@ void ActivityTab::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
     fincept::datahub::DataHub::instance().unsubscribe(this);
     current_topic_.clear();
+}
+
+void ActivityTab::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ActivityTab::retranslateUi() {
+    if (filter_all_)     filter_all_->setText(tr("ALL"));
+    if (filter_swap_)    filter_swap_->setText(tr("SWAP"));
+    if (filter_send_)    filter_send_->setText(tr("SEND"));
+    if (filter_receive_) filter_receive_->setText(tr("RECEIVE"));
+    if (filter_other_)   filter_other_->setText(tr("OTHER"));
+    if (table_) {
+        table_->setHorizontalHeaderLabels(
+            {tr("TIMESTAMP"), tr("EVENT"),
+             tr("ASSET"), tr("AMOUNT"),
+             tr("STATUS"), tr("SIGNATURE")});
+    }
+    // Re-render rows (kind labels) + footer in the new locale.
+    rebuild_table();
 }
 
 } // namespace fincept::screens

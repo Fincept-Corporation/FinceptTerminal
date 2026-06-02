@@ -105,12 +105,12 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
     h_layout->setContentsMargins(12, 6, 12, 6);
     h_layout->setSpacing(6);
 
-    auto* title = new QLabel(QStringLiteral("ORDER ENTRY"));
-    title->setObjectName("cryptoOeTitle");
-    h_layout->addWidget(title);
+    title_label_ = new QLabel(tr("ORDER ENTRY"));
+    title_label_->setObjectName("cryptoOeTitle");
+    h_layout->addWidget(title_label_);
     h_layout->addStretch();
 
-    mode_label_ = new QLabel(QStringLiteral("PAPER"));
+    mode_label_ = new QLabel(tr("PAPER"));
     mode_label_->setObjectName("cryptoOeMode");
     mode_label_->setProperty("mode", "paper");
     h_layout->addWidget(mode_label_);
@@ -133,9 +133,12 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
         grid->setColumnStretch(0, 0);
         grid->setColumnStretch(1, 1);
 
-        balance_label_      = add_kv_row(grid, 0, QStringLiteral("BALANCE"),  "cryptoOeKvValueAccent");
-        market_price_label_ = add_kv_row(grid, 1, QStringLiteral("MARK"));
-        avail_label_        = add_kv_row(grid, 2, QStringLiteral("AVAIL"),    "cryptoOeKvValueDim");
+        balance_label_      = add_kv_row(grid, 0, tr("BALANCE"),  "cryptoOeKvValueAccent");
+        market_price_label_ = add_kv_row(grid, 1, tr("MARK"));
+        avail_label_        = add_kv_row(grid, 2, tr("AVAIL"),    "cryptoOeKvValueDim");
+        balance_title_ = qobject_cast<QLabel*>(grid->itemAtPosition(0, 0)->widget());
+        mark_title_    = qobject_cast<QLabel*>(grid->itemAtPosition(1, 0)->widget());
+        avail_title_   = qobject_cast<QLabel*>(grid->itemAtPosition(2, 0)->widget());
 
         balance_label_->setText(QStringLiteral("$0.00"));
         market_price_label_->setText(QStringLiteral("--"));
@@ -150,7 +153,7 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
         side_row->setSpacing(0);
         side_row->setContentsMargins(0, 0, 0, 0);
 
-        buy_tab_ = new QPushButton(QStringLiteral("BUY"));
+        buy_tab_ = new QPushButton(tr("BUY"));
         buy_tab_->setObjectName("cryptoBuyTab");
         buy_tab_->setProperty("active", true);
         buy_tab_->setCursor(Qt::PointingHandCursor);
@@ -158,7 +161,7 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
         connect(buy_tab_, &QPushButton::clicked, this, [this]() { set_buy_side(true); });
         side_row->addWidget(buy_tab_, 1);
 
-        sell_tab_ = new QPushButton(QStringLiteral("SELL"));
+        sell_tab_ = new QPushButton(tr("SELL"));
         sell_tab_->setObjectName("cryptoSellTab");
         sell_tab_->setProperty("active", false);
         sell_tab_->setCursor(Qt::PointingHandCursor);
@@ -175,9 +178,9 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
         type_row->setSpacing(0);
         type_row->setContentsMargins(0, 0, 0, 0);
         // Slightly more readable than the previous 3-letter abbreviations.
-        const char* type_labels[] = {"MARKET", "LIMIT", "STOP", "STOP-LMT"};
+        const QString type_labels[] = {tr("MARKET"), tr("LIMIT"), tr("STOP"), tr("STOP-LMT")};
         for (int i = 0; i < 4; ++i) {
-            type_btns_[i] = new QPushButton(QString::fromLatin1(type_labels[i]));
+            type_btns_[i] = new QPushButton(type_labels[i]);
             type_btns_[i]->setObjectName("cryptoOeTypeBtn");
             type_btns_[i]->setCursor(Qt::PointingHandCursor);
             type_btns_[i]->setFocusPolicy(Qt::NoFocus);
@@ -190,9 +193,9 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
 
     // ── 4. Quantity input + 25/50/75/100% quick fills ───────────────────────
     {
-        auto* qty_label = new QLabel(QStringLiteral("QUANTITY"));
-        qty_label->setObjectName("cryptoOeLabel");
-        form->addWidget(qty_label);
+        qty_title_ = new QLabel(tr("QUANTITY"));
+        qty_title_->setObjectName("cryptoOeLabel");
+        form->addWidget(qty_title_);
 
         // Quantity field with the base-asset suffix shown in a side label so
         // users always know whether they're sizing in BTC or USDT.
@@ -244,9 +247,9 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
         v->setContentsMargins(0, 0, 0, 0);
         v->setSpacing(4);
 
-        auto* lbl = new QLabel(QStringLiteral("LIMIT PRICE"));
-        lbl->setObjectName("cryptoOeLabel");
-        v->addWidget(lbl);
+        price_title_ = new QLabel(tr("LIMIT PRICE"));
+        price_title_->setObjectName("cryptoOeLabel");
+        v->addWidget(price_title_);
 
         auto* wrap = new QWidget;
         auto* h = new QHBoxLayout(wrap);
@@ -280,9 +283,9 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
         v->setContentsMargins(0, 0, 0, 0);
         v->setSpacing(4);
 
-        auto* lbl = new QLabel(QStringLiteral("STOP PRICE"));
-        lbl->setObjectName("cryptoOeLabel");
-        v->addWidget(lbl);
+        stop_title_ = new QLabel(tr("STOP PRICE"));
+        stop_title_->setObjectName("cryptoOeLabel");
+        v->addWidget(stop_title_);
 
         auto* wrap = new QWidget;
         auto* h = new QHBoxLayout(wrap);
@@ -318,17 +321,22 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
         grid->setColumnStretch(0, 0);
         grid->setColumnStretch(1, 1);
 
-        cost_label_     = add_kv_row(grid, 0, QStringLiteral("ORDER VALUE"));
-        fee_label_      = add_kv_row(grid, 1, QStringLiteral("FEE EST"),     "cryptoOeKvValueDim");
-        total_label_    = add_kv_row(grid, 2, QStringLiteral("TOTAL"),       "cryptoOeKvValueAccent");
-        recv_label_     = add_kv_row(grid, 3, QStringLiteral("YOU RECEIVE"), "cryptoOeKvValueDim");
-        pct_used_label_ = add_kv_row(grid, 4, QStringLiteral("% OF BALANCE"),"cryptoOeKvValueDim");
+        cost_label_     = add_kv_row(grid, 0, tr("ORDER VALUE"));
+        fee_label_      = add_kv_row(grid, 1, tr("FEE EST"),     "cryptoOeKvValueDim");
+        total_label_    = add_kv_row(grid, 2, tr("TOTAL"),       "cryptoOeKvValueAccent");
+        recv_label_     = add_kv_row(grid, 3, tr("YOU RECEIVE"), "cryptoOeKvValueDim");
+        pct_used_label_ = add_kv_row(grid, 4, tr("% OF BALANCE"),"cryptoOeKvValueDim");
+        cost_title_     = qobject_cast<QLabel*>(grid->itemAtPosition(0, 0)->widget());
+        fee_title_      = qobject_cast<QLabel*>(grid->itemAtPosition(1, 0)->widget());
+        total_title_    = qobject_cast<QLabel*>(grid->itemAtPosition(2, 0)->widget());
+        recv_title_     = qobject_cast<QLabel*>(grid->itemAtPosition(3, 0)->widget());
+        pct_used_title_ = qobject_cast<QLabel*>(grid->itemAtPosition(4, 0)->widget());
 
         form->addWidget(card);
     }
 
     // ── 8. Advanced toggle (SL / TP) ────────────────────────────────────────
-    advanced_toggle_ = new QPushButton(QStringLiteral("▾  Advanced  (SL / TP)"));
+    advanced_toggle_ = new QPushButton(tr("▾  Advanced  (SL / TP)"));
     advanced_toggle_->setObjectName("cryptoAdvToggle");
     advanced_toggle_->setCursor(Qt::PointingHandCursor);
     advanced_toggle_->setFocusPolicy(Qt::NoFocus);
@@ -341,10 +349,12 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
         adv->setContentsMargins(0, 0, 0, 0);
         adv->setSpacing(6);
 
-        auto add_pair = [&](const QString& label, QLineEdit*& edit, const QString& placeholder) {
+        auto add_pair = [&](const QString& label, QLineEdit*& edit, QLabel*& title_out,
+                            const QString& placeholder) {
             auto* lbl = new QLabel(label);
             lbl->setObjectName("cryptoOeLabel");
             adv->addWidget(lbl);
+            title_out = lbl;
             edit = new QLineEdit;
             edit->setObjectName("cryptoOeInput");
             edit->setPlaceholderText(placeholder);
@@ -352,16 +362,16 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
             edit->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
             adv->addWidget(edit);
         };
-        add_pair(QStringLiteral("STOP LOSS"),   sl_edit_, QStringLiteral("Trigger price"));
-        add_pair(QStringLiteral("TAKE PROFIT"), tp_edit_, QStringLiteral("Trigger price"));
+        add_pair(tr("STOP LOSS"),   sl_edit_, sl_title_, tr("Trigger price"));
+        add_pair(tr("TAKE PROFIT"), tp_edit_, tp_title_, tr("Trigger price"));
     }
     form->addWidget(advanced_section_);
 
     connect(advanced_toggle_, &QPushButton::clicked, this, [this]() {
         const bool show = !advanced_section_->isVisible();
         advanced_section_->setVisible(show);
-        advanced_toggle_->setText(show ? QStringLiteral("▴  Advanced  (SL / TP)")
-                                       : QStringLiteral("▾  Advanced  (SL / TP)"));
+        advanced_toggle_->setText(show ? tr("▴  Advanced  (SL / TP)")
+                                       : tr("▾  Advanced  (SL / TP)"));
     });
 
     // ── 9. Futures controls (leverage + margin mode) ────────────────────────
@@ -372,9 +382,9 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
         layout->setContentsMargins(0, 0, 0, 0);
         layout->setSpacing(6);
 
-        auto* lev_lbl = new QLabel(QStringLiteral("LEVERAGE"));
-        lev_lbl->setObjectName("cryptoOeLabel");
-        layout->addWidget(lev_lbl);
+        leverage_title_ = new QLabel(tr("LEVERAGE"));
+        leverage_title_->setObjectName("cryptoOeLabel");
+        layout->addWidget(leverage_title_);
 
         leverage_spin_ = new QSpinBox;
         leverage_spin_->setObjectName("cryptoOeSpinBox");
@@ -384,15 +394,19 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
         leverage_spin_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         layout->addWidget(leverage_spin_);
 
-        auto* margin_lbl = new QLabel(QStringLiteral("MARGIN MODE"));
-        margin_lbl->setObjectName("cryptoOeLabel");
-        layout->addWidget(margin_lbl);
+        margin_title_ = new QLabel(tr("MARGIN MODE"));
+        margin_title_->setObjectName("cryptoOeLabel");
+        layout->addWidget(margin_title_);
 
         margin_mode_combo_ = new QComboBox;
         margin_mode_combo_->setObjectName("cryptoOeCombo");
-        margin_mode_combo_->addItem(QStringLiteral("Cross"),    QStringLiteral("cross"));
-        margin_mode_combo_->addItem(QStringLiteral("Isolated"), QStringLiteral("isolated"));
+        margin_mode_combo_->addItem(tr("Cross"),    QStringLiteral("cross"));
+        margin_mode_combo_->addItem(tr("Isolated"), QStringLiteral("isolated"));
         layout->addWidget(margin_mode_combo_);
+
+        reduce_only_check_ = new QCheckBox(tr("Reduce only"));
+        reduce_only_check_->setObjectName("cryptoOeCheck");
+        layout->addWidget(reduce_only_check_);
     }
     form->addWidget(futures_section_);
 
@@ -404,15 +418,15 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
             [this](int idx) { emit margin_mode_changed(margin_mode_combo_->itemData(idx).toString()); });
 
     // ── 10. Submit button + computed subtitle ───────────────────────────────
-    submit_btn_ = new QPushButton(QStringLiteral("BUY  ") + current_symbol_);
+    submit_btn_ = new QPushButton(tr("BUY  %1").arg(current_symbol_));
     submit_btn_->setObjectName("cryptoBuySubmit");
     submit_btn_->setCursor(Qt::PointingHandCursor);
     submit_btn_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return));
-    submit_btn_->setToolTip(QStringLiteral("Submit order  (⌘/Ctrl+Enter)"));
+    submit_btn_->setToolTip(tr("Submit order  (⌘/Ctrl+Enter)"));
     connect(submit_btn_, &QPushButton::clicked, this, &CryptoOrderEntry::on_submit);
     form->addWidget(submit_btn_);
 
-    submit_subtitle_ = new QLabel(QStringLiteral("Enter a quantity to preview"));
+    submit_subtitle_ = new QLabel(tr("Enter a quantity to preview"));
     submit_subtitle_->setObjectName("cryptoOeSubmitSubtitle");
     submit_subtitle_->setAlignment(Qt::AlignCenter);
     submit_subtitle_->setWordWrap(true);
@@ -438,7 +452,7 @@ void CryptoOrderEntry::set_buy_side(bool is_buy) {
     buy_tab_->setProperty("active", is_buy);
     sell_tab_->setProperty("active", !is_buy);
 
-    submit_btn_->setText(QString::fromLatin1(is_buy ? "BUY  " : "SELL  ") + current_symbol_);
+    submit_btn_->setText(is_buy ? tr("BUY  %1").arg(current_symbol_) : tr("SELL  %1").arg(current_symbol_));
     submit_btn_->setObjectName(is_buy ? "cryptoBuySubmit" : "cryptoSellSubmit");
 
     repolish(buy_tab_);
@@ -487,14 +501,14 @@ void CryptoOrderEntry::set_current_price(double price) {
 
 void CryptoOrderEntry::set_mode(bool is_paper) {
     is_paper_ = is_paper;
-    mode_label_->setText(is_paper ? QStringLiteral("PAPER") : QStringLiteral("LIVE"));
+    mode_label_->setText(is_paper ? tr("PAPER") : tr("LIVE"));
     mode_label_->setProperty("mode", is_paper ? "paper" : "live");
     repolish(mode_label_);
 }
 
 void CryptoOrderEntry::set_symbol(const QString& symbol) {
     current_symbol_ = symbol;
-    submit_btn_->setText(QString::fromLatin1(is_buy_side_ ? "BUY  " : "SELL  ") + symbol);
+    submit_btn_->setText(is_buy_side_ ? tr("BUY  %1").arg(symbol) : tr("SELL  %1").arg(symbol));
 
     // Update unit suffix labels (base on qty, quote on price/stop) by looking
     // up the children we tagged with the ftRoleUnit dynamic property.
@@ -518,7 +532,7 @@ void CryptoOrderEntry::on_submit() {
 
     const double qty = qty_edit_->text().toDouble();
     if (qty <= 0) {
-        status_label_->setText(QStringLiteral("⚠ Enter a valid quantity"));
+        status_label_->setText(tr("⚠ Enter a valid quantity"));
         status_label_->setProperty("severity", "error");
         status_label_->setVisible(true);
         repolish(status_label_);
@@ -531,7 +545,7 @@ void CryptoOrderEntry::on_submit() {
     repolish(qty_edit_);
 
     if ((active_type_ == 1 || active_type_ == 3) && price_edit_->text().toDouble() <= 0) {
-        status_label_->setText(QStringLiteral("⚠ Limit price required"));
+        status_label_->setText(tr("⚠ Limit price required"));
         status_label_->setProperty("severity", "error");
         status_label_->setVisible(true);
         repolish(status_label_);
@@ -539,7 +553,7 @@ void CryptoOrderEntry::on_submit() {
         return;
     }
     if ((active_type_ == 2 || active_type_ == 3) && stop_price_edit_->text().toDouble() <= 0) {
-        status_label_->setText(QStringLiteral("⚠ Stop trigger price required"));
+        status_label_->setText(tr("⚠ Stop trigger price required"));
         status_label_->setProperty("severity", "error");
         status_label_->setVisible(true);
         repolish(status_label_);
@@ -577,6 +591,12 @@ void CryptoOrderEntry::on_pct_clicked(int pct) {
 void CryptoOrderEntry::set_futures_mode(bool is_futures) {
     is_futures_ = is_futures;
     futures_section_->setVisible(is_futures);
+    if (!is_futures && reduce_only_check_)
+        reduce_only_check_->setChecked(false); // spot has no reduce-only concept
+}
+
+bool CryptoOrderEntry::reduce_only() const {
+    return is_futures_ && reduce_only_check_ && reduce_only_check_->isChecked();
 }
 
 void CryptoOrderEntry::update_cost_preview() {
@@ -623,7 +643,7 @@ void CryptoOrderEntry::update_cost_preview() {
 
         const bool insufficient = !is_futures_ && total > balance_ && balance_ > 0;
         if (insufficient) {
-            status_label_->setText(QStringLiteral("⚠ Insufficient balance for this order"));
+            status_label_->setText(tr("⚠ Insufficient balance for this order"));
             status_label_->setProperty("severity", "warning");
             status_label_->setVisible(true);
             repolish(status_label_);
@@ -640,8 +660,73 @@ void CryptoOrderEntry::update_cost_preview() {
             avail_label_->setText(fmt_money(balance_));
         else if (avail_label_)
             avail_label_->setText(QStringLiteral("--"));
-        submit_subtitle_->setText(QStringLiteral("Enter a quantity to preview"));
+        submit_subtitle_->setText(tr("Enter a quantity to preview"));
     }
+}
+
+void CryptoOrderEntry::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void CryptoOrderEntry::retranslateUi() {
+    if (title_label_) title_label_->setText(tr("ORDER ENTRY"));
+    if (mode_label_)  mode_label_->setText(is_paper_ ? tr("PAPER") : tr("LIVE"));
+
+    // Account card titles
+    if (balance_title_) balance_title_->setText(tr("BALANCE"));
+    if (mark_title_)    mark_title_->setText(tr("MARK"));
+    if (avail_title_)   avail_title_->setText(tr("AVAIL"));
+
+    // Side tabs
+    if (buy_tab_)  buy_tab_->setText(tr("BUY"));
+    if (sell_tab_) sell_tab_->setText(tr("SELL"));
+
+    // Order type segmented control
+    const QString type_labels[] = {tr("MARKET"), tr("LIMIT"), tr("STOP"), tr("STOP-LMT")};
+    for (int i = 0; i < 4; ++i)
+        if (type_btns_[i]) type_btns_[i]->setText(type_labels[i]);
+
+    // Field / section titles
+    if (qty_title_)      qty_title_->setText(tr("QUANTITY"));
+    if (price_title_)    price_title_->setText(tr("LIMIT PRICE"));
+    if (stop_title_)     stop_title_->setText(tr("STOP PRICE"));
+    if (sl_title_)       sl_title_->setText(tr("STOP LOSS"));
+    if (tp_title_)       tp_title_->setText(tr("TAKE PROFIT"));
+    if (sl_edit_)        sl_edit_->setPlaceholderText(tr("Trigger price"));
+    if (tp_edit_)        tp_edit_->setPlaceholderText(tr("Trigger price"));
+    if (leverage_title_) leverage_title_->setText(tr("LEVERAGE"));
+    if (margin_title_)   margin_title_->setText(tr("MARGIN MODE"));
+
+    // Margin mode combo items (preserve userData / selection)
+    if (margin_mode_combo_) {
+        margin_mode_combo_->setItemText(0, tr("Cross"));
+        margin_mode_combo_->setItemText(1, tr("Isolated"));
+    }
+
+    // Order breakdown titles
+    if (cost_title_)     cost_title_->setText(tr("ORDER VALUE"));
+    if (fee_title_)      fee_title_->setText(tr("FEE EST"));
+    if (total_title_)    total_title_->setText(tr("TOTAL"));
+    if (recv_title_)     recv_title_->setText(tr("YOU RECEIVE"));
+    if (pct_used_title_) pct_used_title_->setText(tr("% OF BALANCE"));
+
+    // Advanced toggle reflects current expanded state
+    if (advanced_toggle_ && advanced_section_)
+        advanced_toggle_->setText(advanced_section_->isVisible() ? tr("▴  Advanced  (SL / TP)")
+                                                                 : tr("▾  Advanced  (SL / TP)"));
+
+    // Submit button + tooltip + subtitle
+    if (submit_btn_) {
+        submit_btn_->setText(is_buy_side_ ? tr("BUY  %1").arg(current_symbol_)
+                                          : tr("SELL  %1").arg(current_symbol_));
+        submit_btn_->setToolTip(tr("Submit order  (⌘/Ctrl+Enter)"));
+    }
+
+    // Recompute the live cost preview so the subtitle / breakdown values pick
+    // up the new language; covers both the populated and the placeholder state.
+    update_cost_preview();
 }
 
 } // namespace fincept::screens::crypto

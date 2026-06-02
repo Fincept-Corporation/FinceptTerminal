@@ -2,6 +2,7 @@
 #pragma once
 #include "services/dbnomics/DBnomicsModels.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QStackedWidget>
 #include <QTableWidget>
@@ -19,14 +20,20 @@ class DBnomicsDataTable : public QWidget {
     void clear();
     void set_loading(bool on);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
+    void retranslateUi();
 
     QStackedWidget* stack_ = nullptr;
+    QLabel* header_label_ = nullptr; // (cached for retranslateUi)
     QLabel* spin_label_ = nullptr;
     QTimer* spin_timer_ = nullptr;
     QTableWidget* table_ = nullptr;
     int frame_ = 0;
+    bool showing_placeholder_ = false; // table currently shows the empty-state cell
 };
 
 } // namespace fincept::screens

@@ -1,5 +1,6 @@
 #pragma once
 #include <QComboBox>
+#include <QEvent>
 #include <QLabel>
 #include <QResizeEvent>
 #include <QStandardItemModel>
@@ -21,12 +22,16 @@ class PhoneCodeComboBox : public QComboBox {
 
   protected:
     void resizeEvent(QResizeEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     QStandardItemModel* model_ = nullptr;
     QLabel* arrow_lbl_ = nullptr;
     void populate();
     void sync_display(int index);
+
+    /// Re-apply tr() lookups to the search placeholder after a language switch.
+    void retranslateUi();
 };
 
 } // namespace fincept::ui

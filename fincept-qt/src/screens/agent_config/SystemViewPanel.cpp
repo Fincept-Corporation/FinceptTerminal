@@ -34,7 +34,8 @@ static QLabel* make_stat_label(const QString& text) {
 }
 
 static QWidget* make_section_card(const QString& title, QVBoxLayout** content_layout,
-                                  QPushButton** action_btn = nullptr, const QString& action_text = {}) {
+                                  QPushButton** action_btn = nullptr, const QString& action_text = {},
+                                  QLabel** title_out = nullptr) {
     auto* card = new QFrame;
     card->setStyleSheet(
         QString("QFrame { background:%1;border:1px solid %2; }").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
@@ -55,6 +56,8 @@ static QWidget* make_section_card(const QString& title, QVBoxLayout** content_la
         QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     hdr_layout->addWidget(title_lbl);
     hdr_layout->addStretch();
+    if (title_out)
+        *title_out = title_lbl;
 
     if (action_btn && !action_text.isEmpty()) {
         *action_btn = new QPushButton(action_text);
@@ -107,22 +110,23 @@ void SystemViewPanel::build_ui() {
 
     // Header
     auto* header_row = new QHBoxLayout;
-    auto* title = new QLabel(tr("SYSTEM CAPABILITIES"));
-    title->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;").arg(ui::colors::AMBER()));
-    header_row->addWidget(title);
+    header_title_ = new QLabel(tr("SYSTEM CAPABILITIES"));
+    header_title_->setStyleSheet(
+        QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;").arg(ui::colors::AMBER()));
+    header_row->addWidget(header_title_);
     header_row->addStretch();
 
-    auto* refresh_btn = new QPushButton(tr("REFRESH"));
-    refresh_btn->setCursor(Qt::PointingHandCursor);
-    refresh_btn->setStyleSheet(QString("QPushButton { background:transparent;color:%1;border:1px solid %2;"
-                                       "padding:4px 12px;font-size:10px;font-weight:600;letter-spacing:1px; }"
-                                       "QPushButton:hover { background:%2; }")
-                                   .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED()));
-    connect(refresh_btn, &QPushButton::clicked, this, [this]() {
+    header_refresh_btn_ = new QPushButton(tr("REFRESH"));
+    header_refresh_btn_->setCursor(Qt::PointingHandCursor);
+    header_refresh_btn_->setStyleSheet(QString("QPushButton { background:transparent;color:%1;border:1px solid %2;"
+                                               "padding:4px 12px;font-size:10px;font-weight:600;letter-spacing:1px; }"
+                                               "QPushButton:hover { background:%2; }")
+                                           .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED()));
+    connect(header_refresh_btn_, &QPushButton::clicked, this, [this]() {
         data_loaded_ = false;
         refresh_data();
     });
-    header_row->addWidget(refresh_btn);
+    header_row->addWidget(header_refresh_btn_);
     vl->addLayout(header_row);
 
     // Stats row
@@ -151,7 +155,7 @@ QWidget* SystemViewPanel::build_stats_row() {
     grid->setContentsMargins(0, 0, 0, 0);
     grid->setSpacing(8);
 
-    auto make_stat_card = [&](int col, const QString& label, const char* color) -> QLabel* {
+    auto make_stat_card = [&](int col, const QString& label, const char* color, QLabel** caption_out) -> QLabel* {
         auto* card = new QFrame;
         card->setStyleSheet(QString("QFrame { background:%1;border:1px solid %2;padding:8px; }")
                                 .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
@@ -163,25 +167,28 @@ QWidget* SystemViewPanel::build_stats_row() {
 
         auto* val = make_stat_value("--", color);
         cvl->addWidget(val);
-        cvl->addWidget(make_stat_label(label));
+        auto* caption = make_stat_label(label);
+        cvl->addWidget(caption);
+        if (caption_out)
+            *caption_out = caption;
 
         grid->addWidget(card, 0, col);
         return val;
     };
 
-    agents_count_ = make_stat_card(0, "AGENTS", ui::colors::AMBER);
-    tools_count_ = make_stat_card(1, "TOOLS", ui::colors::CYAN);
-    llms_count_ = make_stat_card(2, "LLMS", ui::colors::POSITIVE);
-    cache_count_ = make_stat_card(3, "CACHED", ui::colors::INFO);
+    agents_count_ = make_stat_card(0, tr("AGENTS"), ui::colors::AMBER, &agents_caption_);
+    tools_count_ = make_stat_card(1, tr("TOOLS"), ui::colors::CYAN, &tools_caption_);
+    llms_count_ = make_stat_card(2, tr("LLMS"), ui::colors::POSITIVE, &llms_caption_);
+    cache_count_ = make_stat_card(3, tr("CACHED"), ui::colors::INFO, &cache_caption_);
 
     return row;
 }
 
 QWidget* SystemViewPanel::build_llm_section() {
-    QPushButton* refresh = nullptr;
-    auto* card = make_section_card("CONFIGURED LLM PROVIDERS", &llm_list_layout_, &refresh, "REFRESH");
-    if (refresh) {
-        connect(refresh, &QPushButton::clicked, this, [this]() {
+    auto* card = make_section_card(tr("CONFIGURED LLM PROVIDERS"), &llm_list_layout_, &llm_section_refresh_, tr("REFRESH"),
+                                   &llm_section_title_);
+    if (llm_section_refresh_) {
+        connect(llm_section_refresh_, &QPushButton::clicked, this, [this]() {
             // Clear and reload LLM list
             while (llm_list_layout_->count() > 0) {
                 auto* item = llm_list_layout_->takeAt(0);
@@ -193,7 +200,7 @@ QWidget* SystemViewPanel::build_llm_section() {
         });
     }
 
-    auto* placeholder = new QLabel("Loading LLM providers...");
+    auto* placeholder = new QLabel(tr("Loading LLM providers..."));
     placeholder->setStyleSheet(QString("color:%1;font-size:11px;font-style:italic;").arg(ui::colors::TEXT_TERTIARY()));
     llm_list_layout_->addWidget(placeholder);
 
@@ -201,9 +208,9 @@ QWidget* SystemViewPanel::build_llm_section() {
 }
 
 QWidget* SystemViewPanel::build_tools_section() {
-    auto* card = make_section_card("AVAILABLE TOOLS", &tools_list_layout_);
+    auto* card = make_section_card(tr("AVAILABLE TOOLS"), &tools_list_layout_, nullptr, {}, &tools_section_title_);
 
-    auto* placeholder = new QLabel("Loading tools...");
+    auto* placeholder = new QLabel(tr("Loading tools..."));
     placeholder->setStyleSheet(QString("color:%1;font-size:11px;font-style:italic;").arg(ui::colors::TEXT_TERTIARY()));
     tools_list_layout_->addWidget(placeholder);
 
@@ -211,25 +218,25 @@ QWidget* SystemViewPanel::build_tools_section() {
 }
 
 QWidget* SystemViewPanel::build_sysinfo_section() {
-    auto* card = make_section_card(tr("SYSTEM INFO"), &features_layout_);
+    auto* card = make_section_card(tr("SYSTEM INFO"), &features_layout_, nullptr, {}, &sysinfo_section_title_);
 
     auto* info_grid = new QGridLayout;
     info_grid->setSpacing(4);
 
-    auto* ver_title = new QLabel(tr("VERSION"));
-    ver_title->setStyleSheet(
+    version_title_ = new QLabel(tr("VERSION"));
+    version_title_->setStyleSheet(
         QString("color:%1;font-size:9px;font-weight:600;letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY()));
     version_label_ = new QLabel("--");
     version_label_->setStyleSheet(QString("color:%1;font-size:12px;").arg(ui::colors::CYAN()));
-    info_grid->addWidget(ver_title, 0, 0);
+    info_grid->addWidget(version_title_, 0, 0);
     info_grid->addWidget(version_label_, 0, 1);
 
-    auto* fw_title = new QLabel(tr("FRAMEWORK"));
-    fw_title->setStyleSheet(
+    framework_title_ = new QLabel(tr("FRAMEWORK"));
+    framework_title_->setStyleSheet(
         QString("color:%1;font-size:9px;font-weight:600;letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY()));
     framework_label_ = new QLabel("--");
     framework_label_->setStyleSheet(QString("color:%1;font-size:12px;").arg(ui::colors::CYAN()));
-    info_grid->addWidget(fw_title, 1, 0);
+    info_grid->addWidget(framework_title_, 1, 0);
     info_grid->addWidget(framework_label_, 1, 1);
     info_grid->setColumnStretch(1, 1);
 
@@ -256,7 +263,7 @@ void SystemViewPanel::populate_llm_list() {
 
     auto providers = LlmConfigRepository::instance().list_providers();
     if (!providers.is_ok()) {
-        auto* err = new QLabel("Failed to load LLM providers.");
+        auto* err = new QLabel(tr("Failed to load LLM providers."));
         err->setStyleSheet(QString("color:%1;font-size:11px;").arg(ui::colors::NEGATIVE()));
         llm_list_layout_->addWidget(err);
         return;
@@ -266,7 +273,7 @@ void SystemViewPanel::populate_llm_list() {
     llms_count_->setText(QString::number(list.size()));
 
     if (list.isEmpty()) {
-        auto* empty = new QLabel("No LLM providers configured. Go to Settings → LLM to add one.");
+        auto* empty = new QLabel(tr("No LLM providers configured. Go to Settings → LLM to add one."));
         empty->setWordWrap(true);
         empty->setStyleSheet(QString("color:%1;font-size:11px;font-style:italic;").arg(ui::colors::TEXT_TERTIARY()));
         llm_list_layout_->addWidget(empty);
@@ -297,7 +304,7 @@ void SystemViewPanel::populate_llm_list() {
         hl->addStretch();
 
         const bool has_key = !p.api_key.isEmpty();
-        auto* key_status = new QLabel(has_key ? "KEY SET" : "NO KEY");
+        auto* key_status = new QLabel(has_key ? tr("KEY SET") : tr("NO KEY"));
         key_status->setStyleSheet(QString("color:%1;font-size:9px;font-weight:600;")
                                       .arg(has_key ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
         hl->addWidget(key_status);
@@ -313,7 +320,7 @@ void SystemViewPanel::populate_tools_list(const services::AgentToolsInfo& info) 
     tools_count_->setText(QString::number(info.total_count));
 
     if (info.categories.isEmpty()) {
-        auto* empty = new QLabel("No tools loaded.");
+        auto* empty = new QLabel(tr("No tools loaded."));
         empty->setStyleSheet(QString("color:%1;font-size:11px;font-style:italic;").arg(ui::colors::TEXT_TERTIARY()));
         tools_list_layout_->addWidget(empty);
         return;
@@ -444,6 +451,36 @@ void SystemViewPanel::showEvent(QShowEvent* event) {
         data_loaded_ = true;
         refresh_data();
     }
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void SystemViewPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void SystemViewPanel::retranslateUi() {
+    // Header.
+    if (header_title_)      header_title_->setText(tr("SYSTEM CAPABILITIES"));
+    if (header_refresh_btn_) header_refresh_btn_->setText(tr("REFRESH"));
+
+    // Stat card captions (values hold live data — not re-applied here).
+    if (agents_caption_) agents_caption_->setText(tr("AGENTS"));
+    if (tools_caption_)  tools_caption_->setText(tr("TOOLS"));
+    if (llms_caption_)   llms_caption_->setText(tr("LLMS"));
+    if (cache_caption_)  cache_caption_->setText(tr("CACHED"));
+
+    // Section card titles + the LLM section refresh action.
+    if (llm_section_title_)   llm_section_title_->setText(tr("CONFIGURED LLM PROVIDERS"));
+    if (llm_section_refresh_) llm_section_refresh_->setText(tr("REFRESH"));
+    if (tools_section_title_) tools_section_title_->setText(tr("AVAILABLE TOOLS"));
+    if (sysinfo_section_title_) sysinfo_section_title_->setText(tr("SYSTEM INFO"));
+
+    // System info field titles (values hold live data — not re-applied here).
+    if (version_title_)   version_title_->setText(tr("VERSION"));
+    if (framework_title_) framework_title_->setText(tr("FRAMEWORK"));
 }
 
 } // namespace fincept::screens

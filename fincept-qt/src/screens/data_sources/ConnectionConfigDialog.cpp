@@ -51,9 +51,9 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
     QString saved_id;
 
     QDialog dlg(parent);
-    dlg.setWindowTitle(editing     ? QString("Edit — %1").arg(config.name)
-                       : duplicate ? QString("Clone — %1").arg(config.name)
-                                   : QString("Configure — %1").arg(config.name));
+    dlg.setWindowTitle(editing     ? QObject::tr("Edit — %1").arg(config.name)
+                       : duplicate ? QObject::tr("Clone — %1").arg(config.name)
+                                   : QObject::tr("Configure — %1").arg(config.name));
     dlg.resize(560, 620);
     dlg.setModal(true);
     dlg.setStyleSheet(
@@ -93,8 +93,8 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
     title_vl->setContentsMargins(0, 0, 0, 0);
     title_vl->setSpacing(2);
 
-    auto* dlg_title = new QLabel(editing     ? QString("Edit  %1").arg(config.name)
-                                 : duplicate ? QString("Clone  %1").arg(config.name)
+    auto* dlg_title = new QLabel(editing     ? QObject::tr("Edit  %1").arg(config.name)
+                                 : duplicate ? QObject::tr("Clone  %1").arg(config.name)
                                              : config.name);
     dlg_title->setStyleSheet(
         QString("color:%1;font-size:14px;font-weight:700;background:transparent;").arg(col::AMBER()));
@@ -127,23 +127,23 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
 
     int row = 0;
 
-    auto* name_lbl = new QLabel("Connection Name");
+    auto* name_lbl = new QLabel(QObject::tr("Connection Name"));
     name_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     form->addWidget(name_lbl, row, 0);
 
     auto* name_edit = new QLineEdit;
-    name_edit->setPlaceholderText(config.name + " Connection");
+    name_edit->setPlaceholderText(QObject::tr("%1 Connection").arg(config.name));
     name_edit->setText(
-        existing_loaded ? (duplicate ? QString("Copy of %1").arg(existing.display_name) : existing.display_name) : "");
+        existing_loaded ? (duplicate ? QObject::tr("Copy of %1").arg(existing.display_name) : existing.display_name) : "");
     name_edit->setFixedHeight(34);
     form->addWidget(name_edit, row, 1);
     ++row;
 
-    auto* enabled_lbl = new QLabel("Enable Connection");
+    auto* enabled_lbl = new QLabel(QObject::tr("Enable Connection"));
     enabled_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     form->addWidget(enabled_lbl, row, 0);
 
-    auto* enabled_check = new QCheckBox("Active");
+    auto* enabled_check = new QCheckBox(QObject::tr("Active"));
     enabled_check->setChecked(existing_loaded ? existing.enabled : true);
     form->addWidget(enabled_check, row, 1);
     ++row;
@@ -157,7 +157,7 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
 
         QWidget* input = nullptr;
         if (field.type == FieldType::Checkbox) {
-            auto* check = new QCheckBox(field.required ? "Required" : "Optional");
+            auto* check = new QCheckBox(field.required ? QObject::tr("Required") : QObject::tr("Optional"));
             const bool value = existing_cfg.contains(field.name) ? existing_cfg.value(field.name).toBool()
                                                                  : (field.default_value == "true");
             check->setChecked(value);
@@ -198,12 +198,12 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
     }
 
     // Tags field
-    auto* tags_lbl = new QLabel("Tags");
+    auto* tags_lbl = new QLabel(QObject::tr("Tags"));
     tags_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     form->addWidget(tags_lbl, row, 0);
 
     auto* tags_edit = new QLineEdit;
-    tags_edit->setPlaceholderText("Comma-separated tags, e.g. prod, live, trading");
+    tags_edit->setPlaceholderText(QObject::tr("Comma-separated tags, e.g. prod, live, trading"));
     tags_edit->setFixedHeight(34);
     tags_edit->setText(existing_loaded ? existing.tags : "");
     form->addWidget(tags_edit, row, 1);
@@ -211,7 +211,7 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
 
     body_vl->addLayout(form);
 
-    auto* note = new QLabel("Fields marked with * are required.");
+    auto* note = new QLabel(QObject::tr("Fields marked with * are required."));
     note->setWordWrap(true);
     note->setStyleSheet(
         QString("color:%1;font-size:11px;font-style:italic;background:transparent;").arg(col::TEXT_TERTIARY()));
@@ -233,14 +233,14 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
     status->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(col::TEXT_SECONDARY()));
     footer_hl->addWidget(status, 1);
 
-    auto* cancel = new QPushButton("Cancel");
+    auto* cancel = new QPushButton(QObject::tr("Cancel"));
     cancel->setCursor(Qt::PointingHandCursor);
     cancel->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;}"
                                   "QPushButton:hover{background:%3;color:%4;}")
                               .arg(col::BG_BASE(), col::TEXT_SECONDARY(), col::BORDER_MED(), col::TEXT_PRIMARY()));
     footer_hl->addWidget(cancel);
 
-    auto* save = new QPushButton(editing ? "Update Connection" : "Save Connection");
+    auto* save = new QPushButton(editing ? QObject::tr("Update Connection") : QObject::tr("Save Connection"));
     save->setCursor(Qt::PointingHandCursor);
     save->setDefault(true);
     save->setAutoDefault(true);
@@ -278,7 +278,7 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
             }
 
             if (field.required && field.type != FieldType::Checkbox && text_value.isEmpty()) {
-                status->setText("Missing required field: " + field.label);
+                status->setText(QObject::tr("Missing required field: %1").arg(field.label));
                 status->setStyleSheet(
                     QString("color:%1;font-size:12px;font-weight:700;background:transparent;").arg(col::NEGATIVE()));
                 return;
@@ -301,7 +301,7 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
 
         const auto result = DataSourceRepository::instance().save(ds);
         if (result.is_err()) {
-            status->setText("Failed to save: " + QString::fromStdString(result.error()));
+            status->setText(QObject::tr("Failed to save: %1").arg(QString::fromStdString(result.error())));
             status->setStyleSheet(
                 QString("color:%1;font-size:12px;font-weight:700;background:transparent;").arg(col::NEGATIVE()));
             return;

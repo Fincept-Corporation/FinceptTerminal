@@ -9,6 +9,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -33,8 +34,12 @@ class AccountManagementDialog : public QDialog {
     void account_removed(const QString& account_id);
     void credentials_saved(const QString& account_id);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void setup_ui();
+    void retranslateUi();
     void refresh_account_list();
     void on_account_selected(int row);
     void on_add_account();
@@ -69,11 +74,13 @@ class AccountManagementDialog : public QDialog {
                               const QString& region);
 
     // Left panel — account list
+    QLabel* list_label_ = nullptr;
     QListWidget* account_list_ = nullptr;
     QPushButton* add_btn_ = nullptr;
     QPushButton* remove_btn_ = nullptr;
     QComboBox* broker_picker_ = nullptr;
     QLineEdit* display_name_input_ = nullptr;
+    QLabel* empty_label_ = nullptr;
 
     // Right panel — credential form
     QStackedWidget* right_stack_ = nullptr;

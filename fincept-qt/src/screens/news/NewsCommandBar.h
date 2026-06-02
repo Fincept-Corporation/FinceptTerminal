@@ -1,5 +1,6 @@
 #pragma once
 #include <QComboBox>
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -49,6 +50,9 @@ class NewsCommandBar : public QWidget {
     /// Used to restore persisted state without emitting refresh_interval_changed.
     void set_refresh_interval_minutes(int minutes);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   signals:
     void category_changed(const QString& category);
     void time_range_changed(const QString& range);
@@ -74,6 +78,10 @@ class NewsCommandBar : public QWidget {
     void build_command_row(QVBoxLayout* root);
     void build_intel_row(QVBoxLayout* root);
 
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
+
     // Row 1 — command bar
     QLineEdit* search_input_ = nullptr;
     QVector<QPushButton*> category_btns_;
@@ -86,6 +94,7 @@ class NewsCommandBar : public QWidget {
     QPushButton* summarize_btn_ = nullptr;
     QPushButton* drawer_btn_ = nullptr;
     QPushButton* sources_btn_ = nullptr;
+    QPushButton* rtl_btn_ = nullptr;
     QLabel* summary_label_ = nullptr;
     QLabel* count_label_ = nullptr;
     QLabel* alert_label_ = nullptr;
@@ -101,6 +110,12 @@ class NewsCommandBar : public QWidget {
     QLabel* intel_articles_ = nullptr;
     QLabel* intel_clusters_ = nullptr;
     QLabel* intel_sources_ = nullptr;
+    // Fixed text-label captions for the intel stats (cached for retranslateUi).
+    QLabel* intel_feeds_lbl_ = nullptr;
+    QLabel* intel_articles_lbl_ = nullptr;
+    QLabel* intel_clusters_lbl_ = nullptr;
+    QLabel* intel_sources_lbl_ = nullptr;
+    QLabel* sentiment_caption_ = nullptr;
     QWidget* sentiment_bull_ = nullptr;
     QWidget* sentiment_neut_ = nullptr;
     QWidget* sentiment_bear_ = nullptr;

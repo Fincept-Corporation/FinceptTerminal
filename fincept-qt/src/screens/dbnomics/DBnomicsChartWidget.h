@@ -2,6 +2,7 @@
 #pragma once
 #include "services/dbnomics/DBnomicsModels.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QStackedWidget>
 #include <QTimer>
@@ -28,9 +29,11 @@ class DBnomicsChartWidget : public QWidget {
 
   protected:
     void resizeEvent(QResizeEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
+    void retranslateUi();
     void render_line_area(const QVector<services::DbnDataPoint>& series, services::DbnChartType type);
     void render_bar(const QVector<services::DbnDataPoint>& series);
     void render_scatter(const QVector<services::DbnDataPoint>& series);
@@ -44,6 +47,7 @@ class DBnomicsChartWidget : public QWidget {
     QChartView* chart_view_ = nullptr;
     int frame_ = 0;
     bool compact_ = false;
+    bool showing_placeholder_ = true; // chart currently shows the "no data" title
 };
 
 } // namespace fincept::screens

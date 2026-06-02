@@ -91,7 +91,7 @@ void BacktestingScreen::rebuild_strategy_params() {
             t->setStyleSheet(label_s);
             strategy_params_layout_->addWidget(t);
 
-            auto* tl = new QLabel("TYPE", strategy_params_container_);
+            auto* tl = new QLabel(tr("TYPE"), strategy_params_container_);
             tl->setStyleSheet(label_s);
             strategy_params_layout_->addWidget(tl);
             row.type = new QComboBox(strategy_params_container_);
@@ -99,7 +99,7 @@ void BacktestingScreen::rebuild_strategy_params() {
             for (const auto& it : ind_types) row.type->addItem(it);
             strategy_params_layout_->addWidget(row.type);
 
-            auto* pl = new QLabel("PERIOD", strategy_params_container_);
+            auto* pl = new QLabel(tr("PERIOD"), strategy_params_container_);
             pl->setStyleSheet(label_s);
             strategy_params_layout_->addWidget(pl);
             row.period = new QSpinBox(strategy_params_container_);
@@ -108,7 +108,7 @@ void BacktestingScreen::rebuild_strategy_params() {
             row.period->setStyleSheet(input_s);
             strategy_params_layout_->addWidget(row.period);
 
-            auto* cl = new QLabel("CONDITION", strategy_params_container_);
+            auto* cl = new QLabel(tr("CONDITION"), strategy_params_container_);
             cl->setStyleSheet(label_s);
             strategy_params_layout_->addWidget(cl);
             row.cond = new QComboBox(strategy_params_container_);
@@ -116,7 +116,7 @@ void BacktestingScreen::rebuild_strategy_params() {
             for (const auto& c : cond_types) row.cond->addItem(c);
             strategy_params_layout_->addWidget(row.cond);
 
-            auto* vl = new QLabel("THRESHOLD", strategy_params_container_);
+            auto* vl = new QLabel(tr("THRESHOLD"), strategy_params_container_);
             vl->setStyleSheet(label_s);
             strategy_params_layout_->addWidget(vl);
             row.val = new QDoubleSpinBox(strategy_params_container_);
@@ -127,8 +127,8 @@ void BacktestingScreen::rebuild_strategy_params() {
             strategy_params_layout_->addWidget(row.val);
         };
 
-        build_ind_row("INDICATOR 1", combo_rows_[0]);
-        build_ind_row("INDICATOR 2", combo_rows_[1]);
+        build_ind_row(tr("INDICATOR 1"), combo_rows_[0]);
+        build_ind_row(tr("INDICATOR 2"), combo_rows_[1]);
 
         // Defaults for indicator 2
         combo_rows_[1].type->setCurrentText("sma");
@@ -143,7 +143,7 @@ void BacktestingScreen::rebuild_strategy_params() {
                            .arg(ui::colors::TEXT_SECONDARY(), ui::fonts::DATA_FAMILY)
                            .arg(ui::fonts::SMALL)
                            .arg(ui::colors::BORDER_MED(), ui::colors::BG_RAISED(), ui::colors::AMBER());
-        combo_ind3_enabled_ = new QCheckBox("Enable Indicator 3", strategy_params_container_);
+        combo_ind3_enabled_ = new QCheckBox(tr("Enable Indicator 3"), strategy_params_container_);
         combo_ind3_enabled_->setStyleSheet(check_s);
         strategy_params_layout_->addWidget(combo_ind3_enabled_);
 
@@ -154,7 +154,7 @@ void BacktestingScreen::rebuild_strategy_params() {
         ind3_inner->setContentsMargins(0, 0, 0, 0);
         ind3_inner->setSpacing(4);
         strategy_params_layout_ = ind3_inner;
-        build_ind_row("INDICATOR 3", combo_rows_[2]);
+        build_ind_row(tr("INDICATOR 3"), combo_rows_[2]);
         combo_rows_[2].type->setCurrentText("macd_hist");
         combo_rows_[2].cond->setCurrentText("above");
         combo_rows_[2].val->setValue(0);
@@ -164,7 +164,7 @@ void BacktestingScreen::rebuild_strategy_params() {
         strategy_params_layout_->addWidget(ind3_container);
         connect(combo_ind3_enabled_, &QCheckBox::toggled, ind3_container, &QWidget::setVisible);
 
-        auto* logic_lbl = new QLabel("COMBINE LOGIC", strategy_params_container_);
+        auto* logic_lbl = new QLabel(tr("COMBINE LOGIC"), strategy_params_container_);
         logic_lbl->setStyleSheet(label_s);
         strategy_params_layout_->addWidget(logic_lbl);
         combo_logic_ = new QComboBox(strategy_params_container_);
@@ -245,9 +245,9 @@ void BacktestingScreen::rebuild_strategy_params() {
         const double span = qMax(p.step, (p.max_val - p.min_val) * 0.1);
         const double min_default = qMax(p.min_val, p.default_val - span);
         const double max_default = qMin(p.max_val, p.default_val + span);
-        auto* min_spin  = build_subspin("MIN",  min_default,    0);
-        auto* max_spin  = build_subspin("MAX",  max_default,    1);
-        auto* step_spin = build_subspin("STEP", p.step,         2);
+        auto* min_spin  = build_subspin(tr("MIN"),  min_default,    0);
+        auto* max_spin  = build_subspin(tr("MAX"),  max_default,    1);
+        auto* step_spin = build_subspin(tr("STEP"), p.step,         2);
 
         strategy_params_layout_->addWidget(range_row);
         range_row->setVisible(is_optimize);

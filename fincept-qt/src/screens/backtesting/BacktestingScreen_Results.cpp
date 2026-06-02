@@ -176,12 +176,12 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
     // ── Header (per-command title) ──
     QString cmd_label = command.toUpper();
     for (const auto& c : commands_) if (c.id == command) { cmd_label = c.label.toUpper(); break; }
-    add_section_header(cmd_label + " RESULTS");
+    add_section_header(tr("%1 RESULTS").arg(cmd_label));
 
     // ── Synthetic-data warning (Python sets this when yfinance is unavailable) ──
     if (payload.value("usingSyntheticData").toBool()) {
         auto* warn = new QLabel(
-            "Using synthetic price data (yfinance unavailable). Results do not reflect real markets.",
+            tr("Using synthetic price data (yfinance unavailable). Results do not reflect real markets."),
             summary_container_);
         warn->setWordWrap(true);
         warn->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:8px 10px; "
@@ -202,7 +202,7 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
                               "totalTrades", "volatility"});
         if (payload.contains("status")) {
             auto status = payload["status"].toString();
-            auto* sl = new QLabel(QString("Status: %1").arg(status), summary_container_);
+            auto* sl = new QLabel(tr("Status: %1").arg(status), summary_container_);
             sl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:8px;")
                                   .arg(status == "success" ? ui::colors::POSITIVE() : ui::colors::WARNING())
                                   .arg(ui::fonts::SMALL)
@@ -228,12 +228,12 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
 
         auto best_params = payload.value("bestParameters").toObject();
         if (!best_params.isEmpty()) {
-            add_section_header("BEST PARAMETERS");
+            add_section_header(tr("BEST PARAMETERS"));
             add_cards_from(best_params, {}, 4);
         }
         auto best_perf = payload.value("bestPerformance").toObject();
         if (!best_perf.isEmpty()) {
-            add_section_header("BEST PERFORMANCE");
+            add_section_header(tr("BEST PERFORMANCE"));
             add_cards_from(best_perf, {"totalReturn", "sharpeRatio", "maxDrawdown",
                                        "winRate", "profitFactor", "totalTrades"});
             fill_kv_table(best_perf);
@@ -298,7 +298,7 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             } else {
                 flat = stats;
             }
-            add_section_header("STATISTICS");
+            add_section_header(tr("STATISTICS"));
             add_cards_from(flat, {"last", "mean", "std", "min", "max"});
             fill_kv_table(flat);
         }
@@ -353,7 +353,7 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
 
         auto dist = payload.value("distribution").toObject();
         if (!dist.isEmpty()) {
-            add_section_header("CLASS DISTRIBUTION");
+            add_section_header(tr("CLASS DISTRIBUTION"));
             // Re-key so cards show "Class -1 / Class 0 / Class 1"
             QJsonObject relabeled;
             QStringList ordered;
@@ -362,7 +362,7 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
                 return a.toInt() < b.toInt();
             });
             for (const auto& k : raw_keys) {
-                QString rk = "Class " + k;
+                QString rk = tr("Class %1").arg(k);
                 relabeled[rk] = dist.value(k);
                 ordered.append(rk);
             }
@@ -397,7 +397,7 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
         // OR scattered at the top level for other shapes.
         auto stats = payload.value("stats").toObject();
         if (!stats.isEmpty()) {
-            add_section_header("STATISTICS");
+            add_section_header(tr("STATISTICS"));
             add_cards_from(stats, {"Total Return", "Annualized Return", "Sharpe Ratio",
                                    "Sortino Ratio", "Calmar Ratio", "Max Drawdown",
                                    "Annualized Volatility", "Downside Risk"});
@@ -645,7 +645,7 @@ void BacktestingScreen::on_result(const QString& provider, const QString& comman
     // Regular command result — update run state and display
     is_running_ = false;
     run_button_->setEnabled(true);
-    set_status_state("READY", ui::colors::POSITIVE, "rgba(22,163,74,0.08)");
+    set_status_state(tr("READY"), ui::colors::POSITIVE, "rgba(22,163,74,0.08)");
     display_result(command, payload);
     LOG_INFO("Backtesting", QString("[%1/%2] Complete").arg(provider, command));
 }
@@ -687,7 +687,7 @@ void BacktestingScreen::on_command_options_loaded(const QString& provider, const
 void BacktestingScreen::on_error(const QString& context, const QString& message) {
     is_running_ = false;
     run_button_->setEnabled(true);
-    set_status_state("ERROR", ui::colors::NEGATIVE, "rgba(220,38,38,0.08)");
+    set_status_state(tr("ERROR"), ui::colors::NEGATIVE, "rgba(220,38,38,0.08)");
     display_error(QString("[%1] %2").arg(context, message));
 }
 

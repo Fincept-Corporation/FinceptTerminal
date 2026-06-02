@@ -3,6 +3,7 @@
 #include "screens/common/IStatefulScreen.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QLabel>
@@ -41,6 +42,7 @@ class AsiaMarketsScreen : public QWidget, public IStatefulScreen {
 
   protected:
     void showEvent(QShowEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_category_changed(int index);
@@ -58,6 +60,10 @@ class AsiaMarketsScreen : public QWidget, public IStatefulScreen {
     QWidget* create_left_panel();
     QWidget* create_data_panel();
     QWidget* create_status_bar();
+
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
 
     void load_endpoints(int cat_index);
     void populate_endpoint_list(const QJsonObject& result);
@@ -83,11 +89,16 @@ class AsiaMarketsScreen : public QWidget, public IStatefulScreen {
     QList<QPushButton*> cat_btns_;
     QList<QPushButton*> region_btns_;
 
+    // UI — header (cached for retranslateUi)
+    QLabel* header_title_ = nullptr;
+    QLabel* header_sub_ = nullptr;
+
     // UI — left panel
     QListWidget* endpoint_list_ = nullptr;
     QLineEdit* search_input_ = nullptr;
     QLineEdit* symbol_input_ = nullptr;
     QLabel* endpoint_count_label_ = nullptr;
+    QLabel* sym_label_ = nullptr; // (cached for retranslateUi)
 
     // UI — data panel
     QStackedWidget* view_stack_ = nullptr;
@@ -95,10 +106,12 @@ class AsiaMarketsScreen : public QWidget, public IStatefulScreen {
     QTextEdit* json_view_ = nullptr;
     QPushButton* view_toggle_btn_ = nullptr;
     QPushButton* exec_btn_ = nullptr;
+    QPushButton* refresh_btn_ = nullptr; // (cached for retranslateUi)
     QLabel* data_status_ = nullptr;
     QLabel* record_count_ = nullptr;
 
     // UI — status bar
+    QLabel* status_left_ = nullptr; // (cached for retranslateUi)
     QLabel* status_category_ = nullptr;
     QLabel* status_region_ = nullptr;
 

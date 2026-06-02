@@ -3,6 +3,7 @@
 
 #include "trading/TradingTypes.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMutex>
@@ -33,14 +34,19 @@ class CryptoWatchlist : public QWidget {
     void symbol_selected(const QString& symbol);
     void search_requested(const QString& filter);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_cell_clicked(int row, int col);
     void on_filter_changed(const QString& text);
 
   private:
     void rebuild_table();
+    void retranslateUi();
 
     QLineEdit* filter_edit_ = nullptr;
+    QLabel* title_label_ = nullptr;
     QLabel* count_label_ = nullptr;
     QTableWidget* table_ = nullptr;
 

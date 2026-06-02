@@ -96,7 +96,7 @@ QVariant NewsFeedModel::data(const QModelIndex& index, int role) const {
             return cluster.tier;
         case VelocityTextRole:
             if (cluster.velocity == "rising" && cluster.source_count > 1)
-                return QString("+%1 src").arg(cluster.source_count);
+                return tr("+%1 src").arg(cluster.source_count);
             return QString();
         default:
             return {};

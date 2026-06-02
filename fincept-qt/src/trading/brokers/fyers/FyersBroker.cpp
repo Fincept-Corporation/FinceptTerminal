@@ -4,6 +4,7 @@
 
 #include "core/logging/Logger.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -105,9 +106,46 @@ TokenExchangeResponse FyersBroker::exchange_token(const QString& api_key, const 
         result.access_token = resp.json.value("access_token").toString();
         result.refresh_token = resp.json.value("refresh_token").toString();
         result.user_id = resp.json.value("user_id").toString();
+        // Fyers access tokens lapse at the daily login reset; the live sweep
+        // re-validates and silent-refreshes (15-day refresh token) as needed.
+        result.additional_data = with_token_expiry(result.additional_data, next_ist_flush_epoch(6, 0));
     } else {
         result.error = resp.json.value("message").toString("Token exchange failed");
     }
+    return result;
+}
+
+// Silent refresh using the 15-day refresh token. Fyers additionally requires the
+// account's trading PIN, which must be present in additional_data["pin"].
+TokenExchangeResponse FyersBroker::refresh_session(const BrokerCredentials& creds) {
+    TokenExchangeResponse result;
+    const auto extra = QJsonDocument::fromJson(creds.additional_data.toUtf8()).object();
+    const QString pin = extra.value("pin").toString();
+    if (creds.refresh_token.isEmpty() || pin.isEmpty()) {
+        result.error = "Fyers silent refresh requires a stored refresh token and trading PIN";
+        return result; // no HTTP — let the caller mark the session expired
+    }
+
+    const QByteArray input = (creds.api_key + ":" + creds.api_secret).toUtf8();
+    const QString hash = QCryptographicHash::hash(input, QCryptographicHash::Sha256).toHex();
+    QJsonObject payload{
+        {"grant_type", "refresh_token"},
+        {"appIdHash", hash},
+        {"refresh_token", creds.refresh_token},
+        {"pin", pin},
+    };
+    auto resp = BrokerHttp::instance().post_json(QString(base_url()) + "/api/v3/validate-refresh-token", payload);
+    if (!resp.success || resp.json.value("s").toString() != "ok") {
+        result.error = fyers_check_auth(resp, resp.json.value("message").toString("Refresh failed"));
+        return result;
+    }
+
+    result.success = true;
+    result.access_token = resp.json.value("access_token").toString();
+    result.refresh_token = creds.refresh_token; // unchanged — valid for 15 days
+    result.user_id = creds.user_id;
+    result.additional_data = with_token_expiry(creds.additional_data, next_ist_flush_epoch(6, 0));
+    LOG_INFO("Fyers", "Silent token refresh OK");
     return result;
 }
 

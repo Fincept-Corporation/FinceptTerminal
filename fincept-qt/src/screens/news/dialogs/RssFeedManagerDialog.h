@@ -2,6 +2,7 @@
 #include "services/news/NewsService.h"
 
 #include <QDialog>
+#include <QEvent>
 #include <QLabel>
 #include <QPushButton>
 #include <QTableWidget>
@@ -27,6 +28,9 @@ class RssFeedManagerDialog : public QDialog {
     /// (NewsScreen) uses this to decide whether to trigger a refresh.
     bool changed() const { return dirty_; }
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_add();
     void on_edit();
@@ -40,6 +44,11 @@ class RssFeedManagerDialog : public QDialog {
     void reload_table();
     int selected_row() const;
 
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
+
+    QLabel* header_label_ = nullptr;
     QTableWidget* table_ = nullptr;
     QPushButton* add_btn_ = nullptr;
     QPushButton* edit_btn_ = nullptr;

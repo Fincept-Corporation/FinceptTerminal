@@ -123,14 +123,16 @@ QVariant OptionChainModel::data(const QModelIndex& index, int role) const {
 QVariant OptionChainModel::headerData(int section, Qt::Orientation orient, int role) const {
     if (orient != Qt::Horizontal || role != Qt::DisplayRole)
         return {};
-    static const char* kHeaders[ColCount] = {
-        "OI",   "Chg OI", "Volume", "IV",   "LTP",
-        "Strike",
-        "LTP",  "IV",     "Volume", "Chg OI", "OI",
+    // tr() per-call so the live header row reflects the current language.
+    // The owning QHeaderView re-polls headerData on QEvent::LanguageChange.
+    const QString headers[ColCount] = {
+        tr("OI"),   tr("Chg OI"), tr("Volume"), tr("IV"),   tr("LTP"),
+        tr("Strike"),
+        tr("LTP"),  tr("IV"),     tr("Volume"), tr("Chg OI"), tr("OI"),
     };
     if (section < 0 || section >= ColCount)
         return {};
-    return QString::fromLatin1(kHeaders[section]);
+    return headers[section];
 }
 
 void OptionChainModel::set_chain(const OptionChain& chain) {

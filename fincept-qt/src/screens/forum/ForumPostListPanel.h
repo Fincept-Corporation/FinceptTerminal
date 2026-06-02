@@ -2,6 +2,7 @@
 #pragma once
 #include "services/forum/ForumModels.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QScrollArea>
 #include <QTimer>
@@ -25,11 +26,15 @@ class ForumPostListPanel : public QWidget {
     void post_selected(const services::ForumPost& post);
     void load_more_requested(int page);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
     void rebuild_feed();
     void show_skeleton();
     void pulse_skeleton();
+    void retranslateUi();
 
     // Header bar
     QLabel* channel_label_ = nullptr; // "# general"

@@ -7,6 +7,7 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QCoreApplication>
 #include <QFormLayout>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -231,7 +232,7 @@ void MAModulePanel::display_error(const QString& msg) {
                            .arg(ui::fonts::DATA_FAMILY())
                            .arg(neg_rgb));
     results_layout_->addWidget(err);
-    status_label_->setText("Error");
+    status_label_->setText(tr("Error"));
 }
 
 // `intrinsic` pins the symbol to a fixed currency (e.g. "USD" for SEC/EDGAR
@@ -246,7 +247,8 @@ static QString format_value(const QJsonValue& val, const QString& intrinsic = QS
         return QString::number(v, 'f', 2);
     }
     if (val.isBool())
-        return val.toBool() ? "YES" : "NO";
+        return val.toBool() ? QCoreApplication::translate("MAModulePanel", "YES")
+                            : QCoreApplication::translate("MAModulePanel", "NO");
     if (val.isString())
         return val.toString();
     return QString::fromUtf8("—");
@@ -311,7 +313,8 @@ static QTableWidget* build_kv_table(const QJsonObject& obj, const QString& accen
         return nullptr;
 
     auto* table = new QTableWidget(keys.size(), 2, parent);
-    table->setHorizontalHeaderLabels({"Metric", "Value"});
+    table->setHorizontalHeaderLabels({QCoreApplication::translate("MAModulePanel", "Metric"),
+                                      QCoreApplication::translate("MAModulePanel", "Value")});
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setAlternatingRowColors(true);
@@ -360,7 +363,7 @@ void MAModulePanel::display_result(const QJsonObject& payload) {
                                   : QString();
 
     // Section header
-    auto* header = new QLabel("RESULTS");
+    auto* header = new QLabel(tr("RESULTS"));
     header->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2; letter-spacing:1px;"
                                   "padding:4px 0;")
                               .arg(module_.color.name())
@@ -451,7 +454,7 @@ void MAModulePanel::display_result(const QJsonObject& payload) {
     }
 
     // 3. Raw JSON viewer (collapsed)
-    auto* raw_btn = new QPushButton("Show Raw JSON", this);
+    auto* raw_btn = new QPushButton(tr("Show Raw JSON"), this);
     raw_btn->setCursor(Qt::PointingHandCursor);
     raw_btn->setStyleSheet(QString("QPushButton { color:%1; font-size:%2px; font-family:%3;"
                                    "background:transparent; border:1px solid %4; padding:4px 12px; }"
@@ -476,13 +479,13 @@ void MAModulePanel::display_result(const QJsonObject& payload) {
     connect(raw_btn, &QPushButton::clicked, this, [raw_text, raw_btn]() {
         bool showing = raw_text->isVisible();
         raw_text->setVisible(!showing);
-        raw_btn->setText(showing ? "Show Raw JSON" : "Hide Raw JSON");
+        raw_btn->setText(showing ? tr("Show Raw JSON") : tr("Hide Raw JSON"));
     });
 
     results_layout_->addWidget(raw_btn);
     results_layout_->addWidget(raw_text);
 
-    status_label_->setText("Done");
+    status_label_->setText(tr("Done"));
 }
 
 // ── Service signal handlers ──────────────────────────────────────────────────
@@ -519,6 +522,33 @@ void MAModulePanel::on_error(const QString& context, const QString& message) {
     auto it = get_context_map().find(module_.id);
     if (it != get_context_map().end() && it->contains(context)) {
         display_error(QString("[%1] %2").arg(context, message));
+    }
+}
+
+// ── Sub-tab registration (records source label for retranslateUi) ────────────
+void MAModulePanel::add_sub_tab(QWidget* page, const char* source_label) {
+    if (!sub_tabs_ || !page)
+        return;
+    sub_tabs_->addTab(page, tr(source_label));
+    sub_tab_sources_.append({page, QString::fromUtf8(source_label)});
+}
+
+// ── Live language switch ─────────────────────────────────────────────────────
+void MAModulePanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void MAModulePanel::retranslateUi() {
+    // Header label/category come from module_ (data) — not translated here.
+    // Re-apply sub-tab labels from their recorded source strings.
+    if (sub_tabs_) {
+        for (const auto& pair : sub_tab_sources_) {
+            int idx = sub_tabs_->indexOf(pair.first);
+            if (idx >= 0)
+                sub_tabs_->setTabText(idx, tr(pair.second.toUtf8().constData()));
+        }
     }
 }
 

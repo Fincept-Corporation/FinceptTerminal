@@ -2,6 +2,7 @@
 
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QStyle>
@@ -30,6 +31,18 @@ constexpr CatDef kCats[5] = {
     {StrategyCategory::Volatility, "VOLATILE"},
     {StrategyCategory::Others, "OTHERS"},
 };
+
+/// Translated category label for the strip button at index i (0..4).
+QString cat_label(int i) {
+    switch (i) {
+        case 0: return QCoreApplication::translate("TemplatePickerPanel", "BULLISH");
+        case 1: return QCoreApplication::translate("TemplatePickerPanel", "BEARISH");
+        case 2: return QCoreApplication::translate("TemplatePickerPanel", "NEUTRAL");
+        case 3: return QCoreApplication::translate("TemplatePickerPanel", "VOLATILE");
+        case 4: return QCoreApplication::translate("TemplatePickerPanel", "OTHERS");
+        default: return {};
+    }
+}
 
 }  // namespace
 
@@ -76,7 +89,7 @@ void TemplatePickerPanel::setup_ui() {
     cat_lay->setContentsMargins(0, 0, 0, 0);
     cat_lay->setSpacing(2);
     for (int i = 0; i < 5; ++i) {
-        auto* btn = new QPushButton(QString::fromLatin1(kCats[i].label), cat_row);
+        auto* btn = new QPushButton(cat_label(i), cat_row);
         btn->setObjectName("fnoPickerCatBtn");
         btn->setCursor(Qt::PointingHandCursor);
         btn->setProperty("active", kCats[i].cat == active_category_);
@@ -100,7 +113,7 @@ void TemplatePickerPanel::setup_ui() {
     ctrl_lay->setContentsMargins(0, 0, 0, 0);
     ctrl_lay->setSpacing(8);
 
-    auto add_kv = [&](const QString& label, QSpinBox*& spin, int min_v, int max_v, int default_v) {
+    auto add_kv = [&](const QString& label, QLabel*& label_out, QSpinBox*& spin, int min_v, int max_v, int default_v) {
         auto* l = new QLabel(label, ctrl_row);
         l->setObjectName("fnoPickerLabel");
         spin = new QSpinBox(ctrl_row);
@@ -108,13 +121,14 @@ void TemplatePickerPanel::setup_ui() {
         spin->setValue(default_v);
         ctrl_lay->addWidget(l);
         ctrl_lay->addWidget(spin);
+        label_out = l;
     };
-    add_kv("WIDTH", width_spin_, 1, 10, 1);
-    add_kv("SHIFT", shift_spin_, -10, 10, 0);
-    add_kv("LOTS", lots_spin_, 1, 100, 1);
+    add_kv(tr("WIDTH"), width_label_, width_spin_, 1, 10, 1);
+    add_kv(tr("SHIFT"), shift_label_, shift_spin_, -10, 10, 0);
+    add_kv(tr("LOTS"), lots_label_, lots_spin_, 1, 100, 1);
 
     ctrl_lay->addStretch(1);
-    use_btn_ = new QPushButton("USE", ctrl_row);
+    use_btn_ = new QPushButton(tr("USE"), ctrl_row);
     use_btn_->setObjectName("fnoUseBtn");
     use_btn_->setCursor(Qt::PointingHandCursor);
     use_btn_->setEnabled(false);
@@ -182,6 +196,22 @@ void TemplatePickerPanel::on_use_clicked() {
     opts.shift = shift_spin_->value();
     opts.default_lots = lots_spin_->value();
     emit template_chosen(selected_->id, opts);
+}
+
+void TemplatePickerPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void TemplatePickerPanel::retranslateUi() {
+    for (int i = 0; i < category_btns_.size() && i < 5; ++i)
+        if (category_btns_.at(i))
+            category_btns_.at(i)->setText(cat_label(i));
+    if (width_label_) width_label_->setText(tr("WIDTH"));
+    if (shift_label_) shift_label_->setText(tr("SHIFT"));
+    if (lots_label_)  lots_label_->setText(tr("LOTS"));
+    if (use_btn_)     use_btn_->setText(tr("USE"));
 }
 
 } // namespace fincept::screens::fno

@@ -193,18 +193,18 @@ QWidget* QuantLibScreen::create_header() {
 
     auto* title_col = new QVBoxLayout;
     title_col->setSpacing(0);
-    auto* title = new QLabel("QUANTLIB SUITE");
-    title->setObjectName("qlHeaderTitle");
-    auto* sub = new QLabel("18 MODULES | 590+ QUANTITATIVE ENDPOINTS");
-    sub->setObjectName("qlHeaderSub");
-    title_col->addWidget(title);
-    title_col->addWidget(sub);
+    header_title_ = new QLabel(tr("QUANTLIB SUITE"));
+    header_title_->setObjectName("qlHeaderTitle");
+    header_sub_ = new QLabel(tr("18 MODULES | 590+ QUANTITATIVE ENDPOINTS"));
+    header_sub_->setObjectName("qlHeaderSub");
+    title_col->addWidget(header_title_);
+    title_col->addWidget(header_sub_);
     hl->addLayout(title_col);
     hl->addStretch(1);
 
-    auto* badge = new QLabel("API POWERED");
-    badge->setObjectName("qlHeaderBadge");
-    hl->addWidget(badge);
+    header_badge_ = new QLabel(tr("API POWERED"));
+    header_badge_->setObjectName("qlHeaderBadge");
+    hl->addWidget(header_badge_);
 
     return bar;
 }
@@ -217,12 +217,12 @@ QWidget* QuantLibScreen::create_sidebar() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    auto* title = new QLabel("MODULES");
-    title->setStyleSheet(QString("color: %1; font-weight: 700; "
+    sidebar_title_ = new QLabel(tr("MODULES"));
+    sidebar_title_->setStyleSheet(QString("color: %1; font-weight: 700; "
                                  "letter-spacing: 0.5px; background: transparent; "
                                  "padding: 8px 12px; border-bottom: 1px solid %2;")
                              .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM()));
-    vl->addWidget(title);
+    vl->addWidget(sidebar_title_);
 
     module_tree_ = new QTreeWidget;
     module_tree_->setHeaderHidden(true);
@@ -289,9 +289,9 @@ QWidget* QuantLibScreen::create_center_panel() {
     ephdr->setFixedHeight(34);
     auto* ephl = new QHBoxLayout(ephdr);
     ephl->setContentsMargins(12, 0, 12, 0);
-    auto* ept = new QLabel("ENDPOINT");
-    ept->setObjectName("qlPanelTitle");
-    ephl->addWidget(ept);
+    endpoint_panel_title_ = new QLabel(tr("ENDPOINT"));
+    endpoint_panel_title_->setObjectName("qlPanelTitle");
+    ephl->addWidget(endpoint_panel_title_);
     ephl->addStretch(1);
     epvl->addWidget(ephdr);
 
@@ -304,9 +304,9 @@ QWidget* QuantLibScreen::create_center_panel() {
     ebl->addWidget(endpoint_combo_);
 
     // JSON body input — users enter the exact fields the API expects
-    auto* json_label = new QLabel("REQUEST BODY (JSON)");
-    json_label->setObjectName("qlLabel");
-    ebl->addWidget(json_label);
+    json_body_label_ = new QLabel(tr("REQUEST BODY (JSON)"));
+    json_body_label_->setObjectName("qlLabel");
+    ebl->addWidget(json_body_label_);
 
     param_input1_ = new QLineEdit;
     param_input1_->setPlaceholderText(
@@ -331,11 +331,11 @@ QWidget* QuantLibScreen::create_center_panel() {
         helpers->addWidget(btn);
     };
 
-    add_helper("BS Price", "{\"spot\":100,\"strike\":105,\"risk_free_rate\":0.05,\"volatility\":0.2,\"time_to_"
+    add_helper(tr("BS Price"), "{\"spot\":100,\"strike\":105,\"risk_free_rate\":0.05,\"volatility\":0.2,\"time_to_"
                            "maturity\":1.0,\"option_type\":\"call\"}");
-    add_helper("GBM Sim", "{\"S0\":100,\"mu\":0.05,\"sigma\":0.2,\"T\":1.0,\"n_steps\":52,\"n_paths\":5}");
-    add_helper("VaR", "{\"portfolio_value\":1000000,\"volatility\":0.02,\"confidence\":0.99,\"horizon\":1}");
-    add_helper("Heston", "{\"spot\":100,\"strike\":105,\"r\":0.05,\"T\":1.0,\"v0\":0.04,\"kappa\":1.5,"
+    add_helper(tr("GBM Sim"), "{\"S0\":100,\"mu\":0.05,\"sigma\":0.2,\"T\":1.0,\"n_steps\":52,\"n_paths\":5}");
+    add_helper(tr("VaR"), "{\"portfolio_value\":1000000,\"volatility\":0.02,\"confidence\":0.99,\"horizon\":1}");
+    add_helper(tr("Heston"), "{\"spot\":100,\"strike\":105,\"r\":0.05,\"T\":1.0,\"v0\":0.04,\"kappa\":1.5,"
                          "\"theta\":0.04,\"sigma_v\":0.3,\"rho\":-0.7,\"option_type\":\"call\"}");
     helpers->addStretch(1);
     ebl->addLayout(helpers);
@@ -348,7 +348,7 @@ QWidget* QuantLibScreen::create_center_panel() {
     param_input4_ = new QLineEdit;
     param_input4_->hide();
 
-    exec_btn_ = new QPushButton("EXECUTE COMPUTATION");
+    exec_btn_ = new QPushButton(tr("EXECUTE COMPUTATION"));
     exec_btn_->setObjectName("qlExecBtn");
     exec_btn_->setCursor(Qt::PointingHandCursor);
     exec_btn_->setFixedHeight(34);
@@ -376,9 +376,9 @@ QWidget* QuantLibScreen::create_right_panel() {
     toolbar->setFixedHeight(32);
     auto* tbl = new QHBoxLayout(toolbar);
     tbl->setContentsMargins(12, 0, 12, 0);
-    auto* rt = new QLabel("RESULTS");
-    rt->setObjectName("qlPanelTitle");
-    tbl->addWidget(rt);
+    results_title_ = new QLabel(tr("RESULTS"));
+    results_title_->setObjectName("qlPanelTitle");
+    tbl->addWidget(results_title_);
     tbl->addStretch(1);
     result_status_ = new QLabel;
     result_status_->setObjectName("qlResultStatus");
@@ -390,7 +390,7 @@ QWidget* QuantLibScreen::create_right_panel() {
 
     result_view_ = new QTextEdit;
     result_view_->setReadOnly(true);
-    result_view_->setPlaceholderText("Select a module and endpoint, then execute to see results...");
+    result_view_->setPlaceholderText(tr("Select a module and endpoint, then execute to see results..."));
     result_stack_->addWidget(result_view_);
 
     result_table_ = new QTableWidget;
@@ -412,12 +412,12 @@ QWidget* QuantLibScreen::create_status_bar() {
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(16, 0, 16, 0);
 
-    auto* left = new QLabel("QUANTLIB SUITE");
-    left->setObjectName("qlStatusText");
-    hl->addWidget(left);
+    status_left_ = new QLabel(tr("QUANTLIB SUITE"));
+    status_left_->setObjectName("qlStatusText");
+    hl->addWidget(status_left_);
     hl->addStretch(1);
 
-    status_module_ = new QLabel("MODULE: CORE");
+    status_module_ = new QLabel(tr("MODULE: %1").arg(QStringLiteral("CORE")));
     status_module_->setObjectName("qlStatusText");
     hl->addWidget(status_module_);
 
@@ -434,6 +434,32 @@ QWidget* QuantLibScreen::create_status_bar() {
     return bar;
 }
 
+// ── Live language switch ─────────────────────────────────────────────────────
+
+void QuantLibScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void QuantLibScreen::retranslateUi() {
+    // Fixed chrome. Module/panel/endpoint names are API-catalog data and are
+    // intentionally not translated.
+    if (header_title_)         header_title_->setText(tr("QUANTLIB SUITE"));
+    if (header_sub_)           header_sub_->setText(tr("18 MODULES | 590+ QUANTITATIVE ENDPOINTS"));
+    if (header_badge_)         header_badge_->setText(tr("API POWERED"));
+    if (sidebar_title_)        sidebar_title_->setText(tr("MODULES"));
+    if (endpoint_panel_title_) endpoint_panel_title_->setText(tr("ENDPOINT"));
+    if (json_body_label_)      json_body_label_->setText(tr("REQUEST BODY (JSON)"));
+    if (results_title_)        results_title_->setText(tr("RESULTS"));
+    if (status_left_)          status_left_->setText(tr("QUANTLIB SUITE"));
+    if (exec_btn_ && !loading_) exec_btn_->setText(tr("EXECUTE COMPUTATION"));
+
+    // Status module prefix (module name itself is data)
+    if (status_module_ && active_module_ >= 0 && active_module_ < modules_.size())
+        status_module_->setText(tr("MODULE: %1").arg(modules_[active_module_].name.toUpper()));
+}
+
 // ── Slots ───────────────────────────────────────────────────────────────────
 
 void QuantLibScreen::on_module_changed(int index) {
@@ -442,7 +468,7 @@ void QuantLibScreen::on_module_changed(int index) {
     active_module_ = index;
 
     const auto& m = modules_[index];
-    status_module_->setText("MODULE: " + m.name.toUpper());
+    status_module_->setText(tr("MODULE: %1").arg(m.name.toUpper()));
     center_title_->setText(m.name.toUpper());
 
     populate_panels(index);
@@ -491,9 +517,9 @@ void QuantLibScreen::on_execute() {
         if (doc.isObject()) {
             params = doc.object();
         } else {
-            result_view_->setPlainText("ERROR: Invalid JSON in request body.\n\n"
-                                       "Expected format: {\"key\": value, ...}\n"
-                                       "Example: {\"spot\": 100, \"strike\": 105, \"risk_free_rate\": 0.05}");
+            result_view_->setPlainText(tr("ERROR: Invalid JSON in request body.\n\n"
+                                          "Expected format: {\"key\": value, ...}\n"
+                                          "Example: {\"spot\": 100, \"strike\": 105, \"risk_free_rate\": 0.05}"));
             result_stack_->setCurrentIndex(0);
             return;
         }
@@ -530,7 +556,7 @@ void QuantLibScreen::populate_panels(int module_index) {
 
 void QuantLibScreen::execute_api(const QString& endpoint, const QJsonObject& params) {
     set_loading(true);
-    result_status_->setText("Computing...");
+    result_status_->setText(tr("Computing..."));
 
     QPointer<QuantLibScreen> self = this;
     services::QuantLibClient::instance().call(endpoint, params, [self, endpoint](mcp::ToolResult result) {
@@ -563,7 +589,7 @@ void QuantLibScreen::display_result_array(const QJsonArray& arr) {
     if (arr.isEmpty()) {
         result_view_->setPlainText("[]");
         result_stack_->setCurrentIndex(0);
-        result_status_->setText("Empty");
+        result_status_->setText(tr("Empty"));
         return;
     }
 
@@ -598,12 +624,12 @@ void QuantLibScreen::display_result_array(const QJsonArray& arr) {
         result_table_->resizeColumnsToContents();
         result_table_->setSortingEnabled(true);
         result_stack_->setCurrentIndex(1);
-        result_status_->setText(QString::number(rows) + " results");
+        result_status_->setText(tr("%1 results").arg(rows));
     } else {
         // Array of scalars (e.g. currency list, calendar list) → two-column table: Index | Value
         result_table_->setSortingEnabled(false);
         result_table_->setColumnCount(2);
-        result_table_->setHorizontalHeaderLabels({"#", "Value"});
+        result_table_->setHorizontalHeaderLabels({tr("#"), tr("Value")});
         int rows = qMin(arr.size(), 1000);
         result_table_->setRowCount(rows);
         for (int r = 0; r < rows; ++r) {
@@ -613,16 +639,16 @@ void QuantLibScreen::display_result_array(const QJsonArray& arr) {
         result_table_->resizeColumnsToContents();
         result_table_->setSortingEnabled(true);
         result_stack_->setCurrentIndex(1);
-        result_status_->setText(QString::number(rows) + " items");
+        result_status_->setText(tr("%1 items").arg(rows));
     }
 }
 
 void QuantLibScreen::display_result(const QJsonObject& result) {
     // result is already the unwrapped payload from QuantLibClient
     if (result.isEmpty()) {
-        result_view_->setPlainText("(empty response)");
+        result_view_->setPlainText(tr("(empty response)"));
         result_stack_->setCurrentIndex(0);
-        result_status_->setText("OK");
+        result_status_->setText(tr("OK"));
         return;
     }
 
@@ -632,7 +658,7 @@ void QuantLibScreen::display_result(const QJsonObject& result) {
         if (!obj.isEmpty()) {
             result_table_->setSortingEnabled(false);
             result_table_->setColumnCount(2);
-            result_table_->setHorizontalHeaderLabels({"Field", "Value"});
+            result_table_->setHorizontalHeaderLabels({tr("Field"), tr("Value")});
             result_table_->setRowCount(obj.size());
             int r = 0;
             for (auto it = obj.begin(); it != obj.end(); ++it, ++r) {
@@ -663,7 +689,7 @@ void QuantLibScreen::display_result(const QJsonObject& result) {
             result_table_->resizeColumnsToContents();
             result_table_->setSortingEnabled(true);
             result_stack_->setCurrentIndex(1);
-            result_status_->setText(QString::number(obj.size()) + " fields");
+            result_status_->setText(tr("%1 fields").arg(obj.size()));
             return;
         }
     }
@@ -671,20 +697,20 @@ void QuantLibScreen::display_result(const QJsonObject& result) {
     // Fallback: raw JSON
     result_view_->setPlainText(QJsonDocument(result).toJson(QJsonDocument::Indented));
     result_stack_->setCurrentIndex(0);
-    result_status_->setText("OK");
+    result_status_->setText(tr("OK"));
 }
 
 void QuantLibScreen::display_error(const QString& error) {
-    result_view_->setPlainText("ERROR: " + error);
+    result_view_->setPlainText(tr("ERROR: %1").arg(error));
     result_stack_->setCurrentIndex(0);
-    result_status_->setText("Error");
+    result_status_->setText(tr("Error"));
     LOG_ERROR("QuantLib", error);
 }
 
 void QuantLibScreen::set_loading(bool loading) {
     loading_ = loading;
     exec_btn_->setEnabled(!loading);
-    exec_btn_->setText(loading ? "COMPUTING..." : "EXECUTE COMPUTATION");
+    exec_btn_->setText(loading ? tr("COMPUTING...") : tr("EXECUTE COMPUTATION"));
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────

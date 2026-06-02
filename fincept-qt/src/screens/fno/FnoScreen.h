@@ -18,6 +18,7 @@
 #include "core/symbol/IGroupLinked.h"
 #include "screens/common/IStatefulScreen.h"
 
+#include <QEvent>
 #include <QHash>
 #include <QPointer>
 #include <QPushButton>
@@ -56,6 +57,7 @@ class FnoScreen : public QWidget,
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   public:
     enum SubTab : int {
@@ -75,6 +77,13 @@ class FnoScreen : public QWidget,
     void setup_ui();
     QWidget* build_tab_bar();
     QWidget* build_placeholder(const QString& tab_name, const QString& detail);
+
+    /// Re-apply tr() lookups to the tab-bar buttons on QEvent::LanguageChange.
+    void retranslateUi();
+
+    /// Translated tab label / detail for the given slot index.
+    static QString tab_label_for(int index);
+    static QString tab_detail_for(int index);
 
     /// Lazy-construct the requested sub-tab and insert it into the stack at
     /// its slot index. No-op if already present.

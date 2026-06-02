@@ -3,6 +3,7 @@
 #include "core/result/Result.h"
 #include "services/wallet/WalletTypes.h"
 
+#include <QEvent>
 #include <QHash>
 #include <QString>
 #include <QVariant>
@@ -57,10 +58,12 @@ class SwapPanel : public QWidget {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
     void apply_theme();
+    void retranslateUi();
 
     void on_wallet_connected(const QString& pubkey, const QString& label);
     void on_wallet_disconnected();
@@ -115,6 +118,17 @@ class SwapPanel : public QWidget {
     QLabel* error_text_ = nullptr;
     QPushButton* swap_button_ = nullptr;
     QLabel* status_label_ = nullptr;
+
+    // Fixed UI captions / chrome (cached for retranslateUi)
+    QLabel* head_title_ = nullptr;          // "SWAP"
+    QLabel* head_status_ = nullptr;         // "via PumpPortal · pool=auto"
+    QLabel* pay_caption_ = nullptr;         // "YOU PAY"
+    QLabel* from_caption_ = nullptr;        // "FROM"
+    QLabel* receive_caption_ = nullptr;     // "YOU RECEIVE (EST.)"
+    QLabel* to_caption_ = nullptr;          // "TO"
+    QLabel* route_caption_ = nullptr;       // "ROUTE"
+    QLabel* impact_caption_ = nullptr;      // "PRICE IMPACT"
+    QLabel* slippage_caption_ = nullptr;    // "MAX SLIPPAGE"
 
     // Debounce for estimate recompute on every keystroke.
     QTimer* debounce_timer_ = nullptr;

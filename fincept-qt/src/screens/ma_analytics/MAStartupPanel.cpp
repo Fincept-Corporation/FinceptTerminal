@@ -39,17 +39,17 @@ QWidget* MAModulePanel::build_startup_panel() {
     bvl->setContentsMargins(12, 12, 12, 12);
     bvl->setSpacing(8);
 
-    QStringList berkus_factors = {"Sound Idea", "Prototype", "Quality Team", "Strategic Relationships",
-                                  "Product Rollout"};
+    QStringList berkus_factors = {tr("Sound Idea"), tr("Prototype"), tr("Quality Team"),
+                                  tr("Strategic Relationships"), tr("Product Rollout")};
     for (int i = 0; i < berkus_factors.size(); ++i) {
         auto* spin = make_double_spin(0, 100, 50, 0, "%", berkus);
         double_inputs_[QString("berkus_%1").arg(i)] = spin;
         bvl->addWidget(build_input_row(berkus_factors[i] + " (0-100%)", spin, berkus));
     }
 
-    auto* berkus_run = make_run_button("CALCULATE BERKUS", berkus);
+    auto* berkus_run = make_run_button(tr("CALCULATE BERKUS"), berkus);
     connect(berkus_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Calculating Berkus...");
+        status_label_->setText(tr("Calculating Berkus..."));
         QJsonObject params;
         QJsonArray scores;
         for (int i = 0; i < 5; ++i)
@@ -59,7 +59,7 @@ QWidget* MAModulePanel::build_startup_panel() {
     });
     bvl->addWidget(berkus_run);
     bvl->addStretch();
-    sub_tabs_->addTab(berkus, "Berkus");
+    add_sub_tab(berkus, QT_TR_NOOP("Berkus"));
 
     // ── Scorecard ──
     auto* sc = new QWidget(this);
@@ -75,19 +75,20 @@ QWidget* MAModulePanel::build_startup_panel() {
                                 .arg(ui::fonts::DATA_FAMILY)
                                 .arg(ui::fonts::SMALL));
     combo_inputs_["sc_stage"] = sc_stage;
-    scvl->addWidget(build_input_row("Stage", sc_stage, sc));
+    scvl->addWidget(build_input_row(tr("Stage"), sc_stage, sc));
 
-    QStringList sc_factors = {"Management Team",  "Market Size", "Product/Technology", "Competition", "Marketing/Sales",
-                              "Need for Funding", "Other"};
+    QStringList sc_factors = {tr("Management Team"),  tr("Market Size"),      tr("Product/Technology"),
+                              tr("Competition"),      tr("Marketing/Sales"),  tr("Need for Funding"),
+                              tr("Other")};
     for (int i = 0; i < sc_factors.size(); ++i) {
         auto* spin = make_double_spin(0.5, 2.0, 1.0, 1, "x", sc);
         double_inputs_[QString("sc_%1").arg(i)] = spin;
         scvl->addWidget(build_input_row(sc_factors[i], spin, sc));
     }
 
-    auto* sc_run = make_run_button("CALCULATE SCORECARD", sc);
+    auto* sc_run = make_run_button(tr("CALCULATE SCORECARD"), sc);
     connect(sc_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Calculating Scorecard...");
+        status_label_->setText(tr("Calculating Scorecard..."));
         QJsonObject params;
         params["stage"] = combo_inputs_["sc_stage"]->currentText();
         QJsonArray assessments;
@@ -98,7 +99,7 @@ QWidget* MAModulePanel::build_startup_panel() {
     });
     scvl->addWidget(sc_run);
     scvl->addStretch();
-    sub_tabs_->addTab(sc, "Scorecard");
+    add_sub_tab(sc, QT_TR_NOOP("Scorecard"));
 
     // ── VC Method ──
     auto* vc = new QWidget(this);
@@ -108,23 +109,23 @@ QWidget* MAModulePanel::build_startup_panel() {
 
     auto* vc_exit = make_double_spin(0, 1e12, 50e6, 0, "", vc);
     double_inputs_["vc_exit_metric"] = vc_exit;
-    vc_vl->addWidget(build_input_row("Exit Year Metric ($)", vc_exit, vc));
+    vc_vl->addWidget(build_input_row(tr("Exit Year Metric") + " ($)", vc_exit, vc));
 
     auto* vc_mult = make_double_spin(0, 100, 8, 1, "x", vc);
     double_inputs_["vc_multiple"] = vc_mult;
-    vc_vl->addWidget(build_input_row("Exit Multiple", vc_mult, vc));
+    vc_vl->addWidget(build_input_row(tr("Exit Multiple"), vc_mult, vc));
 
     auto* vc_years = make_int_spin(1, 20, 5, vc);
     int_inputs_["vc_years"] = vc_years;
-    vc_vl->addWidget(build_input_row("Years to Exit", vc_years, vc));
+    vc_vl->addWidget(build_input_row(tr("Years to Exit"), vc_years, vc));
 
     auto* vc_invest = make_double_spin(0, 1e12, 5e6, 0, "", vc);
     double_inputs_["vc_investment"] = vc_invest;
-    vc_vl->addWidget(build_input_row("Investment ($)", vc_invest, vc));
+    vc_vl->addWidget(build_input_row(tr("Investment") + " ($)", vc_invest, vc));
 
-    auto* vc_run = make_run_button("CALCULATE VC METHOD", vc);
+    auto* vc_run = make_run_button(tr("CALCULATE VC METHOD"), vc);
     connect(vc_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Calculating VC Method...");
+        status_label_->setText(tr("Calculating VC Method..."));
         QJsonObject params;
         params["exit_metric"] = double_inputs_["vc_exit_metric"]->value();
         params["exit_multiple"] = double_inputs_["vc_multiple"]->value();
@@ -134,7 +135,7 @@ QWidget* MAModulePanel::build_startup_panel() {
     });
     vc_vl->addWidget(vc_run);
     vc_vl->addStretch();
-    sub_tabs_->addTab(vc, "VC Method");
+    add_sub_tab(vc, QT_TR_NOOP("VC Method"));
 
     // ── First Chicago ──
     auto* fc = new QWidget(this);
@@ -142,11 +143,11 @@ QWidget* MAModulePanel::build_startup_panel() {
     fc_vl->setContentsMargins(12, 12, 12, 12);
     fc_vl->setSpacing(8);
 
-    QStringList scenarios = {"Bull", "Base", "Bear"};
+    QStringList scenarios = {tr("BULL CASE"), tr("BASE CASE"), tr("BEAR CASE")};
     double defaults_prob[] = {25, 50, 25};
     double defaults_val[] = {100e6, 40e6, 10e6};
     for (int i = 0; i < 3; ++i) {
-        auto* lbl = new QLabel(scenarios[i].toUpper() + " CASE", fc);
+        auto* lbl = new QLabel(scenarios[i], fc);
         lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
                                    "letter-spacing:1px;")
                                .arg(module_.color.name())
@@ -155,16 +156,16 @@ QWidget* MAModulePanel::build_startup_panel() {
 
         auto* prob = make_double_spin(0, 100, defaults_prob[i], 0, "%", fc);
         double_inputs_[QString("fc_prob_%1").arg(i)] = prob;
-        fc_vl->addWidget(build_input_row("Probability", prob, fc));
+        fc_vl->addWidget(build_input_row(tr("Probability"), prob, fc));
 
         auto* val = make_double_spin(0, 1e15, defaults_val[i], 0, "", fc);
         double_inputs_[QString("fc_value_%1").arg(i)] = val;
-        fc_vl->addWidget(build_input_row("Exit Value ($)", val, fc));
+        fc_vl->addWidget(build_input_row(tr("Exit Value") + " ($)", val, fc));
     }
 
-    auto* fc_run = make_run_button("CALCULATE FIRST CHICAGO", fc);
+    auto* fc_run = make_run_button(tr("CALCULATE FIRST CHICAGO"), fc);
     connect(fc_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Calculating First Chicago...");
+        status_label_->setText(tr("Calculating First Chicago..."));
         QJsonObject params;
         QJsonArray scenarios;
         for (int i = 0; i < 3; ++i) {
@@ -178,7 +179,7 @@ QWidget* MAModulePanel::build_startup_panel() {
     });
     fc_vl->addWidget(fc_run);
     fc_vl->addStretch();
-    sub_tabs_->addTab(fc, "First Chicago");
+    add_sub_tab(fc, QT_TR_NOOP("First Chicago"));
 
     // ── Risk Factor ──
     auto* rf = new QWidget(this);
@@ -188,20 +189,21 @@ QWidget* MAModulePanel::build_startup_panel() {
 
     auto* rf_base = make_double_spin(0, 1e12, 3e6, 0, "", rf);
     double_inputs_["rf_base"] = rf_base;
-    rf_vl->addWidget(build_input_row("Base Valuation ($)", rf_base, rf));
+    rf_vl->addWidget(build_input_row(tr("Base Valuation") + " ($)", rf_base, rf));
 
-    QStringList risk_factors = {"Management",        "Stage",         "Legislation", "Manufacturing",
-                                "Sales & Marketing", "Funding",       "Competition", "Technology",
-                                "Litigation",        "International", "Reputation",  "Exit Opportunity"};
+    QStringList risk_factors = {tr("Management"),        tr("Stage"),         tr("Legislation"),
+                                tr("Manufacturing"),     tr("Sales & Marketing"), tr("Funding"),
+                                tr("Competition"),       tr("Technology"),    tr("Litigation"),
+                                tr("International"),      tr("Reputation"),    tr("Exit Opportunity")};
     for (int i = 0; i < risk_factors.size(); ++i) {
         auto* spin = make_int_spin(-2, 2, 0, rf);
         int_inputs_[QString("rf_%1").arg(i)] = spin;
         rf_vl->addWidget(build_input_row(risk_factors[i] + " (-2 to +2)", spin, rf));
     }
 
-    auto* rf_run = make_run_button("CALCULATE RISK FACTOR", rf);
+    auto* rf_run = make_run_button(tr("CALCULATE RISK FACTOR"), rf);
     connect(rf_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Calculating Risk Factor...");
+        status_label_->setText(tr("Calculating Risk Factor..."));
         QJsonObject params;
         params["base_valuation"] = double_inputs_["rf_base"]->value();
         QJsonArray assessments;
@@ -212,7 +214,7 @@ QWidget* MAModulePanel::build_startup_panel() {
     });
     rf_vl->addWidget(rf_run);
     rf_vl->addStretch();
-    sub_tabs_->addTab(rf, "Risk Factor");
+    add_sub_tab(rf, QT_TR_NOOP("Risk Factor"));
 
     // ── Comprehensive ──
     auto* comp = new QWidget(this);
@@ -220,7 +222,7 @@ QWidget* MAModulePanel::build_startup_panel() {
     comp_vl->setContentsMargins(12, 12, 12, 12);
     comp_vl->setSpacing(8);
 
-    auto* comp_hint = new QLabel("Runs all 5 methods with current inputs and returns a consensus range.", comp);
+    auto* comp_hint = new QLabel(tr("Runs all 5 methods with current inputs and returns a consensus range."), comp);
     comp_hint->setWordWrap(true);
     comp_hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                  .arg(ui::colors::TEXT_SECONDARY())
@@ -228,9 +230,9 @@ QWidget* MAModulePanel::build_startup_panel() {
                                  .arg(ui::fonts::DATA_FAMILY));
     comp_vl->addWidget(comp_hint);
 
-    auto* comp_run = make_run_button("RUN ALL METHODS", comp);
+    auto* comp_run = make_run_button(tr("RUN ALL METHODS"), comp);
     connect(comp_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Running Comprehensive...");
+        status_label_->setText(tr("Running Comprehensive..."));
         QJsonObject params;
         // Gather all startup inputs
         QJsonArray berkus_scores;
@@ -246,7 +248,7 @@ QWidget* MAModulePanel::build_startup_panel() {
     });
     comp_vl->addWidget(comp_run);
     comp_vl->addStretch();
-    sub_tabs_->addTab(comp, "All Methods");
+    add_sub_tab(comp, QT_TR_NOOP("All Methods"));
 
     vl->addWidget(sub_tabs_);
 

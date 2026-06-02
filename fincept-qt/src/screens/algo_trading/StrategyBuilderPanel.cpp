@@ -147,9 +147,9 @@ QWidget* StrategyBuilderPanel::build_right_panel() {
     layout->setSpacing(8);
 
     // Backtest params
-    auto* bt_section = new QLabel(tr("BACKTEST"), this);
-    bt_section->setObjectName(QStringLiteral("builderBtHeader"));
-    layout->addWidget(bt_section);
+    bt_header_ = new QLabel(tr("BACKTEST"), this);
+    bt_header_->setObjectName(QStringLiteral("builderBtHeader"));
+    layout->addWidget(bt_header_);
 
     auto* bt_grid = new QGridLayout();
     bt_grid->setSpacing(6);
@@ -178,11 +178,14 @@ QWidget* StrategyBuilderPanel::build_right_panel() {
     bt_end_date_->setMaximumDate(today);
     bt_end_date_->setDate(today);
 
-    bt_grid->addWidget(new QLabel(tr("Capital"), this), 0, 0);
+    bt_capital_label_ = new QLabel(tr("Capital"), this);
+    bt_start_label_ = new QLabel(tr("Start"), this);
+    bt_end_label_ = new QLabel(tr("End"), this);
+    bt_grid->addWidget(bt_capital_label_, 0, 0);
     bt_grid->addWidget(bt_capital_, 0, 1);
-    bt_grid->addWidget(new QLabel(tr("Start"), this), 1, 0);
+    bt_grid->addWidget(bt_start_label_, 1, 0);
     bt_grid->addWidget(bt_start_date_, 1, 1);
-    bt_grid->addWidget(new QLabel(tr("End"), this), 2, 0);
+    bt_grid->addWidget(bt_end_label_, 2, 0);
     bt_grid->addWidget(bt_end_date_, 2, 1);
     layout->addLayout(bt_grid);
 
@@ -420,6 +423,35 @@ void StrategyBuilderPanel::restore_draft(const QVariantMap& draft) {
         draft.value("quantity", 1.0).toDouble(),
         draft.value("max_order_value", 0.0).toDouble(),
         draft.value("capital_pct", 100.0).toDouble());
+}
+
+// ── Live language switch ──────────────────────────────────────────────────────
+
+void StrategyBuilderPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void StrategyBuilderPanel::retranslateUi() {
+    if (name_edit_) name_edit_->setPlaceholderText(tr("Strategy Name"));
+    if (desc_edit_) desc_edit_->setPlaceholderText(tr("Description (optional)"));
+
+    // template_combo_ item 0 is the "Templates…" placeholder; rest are data names.
+    if (template_combo_ && template_combo_->count() > 0)
+        template_combo_->setItemText(0, tr("Templates…"));
+
+    if (save_btn_)     save_btn_->setText(tr("Save"));
+    if (backtest_btn_) backtest_btn_->setText(tr("Backtest"));
+    if (deploy_btn_)   deploy_btn_->setText(tr("Deploy"));
+
+    if (bt_header_)        bt_header_->setText(tr("BACKTEST"));
+    if (bt_capital_label_) bt_capital_label_->setText(tr("Capital"));
+    if (bt_start_label_)   bt_start_label_->setText(tr("Start"));
+    if (bt_end_label_)     bt_end_label_->setText(tr("End"));
+    // status_label_ carries transient action feedback — left as-is on language switch.
+    // Child widgets (ConditionSection / RiskManagementPanel / BacktestReportPanel)
+    // own their own retranslate via their changeEvent overrides.
 }
 
 } // namespace fincept::screens

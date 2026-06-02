@@ -17,6 +17,8 @@
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QEvent>
+#include <QGroupBox>
 #include <QHash>
 #include <QLabel>
 #include <QLineEdit>
@@ -64,6 +66,7 @@ class AlphaArenaScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* e) override;
 
   private slots:
     void on_create_clicked();
@@ -91,6 +94,11 @@ class AlphaArenaScreen : public QWidget, public IStatefulScreen {
     QWidget* build_main();
     QWidget* build_right_stack();
 
+    /// Re-apply tr() lookups to persistent chrome after a QEvent::LanguageChange.
+    /// Status/venue badges and the tick line are re-derived from current state;
+    /// table/list data rows are model-driven and kept verbatim.
+    void retranslateUi();
+
     void connect_engine_signals();
     void disconnect_engine_signals();
 
@@ -111,18 +119,29 @@ class AlphaArenaScreen : public QWidget, public IStatefulScreen {
     QVector<QMetaObject::Connection> engine_conns_;
 
     // Header.
+    QLabel* title_label_ = nullptr;
     QLabel* venue_badge_ = nullptr;
     QLabel* status_badge_ = nullptr;
     QLabel* tick_label_ = nullptr;
+    int tick_seq_ = 0;                        // last seq shown on tick_label_
     QLabel* countdown_label_ = nullptr;
     QPushButton* force_tick_btn_ = nullptr;
     QPushButton* kill_all_btn_ = nullptr;
     QPushButton* live_mode_btn_ = nullptr;
+    QLabel* cadence_label_ = nullptr;
     QSpinBox* hot_cadence_spin_ = nullptr;
+    QPushButton* apply_cadence_btn_ = nullptr;
     QLabel* disclaimer_ = nullptr;
 
     // Create panel.
-    QWidget* create_panel_ = nullptr;
+    QGroupBox* create_panel_ = nullptr;
+    QLabel* comp_name_lbl_ = nullptr;
+    QLabel* comp_mode_lbl_ = nullptr;
+    QLabel* comp_venue_lbl_ = nullptr;
+    QLabel* comp_capital_lbl_ = nullptr;
+    QLabel* comp_cadence_lbl_ = nullptr;
+    QLabel* comp_instruments_lbl_ = nullptr;
+    QLabel* comp_models_lbl_ = nullptr;
     QLineEdit* comp_name_ = nullptr;
     QComboBox* comp_mode_ = nullptr;
     QRadioButton* venue_paper_ = nullptr;

@@ -2,6 +2,7 @@
 
 #include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 #include "trading/instruments/InstrumentService.h"
 
 #include <QCryptographicHash>
@@ -141,7 +142,11 @@ TokenExchangeResponse AliceBlueBroker::exchange_token(const QString& api_key, co
     if (session.isEmpty())
         return {false, "", "", "", "No userSession in response", ""};
 
-    return {true, session, client_id, "", "", ""};
+    // AliceBlue session tokens are flushed at the daily reset; the live sweep is
+    // authoritative — this is only a startup hint. No silent refresh (re-auth
+    // needs a fresh web-login auth code).
+    const QString extra = with_token_expiry({}, next_ist_flush_epoch(6, 0));
+    return {true, session, client_id, "", extra, ""};
 }
 
 // ============================================================================

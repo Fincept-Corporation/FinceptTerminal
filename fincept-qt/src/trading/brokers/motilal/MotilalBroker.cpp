@@ -1,6 +1,7 @@
 #include "trading/brokers/motilal/MotilalBroker.h"
 
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 #include "trading/instruments/InstrumentService.h"
 
 #include <algorithm>
@@ -185,7 +186,10 @@ TokenExchangeResponse MotilalBroker::exchange_token(const QString& api_key, cons
     if (token.isEmpty())
         return {false, "", "", "", "Login: no AuthToken in response", ""};
 
-    return {true, token, "", api_key, "", ""};
+    // Motilal AuthToken is valid for the trading day; 2FA (TOTP/OTP) can't be
+    // replayed silently, so detect-only. Startup hint.
+    const QString extra = with_token_expiry({}, next_ist_flush_epoch(6, 0));
+    return {true, token, "", api_key, extra, ""};
 }
 
 // ---------- place_order ----------

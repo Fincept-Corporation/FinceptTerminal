@@ -28,20 +28,6 @@ using namespace fincept::ui;
 
 namespace {
 
-struct TabDef {
-    const char* label;
-    const char* description;
-};
-
-constexpr TabDef kTabDefs[FnoScreen::TabCount] = {
-    {"Chain", "Live option chain (Phase 2)"},
-    {"Builder", "Strategy builder + payoff (Phase 5)"},
-    {"OI", "Open Interest analytics (Phase 7)"},
-    {"Multi-Stra", "Multi straddle / strangle charts (Phase 9)"},
-    {"FII / DII", "Institutional flows (Phase 8)"},
-    {"Screener", "Chain screener (Phase 9)"},
-};
-
 template <typename Sub>
 void replace_placeholder(QStackedWidget* stack, QHash<int, QWidget*>& tabs, int slot, Sub*& target,
                          QWidget* parent) {
@@ -57,6 +43,30 @@ void replace_placeholder(QStackedWidget* stack, QHash<int, QWidget*>& tabs, int 
 }
 
 }  // namespace
+
+QString FnoScreen::tab_label_for(int index) {
+    switch (index) {
+        case TabChain:         return tr("Chain");
+        case TabBuilder:       return tr("Builder");
+        case TabOI:            return tr("OI");
+        case TabMultiStraddle: return tr("Multi-Stra");
+        case TabFiiDii:        return tr("FII / DII");
+        case TabScreener:      return tr("Screener");
+        default:               return {};
+    }
+}
+
+QString FnoScreen::tab_detail_for(int index) {
+    switch (index) {
+        case TabChain:         return tr("Live option chain (Phase 2)");
+        case TabBuilder:       return tr("Strategy builder + payoff (Phase 5)");
+        case TabOI:            return tr("Open Interest analytics (Phase 7)");
+        case TabMultiStraddle: return tr("Multi straddle / strangle charts (Phase 9)");
+        case TabFiiDii:        return tr("Institutional flows (Phase 8)");
+        case TabScreener:      return tr("Chain screener (Phase 9)");
+        default:               return {};
+    }
+}
 
 FnoScreen::FnoScreen(QWidget* parent) : QWidget(parent) {
     setObjectName("fnoScreen");
@@ -88,8 +98,7 @@ void FnoScreen::setup_ui() {
     // 1:1 to SubTab values. The Chain slot is replaced with the real widget
     // immediately so the user sees data on first reveal.
     for (int i = 0; i < TabCount; ++i) {
-        auto* placeholder =
-            build_placeholder(QString::fromLatin1(kTabDefs[i].label), QString::fromLatin1(kTabDefs[i].description));
+        auto* placeholder = build_placeholder(tab_label_for(i), tab_detail_for(i));
         stack_->addWidget(placeholder);
         tabs_.insert(i, placeholder);
     }
@@ -109,7 +118,7 @@ QWidget* FnoScreen::build_tab_bar() {
 
     tab_btns_.reserve(TabCount);
     for (int i = 0; i < TabCount; ++i) {
-        auto* btn = new QPushButton(QString::fromLatin1(kTabDefs[i].label).toUpper(), bar);
+        auto* btn = new QPushButton(tab_label_for(i).toUpper(), bar);
         btn->setObjectName("fnoTabBtn");
         btn->setCursor(Qt::PointingHandCursor);
         btn->setProperty("active", i == int(active_tab_));
@@ -127,7 +136,7 @@ QWidget* FnoScreen::build_placeholder(const QString& tab_name, const QString& de
     lay->setContentsMargins(0, 0, 0, 0);
     lay->setSpacing(6);
     lay->addStretch(1);
-    auto* title = new QLabel(tab_name + " — coming in a later phase", wrap);
+    auto* title = new QLabel(tr("%1 — coming in a later phase").arg(tab_name), wrap);
     title->setObjectName("fnoComingSoon");
     title->setAlignment(Qt::AlignCenter);
     auto* hint = new QLabel(detail, wrap);
@@ -314,6 +323,18 @@ void FnoScreen::showEvent(QShowEvent* e) {
 
 void FnoScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+}
+
+void FnoScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void FnoScreen::retranslateUi() {
+    for (int i = 0; i < tab_btns_.size(); ++i)
+        if (tab_btns_.at(i))
+            tab_btns_.at(i)->setText(tab_label_for(i).toUpper());
 }
 
 } // namespace fincept::screens::fno

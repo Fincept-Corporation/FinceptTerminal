@@ -68,16 +68,16 @@ void McpServersSection::build_ui() {
                              QString(ui::colors::BORDER_DIM()) + ";");
     auto* tbl = new QHBoxLayout(title_bar);
     tbl->setContentsMargins(16, 0, 16, 0);
-    auto* title = new QLabel(tr("MCP SERVERS"));
-    title->setStyleSheet("color:" + QString(ui::colors::AMBER()) + ";font-weight:700;letter-spacing:1px;");
-    tbl->addWidget(title);
+    title_lbl_ = new QLabel(tr("MCP SERVERS"));
+    title_lbl_->setStyleSheet("color:" + QString(ui::colors::AMBER()) + ";font-weight:700;letter-spacing:1px;");
+    tbl->addWidget(title_lbl_);
     tbl->addStretch();
 
     // Internal tools count badge
-    auto* tools_badge = new QLabel;
-    tools_badge->setObjectName("McpToolsBadge");
-    tools_badge->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";");
-    tbl->addWidget(tools_badge);
+    tools_badge_ = new QLabel;
+    tools_badge_->setObjectName("McpToolsBadge");
+    tools_badge_->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";");
+    tbl->addWidget(tools_badge_);
 
     root->addWidget(title_bar);
 
@@ -108,8 +108,8 @@ void McpServersSection::build_ui() {
             btn->setChecked(true);
         return btn;
     };
-    make_tab("Installed Servers", 0);
-    make_tab("Tools", 1);
+    servers_tab_btn_ = make_tab(tr("Installed Servers"), 0);
+    tools_tab_btn_   = make_tab(tr("Tools"), 1);
     tbbl->addStretch();
     root->addWidget(tab_bar);
 
@@ -120,8 +120,8 @@ void McpServersSection::build_ui() {
 
     // Update badge
     std::size_t n = McpService::instance().tool_count();
-    if (auto* badge = findChild<QLabel*>("McpToolsBadge"))
-        badge->setText(QString("%1 internal tools active").arg(n));
+    if (tools_badge_)
+        tools_badge_->setText(tr("%1 internal tools active").arg(n));
 }
 
 // ============================================================================
@@ -144,9 +144,9 @@ QWidget* McpServersSection::build_servers_tab() {
     lvl->setContentsMargins(8, 8, 8, 8);
     lvl->setSpacing(6);
 
-    auto* list_lbl = new QLabel("External Servers");
-    list_lbl->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";font-weight:700;letter-spacing:1px;");
-    lvl->addWidget(list_lbl);
+    server_list_lbl_ = new QLabel(tr("External Servers"));
+    server_list_lbl_->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";font-weight:700;letter-spacing:1px;");
+    lvl->addWidget(server_list_lbl_);
 
     server_list_ = new QListWidget;
     server_list_->setStyleSheet(
@@ -165,7 +165,7 @@ QWidget* McpServersSection::build_servers_tab() {
 
     // Action buttons
     auto* btns = new QHBoxLayout;
-    add_btn_ = new QPushButton("+ Add");
+    add_btn_ = new QPushButton(tr("+ Add"));
     add_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" +
                             QString(ui::colors::AMBER()) + ";border:1px solid " + QString(ui::colors::AMBER()) +
                             ";"
@@ -174,7 +174,7 @@ QWidget* McpServersSection::build_servers_tab() {
                             QString(ui::colors::BG_RAISED()) + ";}");
     connect(add_btn_, &QPushButton::clicked, this, &McpServersSection::on_add_server);
 
-    remove_btn_ = new QPushButton("Remove");
+    remove_btn_ = new QPushButton(tr("Remove"));
     remove_btn_->setEnabled(false);
     remove_btn_->setStyleSheet(
         "QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::NEGATIVE()) +
@@ -214,14 +214,14 @@ QWidget* McpServersSection::build_servers_tab() {
     dvl->setContentsMargins(24, 20, 24, 20);
     dvl->setSpacing(12);
 
-    detail_lbl_ = new QLabel("Select a server to view details.");
+    detail_lbl_ = new QLabel(tr("Select a server to view details."));
     detail_lbl_->setWordWrap(true);
     detail_lbl_->setStyleSheet("color:" + QString(ui::colors::TEXT_TERTIARY()) + ";");
     dvl->addWidget(detail_lbl_);
 
     // Start/Stop buttons
     auto* server_btns = new QHBoxLayout;
-    start_btn_ = new QPushButton("▶  Start");
+    start_btn_ = new QPushButton(tr("▶  Start"));
     start_btn_->setEnabled(false);
     start_btn_->setFixedHeight(32);
     start_btn_->setStyleSheet(
@@ -237,7 +237,7 @@ QWidget* McpServersSection::build_servers_tab() {
         ";background:" + QString(ui::colors::BG_BASE()) + ";}");
     connect(start_btn_, &QPushButton::clicked, this, &McpServersSection::on_start_server);
 
-    stop_btn_ = new QPushButton("■  Stop");
+    stop_btn_ = new QPushButton(tr("■  Stop"));
     stop_btn_->setEnabled(false);
     stop_btn_->setFixedHeight(32);
     stop_btn_->setStyleSheet(
@@ -281,15 +281,15 @@ QWidget* McpServersSection::build_tools_tab() {
     vl->setContentsMargins(16, 12, 16, 12);
     vl->setSpacing(8);
 
-    auto* info =
-        new QLabel("All registered MCP tools — both internal (built-in) and external (from connected servers).");
-    info->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";");
-    info->setWordWrap(true);
-    vl->addWidget(info);
+    tools_info_lbl_ =
+        new QLabel(tr("All registered MCP tools — both internal (built-in) and external (from connected servers)."));
+    tools_info_lbl_->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";");
+    tools_info_lbl_->setWordWrap(true);
+    vl->addWidget(tools_info_lbl_);
 
     tools_table_ = new QTableWidget;
     tools_table_->setColumnCount(4);
-    tools_table_->setHorizontalHeaderLabels({"Tool Name", "Server", "Category", "Description"});
+    tools_table_->setHorizontalHeaderLabels({tr("Tool Name"), tr("Server"), tr("Category"), tr("Description")});
     tools_table_->horizontalHeader()->setStretchLastSection(true);
     tools_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     tools_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
@@ -328,7 +328,7 @@ QWidget* McpServersSection::build_tools_tab() {
 
 void McpServersSection::on_add_server() {
     auto* dlg = new QDialog(this);
-    dlg->setWindowTitle("Add MCP Server");
+    dlg->setWindowTitle(tr("Add MCP Server"));
     dlg->setMinimumWidth(480);
     dlg->setStyleSheet("background:" + QString(ui::colors::BG_SURFACE()) +
                        ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";");
@@ -337,7 +337,7 @@ void McpServersSection::on_add_server() {
     vl->setSpacing(12);
     vl->setContentsMargins(16, 16, 16, 16);
 
-    auto* title = new QLabel("Add External MCP Server");
+    auto* title = new QLabel(tr("Add External MCP Server"));
     title->setStyleSheet("color:" + QString(ui::colors::AMBER()) + ";font-weight:700;");
     vl->addWidget(title);
 
@@ -362,23 +362,23 @@ void McpServersSection::on_add_server() {
         return l;
     };
 
-    auto* name_edit = fe("e.g. My Database Server");
-    auto* cmd_edit = fe("e.g. npx, uvx, python");
-    auto* args_edit = fe("e.g. -y @modelcontextprotocol/server-postgres");
-    auto* env_edit = fe("KEY=VALUE KEY2=VALUE2 (space-separated)");
-    auto* cat_edit = fe("e.g. data, tools, analytics");
+    auto* name_edit = fe(tr("e.g. My Database Server"));
+    auto* cmd_edit = fe(tr("e.g. npx, uvx, python"));
+    auto* args_edit = fe(tr("e.g. -y @modelcontextprotocol/server-postgres"));
+    auto* env_edit = fe(tr("KEY=VALUE KEY2=VALUE2 (space-separated)"));
+    auto* cat_edit = fe(tr("e.g. data, tools, analytics"));
 
-    form->addRow(fl("Name"), name_edit);
-    form->addRow(fl("Command"), cmd_edit);
-    form->addRow(fl("Arguments"), args_edit);
-    form->addRow(fl("Environment"), env_edit);
-    form->addRow(fl("Category"), cat_edit);
+    form->addRow(fl(tr("Name")), name_edit);
+    form->addRow(fl(tr("Command")), cmd_edit);
+    form->addRow(fl(tr("Arguments")), args_edit);
+    form->addRow(fl(tr("Environment")), env_edit);
+    form->addRow(fl(tr("Category")), cat_edit);
 
     vl->addLayout(form);
 
     // Auto-start checkbox
     auto* auto_start_row = new QHBoxLayout;
-    auto* as_lbl = new QLabel("Auto-start on launch");
+    auto* as_lbl = new QLabel(tr("Auto-start on launch"));
     as_lbl->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";");
     auto* as_cb = new QCheckBox;
     as_cb->setChecked(false);
@@ -413,7 +413,7 @@ void McpServersSection::on_add_server() {
     QString name = name_edit->text().trimmed();
     QString cmd = cmd_edit->text().trimmed();
     if (name.isEmpty() || cmd.isEmpty()) {
-        show_status("Name and Command are required", true);
+        show_status(tr("Name and Command are required"), true);
         dlg->deleteLater();
         return;
     }
@@ -435,9 +435,9 @@ void McpServersSection::on_add_server() {
 
     auto r = McpManager::instance().save_server(cfg);
     if (r.is_err()) {
-        show_status("Failed to save server: " + QString::fromStdString(r.error()), true);
+        show_status(tr("Failed to save server: ") + QString::fromStdString(r.error()), true);
     } else {
-        show_status("Server added: " + name, false);
+        show_status(tr("Server added: ") + name, false);
         load_servers();
         LOG_INFO(TAG, "Added MCP server: " + name);
     }
@@ -485,7 +485,7 @@ void McpServersSection::load_servers() {
     if (server_list_->count() > 0)
         server_list_->setCurrentRow(0);
     else
-        detail_lbl_->setText("No external servers configured.\nClick '+ Add' to add one.");
+        detail_lbl_->setText(tr("No external servers configured.\nClick '+ Add' to add one."));
 }
 
 void McpServersSection::load_tools() {
@@ -497,7 +497,7 @@ void McpServersSection::load_tools() {
     for (const auto& t : tools) {
         auto* name_item = new QTableWidgetItem(t.name);
         auto* server_item = new QTableWidgetItem(t.server_name);
-        auto* cat_item = new QTableWidgetItem(t.is_internal ? "internal" : "external");
+        auto* cat_item = new QTableWidgetItem(t.is_internal ? tr("internal") : tr("external"));
         auto* desc_item = new QTableWidgetItem(t.description);
 
         if (t.is_internal) {
@@ -524,27 +524,28 @@ void McpServersSection::refresh_server_detail(const QString& server_id) {
 
         QString status_str;
         if (cfg.status == ServerStatus::Running)
-            status_str = "Running";
+            status_str = tr("Running");
         else if (cfg.status == ServerStatus::Error)
-            status_str = "Error";
+            status_str = tr("Error");
         else
-            status_str = "Stopped";
+            status_str = tr("Stopped");
 
         detail_lbl_->setText(QString("<b style='color:" + QString(ui::colors::TEXT_PRIMARY()) +
                                      "'>%1</b><br>"
                                      "<span style='color:" +
                                      QString(ui::colors::TEXT_SECONDARY()) +
-                                     ";'>Status: %2</span><br>"
+                                     ";'>" + tr("Status: %2") + "</span><br>"
                                      "<span style='color:" +
                                      QString(ui::colors::TEXT_TERTIARY()) +
-                                     ";'>Command: %3 %4</span><br>"
+                                     ";'>" + tr("Command: %3 %4") + "</span><br>"
                                      "<span style='color:" +
                                      QString(ui::colors::TEXT_TERTIARY()) +
-                                     ";'>Category: %5</span><br>"
+                                     ";'>" + tr("Category: %5") + "</span><br>"
                                      "<span style='color:" +
-                                     QString(ui::colors::TEXT_TERTIARY()) + ";'>Auto-start: %6</span>")
+                                     QString(ui::colors::TEXT_TERTIARY()) + ";'>" + tr("Auto-start: %6") + "</span>")
                                  .arg(cfg.name, status_str, cfg.command, cfg.args.join(' '),
-                                      cfg.category.isEmpty() ? "-" : cfg.category, cfg.auto_start ? "Yes" : "No"));
+                                      cfg.category.isEmpty() ? "-" : cfg.category,
+                                      cfg.auto_start ? tr("Yes") : tr("No")));
 
         bool running = (cfg.status == ServerStatus::Running);
         start_btn_->setEnabled(!running);
@@ -574,7 +575,7 @@ void McpServersSection::on_remove_server() {
     if (selected_server_id_.isEmpty())
         return;
 
-    auto reply = QMessageBox::question(this, "Remove Server", "Remove this MCP server configuration?",
+    auto reply = QMessageBox::question(this, tr("Remove Server"), tr("Remove this MCP server configuration?"),
                                        QMessageBox::Yes | QMessageBox::No);
     if (reply != QMessageBox::Yes)
         return;
@@ -587,7 +588,7 @@ void McpServersSection::on_remove_server() {
 void McpServersSection::on_start_server() {
     if (selected_server_id_.isEmpty())
         return;
-    show_status("Starting server...", false);
+    show_status(tr("Starting server..."), false);
     start_btn_->setEnabled(false);
 
     QPointer<McpServersSection> self = this;
@@ -600,9 +601,9 @@ void McpServersSection::on_start_server() {
                 if (!self)
                     return;
                 if (r.is_err())
-                    self->show_status("Start failed: " + QString::fromStdString(r.error()), true);
+                    self->show_status(tr("Start failed: ") + QString::fromStdString(r.error()), true);
                 else
-                    self->show_status("Server started", false);
+                    self->show_status(tr("Server started"), false);
                 self->load_servers();
             },
             Qt::QueuedConnection);
@@ -613,7 +614,7 @@ void McpServersSection::on_stop_server() {
     if (selected_server_id_.isEmpty())
         return;
     McpManager::instance().stop_server(selected_server_id_);
-    show_status("Server stopped", false);
+    show_status(tr("Server stopped"), false);
     load_servers();
 }
 
@@ -642,6 +643,45 @@ void McpServersSection::show_status(const QString& msg, bool error) {
                                      : "color:" + QString(ui::colors::POSITIVE()) + ";");
     status_lbl_->show();
     QTimer::singleShot(4000, status_lbl_, &QLabel::hide);
+}
+
+// ============================================================================
+// Retranslation
+// ============================================================================
+
+void McpServersSection::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void McpServersSection::retranslateUi() {
+    // Title bar.
+    if (title_lbl_)   title_lbl_->setText(tr("MCP SERVERS"));
+    if (tools_badge_) tools_badge_->setText(tr("%1 internal tools active").arg(McpService::instance().tool_count()));
+
+    // Tab buttons.
+    if (servers_tab_btn_) servers_tab_btn_->setText(tr("Installed Servers"));
+    if (tools_tab_btn_)   tools_tab_btn_->setText(tr("Tools"));
+
+    // Servers tab chrome.
+    if (server_list_lbl_) server_list_lbl_->setText(tr("External Servers"));
+    if (add_btn_)         add_btn_->setText(tr("+ Add"));
+    if (remove_btn_)      remove_btn_->setText(tr("Remove"));
+    if (start_btn_)       start_btn_->setText(tr("▶  Start"));
+    if (stop_btn_)        stop_btn_->setText(tr("■  Stop"));
+
+    // Tools tab chrome.
+    if (tools_info_lbl_)
+        tools_info_lbl_->setText(
+            tr("All registered MCP tools — both internal (built-in) and external (from connected servers)."));
+    if (tools_table_)
+        tools_table_->setHorizontalHeaderLabels({tr("Tool Name"), tr("Server"), tr("Category"), tr("Description")});
+
+    // Detail panel default placeholder — only re-apply when nothing is selected
+    // (otherwise we'd clobber the live per-server detail HTML).
+    if (detail_lbl_ && selected_server_id_.isEmpty() && server_list_ && server_list_->count() == 0)
+        detail_lbl_->setText(tr("No external servers configured.\nClick '+ Add' to add one."));
 }
 
 } // namespace fincept::screens

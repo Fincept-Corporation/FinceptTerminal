@@ -3,6 +3,8 @@
 
 #include <QComboBox>
 #include <QDialog>
+#include <QEvent>
+#include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -23,6 +25,9 @@ class RssFeedEditDialog : public QDialog {
 
     services::RSSFeed feed() const;
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_test();
     void try_accept();
@@ -30,9 +35,14 @@ class RssFeedEditDialog : public QDialog {
   private:
     void build_ui();
 
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
+
     services::RSSFeed initial_;
     bool is_builtin_id_;
 
+    QFormLayout* form_ = nullptr;
     QLineEdit* id_input_ = nullptr;
     QLineEdit* name_input_ = nullptr;
     QLineEdit* url_input_ = nullptr;

@@ -222,6 +222,16 @@ void LoadingOverlay::hideEvent(QHideEvent* e) {
     stop_shimmer();
 }
 
+void LoadingOverlay::changeEvent(QEvent* e) {
+    // The status text ("LOADING…" / "LOADING X / Y ITEMS") is rendered with
+    // tr() directly in paintEvent(), so there are no cached label widgets to
+    // re-apply. A repaint on language change is enough — the next paint picks
+    // up the new translation.
+    if (e->type() == QEvent::LanguageChange)
+        update();
+    QWidget::changeEvent(e);
+}
+
 void LoadingOverlay::sync_geometry() {
     if (target_)
         setGeometry(target_->rect());

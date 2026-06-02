@@ -13,7 +13,7 @@ SearchBar::SearchBar(QWidget* parent) : QWidget(parent) {
     hl->setSpacing(0);
 
     input_ = new QLineEdit;
-    input_->setPlaceholderText("Enter command or search...");
+    input_->setPlaceholderText(tr("Enter command or search..."));
     input_->setStyleSheet(QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; "
                                   "padding: 4px 12px; font-size: 13px; } "
                                   "QLineEdit:focus { border-color: %4; }")
@@ -30,6 +30,17 @@ QString SearchBar::text() const {
 }
 void SearchBar::clear() {
     input_->clear();
+}
+
+void SearchBar::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void SearchBar::retranslateUi() {
+    if (input_)
+        input_->setPlaceholderText(tr("Enter command or search..."));
 }
 
 } // namespace fincept::ui

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QColor>
+#include <QEvent>
 #include <QLabel>
 #include <QWidget>
 
@@ -30,7 +31,12 @@ class PolymarketStatusBar : public QWidget {
     /// exchange schedule. Empty hides the label.
     void set_next_session(const QString& text);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    void retranslateUi();
+
     QLabel* brand_label_ = nullptr;
     QLabel* view_label_ = nullptr;
     QLabel* count_label_ = nullptr;
@@ -40,6 +46,7 @@ class PolymarketStatusBar : public QWidget {
     QLabel* ws_label_ = nullptr;
 
     QColor accent_{0xD97706};  // default amber — Polymarket
+    bool ws_connected_ = false;
 };
 
 } // namespace fincept::screens::polymarket

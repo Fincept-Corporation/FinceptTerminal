@@ -20,9 +20,6 @@ using namespace fincept::ui;
 namespace pmx = fincept::services::polymarket;
 using namespace fincept::services::prediction;
 
-static const QStringList TAB_NAMES = {
-    "OVERVIEW", "ORDER BOOK", "CHART", "TRADE", "TRADES", "HOLDERS", "COMMENTS", "RELATED"
-};
 static const char* OUTCOME_COLORS[] = {"#00D66F", "#FF3B3B", "#FF8800", "#4F8EF7", "#A855F7"};
 
 PolymarketDetailPanel::PolymarketDetailPanel(QWidget* parent) : QWidget(parent) {
@@ -47,8 +44,12 @@ void PolymarketDetailPanel::build_ui() {
     thl->setContentsMargins(0, 0, 0, 0);
     thl->setSpacing(0);
 
-    for (int i = 0; i < TAB_NAMES.size(); ++i) {
-        auto* btn = new QPushButton(TAB_NAMES[i]);
+    const QStringList tab_names = {
+        tr("OVERVIEW"), tr("ORDER BOOK"), tr("CHART"), tr("TRADE"),
+        tr("TRADES"), tr("HOLDERS"), tr("COMMENTS"), tr("RELATED")
+    };
+    for (int i = 0; i < tab_names.size(); ++i) {
+        auto* btn = new QPushButton(tab_names[i]);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setProperty("active", i == 0);
         connect(btn, &QPushButton::clicked, this, [this, i]() { set_active_tab(i); });
@@ -102,7 +103,7 @@ QWidget* PolymarketDetailPanel::create_overview_page() {
     vl->setSpacing(0);
 
     // ── Market question / title ───────────────────────────────────────────
-    question_label_ = new QLabel("Select a market to view details");
+    question_label_ = new QLabel(tr("Select a market to view details"));
     question_label_->setStyleSheet(
         QString("color: %1; font-size: 13px; font-weight: 700; background: transparent; "
                 "line-height: 1.4;")
@@ -154,6 +155,8 @@ QWidget* PolymarketDetailPanel::create_overview_page() {
             QString("color: %1; font-size: 8px; font-weight: 700; letter-spacing: 0.8px; "
                     "background: transparent;")
                 .arg(colors::TEXT_SECONDARY()));
+        // Cache the caption label so retranslateUi can re-apply its text.
+        stat_caption_lbls_.append(lbl_w);
 
         val = new QLabel("—", box);
         val->setStyleSheet(
@@ -166,10 +169,10 @@ QWidget* PolymarketDetailPanel::create_overview_page() {
         if (box_out) *box_out = box;
     };
 
-    make_stat_in(stats_row1, sr1l, "VOLUME",    volume_label_);
-    make_stat_in(stats_row1, sr1l, "LIQUIDITY", liquidity_label_);
-    make_stat_in(stats_row1, sr1l, "OPEN INT",  oi_label_, false, &oi_box_);
-    make_stat_in(stats_row1, sr1l, "END DATE",  end_date_label_, true);
+    make_stat_in(stats_row1, sr1l, tr("VOLUME"),    volume_label_);
+    make_stat_in(stats_row1, sr1l, tr("LIQUIDITY"), liquidity_label_);
+    make_stat_in(stats_row1, sr1l, tr("OPEN INT"),  oi_label_, false, &oi_box_);
+    make_stat_in(stats_row1, sr1l, tr("END DATE"),  end_date_label_, true);
     vl->addWidget(stats_row1);
 
     // Row 2 of stats
@@ -181,15 +184,16 @@ QWidget* PolymarketDetailPanel::create_overview_page() {
     sr2l->setContentsMargins(0, 0, 0, 0);
     sr2l->setSpacing(0);
 
-    make_stat_in(stats_row2, sr2l, "MIDPOINT",   midpoint_label_);
-    make_stat_in(stats_row2, sr2l, "SPREAD",     spread_label_);
-    make_stat_in(stats_row2, sr2l, "LAST TRADE", last_trade_label_, true);
+    make_stat_in(stats_row2, sr2l, tr("MIDPOINT"),   midpoint_label_);
+    make_stat_in(stats_row2, sr2l, tr("SPREAD"),     spread_label_);
+    make_stat_in(stats_row2, sr2l, tr("LAST TRADE"), last_trade_label_, true);
     vl->addWidget(stats_row2);
 
     vl->addSpacing(14);
 
     // ── Outcome probability bars ──────────────────────────────────────────
-    auto* outcomes_header = new QLabel("OUTCOMES");
+    outcomes_header_ = new QLabel(tr("OUTCOMES"));
+    auto* outcomes_header = outcomes_header_;
     outcomes_header->setStyleSheet(
         QString("color: %1; font-size: 8px; font-weight: 700; letter-spacing: 0.8px; "
                 "background: transparent;")
@@ -233,7 +237,8 @@ QWidget* PolymarketDetailPanel::create_trade_page() {
     auto* icon_lbl = new QLabel("🔒");
     icon_lbl->setAlignment(Qt::AlignCenter);
     icon_lbl->setStyleSheet("font-size: 28px; background: transparent;");
-    auto* msg_lbl = new QLabel("Connect an account\nto place orders");
+    no_acct_msg_lbl_ = new QLabel(tr("Connect an account\nto place orders"));
+    auto* msg_lbl = no_acct_msg_lbl_;
     msg_lbl->setAlignment(Qt::AlignCenter);
     msg_lbl->setStyleSheet(
         QString("color: %1; font-size: 11px; background: transparent;").arg(colors::TEXT_DIM()));
@@ -259,7 +264,8 @@ QWidget* PolymarketDetailPanel::create_trade_page() {
 
     auto* bal_col = new QVBoxLayout;
     bal_col->setSpacing(2);
-    auto* bal_lbl = new QLabel("AVAILABLE");
+    bal_caption_lbl_ = new QLabel(tr("AVAILABLE"));
+    auto* bal_lbl = bal_caption_lbl_;
     bal_lbl->setStyleSheet(
         QString("color: %1; font-size: 8px; font-weight: 700; letter-spacing: 0.8px; "
                 "background: transparent;").arg(colors::TEXT_SECONDARY()));
@@ -273,7 +279,8 @@ QWidget* PolymarketDetailPanel::create_trade_page() {
     auto* pos_col = new QVBoxLayout;
     pos_col->setSpacing(2);
     pos_col->setAlignment(Qt::AlignRight);
-    auto* pos_lbl = new QLabel("POSITION");
+    pos_caption_lbl_ = new QLabel(tr("POSITION"));
+    auto* pos_lbl = pos_caption_lbl_;
     pos_lbl->setAlignment(Qt::AlignRight);
     pos_lbl->setStyleSheet(
         QString("color: %1; font-size: 8px; font-weight: 700; letter-spacing: 0.8px; "
@@ -298,8 +305,8 @@ QWidget* PolymarketDetailPanel::create_trade_page() {
     srl->setContentsMargins(0, 0, 0, 0);
     srl->setSpacing(0);
 
-    ticket_buy_btn_  = new QPushButton("BUY");
-    ticket_sell_btn_ = new QPushButton("SELL");
+    ticket_buy_btn_  = new QPushButton(tr("BUY"));
+    ticket_sell_btn_ = new QPushButton(tr("SELL"));
     for (auto* b : {ticket_buy_btn_, ticket_sell_btn_}) {
         b->setFixedHeight(32);
         b->setCursor(Qt::PointingHandCursor);
@@ -323,6 +330,8 @@ QWidget* PolymarketDetailPanel::create_trade_page() {
         l->setStyleSheet(
             QString("color: %1; font-size: 8px; font-weight: 700; letter-spacing: 0.8px; "
                     "background: transparent;").arg(colors::TEXT_SECONDARY()));
+        // Cache so retranslateUi can re-apply (these are fixed field captions).
+        trade_form_caption_lbls_.append(l);
         return l;
     };
     const QString input_ss =
@@ -336,7 +345,7 @@ QWidget* PolymarketDetailPanel::create_trade_page() {
                 "}")
             .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::BORDER_MED(), colors::BG_HOVER());
 
-    fl->addWidget(make_label("OUTCOME"));
+    fl->addWidget(make_label(tr("OUTCOME")));
     ticket_outcome_cb_ = new QComboBox;
     ticket_outcome_cb_->setStyleSheet(input_ss);
     fl->addWidget(ticket_outcome_cb_);
@@ -350,7 +359,7 @@ QWidget* PolymarketDetailPanel::create_trade_page() {
 
     auto* price_col = new QVBoxLayout;
     price_col->setSpacing(4);
-    price_col->addWidget(make_label("PRICE (0–1)"));
+    price_col->addWidget(make_label(tr("PRICE (0–1)")));
     ticket_price_edit_ = new QLineEdit;
     ticket_price_edit_->setPlaceholderText("0.50");
     ticket_price_edit_->setStyleSheet(input_ss);
@@ -358,7 +367,7 @@ QWidget* PolymarketDetailPanel::create_trade_page() {
 
     auto* size_col = new QVBoxLayout;
     size_col->setSpacing(4);
-    size_col->addWidget(make_label("SIZE"));
+    size_col->addWidget(make_label(tr("SIZE")));
     ticket_size_edit_ = new QLineEdit;
     ticket_size_edit_->setPlaceholderText("10");
     ticket_size_edit_->setStyleSheet(input_ss);
@@ -369,14 +378,16 @@ QWidget* PolymarketDetailPanel::create_trade_page() {
     fl->addWidget(ps_row);
 
     // Order type
-    fl->addWidget(make_label("ORDER TYPE"));
+    fl->addWidget(make_label(tr("ORDER TYPE")));
     ticket_type_cb_ = new QComboBox;
+    // GTC/FOK/FAK are protocol order-type codes sent in the order request —
+    // not translated.
     ticket_type_cb_->addItems({"GTC", "FOK", "FAK"});
     ticket_type_cb_->setStyleSheet(input_ss);
     fl->addWidget(ticket_type_cb_);
 
     // Submit button
-    ticket_submit_btn_ = new QPushButton("PLACE ORDER");
+    ticket_submit_btn_ = new QPushButton(tr("PLACE ORDER"));
     ticket_submit_btn_->setFixedHeight(34);
     ticket_submit_btn_->setCursor(Qt::PointingHandCursor);
     connect(ticket_submit_btn_, &QPushButton::clicked, this, &PolymarketDetailPanel::on_submit_clicked);
@@ -435,13 +446,13 @@ void PolymarketDetailPanel::on_submit_clicked() {
     if (!price_ok || price <= 0.0 || price >= 1.0) {
         ticket_status_lbl_->setStyleSheet(
             QString("color: %1; font-size: 10px; background: transparent;").arg(colors::NEGATIVE()));
-        ticket_status_lbl_->setText("Invalid price — enter a value between 0 and 1");
+        ticket_status_lbl_->setText(tr("Invalid price — enter a value between 0 and 1"));
         return;
     }
     if (!size_ok || size <= 0.0) {
         ticket_status_lbl_->setStyleSheet(
             QString("color: %1; font-size: 10px; background: transparent;").arg(colors::NEGATIVE()));
-        ticket_status_lbl_->setText("Invalid size — must be > 0");
+        ticket_status_lbl_->setText(tr("Invalid size — must be > 0"));
         return;
     }
 
@@ -460,7 +471,7 @@ void PolymarketDetailPanel::on_submit_clicked() {
 
     ticket_status_lbl_->setStyleSheet(
         QString("color: %1; font-size: 10px; background: transparent;").arg(colors::TEXT_DIM()));
-    ticket_status_lbl_->setText("Submitting…");
+    ticket_status_lbl_->setText(tr("Submitting…"));
     ticket_submit_btn_->setEnabled(false);
     emit place_order(req);
 }
@@ -480,8 +491,8 @@ void PolymarketDetailPanel::set_positions(const QVector<PredictionPosition>& pos
             total_size += p.size;
     }
     ticket_position_lbl_->setText(total_size > 0.0
-                                      ? QString("%1 shares").arg(total_size, 0, 'f', 2)
-                                      : "No position");
+                                      ? tr("%1 shares").arg(total_size, 0, 'f', 2)
+                                      : tr("No position"));
 }
 
 void PolymarketDetailPanel::on_order_result(const OrderResult& result) {
@@ -491,7 +502,7 @@ void PolymarketDetailPanel::on_order_result(const OrderResult& result) {
         ticket_status_lbl_->setStyleSheet(
             QString("color: %1; font-size: 10px; background: transparent;").arg(colors::POSITIVE()));
         ticket_status_lbl_->setText(
-            QString("Order placed ✓  ID: %1").arg(result.order_id.left(12)));
+            tr("Order placed ✓  ID: %1").arg(result.order_id.left(12)));
         ticket_price_edit_->clear();
         ticket_size_edit_->clear();
     } else {
@@ -510,7 +521,7 @@ void PolymarketDetailPanel::set_trading_enabled(bool enabled) {
 QWidget* PolymarketDetailPanel::create_holders_page() {
     holders_table_ = new QTableWidget;
     holders_table_->setColumnCount(4);
-    holders_table_->setHorizontalHeaderLabels({"RANK", "TRADER", "SIZE", "AVG PRICE"});
+    holders_table_->setHorizontalHeaderLabels({tr("RANK"), tr("TRADER"), tr("SIZE"), tr("AVG PRICE")});
     holders_table_->horizontalHeader()->setStretchLastSection(true);
     holders_table_->verticalHeader()->setVisible(false);
     holders_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -547,7 +558,7 @@ QWidget* PolymarketDetailPanel::create_comments_page() {
     auto* vl = new QVBoxLayout(comments_container_);
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(8);
-    auto* empty = new QLabel("No comments yet");
+    auto* empty = new QLabel(tr("No comments yet"));
     empty->setStyleSheet(
         QString("color: %1; font-size: 12px; background: transparent;").arg(colors::TEXT_DIM()));
     empty->setAlignment(Qt::AlignCenter);
@@ -571,7 +582,7 @@ QWidget* PolymarketDetailPanel::create_related_page() {
     auto* vl = new QVBoxLayout(related_container_);
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(6);
-    auto* empty = new QLabel("No related markets");
+    auto* empty = new QLabel(tr("No related markets"));
     empty->setStyleSheet(
         QString("color: %1; font-size: 12px; background: transparent;").arg(colors::TEXT_DIM()));
     empty->setAlignment(Qt::AlignCenter);
@@ -761,7 +772,7 @@ void PolymarketDetailPanel::set_comments(const QVector<pmx::Comment>& comments) 
     }
 
     if (comments.isEmpty()) {
-        auto* empty = new QLabel("No comments yet");
+        auto* empty = new QLabel(tr("No comments yet"));
         empty->setStyleSheet(
             QString("color: %1; font-size: 12px; background: transparent;").arg(colors::TEXT_DIM()));
         empty->setAlignment(Qt::AlignCenter);
@@ -789,7 +800,7 @@ void PolymarketDetailPanel::set_comments(const QVector<pmx::Comment>& comments) 
 
             auto* meta = new QLabel(
                 QDateTime::fromSecsSinceEpoch(c.created_at, QTimeZone::UTC).toString("yyyy-MM-dd HH:mm") +
-                (c.likes > 0 ? QString("  · %1 likes").arg(c.likes) : ""));
+                (c.likes > 0 ? tr("  · %1 likes").arg(c.likes) : QString()));
             meta->setStyleSheet(
                 QString("color: %1; font-size: 8px; background: transparent;").arg(colors::TEXT_DIM()));
 
@@ -811,7 +822,7 @@ void PolymarketDetailPanel::set_related_markets(const QVector<PredictionMarket>&
     }
 
     if (markets.isEmpty()) {
-        auto* empty = new QLabel("No related markets");
+        auto* empty = new QLabel(tr("No related markets"));
         empty->setStyleSheet(
             QString("color: %1; font-size: 12px; background: transparent;").arg(colors::TEXT_DIM()));
         empty->setAlignment(Qt::AlignCenter);
@@ -887,7 +898,7 @@ void PolymarketDetailPanel::set_polymarket_extras_enabled(bool enabled) {
 void PolymarketDetailPanel::clear() {
     has_last_market_ = false;
     last_market_ = {};
-    question_label_->setText("Select a market to view details");
+    question_label_->setText(tr("Select a market to view details"));
     volume_label_->setText("—");
     liquidity_label_->setText("—");
     end_date_label_->setText("—");
@@ -970,6 +981,56 @@ void PolymarketDetailPanel::apply_accent_to_tabs() {
 
 void PolymarketDetailPanel::apply_presentation_to_stats() {
     if (oi_box_) oi_box_->setVisible(presentation_.has_open_interest);
+}
+
+void PolymarketDetailPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PolymarketDetailPanel::retranslateUi() {
+    // Tab bar labels (logical tab is index-based; labels are display-only).
+    const QStringList tab_names = {
+        tr("OVERVIEW"), tr("ORDER BOOK"), tr("CHART"), tr("TRADE"),
+        tr("TRADES"), tr("HOLDERS"), tr("COMMENTS"), tr("RELATED")
+    };
+    for (int i = 0; i < tab_btns_.size() && i < tab_names.size(); ++i)
+        tab_btns_[i]->setText(tab_names[i]);
+
+    // Overview stat captions (declared order matches make_stat_in calls).
+    const QStringList stat_caps = {
+        tr("VOLUME"), tr("LIQUIDITY"), tr("OPEN INT"), tr("END DATE"),
+        tr("MIDPOINT"), tr("SPREAD"), tr("LAST TRADE")
+    };
+    for (int i = 0; i < stat_caption_lbls_.size() && i < stat_caps.size(); ++i)
+        if (stat_caption_lbls_[i]) stat_caption_lbls_[i]->setText(stat_caps[i]);
+
+    if (outcomes_header_) outcomes_header_->setText(tr("OUTCOMES"));
+
+    // Trade page captions.
+    if (no_acct_msg_lbl_) no_acct_msg_lbl_->setText(tr("Connect an account\nto place orders"));
+    if (bal_caption_lbl_) bal_caption_lbl_->setText(tr("AVAILABLE"));
+    if (pos_caption_lbl_) pos_caption_lbl_->setText(tr("POSITION"));
+    const QStringList form_caps = {tr("OUTCOME"), tr("PRICE (0–1)"), tr("SIZE"), tr("ORDER TYPE")};
+    for (int i = 0; i < trade_form_caption_lbls_.size() && i < form_caps.size(); ++i)
+        if (trade_form_caption_lbls_[i]) trade_form_caption_lbls_[i]->setText(form_caps[i]);
+    if (ticket_buy_btn_)    ticket_buy_btn_->setText(tr("BUY"));
+    if (ticket_sell_btn_)   ticket_sell_btn_->setText(tr("SELL"));
+    if (ticket_submit_btn_) ticket_submit_btn_->setText(tr("PLACE ORDER"));
+
+    // Holders table headers.
+    if (holders_table_)
+        holders_table_->setHorizontalHeaderLabels({tr("RANK"), tr("TRADER"), tr("SIZE"), tr("AVG PRICE")});
+
+    // Re-render question/badge/outcome bars for the current market so the
+    // status badge text picks up the new language. Per-row data refreshes
+    // through the normal data path.
+    if (has_last_market_) {
+        render_status_badge(last_market_);
+    } else if (question_label_) {
+        question_label_->setText(tr("Select a market to view details"));
+    }
 }
 
 void PolymarketDetailPanel::render_status_badge(const PredictionMarket& market) {

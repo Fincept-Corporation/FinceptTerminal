@@ -29,7 +29,8 @@ constexpr const char* TAG = "DataSources";
 
 bool export_connections(QWidget* parent) {
     const QString path = QFileDialog::getSaveFileName(
-        parent, "Export Connections", "fincept_connections.json", "JSON Files (*.json);;All Files (*)");
+        parent, QObject::tr("Export Connections"), "fincept_connections.json",
+        QObject::tr("JSON Files (*.json);;All Files (*)"));
     if (path.isEmpty())
         return false;
 
@@ -70,7 +71,7 @@ bool export_connections(QWidget* parent) {
 
 bool import_connections(QWidget* parent, int* imported_out, int* skipped_out) {
     const QString path = QFileDialog::getOpenFileName(
-        parent, "Import Connections", "", "JSON Files (*.json);;All Files (*)");
+        parent, QObject::tr("Import Connections"), "", QObject::tr("JSON Files (*.json);;All Files (*)"));
     if (path.isEmpty())
         return false;
 
@@ -126,8 +127,8 @@ bool import_connections(QWidget* parent, int* imported_out, int* skipped_out) {
 
 bool download_connector_template(QWidget* parent) {
     const QString path = QFileDialog::getSaveFileName(
-        parent, "Save Connector Template", "fincept_connections_template.json",
-        "JSON Files (*.json);;All Files (*)");
+        parent, QObject::tr("Save Connector Template"), "fincept_connections_template.json",
+        QObject::tr("JSON Files (*.json);;All Files (*)"));
     if (path.isEmpty())
         return false;
 

@@ -1,6 +1,7 @@
 #include "trading/brokers/fivepaisa/FivePaisaBroker.h"
 
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -205,7 +206,10 @@ TokenExchangeResponse FivePaisaBroker::exchange_token(const QString& api_key, co
             return {false, "", "", "", msg.isEmpty() ? "No AccessToken in response" : msg, ""};
         }
 
-        return {true, access_token, kp.client_id, "", "", ""};
+        // 5paisa access tokens expire at the daily reset. The live TOTP is a
+        // one-time code we can't replay, so there is no silent refresh.
+        const QString extra = with_token_expiry({}, next_ist_flush_epoch(6, 0));
+        return {true, access_token, kp.client_id, "", extra, ""};
     }
 }
 

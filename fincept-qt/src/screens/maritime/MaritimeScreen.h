@@ -7,6 +7,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QDoubleSpinBox>
+#include <QEvent>
 #include <QHideEvent>
 #include <QJsonObject>
 #include <QLabel>
@@ -41,6 +42,7 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_load_vessels();
@@ -58,6 +60,9 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
 
   private:
     void build_ui();
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
     QWidget* build_top_bar();
     QWidget* build_left_panel();
     QWidget* build_center_panel();
@@ -168,6 +173,48 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     /// Set by on_shapes_changed(); consumed by on_vessels_loaded so the next
     /// batch is filtered to vessels lying inside the user's drawn shapes.
     bool filter_to_shapes_ = false;
+
+    // ── Static-text widgets cached for retranslateUi ─────────────────────────
+    // Left panel buttons + section titles + stat captions.
+    QPushButton* global_btn_ = nullptr;
+    QPushButton* load_btn_ = nullptr;
+    QLabel* draw_title_ = nullptr;
+    QPushButton* sq_btn_ = nullptr;
+    QPushButton* ci_btn_ = nullptr;
+    QPushButton* clr_btn_ = nullptr;
+    QLabel* intel_title_ = nullptr;
+    QLabel* routes_title_ = nullptr;
+    QLabel* stat_vessels_cap_ = nullptr;
+    QLabel* stat_displayed_cap_ = nullptr;
+    QLabel* stat_routes_cap_ = nullptr;
+    QLabel* stat_ports_cap_ = nullptr;
+    // Center.
+    QLabel* center_title_ = nullptr;
+    // Right panel buttons + titles + field captions.
+    QLabel* search_title_ = nullptr;
+    QLabel* imo_cap_ = nullptr;
+    QPushButton* track_btn_ = nullptr;
+    QPushButton* history_btn_ = nullptr;
+    QLabel* place_title_ = nullptr;
+    QLabel* place_cap_ = nullptr;
+    QPushButton* place_btn_ = nullptr;
+    QPushButton* area_toggle_ = nullptr;
+    QLabel* coord_min_lat_cap_ = nullptr;
+    QLabel* coord_max_lat_cap_ = nullptr;
+    QLabel* coord_min_lng_cap_ = nullptr;
+    QLabel* coord_max_lng_cap_ = nullptr;
+    QPushButton* area_btn_ = nullptr;
+    QLabel* ports_title_ = nullptr;
+    QLabel* ports_cap_ = nullptr;
+    QPushButton* ports_btn_ = nullptr;
+    QPushButton* ports_in_view_btn_ = nullptr;
+    QLabel* rd_title_ = nullptr;
+    QLabel* classified_footer_ = nullptr;
+    // Status bar captions + static value.
+    QLabel* sb_source_cap_ = nullptr;
+    QLabel* sb_records_cap_ = nullptr;
+    QLabel* sb_refresh_cap_ = nullptr;
+    QLabel* sb_refresh_val_ = nullptr;
 
     // Data
     QVector<services::maritime::TradeRoute> routes_;

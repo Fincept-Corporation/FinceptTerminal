@@ -16,6 +16,7 @@ class AppConfig {
 
     // Typed accessors for common settings
     QString api_base_url() const;
+    QString cloud_base_url() const; // Fincept Cloud (finceptgo /v1) — see CLOUD_SYNC_PLAN.md
     bool dark_mode() const;
     int refresh_interval_ms() const;
 

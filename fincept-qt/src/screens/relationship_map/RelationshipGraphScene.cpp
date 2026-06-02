@@ -386,7 +386,7 @@ void RelationshipGraphScene::build_graph(
             QColor acc = (p.week52_change >= 0) ? cPeer : QColor("#dc2626");
             lv.append({p.ticker, QString("$%1").arg(p.current_price, 0, 'f', 2), acc});
         }
-        push_right(QString("Peers (%1/%2)").arg(lv.size()).arg(data.peers.size()),
+        push_right(tr("Peers (%1/%2)").arg(lv.size()).arg(data.peers.size()),
                    cPeer, std::move(lv));
     }
 
@@ -398,7 +398,7 @@ void RelationshipGraphScene::build_graph(
             if (h.percentage < filters.min_ownership) continue;
             lv.append({h.name.left(14), QString("%1%").arg(h.percentage, 0, 'f', 2), cInst});
         }
-        push_right(QString("Holders (%1/%2)").arg(lv.size()).arg(data.institutional_holders.size()),
+        push_right(tr("Holders (%1/%2)").arg(lv.size()).arg(data.institutional_holders.size()),
                    cInst, std::move(lv));
     }
 
@@ -409,7 +409,7 @@ void RelationshipGraphScene::build_graph(
             if (lv.size() >= 8) break;
             lv.append({h.name.left(14), QString("%1%").arg(h.percentage, 0, 'f', 2), cMF});
         }
-        push_right(QString("Funds (%1/%2)").arg(lv.size()).arg(data.mutualfund_holders.size()),
+        push_right(tr("Funds (%1/%2)").arg(lv.size()).arg(data.mutualfund_holders.size()),
                    cMF, std::move(lv));
     }
 
@@ -419,7 +419,7 @@ void RelationshipGraphScene::build_graph(
         if (data.company.analyst_count > 0) {
             QString rec = data.company.recommendation.toUpper();
             bool bull = rec.contains("BUY") || rec.contains("OUTPERFORM");
-            lv.append({rec, QString("PT $%1").arg(data.company.target_mean, 0, 'f', 0),
+            lv.append({rec, tr("PT $%1").arg(data.company.target_mean, 0, 'f', 0),
                        bull ? QColor("#16a34a") : QColor("#dc2626")});
         }
         for (const auto& ud : data.upgrades_downgrades) {
@@ -428,7 +428,7 @@ void RelationshipGraphScene::build_graph(
                        : (ud.action == "down") ? QColor("#dc2626") : cAnal;
             lv.append({ud.firm.left(14), ud.to_grade.left(12), acc});
         }
-        push_right(QString("Analysts (%1)").arg(data.company.analyst_count),
+        push_right(tr("Analysts (%1)").arg(data.company.analyst_count),
                    cAnal, std::move(lv));
     }
 
@@ -439,7 +439,7 @@ void RelationshipGraphScene::build_graph(
             if (lv.size() >= 10) break;
             lv.append({off.name.left(14), off.title.left(14), cOff});
         }
-        push_left(QString("Board (%1/%2)").arg(lv.size()).arg(data.officers.size()),
+        push_left(tr("Board (%1/%2)").arg(lv.size()).arg(data.officers.size()),
                   cOff, std::move(lv));
     }
 
@@ -453,7 +453,7 @@ void RelationshipGraphScene::build_graph(
                                                          : ins.last_transaction.toUpper();
             lv.append({ins.name.left(14), sub, buy ? QColor("#16a34a") : cIns});
         }
-        push_left(QString("Insiders (%1/%2)").arg(lv.size()).arg(data.insider_holders.size()),
+        push_left(tr("Insiders (%1/%2)").arg(lv.size()).arg(data.insider_holders.size()),
                   cIns, std::move(lv));
     }
 
@@ -461,27 +461,27 @@ void RelationshipGraphScene::build_graph(
     if (filters.show_metrics) {
         QVector<LeafInfo> lv;
         if (data.company.pe_ratio > 0)
-            lv.append({"P/E", QString("%1  fwd %2")
+            lv.append({tr("P/E"), tr("%1  fwd %2")
                        .arg(data.company.pe_ratio, 0, 'f', 1)
                        .arg(data.company.forward_pe, 0, 'f', 1), cMet});
         if (data.margins.gross > 0)
-            lv.append({"Margins", QString("Gr %1%  Net %2%")
+            lv.append({tr("Margins"), tr("Gr %1%  Net %2%")
                        .arg(data.margins.gross * 100, 0, 'f', 1)
                        .arg(data.margins.net * 100, 0, 'f', 1), cMet});
         if (data.technicals.beta > 0)
-            lv.append({"Beta", QString("%1   52W $%2")
+            lv.append({tr("Beta"), tr("%1   52W $%2")
                        .arg(data.technicals.beta, 0, 'f', 2)
                        .arg(data.technicals.fifty_two_week_high, 0, 'f', 0), cMet});
         if (data.short_interest.short_pct_float > 0)
-            lv.append({"Short Int", QString("%1%  %2d cvr")
+            lv.append({tr("Short Int"), tr("%1%  %2d cvr")
                        .arg(data.short_interest.short_pct_float * 100, 0, 'f', 1)
                        .arg(data.short_interest.short_ratio, 0, 'f', 1),
                        data.short_interest.short_pct_float > 0.05 ? QColor("#dc2626") : cMet});
         if (data.governance.overall_risk > 0)
-            lv.append({"Governance", QString("Risk %1/10  Audit %2")
+            lv.append({tr("Governance"), tr("Risk %1/10  Audit %2")
                        .arg(data.governance.overall_risk).arg(data.governance.audit_risk),
                        data.governance.overall_risk > 6 ? QColor("#dc2626") : cMet});
-        push_left("Metrics", cMet, std::move(lv));
+        push_left(tr("Metrics"), cMet, std::move(lv));
     }
 
     // EVENTS → left
@@ -491,7 +491,7 @@ void RelationshipGraphScene::build_graph(
             if (lv.size() >= 6) break;
             lv.append({ev.description.left(14), ev.date.left(10), cEvt});
         }
-        push_left(QString("Events (%1/%2)").arg(lv.size()).arg(data.events.size()),
+        push_left(tr("Events (%1/%2)").arg(lv.size()).arg(data.events.size()),
                   cEvt, std::move(lv));
     }
 
@@ -502,7 +502,7 @@ void RelationshipGraphScene::build_graph(
             if (lv.size() >= 6) break;
             lv.append({sc.name.left(14), sc.relationship.left(10), cSC});
         }
-        push_left(QString("Supply (%1)").arg(lv.size()), cSC, std::move(lv));
+        push_left(tr("Supply (%1)").arg(lv.size()), cSC, std::move(lv));
     }
 
     // ── Banded placement ──────────────────────────────────────────────────────

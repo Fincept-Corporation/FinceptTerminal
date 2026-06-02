@@ -1,5 +1,8 @@
 #pragma once
+#include <QEvent>
 #include <QFontComboBox>
+#include <QHash>
+#include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
 #include <QSpinBox>
@@ -31,6 +34,9 @@ class ComponentToolbar : public QWidget {
     void theme_requested();
     void metadata_requested();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     QListWidget* structure_list_ = nullptr;
     QFontComboBox* font_combo_ = nullptr;
@@ -38,7 +44,32 @@ class ComponentToolbar : public QWidget {
     QPushButton* bold_btn_ = nullptr;
     QPushButton* italic_btn_ = nullptr;
 
-    void add_type_button(QVBoxLayout* layout, const QString& label, const QString& type);
+    void add_type_button(QVBoxLayout* layout, const QString& type);
+    void retranslateUi();
+
+    // Section headers (cached for retranslateUi)
+    QLabel* sec_file_ = nullptr;
+    QLabel* sec_document_ = nullptr;
+    QLabel* sec_add_ = nullptr;
+    QLabel* sec_font_ = nullptr;
+    QLabel* sec_structure_ = nullptr;
+
+    // File / document action buttons
+    QPushButton* new_btn_ = nullptr;
+    QPushButton* open_btn_ = nullptr;
+    QPushButton* recent_btn_ = nullptr;
+    QPushButton* meta_btn_ = nullptr;
+    QPushButton* template_btn_ = nullptr;
+    QPushButton* theme_btn_ = nullptr;
+
+    // Structure action buttons
+    QPushButton* up_btn_ = nullptr;
+    QPushButton* dn_btn_ = nullptr;
+    QPushButton* dup_btn_ = nullptr;
+    QPushButton* del_btn_ = nullptr;
+
+    // Component "add" buttons, keyed by type id so retranslateUi can re-label.
+    QHash<QString, QPushButton*> type_buttons_;
 };
 
 } // namespace fincept::screens

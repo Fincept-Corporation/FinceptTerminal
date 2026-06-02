@@ -2,6 +2,7 @@
 #pragma once
 #include "services/agents/AgentTypes.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -24,6 +25,7 @@ class SystemViewPanel : public QWidget {
 
   protected:
     void showEvent(QShowEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
@@ -32,16 +34,34 @@ class SystemViewPanel : public QWidget {
     void populate_llm_list();
     void populate_tools_list(const services::AgentToolsInfo& info);
 
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
+
     QWidget* build_stats_row();
     QWidget* build_llm_section();
     QWidget* build_tools_section();
     QWidget* build_sysinfo_section();
 
-    // Stats labels
+    // Header
+    QLabel* header_title_ = nullptr;
+    QPushButton* header_refresh_btn_ = nullptr;
+
+    // Stats labels (value + caption)
     QLabel* agents_count_ = nullptr;
     QLabel* tools_count_ = nullptr;
     QLabel* llms_count_ = nullptr;
     QLabel* cache_count_ = nullptr;
+    QLabel* agents_caption_ = nullptr;
+    QLabel* tools_caption_ = nullptr;
+    QLabel* llms_caption_ = nullptr;
+    QLabel* cache_caption_ = nullptr;
+
+    // Section card titles + actions
+    QLabel* llm_section_title_ = nullptr;
+    QPushButton* llm_section_refresh_ = nullptr;
+    QLabel* tools_section_title_ = nullptr;
+    QLabel* sysinfo_section_title_ = nullptr;
 
     // LLM section
     QVBoxLayout* llm_list_layout_ = nullptr;
@@ -50,6 +70,8 @@ class SystemViewPanel : public QWidget {
     QVBoxLayout* tools_list_layout_ = nullptr;
 
     // System info
+    QLabel* version_title_ = nullptr;
+    QLabel* framework_title_ = nullptr;
     QLabel* version_label_ = nullptr;
     QLabel* framework_label_ = nullptr;
     QVBoxLayout* features_layout_ = nullptr;

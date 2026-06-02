@@ -11,6 +11,7 @@
 #include "screens/common/IStatefulScreen.h"
 #include "services/options/FiiDiiTypes.h"
 
+#include <QEvent>
 #include <QPointer>
 #include <QString>
 #include <QVariantMap>
@@ -36,12 +37,14 @@ class FiiDiiSubTab : public QWidget {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_refresh_clicked();
 
   private:
     void setup_ui();
+    void retranslateUi();
     void on_data_arrived(const QVariant& v);
     void apply_data(const QVector<fincept::services::options::FiiDiiDay>& rows);
 

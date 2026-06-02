@@ -3,6 +3,7 @@
 #include "services/wallet/StakingService.h"
 #include "services/wallet/WalletTypes.h"
 
+#include <QEvent>
 #include <QString>
 #include <QVariant>
 #include <QWidget>
@@ -53,12 +54,14 @@ class LockPanel : public QWidget {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     using Duration = fincept::wallet::StakingService::Duration;
 
     void build_ui();
     void apply_theme();
+    void retranslateUi();
 
     void on_wallet_connected(const QString& pubkey, const QString& label);
     void on_wallet_disconnected();
@@ -82,6 +85,15 @@ class LockPanel : public QWidget {
     Duration current_duration() const;
 
     // UI
+    QLabel* head_title_ = nullptr;       // "STAKE / LOCK"
+    QLabel* head_subtitle_ = nullptr;    // "veFNCPT — locked $FNCPT earns USDC yield"
+    QLabel* amount_caption_ = nullptr;   // "AMOUNT"
+    QLabel* token_caption_ = nullptr;    // "TOKEN"
+    QLabel* token_chip_ = nullptr;       // "$FNCPT"
+    QLabel* duration_caption_ = nullptr; // "DURATION"
+    QLabel* weight_caption_ = nullptr;   // "WEIGHT"
+    QLabel* est_yield_caption_ = nullptr;// "EST. YIELD"
+    QLabel* tier_caption_ = nullptr;     // "TIER"
     QLineEdit* amount_input_ = nullptr;
     QLabel* available_label_ = nullptr;
     QPushButton* max_button_ = nullptr;

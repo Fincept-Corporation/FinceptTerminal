@@ -8,6 +8,7 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QCoreApplication>
 #include <QHBoxLayout>
 #include <QJsonObject>
 #include <QShowEvent>
@@ -101,9 +102,10 @@ QWidget* WorkflowsViewPanel::build_catalog_panel() {
         QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(10, 0, 10, 0);
-    auto* t = new QLabel(tr("WORKFLOWS"));
-    t->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
-    hl->addWidget(t);
+    catalog_title_ = new QLabel(tr("WORKFLOWS"));
+    catalog_title_->setStyleSheet(
+        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
+    hl->addWidget(catalog_title_);
     hl->addStretch();
     auto* cnt = new QLabel(QString::number(kWorkflowCount));
     cnt->setStyleSheet(
@@ -120,13 +122,18 @@ QWidget* WorkflowsViewPanel::build_catalog_panel() {
                                      .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
                                           ui::colors::BG_HOVER(), ui::colors::AMBER(), ui::colors::BG_HOVER()));
 
-    // Group by category — insert dim category headers
+    // Group by category — insert dim category headers.
+    // Category + label come from the kWorkflows table; translate them through
+    // the WorkflowsViewPanel context so they participate in i18n. The catalog is
+    // built once at construction — a live language switch repopulates via
+    // retranslateUi() (see rebuild note there).
     QString last_cat;
     for (int i = 0; i < kWorkflowCount; ++i) {
         const auto& wf = kWorkflows[i];
         if (QString(wf.category) != last_cat) {
             last_cat = wf.category;
-            auto* sep = new QListWidgetItem(QString("  %1").arg(wf.category));
+            auto* sep = new QListWidgetItem(
+                QString("  %1").arg(QCoreApplication::translate("WorkflowsViewPanel", wf.category)));
             sep->setFlags(Qt::NoItemFlags);
             sep->setForeground(QColor(ui::colors::TEXT_TERTIARY()));
             QFont f;
@@ -136,14 +143,15 @@ QWidget* WorkflowsViewPanel::build_catalog_panel() {
             sep->setBackground(QColor(ui::colors::BG_RAISED()));
             catalog_list_->addItem(sep);
         }
-        auto* item = new QListWidgetItem(QString("  %1").arg(wf.label));
+        auto* item =
+            new QListWidgetItem(QString("  %1").arg(QCoreApplication::translate("WorkflowsViewPanel", wf.label)));
         item->setData(Qt::UserRole, QString(wf.id));
         catalog_list_->addItem(item);
     }
     vl->addWidget(catalog_list_, 1);
 
     // Description footer
-    wf_desc_label_ = new QLabel("Select a workflow to configure and run.");
+    wf_desc_label_ = new QLabel(tr("Select a workflow to configure and run."));
     wf_desc_label_->setWordWrap(true);
     wf_desc_label_->setContentsMargins(10, 6, 10, 8);
     wf_desc_label_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;border-top:1px solid %3;")
@@ -183,23 +191,23 @@ QWidget* WorkflowsViewPanel::build_params_panel() {
     bl->setSpacing(8);
 
     // LLM Profile
-    auto* lbl_llm = new QLabel(tr("LLM PROFILE"));
-    lbl_llm->setStyleSheet(
+    llm_profile_title_ = new QLabel(tr("LLM PROFILE"));
+    llm_profile_title_->setStyleSheet(
         QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
-    bl->addWidget(lbl_llm);
+    bl->addWidget(llm_profile_title_);
 
     llm_profile_combo_ = new QComboBox;
-    llm_profile_combo_->setToolTip("LLM profile used by this workflow run");
+    llm_profile_combo_->setToolTip(tr("LLM profile used by this workflow run"));
     llm_profile_combo_->setStyleSheet(
         QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:3px 6px;font-size:11px;}"
                 "QComboBox::drop-down{border:none;}"
                 "QComboBox QAbstractItemView{background:%1;color:%2;selection-background-color:%4;}")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER_DIM()));
-    llm_profile_combo_->addItem("Default (Global)", QString{});
+    llm_profile_combo_->addItem(tr("Default (Global)"), QString{});
     const auto pr = LlmProfileRepository::instance().list_profiles();
     const auto profiles = pr.is_ok() ? pr.value() : QVector<LlmProfile>{};
     for (const auto& prof : profiles)
-        llm_profile_combo_->addItem(prof.is_default ? prof.name + " [default]" : prof.name, prof.id);
+        llm_profile_combo_->addItem(prof.is_default ? prof.name + tr(" [default]") : prof.name, prof.id);
     bl->addWidget(llm_profile_combo_);
 
     llm_resolved_lbl_ = new QLabel;
@@ -212,12 +220,12 @@ QWidget* WorkflowsViewPanel::build_params_panel() {
         auto* sl = new QHBoxLayout(symbol_row_);
         sl->setContentsMargins(0, 0, 0, 0);
         sl->setSpacing(6);
-        auto* lbl = new QLabel(tr("SYMBOL"));
-        lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;min-width:55px;")
-                               .arg(ui::colors::TEXT_SECONDARY()));
-        sl->addWidget(lbl);
+        symbol_label_ = new QLabel(tr("SYMBOL"));
+        symbol_label_->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;min-width:55px;")
+                                         .arg(ui::colors::TEXT_SECONDARY()));
+        sl->addWidget(symbol_label_);
         symbol_input_ = new QLineEdit;
-        symbol_input_->setPlaceholderText("e.g. AAPL");
+        symbol_input_->setPlaceholderText(tr("e.g. AAPL"));
         symbol_input_->setMaximumWidth(110);
         symbol_input_->setStyleSheet(
             QString("background:%1;color:%2;border:1px solid %3;padding:3px 6px;font-size:12px;")
@@ -234,12 +242,12 @@ QWidget* WorkflowsViewPanel::build_params_panel() {
         auto* ql = new QVBoxLayout(query_row_);
         ql->setContentsMargins(0, 0, 0, 0);
         ql->setSpacing(4);
-        auto* lbl = new QLabel(tr("QUERY"));
-        lbl->setStyleSheet(
+        query_label_ = new QLabel(tr("QUERY"));
+        query_label_->setStyleSheet(
             QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
-        ql->addWidget(lbl);
+        ql->addWidget(query_label_);
         query_input_ = new QTextEdit;
-        query_input_->setPlaceholderText("Enter query for this workflow...");
+        query_input_->setPlaceholderText(tr("Enter query for this workflow..."));
         query_input_->setFixedHeight(90);
         query_input_->setStyleSheet(
             QString("QTextEdit{background:%1;color:%2;border:1px solid %3;padding:6px;font-size:12px;}")
@@ -252,7 +260,7 @@ QWidget* WorkflowsViewPanel::build_params_panel() {
     bl->addStretch();
 
     // Run button
-    run_btn_ = new QPushButton("RUN WORKFLOW");
+    run_btn_ = new QPushButton(tr("RUN WORKFLOW"));
     run_btn_->setCursor(Qt::PointingHandCursor);
     run_btn_->setEnabled(false);
     run_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:none;padding:9px;"
@@ -304,10 +312,10 @@ QWidget* WorkflowsViewPanel::build_output_panel() {
     bl->setContentsMargins(10, 8, 10, 10);
     bl->setSpacing(6);
 
-    auto* log_lbl = new QLabel(tr("EXECUTION LOG"));
-    log_lbl->setStyleSheet(
+    output_log_title_ = new QLabel(tr("EXECUTION LOG"));
+    output_log_title_->setStyleSheet(
         QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
-    bl->addWidget(log_lbl);
+    bl->addWidget(output_log_title_);
 
     log_display_ = new QTextEdit;
     log_display_->setReadOnly(true);
@@ -320,10 +328,10 @@ QWidget* WorkflowsViewPanel::build_output_panel() {
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::BORDER_BRIGHT()));
     bl->addWidget(log_display_);
 
-    auto* res_lbl = new QLabel(tr("RESULT"));
-    res_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:4px;")
-                               .arg(ui::colors::TEXT_SECONDARY()));
-    bl->addWidget(res_lbl);
+    output_result_title_ = new QLabel(tr("RESULT"));
+    output_result_title_->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:4px;")
+                                            .arg(ui::colors::TEXT_SECONDARY()));
+    bl->addWidget(output_result_title_);
 
     result_display_ = new QTextEdit;
     result_display_->setReadOnly(true);
@@ -434,9 +442,9 @@ void WorkflowsViewPanel::setup_connections() {
         if (pid.isEmpty()) {
             auto resolved = ai_chat::LlmService::instance().resolve_profile("workflow", {});
             if (!resolved.provider.isEmpty())
-                llm_resolved_lbl_->setText(resolved.provider.toUpper() + " / " + resolved.model_id + " (inherited)");
+                llm_resolved_lbl_->setText(resolved.provider.toUpper() + " / " + resolved.model_id + tr(" (inherited)"));
             else
-                llm_resolved_lbl_->setText("No provider — Settings > LLM Config");
+                llm_resolved_lbl_->setText(tr("No provider — Settings > LLM Config"));
         } else {
             const auto pr2 = LlmProfileRepository::instance().list_profiles();
             const auto profs = pr2.is_ok() ? pr2.value() : QVector<LlmProfile>{};
@@ -478,8 +486,9 @@ void WorkflowsViewPanel::on_workflow_selected(int row) {
     if (!def)
         return;
 
-    params_title_->setText(QString("%1  —  PARAMETERS").arg(def->label).toUpper());
-    wf_desc_label_->setText(def->desc);
+    params_title_->setText(
+        tr("%1  —  PARAMETERS").arg(QCoreApplication::translate("WorkflowsViewPanel", def->label)).toUpper());
+    wf_desc_label_->setText(QCoreApplication::translate("WorkflowsViewPanel", def->desc));
 
     symbol_row_->setVisible(def->needs_symbol);
     query_row_->setVisible(def->needs_query);
@@ -496,11 +505,11 @@ void WorkflowsViewPanel::run_current_workflow() {
 
     executing_ = true;
     run_btn_->setEnabled(false);
-    run_btn_->setText("RUNNING...");
+    run_btn_->setText(tr("RUNNING..."));
     result_display_->clear();
     log_display_->clear();
-    output_title_->setText(QString("OUTPUT  —  %1").arg(current_workflow_type_.toUpper()));
-    output_status_->setText("Executing...");
+    output_title_->setText(tr("OUTPUT  —  %1").arg(current_workflow_type_.toUpper()));
+    output_status_->setText(tr("Executing..."));
     output_status_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::AMBER()));
     log_display_->append(QString("[START] %1").arg(current_workflow_type_));
 
@@ -511,7 +520,7 @@ void WorkflowsViewPanel::run_current_workflow() {
             executing_ = false;
             run_btn_->setEnabled(true);
             run_btn_->setText(tr("RUN WORKFLOW"));
-            params_status_->setText("Symbol is required");
+            params_status_->setText(tr("Symbol is required"));
             params_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
             return;
         }
@@ -524,7 +533,7 @@ void WorkflowsViewPanel::run_current_workflow() {
             executing_ = false;
             run_btn_->setEnabled(true);
             run_btn_->setText(tr("RUN WORKFLOW"));
-            params_status_->setText("Query is required");
+            params_status_->setText(tr("Query is required"));
             params_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
             return;
         }
@@ -542,6 +551,64 @@ void WorkflowsViewPanel::run_current_workflow() {
 
 void WorkflowsViewPanel::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void WorkflowsViewPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void WorkflowsViewPanel::retranslateUi() {
+    // Catalog (the list items come from the kWorkflows table; rebuild them so a
+    // live language switch re-translates the category headers + workflow labels).
+    if (catalog_title_) catalog_title_->setText(tr("WORKFLOWS"));
+    if (catalog_list_) {
+        QString last_cat;
+        catalog_list_->clear();
+        for (int i = 0; i < kWorkflowCount; ++i) {
+            const auto& wf = kWorkflows[i];
+            if (QString(wf.category) != last_cat) {
+                last_cat = wf.category;
+                auto* sep = new QListWidgetItem(
+                    QString("  %1").arg(QCoreApplication::translate("WorkflowsViewPanel", wf.category)));
+                sep->setFlags(Qt::NoItemFlags);
+                sep->setForeground(QColor(ui::colors::TEXT_TERTIARY()));
+                QFont f;
+                f.setPointSize(8);
+                f.setBold(true);
+                sep->setFont(f);
+                sep->setBackground(QColor(ui::colors::BG_RAISED()));
+                catalog_list_->addItem(sep);
+            }
+            auto* item =
+                new QListWidgetItem(QString("  %1").arg(QCoreApplication::translate("WorkflowsViewPanel", wf.label)));
+            item->setData(Qt::UserRole, QString(wf.id));
+            catalog_list_->addItem(item);
+        }
+    }
+
+    // Params column.
+    if (llm_profile_title_) llm_profile_title_->setText(tr("LLM PROFILE"));
+    if (symbol_label_)      symbol_label_->setText(tr("SYMBOL"));
+    if (symbol_input_)      symbol_input_->setPlaceholderText(tr("e.g. AAPL"));
+    if (query_label_)       query_label_->setText(tr("QUERY"));
+    if (query_input_)       query_input_->setPlaceholderText(tr("Enter query for this workflow..."));
+    if (run_btn_ && !executing_) run_btn_->setText(tr("RUN WORKFLOW"));
+
+    // Output column section titles (status text holds live state — not re-applied).
+    if (output_log_title_)    output_log_title_->setText(tr("EXECUTION LOG"));
+    if (output_result_title_) output_result_title_->setText(tr("RESULT"));
+
+    // Dynamic-state labels: only re-apply the static default when idle, so a
+    // language switch mid-run does not clobber the current selection / output.
+    if (!executing_ && current_workflow_type_.isEmpty()) {
+        if (params_title_)  params_title_->setText(tr("PARAMETERS"));
+        if (output_title_)  output_title_->setText(tr("OUTPUT"));
+        if (wf_desc_label_) wf_desc_label_->setText(tr("Select a workflow to configure and run."));
+    }
 }
 
 // ── Draft persistence ────────────────────────────────────────────────────────

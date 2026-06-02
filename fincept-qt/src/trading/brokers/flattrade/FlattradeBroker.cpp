@@ -1,6 +1,7 @@
 #include "trading/brokers/flattrade/FlattradeBroker.h"
 
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -144,7 +145,10 @@ TokenExchangeResponse FlattradeBroker::exchange_token(const QString& api_key, co
     if (token.isEmpty())
         return {false, "", "", "", "Login: no token in response", ""};
 
-    return {true, token, "", uid, "", ""};
+    // Flattrade tokens lapse at the daily reset; re-auth needs a fresh web
+    // request_code, so there is no silent refresh. Hint only.
+    const QString extra = with_token_expiry({}, next_ist_flush_epoch(6, 0));
+    return {true, token, "", uid, extra, ""};
 }
 
 // ---------- place_order ----------

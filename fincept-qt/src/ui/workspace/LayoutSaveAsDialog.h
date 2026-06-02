@@ -3,8 +3,10 @@
 // "Save Layout" (when no layout loaded) and "Save Layout As…".
 
 #include <QDialog>
+#include <QEvent>
 
 class QLineEdit;
+class QLabel;
 
 namespace fincept::ui {
 
@@ -17,8 +19,16 @@ class LayoutSaveAsDialog : public QDialog {
     /// Trimmed name. Valid only after exec() returns Accepted.
     QString name() const;
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
+
     QLineEdit* name_edit_ = nullptr;
+    QLabel* name_label_ = nullptr;
 };
 
 } // namespace fincept::ui

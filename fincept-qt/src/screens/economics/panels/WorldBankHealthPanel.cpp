@@ -83,8 +83,8 @@ WorldBankHealthPanel::WorldBankHealthPanel(QWidget* parent)
 }
 
 void WorldBankHealthPanel::activate() {
-    show_empty("Select an indicator and country, then click FETCH\n"
-               "Source: World Bank — Health & Development indicators");
+    show_empty(tr("Select an indicator and country, then click FETCH\n"
+                  "Source: World Bank — Health & Development indicators"));
 }
 
 void WorldBankHealthPanel::build_controls(QHBoxLayout* thl) {
@@ -106,9 +106,9 @@ void WorldBankHealthPanel::build_controls(QHBoxLayout* thl) {
     country_combo_->setFixedHeight(26);
     country_combo_->setMinimumWidth(130);
 
-    thl->addWidget(lbl("INDICATOR"));
+    thl->addWidget(indicator_lbl_ = lbl(tr("INDICATOR")));
     thl->addWidget(indicator_combo_);
-    thl->addWidget(lbl("COUNTRY"));
+    thl->addWidget(country_lbl_ = lbl(tr("COUNTRY")));
     thl->addWidget(country_combo_);
 }
 
@@ -116,8 +116,8 @@ void WorldBankHealthPanel::on_fetch() {
     const QString command = indicator_combo_->currentData().toString();
     const QString country = country_combo_->currentData().toString();
 
-    show_loading("Fetching WB Health: " + indicator_combo_->currentText() + " — " + country_combo_->currentText() +
-                 "…");
+    show_loading(
+        tr("Fetching WB Health: %1 — %2…").arg(indicator_combo_->currentText(), country_combo_->currentText()));
 
     services::EconomicsService::instance().execute(kWorldBankHealthSourceId, kWorldBankHealthScript, command, {country},
                                                    "wbhealth_" + command + "_" + country);
@@ -139,7 +139,7 @@ void WorldBankHealthPanel::on_result(const QString& request_id, const services::
         rows = result.data["data"].toArray();
 
     if (rows.isEmpty()) {
-        show_error("No data available for this selection");
+        show_error(tr("No data available for this selection"));
         return;
     }
 
@@ -151,6 +151,22 @@ void WorldBankHealthPanel::on_result(const QString& request_id, const services::
 
     display(rows, title);
     LOG_INFO("WorldBankHealthPanel", QString("Displayed %1 records: %2").arg(rows.size()).arg(title));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void WorldBankHealthPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void WorldBankHealthPanel::retranslateUi() {
+    if (indicator_lbl_)
+        indicator_lbl_->setText(tr("INDICATOR"));
+    if (country_lbl_)
+        country_lbl_->setText(tr("COUNTRY"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

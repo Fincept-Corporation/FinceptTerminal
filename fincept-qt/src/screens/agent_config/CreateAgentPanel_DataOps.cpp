@@ -165,7 +165,7 @@ void CreateAgentPanel::load_agent_into_form(const AgentConfig& cfg) {
     terminal_name_exclude_edit_->setText(exc_pats.isEmpty() ? QString() : exc_pats.first().toString());
     terminal_max_tools_spin_->setValue(tf["max_tools"].toInt(0));
 
-    status_lbl_->setText(QString("Loaded: %1").arg(cfg.name));
+    status_lbl_->setText(tr("Loaded: %1").arg(cfg.name));
     status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::CYAN()));
 }
 
@@ -204,7 +204,7 @@ void CreateAgentPanel::clear_form() {
     terminal_max_tools_spin_->setValue(0);
     test_result_->clear();
     test_status_lbl_->clear();
-    status_lbl_->setText("Form cleared");
+    status_lbl_->setText(tr("Form cleared"));
     status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::TEXT_TERTIARY()));
 }
 
@@ -332,7 +332,7 @@ QJsonObject CreateAgentPanel::build_config_json() const {
 void CreateAgentPanel::save_agent() {
     const QString name = name_edit_->text().trimmed();
     if (name.isEmpty()) {
-        status_lbl_->setText("Agent name is required");
+        status_lbl_->setText(tr("Agent name is required"));
         status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::NEGATIVE()));
         return;
     }
@@ -364,16 +364,16 @@ void CreateAgentPanel::test_agent() {
     if (query.isEmpty())
         return;
     test_btn_->setEnabled(false);
-    test_btn_->setText("RUNNING...");
+    test_btn_->setText(tr("RUNNING..."));
     test_result_->clear();
-    test_status_lbl_->setText("Running...");
+    test_status_lbl_->setText(tr("Running..."));
     test_status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::AMBER()));
     pending_request_id_ = services::AgentService::instance().run_agent_streaming(query, build_config_json());
 }
 
 void CreateAgentPanel::export_json() {
     const QString path =
-        QFileDialog::getSaveFileName(this, "Export Agent Config", "agent_config.json", "JSON (*.json)");
+        QFileDialog::getSaveFileName(this, tr("Export Agent Config"), "agent_config.json", tr("JSON (*.json)"));
     if (path.isEmpty())
         return;
     QJsonObject out;
@@ -384,12 +384,12 @@ void CreateAgentPanel::export_json() {
     QFile file(path);
     if (file.open(QIODevice::WriteOnly))
         file.write(QJsonDocument(out).toJson(QJsonDocument::Indented));
-    status_lbl_->setText("Exported: " + path);
+    status_lbl_->setText(tr("Exported: %1").arg(path));
     status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::POSITIVE()));
 }
 
 void CreateAgentPanel::import_json() {
-    const QString path = QFileDialog::getOpenFileName(this, "Import Agent Config", {}, "JSON (*.json)");
+    const QString path = QFileDialog::getOpenFileName(this, tr("Import Agent Config"), {}, tr("JSON (*.json)"));
     if (path.isEmpty())
         return;
     QFile file(path);
@@ -403,7 +403,7 @@ void CreateAgentPanel::import_json() {
     cfg.category = obj["category"].toString("custom");
     cfg.config_json = QString::fromUtf8(QJsonDocument(obj["config"].toObject()).toJson(QJsonDocument::Compact));
     load_agent_into_form(cfg);
-    status_lbl_->setText("Imported from file");
+    status_lbl_->setText(tr("Imported from file"));
     status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::CYAN()));
 }
 

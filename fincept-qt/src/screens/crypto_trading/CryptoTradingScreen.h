@@ -7,6 +7,7 @@
 #include "screens/crypto_trading/CryptoTypes.h"
 #include "trading/TradingTypes.h"
 
+#include <QEvent>
 #include <QHideEvent>
 #include <QJsonArray>
 #include <QLabel>
@@ -53,6 +54,7 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_exchange_changed(const QString& exchange);
@@ -62,6 +64,9 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
     void on_order_submitted(const QString& side, const QString& order_type, double qty, double price, double stop_price,
                             double sl, double tp);
     void on_cancel_order(const QString& order_id);
+    void on_cancel_all_orders();                     // CANCEL ALL (live + paper)
+    void on_close_all_positions();                   // SQUARE OFF ALL (live + paper)
+    void on_close_position(const QString& symbol);   // close a single position
     void on_ob_price_clicked(double price);
     void on_search_requested(const QString& filter);
 
@@ -77,9 +82,16 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
   private:
     void setup_ui();
     void setup_timers();
+    void retranslateUi();
     void init_exchange();
     void load_portfolio();
     void switch_symbol(const QString& symbol);
+
+    // Perp detection + futures-control visibility. Leverage / margin-mode /
+    // reduce-only controls only make sense on derivatives, so they are shown
+    // only when the active market is a perp (Hyperliquid, or a settled pair).
+    bool is_perp_market() const;
+    void update_futures_visibility();
 
     void async_fetch_candles(const QString& symbol, const QString& timeframe);
     void async_fetch_live_positions();

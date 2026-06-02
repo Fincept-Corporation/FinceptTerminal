@@ -11,6 +11,7 @@
 #include "core/logging/Logger.h"
 #include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 #include "trading/instruments/InstrumentService.h"
 
 #include <QCryptographicHash>
@@ -301,16 +302,34 @@ TokenExchangeResponse AngelOneBroker::exchange_token(const QString& api_key, con
     result.refresh_token = data.value("refreshToken").toString();
     result.user_id = client_code; // use client_code as stable login ID
 
-    // Pack feed_token, client_code, totp_secret into additional_data JSON
+    // Pack feed_token, client_code, totp_secret into additional_data JSON.
+    // Angel One's JWT access token is short-lived (~2.5h); the live sweep
+    // silent-relogins (TOTP) before/at expiry to keep the session alive.
     QJsonObject extra{
         {"feed_token", data.value("feedToken").toString()},
         {"client_code", client_code},
         {"totp_secret", totp_secret}, // persist so UI can pre-fill & token refresh can re-login
+        {"token_expires_at", static_cast<double>(rolling_expiry_epoch(2.5))},
     };
     result.additional_data = QString::fromUtf8(QJsonDocument(extra).toJson(QJsonDocument::Compact));
 
     LOG_INFO(TAG_AO, "Login success, user: " + result.user_id);
     return result;
+}
+
+// Silent refresh = replay the TOTP login from stored credentials (api_key,
+// MPIN, client_code, totp_secret). Yields a brand-new JWT with a fresh expiry.
+TokenExchangeResponse AngelOneBroker::refresh_session(const BrokerCredentials& creds) {
+    const auto extra = QJsonDocument::fromJson(creds.additional_data.toUtf8()).object();
+    const QString client_code = extra.value("client_code").toString();
+    const QString totp_secret = extra.value("totp_secret").toString();
+    if (client_code.isEmpty() || totp_secret.isEmpty()) {
+        return {false, "", "", "", "",
+                "Angel One silent refresh requires stored client code and TOTP secret"};
+    }
+    const QJsonObject auth{{"client_code", client_code}, {"totp_secret", totp_secret}};
+    return exchange_token(creds.api_key, creds.api_secret,
+                          QString::fromUtf8(QJsonDocument(auth).toJson(QJsonDocument::Compact)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

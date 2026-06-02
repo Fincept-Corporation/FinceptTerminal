@@ -15,6 +15,21 @@ GroupBlock::GroupBlock(bool is_entry, QWidget* parent)
     build_ui();
 }
 
+void GroupBlock::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QFrame::changeEvent(event);
+}
+
+void GroupBlock::retranslateUi() {
+    if (tag_) tag_->setText(tr("GROUP"));
+    if (and_btn_) and_btn_->setText(tr("AND"));
+    if (or_btn_) or_btn_->setText(tr("OR"));
+    if (add_cond_btn_) add_cond_btn_->setText(tr("+ Condition"));
+    if (add_group_btn_) add_group_btn_->setText(tr("+ Group"));
+    if (remove_btn_) remove_btn_->setToolTip(tr("Remove group"));
+}
+
 void GroupBlock::build_ui() {
     auto* main = new QVBoxLayout(this);
     main->setContentsMargins(8, 6, 8, 8);
@@ -24,9 +39,9 @@ void GroupBlock::build_ui() {
     auto* header = new QHBoxLayout();
     header->setSpacing(6);
 
-    auto* tag = new QLabel(tr("GROUP"), this);
-    tag->setObjectName(QStringLiteral("groupTag"));
-    header->addWidget(tag);
+    tag_ = new QLabel(tr("GROUP"), this);
+    tag_->setObjectName(QStringLiteral("groupTag"));
+    header->addWidget(tag_);
 
     and_btn_ = new QPushButton(tr("AND"), this);
     and_btn_->setObjectName(QStringLiteral("logicBtnAnd"));
@@ -40,17 +55,17 @@ void GroupBlock::build_ui() {
     header->addWidget(or_btn_);
     header->addStretch();
 
-    auto* add_cond = new QPushButton(tr("+ Condition"), this);
-    add_cond->setObjectName(QStringLiteral("condSectionAddBtn"));
-    auto* add_grp = new QPushButton(tr("+ Group"), this);
-    add_grp->setObjectName(QStringLiteral("condSectionAddGroupBtn"));
-    auto* remove = new QPushButton(QStringLiteral("✕"), this);
-    remove->setObjectName(QStringLiteral("condBlockRemove"));
-    remove->setFixedSize(24, 22);
-    remove->setToolTip(tr("Remove group"));
-    header->addWidget(add_cond);
-    header->addWidget(add_grp);
-    header->addWidget(remove);
+    add_cond_btn_ = new QPushButton(tr("+ Condition"), this);
+    add_cond_btn_->setObjectName(QStringLiteral("condSectionAddBtn"));
+    add_group_btn_ = new QPushButton(tr("+ Group"), this);
+    add_group_btn_->setObjectName(QStringLiteral("condSectionAddGroupBtn"));
+    remove_btn_ = new QPushButton(QStringLiteral("✕"), this);
+    remove_btn_->setObjectName(QStringLiteral("condBlockRemove"));
+    remove_btn_->setFixedSize(24, 22);
+    remove_btn_->setToolTip(tr("Remove group"));
+    header->addWidget(add_cond_btn_);
+    header->addWidget(add_group_btn_);
+    header->addWidget(remove_btn_);
     main->addLayout(header);
 
     nodes_layout_ = new QVBoxLayout();
@@ -60,9 +75,9 @@ void GroupBlock::build_ui() {
 
     connect(and_btn_, &QPushButton::clicked, this, [this]() { set_logic(QStringLiteral("AND")); emit changed(); });
     connect(or_btn_, &QPushButton::clicked, this, [this]() { set_logic(QStringLiteral("OR")); emit changed(); });
-    connect(add_cond, &QPushButton::clicked, this, &GroupBlock::add_condition);
-    connect(add_grp, &QPushButton::clicked, this, &GroupBlock::add_group);
-    connect(remove, &QPushButton::clicked, this, &GroupBlock::remove_requested);
+    connect(add_cond_btn_, &QPushButton::clicked, this, &GroupBlock::add_condition);
+    connect(add_group_btn_, &QPushButton::clicked, this, &GroupBlock::add_group);
+    connect(remove_btn_, &QPushButton::clicked, this, &GroupBlock::remove_requested);
 
     update_logic_buttons();
     add_condition(); // a fresh group starts with one condition

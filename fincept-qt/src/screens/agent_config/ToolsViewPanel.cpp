@@ -184,12 +184,13 @@ QWidget* ToolsViewPanel::build_left_panel() {
     vl->setSpacing(8);
 
     // ── Assign To ────────────────────────────────────────────────────────────
-    vl->addWidget(section_header("ASSIGN TO"));
+    assign_to_hdr_ = section_header(tr("ASSIGN TO"));
+    vl->addWidget(assign_to_hdr_);
 
     auto* radio_row = new QHBoxLayout;
     radio_row->setSpacing(12);
-    radio_agent_ = new QRadioButton("Agent");
-    radio_team_ = new QRadioButton("Team");
+    radio_agent_ = new QRadioButton(tr("Agent"));
+    radio_team_ = new QRadioButton(tr("Team"));
     radio_agent_->setChecked(true);
     radio_agent_->setStyleSheet(radio_style());
     radio_team_->setStyleSheet(radio_style());
@@ -200,10 +201,10 @@ QWidget* ToolsViewPanel::build_left_panel() {
 
     target_combo_ = new QComboBox;
     target_combo_->setStyleSheet(combo_style());
-    target_combo_->setPlaceholderText("Select target...");
+    target_combo_->setPlaceholderText(tr("Select target..."));
     vl->addWidget(target_combo_);
 
-    target_status_ = new QLabel("No target selected");
+    target_status_ = new QLabel(tr("No target selected"));
     target_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:4px 0;").arg(ui::colors::TEXT_TERTIARY()));
     target_status_->setWordWrap(true);
     vl->addWidget(target_status_);
@@ -212,7 +213,8 @@ QWidget* ToolsViewPanel::build_left_panel() {
 
     // ── Selected Tools ────────────────────────────────────────────────────────
     auto* sel_header = new QHBoxLayout;
-    sel_header->addWidget(section_header("SELECTED TOOLS"));
+    selected_tools_hdr_ = section_header(tr("SELECTED TOOLS"));
+    sel_header->addWidget(selected_tools_hdr_);
     selected_count_ = new QLabel("0");
     selected_count_->setStyleSheet(badge_style());
     sel_header->addWidget(selected_count_);
@@ -225,7 +227,7 @@ QWidget* ToolsViewPanel::build_left_panel() {
     vl->addWidget(selected_list_, 1);
 
     // ── Actions ───────────────────────────────────────────────────────────────
-    remove_btn_ = new QPushButton("REMOVE");
+    remove_btn_ = new QPushButton(tr("REMOVE"));
     remove_btn_->setCursor(Qt::PointingHandCursor);
     remove_btn_->setStyleSheet(btn_secondary_style());
     remove_btn_->setEnabled(false);
@@ -234,16 +236,16 @@ QWidget* ToolsViewPanel::build_left_panel() {
     auto* bottom_row = new QHBoxLayout;
     bottom_row->setSpacing(6);
 
-    clear_btn_ = new QPushButton("CLEAR");
+    clear_btn_ = new QPushButton(tr("CLEAR"));
     clear_btn_->setCursor(Qt::PointingHandCursor);
     clear_btn_->setStyleSheet(btn_danger_style());
     bottom_row->addWidget(clear_btn_);
 
-    assign_btn_ = new QPushButton("ASSIGN →");
+    assign_btn_ = new QPushButton(tr("ASSIGN →"));
     assign_btn_->setCursor(Qt::PointingHandCursor);
     assign_btn_->setStyleSheet(btn_primary_style());
     assign_btn_->setEnabled(false);
-    assign_btn_->setToolTip("Save selected tools to the chosen agent or team");
+    assign_btn_->setToolTip(tr("Save selected tools to the chosen agent or team"));
     bottom_row->addWidget(assign_btn_);
 
     vl->addLayout(bottom_row);
@@ -263,23 +265,23 @@ QWidget* ToolsViewPanel::build_center_panel() {
 
     // ── Header ────────────────────────────────────────────────────────────────
     auto* header = new QHBoxLayout;
-    auto* title = new QLabel(tr("AVAILABLE TOOLS"));
-    title->setStyleSheet(section_title_style());
-    header->addWidget(title);
+    available_hdr_ = new QLabel(tr("AVAILABLE TOOLS"));
+    available_hdr_->setStyleSheet(section_title_style());
+    header->addWidget(available_hdr_);
 
     total_count_ = new QLabel("0");
     total_count_->setStyleSheet(badge_style(ui::colors::TEXT_SECONDARY));
     header->addWidget(total_count_);
     header->addStretch();
 
-    auto* hint = new QLabel("● = already assigned");
-    hint->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
-    header->addWidget(hint);
+    assigned_hint_ = new QLabel(tr("● = already assigned"));
+    assigned_hint_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
+    header->addWidget(assigned_hint_);
     vl->addLayout(header);
 
     // ── Search ────────────────────────────────────────────────────────────────
     search_edit_ = new QLineEdit;
-    search_edit_->setPlaceholderText("Search tools...");
+    search_edit_->setPlaceholderText(tr("Search tools..."));
     search_edit_->setStyleSheet(input_style());
     search_edit_->setClearButtonEnabled(true);
     vl->addWidget(search_edit_);
@@ -296,12 +298,12 @@ QWidget* ToolsViewPanel::build_center_panel() {
     auto* btn_row = new QHBoxLayout;
     btn_row->setSpacing(6);
 
-    add_btn_ = new QPushButton("+ ADD TO SELECTION");
+    add_btn_ = new QPushButton(tr("+ ADD TO SELECTION"));
     add_btn_->setCursor(Qt::PointingHandCursor);
     add_btn_->setStyleSheet(btn_primary_style());
     btn_row->addWidget(add_btn_, 1);
 
-    copy_btn_ = new QPushButton("COPY NAME");
+    copy_btn_ = new QPushButton(tr("COPY NAME"));
     copy_btn_->setCursor(Qt::PointingHandCursor);
     copy_btn_->setStyleSheet(btn_secondary_style());
     btn_row->addWidget(copy_btn_);
@@ -324,9 +326,10 @@ QWidget* ToolsViewPanel::build_right_panel() {
     vl->setSpacing(8);
 
     // ── Tool name ─────────────────────────────────────────────────────────────
-    vl->addWidget(section_header("TOOL DETAIL"));
+    detail_hdr_ = section_header(tr("TOOL DETAIL"));
+    vl->addWidget(detail_hdr_);
 
-    detail_name_ = new QLabel("Select a tool");
+    detail_name_ = new QLabel(tr("Select a tool"));
     detail_name_->setStyleSheet(
         QString("color:%1;font-size:13px;font-weight:700;padding:2px 0;").arg(ui::colors::TEXT_PRIMARY()));
     detail_name_->setWordWrap(true);
@@ -340,18 +343,20 @@ QWidget* ToolsViewPanel::build_right_panel() {
     vl->addWidget(h_line());
 
     // ── Description ───────────────────────────────────────────────────────────
-    vl->addWidget(section_header("DESCRIPTION"));
+    description_hdr_ = section_header(tr("DESCRIPTION"));
+    vl->addWidget(description_hdr_);
     detail_desc_ = new QTextEdit;
     detail_desc_->setReadOnly(true);
     detail_desc_->setStyleSheet(textedit_style());
     detail_desc_->setFixedHeight(90);
-    detail_desc_->setPlaceholderText("Click a tool to see details...");
+    detail_desc_->setPlaceholderText(tr("Click a tool to see details..."));
     vl->addWidget(detail_desc_);
 
     vl->addWidget(h_line());
 
     // ── Parameters ────────────────────────────────────────────────────────────
-    vl->addWidget(section_header("PARAMETERS"));
+    parameters_hdr_ = section_header(tr("PARAMETERS"));
+    vl->addWidget(parameters_hdr_);
     detail_params_ = new QTextEdit;
     detail_params_->setReadOnly(true);
     detail_params_->setStyleSheet(textedit_style());
@@ -362,11 +367,12 @@ QWidget* ToolsViewPanel::build_right_panel() {
     vl->addWidget(h_line());
 
     // ── Used By ───────────────────────────────────────────────────────────────
-    vl->addWidget(section_header("USED BY"));
+    used_by_hdr_ = section_header(tr("USED BY"));
+    vl->addWidget(used_by_hdr_);
     detail_used_by_ = new QTextEdit;
     detail_used_by_->setReadOnly(true);
     detail_used_by_->setStyleSheet(textedit_style());
-    detail_used_by_->setPlaceholderText("No agents or teams use this tool yet.");
+    detail_used_by_->setPlaceholderText(tr("No agents or teams use this tool yet."));
     vl->addWidget(detail_used_by_, 1);
 
     return panel;
@@ -438,13 +444,13 @@ void ToolsViewPanel::setup_connections() {
     // Target combo — update status label
     connect(target_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
         if (idx < 0) {
-            target_status_->setText("No target selected");
+            target_status_->setText(tr("No target selected"));
             assign_btn_->setEnabled(false);
             return;
         }
         QString name = target_combo_->currentText();
-        QString type = radio_agent_->isChecked() ? "Agent" : "Team";
-        target_status_->setText(QString("Assigning to: %1 (%2)").arg(name, type));
+        QString type = radio_agent_->isChecked() ? tr("Agent") : tr("Team");
+        target_status_->setText(tr("Assigning to: %1 (%2)").arg(name, type));
         assign_btn_->setEnabled(!selected_tools_.isEmpty());
         update_assigned_dots();
     });
@@ -571,8 +577,8 @@ void ToolsViewPanel::load_assign_targets() {
     }
 
     if (target_combo_->count() == 0) {
-        target_status_->setText(use_agents ? "No agents found — create one first"
-                                           : "No teams found — create one first");
+        target_status_->setText(use_agents ? tr("No agents found — create one first")
+                                           : tr("No teams found — create one first"));
         assign_btn_->setEnabled(false);
     }
 }
@@ -613,7 +619,7 @@ void ToolsViewPanel::show_tool_detail(const QString& tool_name) {
                 }
                 params_text = lines.join("\n");
             } else {
-                params_text = "No parameters";
+                params_text = tr("No parameters");
             }
             break;
         }
@@ -633,7 +639,7 @@ void ToolsViewPanel::show_tool_detail(const QString& tool_name) {
         category = "—";
     detail_category_->setText(category.toUpper());
     detail_category_->setVisible(!category.isEmpty());
-    detail_desc_->setPlainText(description.isEmpty() ? "No description available." : description);
+    detail_desc_->setPlainText(description.isEmpty() ? tr("No description available.") : description);
     detail_params_->setPlainText(params_text.isEmpty() ? "—" : params_text);
 
     refresh_used_by(tool_name);
@@ -647,12 +653,12 @@ void ToolsViewPanel::refresh_used_by(const QString& tool_name) {
         QJsonArray tools = info.config.value("tools").toArray();
         for (const auto& t : tools) {
             if (t.toString() == tool_name) {
-                lines << QString("● Agent: %1").arg(info.name);
+                lines << tr("● Agent: %1").arg(info.name);
                 break;
             }
         }
     }
-    detail_used_by_->setPlainText(lines.isEmpty() ? "Not assigned to any agent or team yet." : lines.join("\n"));
+    detail_used_by_->setPlainText(lines.isEmpty() ? tr("Not assigned to any agent or team yet.") : lines.join("\n"));
 }
 
 // ── Assigned dots ─────────────────────────────────────────────────────────────
@@ -710,7 +716,7 @@ void ToolsViewPanel::assign_to_target() {
     // Load existing config
     auto result = AgentConfigRepository::instance().get(id);
     if (!result.is_ok()) {
-        target_status_->setText(QString("Error: could not load %1").arg(name));
+        target_status_->setText(tr("Error: could not load %1").arg(name));
         return;
     }
 
@@ -736,7 +742,7 @@ void ToolsViewPanel::assign_to_target() {
 
     auto save_result = AgentConfigRepository::instance().save(cfg);
     if (save_result.is_ok()) {
-        const QString msg = QString("✓ %1 tool(s) added to %2").arg(selected_tools_.size()).arg(name);
+        const QString msg = tr("✓ %1 tool(s) added to %2").arg(selected_tools_.size()).arg(name);
         target_status_->setText(msg);
         target_status_->setStyleSheet(
             QString("color:%1;font-size:11px;padding:2px 0;font-weight:600;").arg(ui::colors::POSITIVE()));
@@ -752,14 +758,14 @@ void ToolsViewPanel::assign_to_target() {
         QTimer::singleShot(5000, this, [this]() {
             if (target_combo_->currentIndex() >= 0) {
                 target_status_->setText(
-                    QString("Target: %1 (%2)")
-                        .arg(target_combo_->currentText(), radio_agent_->isChecked() ? "Agent" : "Team"));
+                    tr("Target: %1 (%2)")
+                        .arg(target_combo_->currentText(), radio_agent_->isChecked() ? tr("Agent") : tr("Team")));
                 target_status_->setStyleSheet(
                     QString("color:%1;font-size:11px;padding:2px 0;").arg(ui::colors::TEXT_SECONDARY()));
             }
         });
     } else {
-        target_status_->setText(QString("Error saving to %1").arg(name));
+        target_status_->setText(tr("Error saving to %1").arg(name));
         target_status_->setStyleSheet(QString("color:%1;font-size:11px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
     }
 }
@@ -791,6 +797,52 @@ void ToolsViewPanel::copy_tool_name(const QString& name) {
     QApplication::clipboard()->setText(name);
     copy_btn_->setText(tr("COPIED!"));
     QTimer::singleShot(1500, this, [this]() { copy_btn_->setText(tr("COPY NAME")); });
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void ToolsViewPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ToolsViewPanel::retranslateUi() {
+    // Left panel.
+    if (assign_to_hdr_)     assign_to_hdr_->setText(tr("ASSIGN TO"));
+    if (radio_agent_)       radio_agent_->setText(tr("Agent"));
+    if (radio_team_)        radio_team_->setText(tr("Team"));
+    if (target_combo_)      target_combo_->setPlaceholderText(tr("Select target..."));
+    if (selected_tools_hdr_) selected_tools_hdr_->setText(tr("SELECTED TOOLS"));
+    if (remove_btn_)        remove_btn_->setText(tr("REMOVE"));
+    if (clear_btn_)         clear_btn_->setText(tr("CLEAR"));
+    if (assign_btn_) {
+        assign_btn_->setText(tr("ASSIGN →"));
+        assign_btn_->setToolTip(tr("Save selected tools to the chosen agent or team"));
+    }
+    // target_status_ holds a live status — only restore the idle prompt when no
+    // target is selected.
+    if (target_status_ && target_combo_ && target_combo_->currentIndex() < 0)
+        target_status_->setText(tr("No target selected"));
+
+    // Center panel.
+    if (available_hdr_)  available_hdr_->setText(tr("AVAILABLE TOOLS"));
+    if (assigned_hint_)  assigned_hint_->setText(tr("● = already assigned"));
+    if (search_edit_)    search_edit_->setPlaceholderText(tr("Search tools..."));
+    if (add_btn_)        add_btn_->setText(tr("+ ADD TO SELECTION"));
+    if (copy_btn_ && copy_btn_->text() != tr("COPIED!"))
+        copy_btn_->setText(tr("COPY NAME"));
+
+    // Right panel section headers + placeholders.
+    if (detail_hdr_)      detail_hdr_->setText(tr("TOOL DETAIL"));
+    if (description_hdr_) description_hdr_->setText(tr("DESCRIPTION"));
+    if (parameters_hdr_)  parameters_hdr_->setText(tr("PARAMETERS"));
+    if (used_by_hdr_)     used_by_hdr_->setText(tr("USED BY"));
+    if (detail_desc_)     detail_desc_->setPlaceholderText(tr("Click a tool to see details..."));
+    if (detail_used_by_)  detail_used_by_->setPlaceholderText(tr("No agents or teams use this tool yet."));
+    // detail_name_ shows the selected tool name; only restore the prompt when idle.
+    if (detail_name_ && current_tool_.isEmpty())
+        detail_name_->setText(tr("Select a tool"));
 }
 
 } // namespace fincept::screens

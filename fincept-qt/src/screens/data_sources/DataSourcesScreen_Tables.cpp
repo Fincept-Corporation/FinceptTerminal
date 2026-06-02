@@ -12,12 +12,6 @@
 
 #include "core/logging/Logger.h"
 
-namespace {
-static const QStringList kCategoryLabels = {
-    "All Connectors", "Databases",   "APIs",   "Files",      "Streaming",        "Cloud",
-    "Time Series",    "Market Data", "Search", "Warehouses", "Alternative Data", "Open Banking"};
-} // anonymous namespace
-
 #include "core/session/ScreenStateManager.h"
 #include "screens/data_sources/ConnectionConfigDialog.h"
 #include "screens/data_sources/ConnectionTester.h"
@@ -73,11 +67,17 @@ void DataSourcesScreen::build_category_ladder() {
         ++counts[static_cast<int>(cfg.category) + 1];
     }
 
+    // Category display labels — rebuilt each call so they follow the active
+    // language. Row index (Qt::UserRole) drives logic, not the label text.
+    const QStringList category_labels = {
+        tr("All Connectors"), tr("Databases"),   tr("APIs"),   tr("Files"),      tr("Streaming"),        tr("Cloud"),
+        tr("Time Series"),    tr("Market Data"), tr("Search"), tr("Warehouses"), tr("Alternative Data"), tr("Open Banking")};
+
     QSignalBlocker blocker(category_list_);
     category_list_->clear();
 
-    for (int i = 0; i < kCategoryLabels.size(); ++i) {
-        const QString text = QString("%1  (%2)").arg(kCategoryLabels[i]).arg(counts[i]);
+    for (int i = 0; i < category_labels.size(); ++i) {
+        const QString text = QString("%1  (%2)").arg(category_labels[i]).arg(counts[i]);
         auto* item = new QListWidgetItem(text);
         item->setData(Qt::UserRole, i);
         item->setForeground(i == 0 ? QColor(col::TEXT_PRIMARY()) : QColor(col::TEXT_SECONDARY()));
@@ -119,7 +119,7 @@ void DataSourcesScreen::build_connector_table() {
 
             // Col 3: auth
             connector_table_->setItem(row, 3,
-                                      make_item(cfg.requires_auth ? "KEY" : "OPEN",
+                                      make_item(cfg.requires_auth ? tr("KEY") : tr("OPEN"),
                                                 cfg.requires_auth ? QColor(col::WARNING()) : QColor(col::POSITIVE()),
                                                 Qt::AlignCenter));
 
@@ -199,7 +199,7 @@ void DataSourcesScreen::build_connections_table() {
         // Col 5: live status
         const bool has_status = live_status_cache_.contains(ds.id);
         const bool ok = has_status ? live_status_cache_[ds.id].first : false;
-        auto* status_lbl = new QLabel(has_status ? (ok ? "OK" : "ERR") : "--");
+        auto* status_lbl = new QLabel(has_status ? (ok ? tr("OK") : tr("ERR")) : QStringLiteral("--"));
         status_lbl->setAlignment(Qt::AlignCenter);
         status_lbl->setObjectName("dsStatusDot");
         status_lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
@@ -305,7 +305,7 @@ void DataSourcesScreen::update_provider_ladder() {
     }
 
     if (ranked.isEmpty()) {
-        auto* empty = new QListWidgetItem("no connections yet");
+        auto* empty = new QListWidgetItem(tr("no connections yet"));
         empty->setForeground(QColor(col::TEXT_TERTIARY()));
         empty->setFlags(Qt::NoItemFlags);
         provider_ladder_->addItem(empty);
@@ -324,8 +324,8 @@ void DataSourcesScreen::update_detail_panel() {
                                               "font-size:13px;font-weight:700;color:%1;background:%2;"
                                               "border:1px solid %1;")
                                           .arg(col::AMBER(), col::BG_BASE()));
-        detail_title_->setText("Select a connector");
-        detail_description_->setText("Double-click any row to configure");
+        detail_title_->setText(tr("Select a connector"));
+        detail_description_->setText(tr("Double-click any row to configure"));
         detail_category_value_->setText("--");
         detail_transport_value_->setText("--");
         detail_auth_value_->setText("--");
@@ -358,10 +358,10 @@ void DataSourcesScreen::update_detail_panel() {
     // Metadata
     detail_category_value_->setText(category_label(cfg->category));
     detail_transport_value_->setText(connector_transport(*cfg));
-    detail_auth_value_->setText(cfg->requires_auth ? "Required" : "None");
+    detail_auth_value_->setText(cfg->requires_auth ? tr("Required") : tr("None"));
     detail_auth_value_->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
                                           .arg(cfg->requires_auth ? col::WARNING() : col::POSITIVE()));
-    detail_test_value_->setText(cfg->testable ? "Yes" : "No");
+    detail_test_value_->setText(cfg->testable ? tr("Yes") : tr("No"));
 
     const int total = total_connections_for_provider(connections_cache_, cfg->id);
     const int active = enabled_connections_for_provider(connections_cache_, cfg->id);
@@ -375,7 +375,7 @@ void DataSourcesScreen::update_detail_panel() {
     const QString conn_id = effective_detail_connection_id();
     if (!conn_id.isEmpty() && live_status_cache_.contains(conn_id)) {
         const bool ok = live_status_cache_[conn_id].first;
-        detail_last_status_value_->setText(ok ? "OK" : "ERR");
+        detail_last_status_value_->setText(ok ? tr("OK") : tr("ERR"));
         detail_last_status_value_->setStyleSheet(
             QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
                 .arg(ok ? col::POSITIVE() : col::NEGATIVE()));
@@ -395,7 +395,7 @@ void DataSourcesScreen::update_detail_panel() {
             field_table_->setItem(i, 1,
                                   make_item(field_type_label(f.type), QColor(col::TEXT_SECONDARY()), Qt::AlignCenter));
             field_table_->setItem(i, 2,
-                                  make_item(f.required ? "Y" : "N",
+                                  make_item(f.required ? tr("Y") : tr("N"),
                                             f.required ? QColor(col::WARNING()) : QColor(col::TEXT_TERTIARY()),
                                             Qt::AlignCenter));
         }
@@ -412,7 +412,7 @@ void DataSourcesScreen::update_detail_panel() {
         for (const auto& ds : connections_cache_) {
             if (!connection_matches_connector(ds, cfg->id))
                 continue;
-            const QString status_str = ds.enabled ? "ACTIVE" : "OFF";
+            const QString status_str = ds.enabled ? tr("ACTIVE") : tr("OFF");
             const QString label = QString("%1  [%2]").arg(ds.display_name).arg(status_str);
             auto* item = new QListWidgetItem(label);
             item->setData(Qt::UserRole, ds.id);
@@ -423,7 +423,7 @@ void DataSourcesScreen::update_detail_panel() {
             }
         }
         if (detail_connections_list_->count() == 0) {
-            auto* empty = new QListWidgetItem("No connections configured");
+            auto* empty = new QListWidgetItem(tr("No connections configured"));
             empty->setForeground(QColor(col::TEXT_TERTIARY()));
             empty->setFlags(Qt::NoItemFlags);
             detail_connections_list_->addItem(empty);

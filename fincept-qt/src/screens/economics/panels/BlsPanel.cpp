@@ -56,8 +56,8 @@ BlsPanel::BlsPanel(QWidget* parent) : EconPanelBase(kBlsSourceId, kBlsColor, par
 }
 
 void BlsPanel::activate() {
-    show_empty("Set BLS_API_KEY environment variable, then select a series and click FETCH\n"
-               "Get a free key at: data.bls.gov/registrationEngine/");
+    show_empty(tr("Set BLS_API_KEY environment variable, then select a series and click FETCH\n"
+                  "Get a free key at: data.bls.gov/registrationEngine/"));
 }
 
 void BlsPanel::build_controls(QHBoxLayout* thl) {
@@ -81,17 +81,17 @@ void BlsPanel::build_controls(QHBoxLayout* thl) {
         }
     });
 
-    auto* lbl2 = new QLabel("SERIES ID");
-    lbl2->setStyleSheet(ctrl_label_style());
+    series_lbl_ = new QLabel(tr("SERIES ID"));
+    series_lbl_->setStyleSheet(ctrl_label_style());
 
     series_input_ = new QLineEdit;
-    series_input_->setPlaceholderText("e.g. CES0000000001");
+    series_input_->setPlaceholderText(tr("e.g. CES0000000001"));
     series_input_->setFixedHeight(26);
     series_input_->setFixedWidth(140);
 
-    thl->addWidget(lbl("PRESET"));
+    thl->addWidget(preset_lbl_ = lbl(tr("PRESET")));
     thl->addWidget(preset_combo_);
-    thl->addWidget(lbl2);
+    thl->addWidget(series_lbl_);
     thl->addWidget(series_input_);
 }
 
@@ -101,17 +101,17 @@ void BlsPanel::on_fetch() {
         // Check manual series ID
         const QString sid = series_input_->text().trimmed().toUpper();
         if (sid.isEmpty()) {
-            show_empty("Select a preset or enter a series ID");
+            show_empty(tr("Select a preset or enter a series ID"));
             return;
         }
-        show_loading("Fetching BLS series " + sid + "…");
+        show_loading(tr("Fetching BLS series %1…").arg(sid));
         services::EconomicsService::instance().execute(kBlsSourceId, kBlsScript, "get_series", {sid},
                                                        "bls_series_" + sid);
         return;
     }
 
     const auto& preset = kBlsPresets[idx];
-    show_loading("Fetching BLS: " + preset.label + "…");
+    show_loading(tr("Fetching BLS: %1…").arg(preset.label));
 
     if (preset.command == "get_series") {
         const QString sid = series_input_->text().trimmed().toUpper();
@@ -165,9 +165,9 @@ void BlsPanel::on_result(const QString& request_id, const services::EconomicsRes
     if (!result.success) {
         const QString msg = result.error;
         if (msg.contains("API key") || msg.contains("api_key") || msg.contains("BLS_API_KEY")) {
-            show_error("BLS API key not configured.\n"
-                       "Set BLS_API_KEY environment variable.\n"
-                       "Free key at: data.bls.gov/registrationEngine/");
+            show_error(tr("BLS API key not configured.\n"
+                          "Set BLS_API_KEY environment variable.\n"
+                          "Free key at: data.bls.gov/registrationEngine/"));
         } else {
             show_error(msg);
         }
@@ -178,9 +178,9 @@ void BlsPanel::on_result(const QString& request_id, const services::EconomicsRes
     if (result.data["error"].toBool()) {
         const QString msg = result.data["message"].toString(result.data["error"].toString());
         if (msg.contains("API key") || msg.contains("BLS_API_KEY")) {
-            show_error("BLS API key not configured.\n"
-                       "Set BLS_API_KEY environment variable.\n"
-                       "Free key at: data.bls.gov/registrationEngine/");
+            show_error(tr("BLS API key not configured.\n"
+                          "Set BLS_API_KEY environment variable.\n"
+                          "Free key at: data.bls.gov/registrationEngine/"));
         } else {
             show_error(msg);
         }
@@ -189,7 +189,7 @@ void BlsPanel::on_result(const QString& request_id, const services::EconomicsRes
 
     const QJsonArray rows = extract_bls_rows(result.data);
     if (rows.isEmpty()) {
-        show_error("No data returned");
+        show_error(tr("No data returned"));
         return;
     }
 
@@ -198,6 +198,24 @@ void BlsPanel::on_result(const QString& request_id, const services::EconomicsRes
                                                                 : "BLS: " + series_input_->text().trimmed().toUpper();
     display(rows, title);
     LOG_INFO("BlsPanel", QString("Displayed %1 rows").arg(rows.size()));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void BlsPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void BlsPanel::retranslateUi() {
+    if (preset_lbl_)
+        preset_lbl_->setText(tr("PRESET"));
+    if (series_lbl_)
+        series_lbl_->setText(tr("SERIES ID"));
+    if (series_input_)
+        series_input_->setPlaceholderText(tr("e.g. CES0000000001"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

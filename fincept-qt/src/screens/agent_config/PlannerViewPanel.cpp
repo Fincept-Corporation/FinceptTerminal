@@ -69,43 +69,44 @@ QWidget* PlannerViewPanel::build_templates_panel() {
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
 
-    auto* t = new QLabel(tr("PLAN TEMPLATES"));
-    t->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
-    vl->addWidget(t);
+    templates_title_ = new QLabel(tr("PLAN TEMPLATES"));
+    templates_title_->setStyleSheet(
+        QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
+    vl->addWidget(templates_title_);
 
     // ── LLM Profile picker ───────────────────────────────────────────────────
-    auto* profile_lbl = new QLabel("LLM PROFILE:");
-    profile_lbl->setStyleSheet(
+    llm_profile_title_ = new QLabel(tr("LLM PROFILE:"));
+    llm_profile_title_->setStyleSheet(
         QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
-    vl->addWidget(profile_lbl);
+    vl->addWidget(llm_profile_title_);
 
     llm_profile_combo_ = new QComboBox;
-    llm_profile_combo_->setToolTip("LLM profile used for plan generation and execution");
+    llm_profile_combo_->setToolTip(tr("LLM profile used for plan generation and execution"));
     llm_profile_combo_->setStyleSheet(
         QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:11px;}"
                 "QComboBox::drop-down{border:none;}")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED()));
-    llm_profile_combo_->addItem("Default (Global)", QString{});
+    llm_profile_combo_->addItem(tr("Default (Global)"), QString{});
     {
         const auto pr = fincept::LlmProfileRepository::instance().list_profiles();
         const auto profiles = pr.is_ok() ? pr.value() : QVector<fincept::LlmProfile>{};
         for (const auto& prof : profiles)
-            llm_profile_combo_->addItem(prof.is_default ? prof.name + " [default]" : prof.name, prof.id);
+            llm_profile_combo_->addItem(prof.is_default ? prof.name + tr(" [default]") : prof.name, prof.id);
     }
     vl->addWidget(llm_profile_combo_);
 
-    auto* pf_lbl = new QLabel("PORTFOLIO:");
-    pf_lbl->setStyleSheet(
+    portfolio_title_ = new QLabel(tr("PORTFOLIO:"));
+    portfolio_title_->setStyleSheet(
         QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
-    vl->addWidget(pf_lbl);
+    vl->addWidget(portfolio_title_);
 
     portfolio_combo_ = new QComboBox;
-    portfolio_combo_->setToolTip("Portfolio to use as context for rebalance / analysis plans");
+    portfolio_combo_->setToolTip(tr("Portfolio to use as context for rebalance / analysis plans"));
     portfolio_combo_->setStyleSheet(
         QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:11px;}"
                 "QComboBox::drop-down{border:none;}")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED()));
-    portfolio_combo_->addItem("None", QString{});
+    portfolio_combo_->addItem(tr("None"), QString{});
     {
         auto& repo = fincept::PortfolioRepository::instance();
         const auto res = repo.list_portfolios();
@@ -117,8 +118,8 @@ QWidget* PlannerViewPanel::build_templates_panel() {
     vl->addWidget(portfolio_combo_);
 
     template_list_ = new QListWidget;
-    template_list_->addItems({"Stock Analysis Plan", "Portfolio Rebalance Plan", "Market Overview Plan",
-                              "Risk Assessment Plan", "Sector Rotation Plan"});
+    template_list_->addItems({tr("Stock Analysis Plan"), tr("Portfolio Rebalance Plan"), tr("Market Overview Plan"),
+                              tr("Risk Assessment Plan"), tr("Sector Rotation Plan")});
     template_list_->setStyleSheet(QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:12px;}"
                                           "QListWidget::item{padding:6px 8px;border-bottom:1px solid %2;}"
                                           "QListWidget::item:selected{background:%4;}"
@@ -127,10 +128,10 @@ QWidget* PlannerViewPanel::build_templates_panel() {
                                            ui::colors::AMBER_DIM(), ui::colors::BG_HOVER()));
     vl->addWidget(template_list_);
 
-    auto* cl = new QLabel(tr("CUSTOM PLAN QUERY"));
-    cl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:8px;")
-                          .arg(ui::colors::TEXT_SECONDARY()));
-    vl->addWidget(cl);
+    custom_query_title_ = new QLabel(tr("CUSTOM PLAN QUERY"));
+    custom_query_title_->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:8px;")
+                                           .arg(ui::colors::TEXT_SECONDARY()));
+    vl->addWidget(custom_query_title_);
 
     custom_query_ = new QPlainTextEdit;
     custom_query_->setPlaceholderText(tr("Describe what you want to plan..."));
@@ -156,7 +157,7 @@ QWidget* PlannerViewPanel::build_templates_panel() {
     vl->addWidget(history_header_);
 
     history_search_ = new QLineEdit;
-    history_search_->setPlaceholderText("Search history...");
+    history_search_->setPlaceholderText(tr("Search history..."));
     history_search_->setStyleSheet(kIn);
     vl->addWidget(history_search_);
 
@@ -184,9 +185,10 @@ QWidget* PlannerViewPanel::build_plan_editor() {
 
     // Header
     auto* hdr = new QHBoxLayout;
-    auto* t = new QLabel(tr("EXECUTION PLAN"));
-    t->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
-    hdr->addWidget(t);
+    plan_editor_title_ = new QLabel(tr("EXECUTION PLAN"));
+    plan_editor_title_->setStyleSheet(
+        QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER()));
+    hdr->addWidget(plan_editor_title_);
     plan_status_ = new QLabel;
     plan_status_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
                                     .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED()));
@@ -210,7 +212,7 @@ QWidget* PlannerViewPanel::build_plan_editor() {
     // Steps table
     steps_table_ = new QTableWidget;
     steps_table_->setColumnCount(4);
-    steps_table_->setHorizontalHeaderLabels({"#", "Step", "Type", "Status"});
+    steps_table_->setHorizontalHeaderLabels({tr("#"), tr("Step"), tr("Type"), tr("Status")});
     steps_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
     steps_table_->setColumnWidth(0, 40);
     steps_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
@@ -240,10 +242,10 @@ QWidget* PlannerViewPanel::build_plan_editor() {
         return b;
     };
 
-    add_step_btn_ = small_btn("+ ADD", ui::colors::POSITIVE);
-    remove_step_btn_ = small_btn("- REMOVE", ui::colors::NEGATIVE);
-    move_up_btn_ = small_btn("UP", ui::colors::TEXT_SECONDARY);
-    move_down_btn_ = small_btn("DOWN", ui::colors::TEXT_SECONDARY);
+    add_step_btn_ = small_btn(tr("+ ADD"), ui::colors::POSITIVE);
+    remove_step_btn_ = small_btn(tr("- REMOVE"), ui::colors::NEGATIVE);
+    move_up_btn_ = small_btn(tr("UP"), ui::colors::TEXT_SECONDARY);
+    move_down_btn_ = small_btn(tr("DOWN"), ui::colors::TEXT_SECONDARY);
     step_btns->addWidget(add_step_btn_);
     step_btns->addWidget(remove_step_btn_);
     step_btns->addWidget(move_up_btn_);
@@ -252,7 +254,7 @@ QWidget* PlannerViewPanel::build_plan_editor() {
     vl->addLayout(step_btns);
 
     // Execute
-    execute_btn_ = new QPushButton("EXECUTE PLAN");
+    execute_btn_ = new QPushButton(tr("EXECUTE PLAN"));
     execute_btn_->setCursor(Qt::PointingHandCursor);
     execute_btn_->setEnabled(false);
     execute_btn_->setStyleSheet(
@@ -282,7 +284,7 @@ QWidget* PlannerViewPanel::build_results_panel() {
         QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY()));
     hdr->addWidget(result_header_);
     hdr->addStretch();
-    copy_btn_ = new QPushButton("COPY");
+    copy_btn_ = new QPushButton(tr("COPY"));
     copy_btn_->setCursor(Qt::PointingHandCursor);
     copy_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;padding:2px 8px;"
                                      "font-size:9px;font-weight:600;}QPushButton:hover{background:%3;}")
@@ -605,6 +607,41 @@ void PlannerViewPanel::showEvent(QShowEvent* event) {
         data_loaded_ = true;
         services::AgentService::instance().discover_agents();
     }
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void PlannerViewPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PlannerViewPanel::retranslateUi() {
+    // Left column.
+    if (templates_title_)    templates_title_->setText(tr("PLAN TEMPLATES"));
+    if (llm_profile_title_)  llm_profile_title_->setText(tr("LLM PROFILE:"));
+    if (portfolio_title_)    portfolio_title_->setText(tr("PORTFOLIO:"));
+    if (custom_query_title_) custom_query_title_->setText(tr("CUSTOM PLAN QUERY"));
+    if (custom_query_)       custom_query_->setPlaceholderText(tr("Describe what you want to plan..."));
+    if (history_header_)     history_header_->setText(tr("PLAN HISTORY"));
+    if (history_search_)     history_search_->setPlaceholderText(tr("Search history..."));
+    if (generate_btn_ && !generating_) generate_btn_->setText(tr("GENERATE PLAN"));
+
+    // Center column.
+    if (plan_editor_title_) plan_editor_title_->setText(tr("EXECUTION PLAN"));
+    if (steps_table_)
+        steps_table_->setHorizontalHeaderLabels({tr("#"), tr("Step"), tr("Type"), tr("Status")});
+    if (add_step_btn_)    add_step_btn_->setText(tr("+ ADD"));
+    if (remove_step_btn_) remove_step_btn_->setText(tr("- REMOVE"));
+    if (move_up_btn_)     move_up_btn_->setText(tr("UP"));
+    if (move_down_btn_)   move_down_btn_->setText(tr("DOWN"));
+    if (execute_btn_ && !executing_) execute_btn_->setText(tr("EXECUTE PLAN"));
+
+    // Right column. result_header_ / plan_status_ / progress_label_ hold live
+    // state — not re-applied here. The COPY button only when not mid "COPIED!".
+    if (copy_btn_ && copy_btn_->text() != tr("COPIED!"))
+        copy_btn_->setText(tr("COPY"));
 }
 
 } // namespace fincept::screens

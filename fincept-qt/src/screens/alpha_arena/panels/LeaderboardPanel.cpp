@@ -48,16 +48,16 @@ LeaderboardPanel::LeaderboardPanel(QWidget* parent) : QWidget(parent) {
     hdr->setFixedHeight(34);
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(12, 0, 12, 0);
-    auto* title = new QLabel("LEADERBOARD");
-    title->setObjectName("aaLeaderboardTitle");
-    hl->addWidget(title);
+    title_ = new QLabel(tr("LEADERBOARD"));
+    title_->setObjectName("aaLeaderboardTitle");
+    hl->addWidget(title_);
     hl->addStretch(1);
     root->addWidget(hdr);
 
     table_ = new QTableWidget(this);
     table_->setColumnCount(8);
     table_->setHorizontalHeaderLabels(
-        {"RANK", "MODEL", "EQUITY", "RETURN", "SHARPE", "MAX DD", "FEES", "LEV"});
+        {tr("RANK"), tr("MODEL"), tr("EQUITY"), tr("RETURN"), tr("SHARPE"), tr("MAX DD"), tr("FEES"), tr("LEV")});
     table_->horizontalHeader()->setStretchLastSection(true);
     table_->verticalHeader()->setVisible(false);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -137,6 +137,21 @@ void LeaderboardPanel::refresh() {
     }
     table_->resizeColumnsToContents();
     table_->setSortingEnabled(true);
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void LeaderboardPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void LeaderboardPanel::retranslateUi() {
+    if (title_) title_->setText(tr("LEADERBOARD"));
+    if (table_)
+        table_->setHorizontalHeaderLabels(
+            {tr("RANK"), tr("MODEL"), tr("EQUITY"), tr("RETURN"), tr("SHARPE"), tr("MAX DD"), tr("FEES"), tr("LEV")});
 }
 
 } // namespace fincept::screens::alpha_arena

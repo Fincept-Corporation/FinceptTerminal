@@ -12,13 +12,27 @@ namespace fincept::trading {
 namespace {
 const QString kMgrTag = "ExchangeSessionManager";
 
-// Exchanges whose meta-types are registered with DataHub. Other exchanges
-// still work through the session (callbacks + direct consumer reads) — they
-// just aren't published on the hub yet. Add here as metatypes land.
+// Hub allow-list — exchanges whose WS fan-out is published on DataHub. Backed
+// by the single canonical list (ExchangeSessionManager::supported_exchange_ids).
+// The published payload types (TickerData/OrderBookData/TradeData/Candle) are
+// type-level metatypes registered once, so any listed exchange "just works".
 bool hub_supported_exchange(const QString& id) {
-    return id == QLatin1String("kraken") || id == QLatin1String("hyperliquid");
+    return ExchangeSessionManager::supported_exchange_ids().contains(id);
 }
 } // namespace
+
+const QStringList& ExchangeSessionManager::supported_exchange_ids() {
+    // Kraken (native C++ WS) + Hyperliquid (perps DEX) first, then major
+    // global exchanges streamed via the ccxt.pro daemon. All ids verified
+    // present in ccxt.pro with WS support. Use canonical ids (e.g. "gate",
+    // not the deprecated "gateio" alias).
+    static const QStringList ids = {
+        "kraken", "hyperliquid", "binance", "coinbase", "okx",
+        "bybit",  "kucoin",      "bitget",  "gate",     "mexc",
+        "htx",    "cryptocom",   "bingx",   "bitfinex",
+    };
+    return ids;
+}
 
 ExchangeSessionManager& ExchangeSessionManager::instance() {
     static ExchangeSessionManager s;
@@ -92,7 +106,10 @@ SessionPublisher ExchangeSessionManager::build_publisher() {
 // ── Producer ────────────────────────────────────────────────────────────────
 
 QStringList ExchangeSessionManager::topic_patterns() const {
-    return {"ws:kraken:*", "ws:hyperliquid:*"};
+    QStringList patterns;
+    for (const auto& id : supported_exchange_ids())
+        patterns << (QStringLiteral("ws:") + id + QStringLiteral(":*"));
+    return patterns;
 }
 
 void ExchangeSessionManager::refresh(const QStringList& /*topics*/) {
@@ -118,18 +135,19 @@ void ExchangeSessionManager::ensure_registered_with_hub() {
     fincept::datahub::TopicPolicy coalesced_ticker = push_only;
     coalesced_ticker.coalesce_within_ms = 50; // 20 Hz fan-out cap
 
-    hub.set_policy_pattern("ws:kraken:ticker:*", coalesced_ticker);
-    hub.set_policy_pattern("ws:hyperliquid:ticker:*", coalesced_ticker);
-
-    hub.set_policy_pattern("ws:kraken:orderbook:*", push_only);
-    hub.set_policy_pattern("ws:kraken:trades:*", push_only);
-    hub.set_policy_pattern("ws:kraken:ohlc:*", push_only);
-    hub.set_policy_pattern("ws:hyperliquid:orderbook:*", push_only);
-    hub.set_policy_pattern("ws:hyperliquid:trades:*", push_only);
-    hub.set_policy_pattern("ws:hyperliquid:ohlc:*", push_only);
+    // Install per-exchange policies for every supported exchange: ticker
+    // coalesced at 20 Hz, orderbook/trades/ohlc pushed straight through.
+    for (const auto& id : supported_exchange_ids()) {
+        const QString base = QStringLiteral("ws:") + id + QLatin1Char(':');
+        hub.set_policy_pattern(base + QStringLiteral("ticker:*"), coalesced_ticker);
+        hub.set_policy_pattern(base + QStringLiteral("orderbook:*"), push_only);
+        hub.set_policy_pattern(base + QStringLiteral("trades:*"), push_only);
+        hub.set_policy_pattern(base + QStringLiteral("ohlc:*"), push_only);
+    }
 
     hub_registered_ = true;
-    LOG_INFO(kMgrTag, "Registered with DataHub (ws:kraken:*, ws:hyperliquid:*)");
+    LOG_INFO(kMgrTag, QString("Registered with DataHub (%1 exchanges)")
+                          .arg(supported_exchange_ids().size()));
 }
 
 } // namespace fincept::trading

@@ -23,11 +23,13 @@ class UnescoPanel : public EconPanelBase {
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
     void on_result(const QString& request_id, const services::EconomicsResult& result) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void load_indicators();
     void on_theme_changed(int index);
     void on_indicator_filter(const QString& text);
+    void retranslateUi() override;
 
     QComboBox* theme_combo_ = nullptr;
     QLineEdit* indicator_search_ = nullptr;
@@ -35,6 +37,12 @@ class UnescoPanel : public EconPanelBase {
     QLineEdit* country_input_ = nullptr;
     QLineEdit* start_input_ = nullptr;
     QLineEdit* end_input_ = nullptr;
+
+    // Cached for retranslateUi
+    QLabel* theme_lbl_ = nullptr;
+    QLabel* country_lbl_ = nullptr;
+    QLabel* from_lbl_ = nullptr;
+    QLabel* to_lbl_ = nullptr;
 
     // preset indicators per theme
     struct IndicatorDef {

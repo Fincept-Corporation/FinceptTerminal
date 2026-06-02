@@ -105,7 +105,7 @@ void SurfaceAnalyticsScreen::on_view_line() {
 }
 
 void SurfaceAnalyticsScreen::on_import_csv() {
-    QString path = QFileDialog::getOpenFileName(this, "Import Surface CSV", {}, "CSV Files (*.csv)");
+    QString path = QFileDialog::getOpenFileName(this, tr("Import Surface CSV"), {}, tr("CSV Files (*.csv)"));
     if (!path.isEmpty())
         dispatch_csv(path);
 }
@@ -139,8 +139,8 @@ void SurfaceAnalyticsScreen::on_fetch_requested() {
     auto& svc = DatabentoService::instance();
     if (!svc.has_api_key()) {
         if (data_inspector_) {
-            data_inspector_->set_status("No Databento API key configured", false);
-            data_inspector_->set_error("Add a key in Settings → Credentials → Databento.");
+            data_inspector_->set_status(tr("No Databento API key configured"), false);
+            data_inspector_->set_error(tr("Add a key in Settings → Credentials → Databento."));
         }
         return;
     }
@@ -174,7 +174,7 @@ void SurfaceAnalyticsScreen::on_fetch_requested() {
 
     if (data_inspector_)
         data_inspector_->set_status(
-            QString("Fetching %1 …").arg(QString::fromUtf8(chart_type_name(active_chart_))), true);
+            tr("Fetching %1 …").arg(QString::fromUtf8(chart_type_name(active_chart_))), true);
     svc.fetch_with_params(p);
 }
 

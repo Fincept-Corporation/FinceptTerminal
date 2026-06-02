@@ -29,12 +29,17 @@
 #include <QCompleter>
 #include <QDateTime>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QPointer>
 #include <QSplitter>
 #include <QStringListModel>
 #include <QStyle>
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
+
+#include <cmath>
+#include <optional>
 
 namespace fincept::screens {
 
@@ -52,10 +57,10 @@ void CryptoTradingScreen::on_exchange_changed(const QString& exchange) {
     exchange_btn_->setText(exchange.toUpper());
     if (ws_transport_) {
         const bool native = (exchange == "kraken");
-        ws_transport_->setText(native ? "NATIVE" : "DAEMON");
+        ws_transport_->setText(native ? tr("NATIVE") : tr("DAEMON"));
         ws_transport_->setToolTip(native
-                                      ? "Native C++ WebSocket — direct connection, no Python subprocess"
-                                      : "ws_stream.py via ccxt.pro — Python subprocess");
+                                      ? tr("Native C++ WebSocket — direct connection, no Python subprocess")
+                                      : tr("ws_stream.py via ccxt.pro — Python subprocess"));
     }
 
     auto& es = ExchangeService::instance();
@@ -99,6 +104,9 @@ void CryptoTradingScreen::on_exchange_changed(const QString& exchange) {
     // market_info_timer_ — those endpoints aren't on the public WS feed.
     async_fetch_candles(selected_symbol_, chart_->current_timeframe());
     refresh_market_info();
+    update_futures_visibility(); // leverage/margin/reduce-only depend on perp-ness
+    if (trading_mode_ == TradingMode::Live)
+        async_fetch_trading_fees(); // fees are per-exchange
 
     ScreenStateManager::instance().notify_changed(this);
 }
@@ -179,12 +187,13 @@ void CryptoTradingScreen::switch_symbol(const QString& symbol) {
     // WS-only mode: ticker + orderbook reflow naturally as the new symbol's
     // WS subscriptions kick in. Only history needs a REST fetch.
     async_fetch_candles(selected_symbol_, chart_->current_timeframe());
+    update_futures_visibility(); // a perp↔spot symbol switch toggles the controls
 }
 
 void CryptoTradingScreen::on_mode_toggled() {
     const bool is_live = mode_btn_->isChecked();
     trading_mode_ = is_live ? TradingMode::Live : TradingMode::Paper;
-    mode_btn_->setText(is_live ? "LIVE" : "PAPER");
+    mode_btn_->setText(is_live ? tr("LIVE") : tr("PAPER"));
     mode_btn_->setProperty("mode", is_live ? "live" : "paper");
     mode_btn_->style()->unpolish(mode_btn_);
     mode_btn_->style()->polish(mode_btn_);
@@ -194,6 +203,7 @@ void CryptoTradingScreen::on_mode_toggled() {
     if (is_live) {
         live_data_timer_->start(5000);
         refresh_live_data();
+        async_fetch_trading_fees(); // populate the Fees tab once on entering live
     } else {
         live_data_timer_->stop();
         refresh_portfolio();
@@ -244,11 +254,17 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
             }
             refresh_portfolio();
         } else {
+            // Read the reduce-only flag on the UI thread before dispatching.
+            const bool reduce_only = order_entry_->reduce_only();
             QPointer<CryptoTradingScreen> self = this;
-            (void)QtConcurrent::run([self, side, order_type, qty, price]() {
+            (void)QtConcurrent::run([self, side, order_type, qty, price, stop_price, sl, tp, reduce_only]() {
                 if (!self)
                     return;
-                ExchangeService::instance().place_exchange_order(self->selected_symbol_, side, order_type, qty, price);
+                // stop_price drives Stop / Stop-Limit triggers; sl/tp attach native
+                // bracket legs; reduce_only is honoured on perps. The daemon maps
+                // these to ccxt unified params (triggerPrice / stopLoss / takeProfit).
+                ExchangeService::instance().place_exchange_order(self->selected_symbol_, side, order_type, qty, price,
+                                                                 stop_price, sl, tp, reduce_only);
                 QMetaObject::invokeMethod(
                     self,
                     [self]() {
@@ -309,6 +325,165 @@ void CryptoTradingScreen::on_search_requested(const QString& filter) {
                 if (!self)
                     return;
                 self->watchlist_->set_search_results(markets);
+            },
+            Qt::QueuedConnection);
+    });
+}
+
+bool CryptoTradingScreen::is_perp_market() const {
+    // Hyperliquid is a perps-only DEX; on other venues a settled pair
+    // (e.g. "BTC/USDC:USDC") denotes a swap/perp market.
+    return exchange_id_ == QLatin1String("hyperliquid") || selected_symbol_.contains(QLatin1Char(':'));
+}
+
+void CryptoTradingScreen::update_futures_visibility() {
+    if (order_entry_)
+        order_entry_->set_futures_mode(is_perp_market());
+}
+
+void CryptoTradingScreen::on_cancel_all_orders() {
+    if (trading_mode_ == TradingMode::Paper) {
+        if (portfolio_id_.isEmpty())
+            return;
+        try {
+            for (const auto& o : pt_get_orders(portfolio_id_, "pending")) {
+                pt_cancel_order(o.id);
+                OrderMatcher::instance().remove_order(o.id);
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR(TAG, QString("Paper cancel-all failed: %1").arg(e.what()));
+        }
+        refresh_portfolio();
+        return;
+    }
+    // Live — fetch open orders then cancel each on a worker thread.
+    QPointer<CryptoTradingScreen> self = this;
+    (void)QtConcurrent::run([self]() {
+        if (!self)
+            return;
+        auto result = ExchangeService::instance().fetch_open_orders_live();
+        const auto orders = result.value("orders").toArray();
+        int cancelled = 0;
+        for (const auto& v : orders) {
+            const auto o = v.toObject();
+            const QString id = o.value("id").toString();
+            if (id.isEmpty())
+                continue;
+            ExchangeService::instance().cancel_exchange_order(id, o.value("symbol").toString());
+            ++cancelled;
+        }
+        QMetaObject::invokeMethod(
+            self,
+            [self, cancelled]() {
+                if (!self)
+                    return;
+                LOG_INFO(TAG, QString("Cancelled %1 live order(s)").arg(cancelled));
+                self->refresh_live_data();
+            },
+            Qt::QueuedConnection);
+    });
+}
+
+void CryptoTradingScreen::on_close_all_positions() {
+    if (trading_mode_ == TradingMode::Paper) {
+        if (portfolio_id_.isEmpty())
+            return;
+        try {
+            for (const auto& p : pt_get_positions(portfolio_id_)) {
+                if (p.quantity == 0)
+                    continue;
+                auto ticker = ExchangeService::instance().get_cached_price(p.symbol);
+                const double fill = ticker.last > 0 ? ticker.last : p.current_price;
+                const QString side = p.quantity > 0 ? "sell" : "buy";
+                auto order = pt_place_order(portfolio_id_, p.symbol, side, "market", std::abs(p.quantity),
+                                            std::optional<double>(fill), std::nullopt);
+                pt_fill_order(order.id, fill);
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR(TAG, QString("Paper close-all failed: %1").arg(e.what()));
+        }
+        refresh_portfolio();
+        return;
+    }
+    // Live — counter each open position with a reduce-only market order.
+    QPointer<CryptoTradingScreen> self = this;
+    (void)QtConcurrent::run([self]() {
+        if (!self)
+            return;
+        auto result = ExchangeService::instance().fetch_positions_live();
+        const auto positions = result.value("positions").toArray();
+        int closed = 0;
+        for (const auto& v : positions) {
+            const auto p = v.toObject();
+            const QString sym = p.value("symbol").toString();
+            const double contracts = p.value("contracts").toDouble();
+            if (sym.isEmpty() || contracts == 0)
+                continue;
+            const bool is_long = p.value("side").toString() == QLatin1String("long") || contracts > 0;
+            ExchangeService::instance().place_exchange_order(sym, is_long ? "sell" : "buy", "market",
+                                                             std::abs(contracts), 0.0, 0.0, 0.0, 0.0, /*reduce_only=*/true);
+            ++closed;
+        }
+        QMetaObject::invokeMethod(
+            self,
+            [self, closed]() {
+                if (!self)
+                    return;
+                LOG_INFO(TAG, QString("Closed %1 live position(s)").arg(closed));
+                self->refresh_live_data();
+            },
+            Qt::QueuedConnection);
+    });
+}
+
+void CryptoTradingScreen::on_close_position(const QString& symbol) {
+    if (symbol.isEmpty())
+        return;
+    if (trading_mode_ == TradingMode::Paper) {
+        if (portfolio_id_.isEmpty())
+            return;
+        try {
+            for (const auto& p : pt_get_positions(portfolio_id_)) {
+                if (p.symbol != symbol || p.quantity == 0)
+                    continue;
+                auto ticker = ExchangeService::instance().get_cached_price(symbol);
+                const double fill = ticker.last > 0 ? ticker.last : p.current_price;
+                const QString side = p.quantity > 0 ? "sell" : "buy";
+                auto order = pt_place_order(portfolio_id_, symbol, side, "market", std::abs(p.quantity),
+                                            std::optional<double>(fill), std::nullopt);
+                pt_fill_order(order.id, fill);
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR(TAG, QString("Paper close failed: %1").arg(e.what()));
+        }
+        refresh_portfolio();
+        return;
+    }
+    // Live — reduce-only counter order for the one symbol.
+    QPointer<CryptoTradingScreen> self = this;
+    const QString sym = symbol;
+    (void)QtConcurrent::run([self, sym]() {
+        if (!self)
+            return;
+        auto result = ExchangeService::instance().fetch_positions_live(sym);
+        const auto positions = result.value("positions").toArray();
+        for (const auto& v : positions) {
+            const auto p = v.toObject();
+            if (p.value("symbol").toString() != sym)
+                continue;
+            const double contracts = p.value("contracts").toDouble();
+            if (contracts == 0)
+                continue;
+            const bool is_long = p.value("side").toString() == QLatin1String("long") || contracts > 0;
+            ExchangeService::instance().place_exchange_order(sym, is_long ? "sell" : "buy", "market",
+                                                             std::abs(contracts), 0.0, 0.0, 0.0, 0.0, /*reduce_only=*/true);
+        }
+        QMetaObject::invokeMethod(
+            self,
+            [self]() {
+                if (!self)
+                    return;
+                self->refresh_live_data();
             },
             Qt::QueuedConnection);
     });

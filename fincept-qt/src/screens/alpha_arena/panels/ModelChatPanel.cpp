@@ -3,6 +3,7 @@
 #include "services/alpha_arena/AlphaArenaRepo.h"
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -39,7 +40,8 @@ QString row_summary(const ModelChatRow& r) {
     auto doc = QJsonDocument::fromJson(r.parsed_actions_json.toUtf8());
     int n = doc.isArray() ? doc.array().size() : 0;
     return fmt_tick_time(r.tick_utc_ms, r.tick_seq) +
-           QStringLiteral("  ·  ") + QString::number(n) + QStringLiteral(" action(s)") +
+           QStringLiteral("  ·  ") +
+           QCoreApplication::translate("ModelChatPanel", "%n action(s)", nullptr, n) +
            (r.cost_usd > 0 ? QStringLiteral("  $%1").arg(r.cost_usd, 0, 'f', 4) : QString());
 }
 
@@ -54,7 +56,8 @@ ModelChatPanel::ModelChatPanel(QWidget* parent) : QWidget(parent) {
     auto* header = new QWidget;
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(8, 6, 8, 6);
-    hl->addWidget(new QLabel("AGENT"));
+    agent_label_ = new QLabel(tr("AGENT"));
+    hl->addWidget(agent_label_);
     agent_picker_ = new QComboBox;
     connect(agent_picker_, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, [this](int) { refresh(); });
@@ -129,7 +132,7 @@ void ModelChatPanel::show_decision_detail(const QString& decision_id) {
 
     auto* dlg = new QDialog(this);
     dlg->setAttribute(Qt::WA_DeleteOnClose);
-    dlg->setWindowTitle(QStringLiteral("Tick %1 — %2").arg(target.tick_seq).arg(agent_id.left(8)));
+    dlg->setWindowTitle(tr("Tick %1 — %2").arg(target.tick_seq).arg(agent_id.left(8)));
     dlg->resize(800, 600);
 
     auto* layout = new QVBoxLayout(dlg);
@@ -139,7 +142,7 @@ void ModelChatPanel::show_decision_detail(const QString& decision_id) {
     auto* response = new QPlainTextEdit;
     response->setReadOnly(true);
     response->setPlainText(target.raw_response);
-    response->setPlaceholderText(QStringLiteral("(no response)"));
+    response->setPlaceholderText(tr("(no response)"));
 
     auto* parsed = new QPlainTextEdit;
     parsed->setReadOnly(true);
@@ -148,10 +151,10 @@ void ModelChatPanel::show_decision_detail(const QString& decision_id) {
         if (d.isArray() || d.isObject()) return QString::fromUtf8(d.toJson(QJsonDocument::Indented));
         return json;
     };
-    parsed->setPlainText(QStringLiteral("Parsed actions:\n%1\n\nRisk verdicts:\n%2\n\nParse error: %3")
+    parsed->setPlainText(tr("Parsed actions:\n%1\n\nRisk verdicts:\n%2\n\nParse error: %3")
                               .arg(pretty(target.parsed_actions_json),
                                    pretty(target.risk_verdict_json),
-                                   target.parse_error.isEmpty() ? QStringLiteral("(none)")
+                                   target.parse_error.isEmpty() ? tr("(none)")
                                                                  : target.parse_error));
 
     split->addWidget(response);
@@ -171,6 +174,21 @@ void ModelChatPanel::show_decision_detail(const QString& decision_id) {
     layout->addWidget(buttons);
 
     dlg->show();
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void ModelChatPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ModelChatPanel::retranslateUi() {
+    if (agent_label_) agent_label_->setText(tr("AGENT"));
+    // Timeline row summaries embed translated "%n action(s)" — rebuild them so
+    // they pick up the new language.
+    refresh();
 }
 
 } // namespace fincept::screens::alpha_arena

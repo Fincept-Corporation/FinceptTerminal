@@ -2,6 +2,7 @@
 
 #include "services/wallet/WalletTypes.h"
 
+#include <QEvent>
 #include <QString>
 #include <QVariant>
 #include <QWidget>
@@ -32,10 +33,12 @@ class FeeDiscountPanel : public QWidget {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
     void apply_theme();
+    void retranslateUi();
 
     void on_wallet_connected(const QString& pubkey, const QString& label);
     void on_wallet_disconnected();
@@ -45,6 +48,11 @@ class FeeDiscountPanel : public QWidget {
     void refresh_subscriptions();
     void update_view();
 
+    QLabel* title_ = nullptr;             // "FEE DISCOUNT"
+    QLabel* holding_caption_ = nullptr;   // "HOLDING"
+    QLabel* threshold_caption_ = nullptr; // "THRESHOLD"
+    QLabel* skus_caption_ = nullptr;      // "APPLIED TO"
+    QLabel* savings_caption_ = nullptr;   // "PROJECTED SAVINGS …"
     QLabel* heading_status_ = nullptr;
     QLabel* balance_value_ = nullptr;
     QLabel* threshold_value_ = nullptr;

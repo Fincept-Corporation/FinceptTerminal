@@ -17,6 +17,44 @@ OperandEditor::OperandEditor(bool allow_value, QWidget* parent)
     build_ui();
 }
 
+void OperandEditor::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void OperandEditor::retranslateUi() {
+    // Mode combo — re-apply the two fixed labels in place (data is preserved).
+    if (mode_combo_) {
+        for (int i = 0; i < mode_combo_->count(); ++i) {
+            const QString data = mode_combo_->itemData(i).toString();
+            if (data == "indicator")
+                mode_combo_->setItemText(i, tr("Indicator"));
+            else if (data == "value")
+                mode_combo_->setItemText(i, tr("Value"));
+        }
+    }
+    if (indicator_combo_ && indicator_combo_->lineEdit())
+        indicator_combo_->lineEdit()->setPlaceholderText(tr("Search indicator…"));
+    if (offset_btn_) {
+        offset_btn_->setText(tr("⋯ bar"));
+        offset_btn_->setToolTip(tr("Advanced: compare this against an earlier bar (e.g. 1 bar ago)"));
+    }
+    // Offset combo — re-derive each label from its stored bar-count (covers both
+    // the preset rows and any custom offset added by set_offset()).
+    if (offset_combo_) {
+        for (int i = 0; i < offset_combo_->count(); ++i) {
+            const int bars = offset_combo_->itemData(i).toInt();
+            if (bars == 0)
+                offset_combo_->setItemText(i, tr("Current bar"));
+            else if (bars == 1)
+                offset_combo_->setItemText(i, tr("1 bar ago"));
+            else
+                offset_combo_->setItemText(i, tr("%1 bars ago").arg(bars));
+        }
+    }
+}
+
 void OperandEditor::build_ui() {
     auto* row = new QHBoxLayout(this);
     row->setContentsMargins(0, 0, 0, 0);

@@ -9,6 +9,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QHBoxLayout>
 #include <QHideEvent>
 #include <QLabel>
@@ -45,10 +46,21 @@ constexpr TypeDef kTypeDefs[] = {
     {"Strangle ±3",     3},
 };
 
+/// Translated label for the straddle/strangle type combo at index i (0..3).
+QString type_label_text(int i) {
+    switch (i) {
+        case 0: return QCoreApplication::translate("MultiStraddleSubTab", "Straddle (ATM)");
+        case 1: return QCoreApplication::translate("MultiStraddleSubTab", "Strangle ±1");
+        case 2: return QCoreApplication::translate("MultiStraddleSubTab", "Strangle ±2");
+        case 3: return QCoreApplication::translate("MultiStraddleSubTab", "Strangle ±3");
+        default: return {};
+    }
+}
+
 QString strike_label(const OptionChainRow& row) {
     QString s = QString::number(row.strike, 'f', row.strike < 100 ? 2 : 0);
     if (row.is_atm)
-        s += "  (ATM)";
+        s += "  " + QCoreApplication::translate("MultiStraddleSubTab", "(ATM)");
     return s;
 }
 
@@ -110,22 +122,23 @@ void MultiStraddleSubTab::setup_ui() {
     hlay->setContentsMargins(12, 8, 12, 8);
     hlay->setSpacing(8);
 
-    auto add_kv = [&](const QString& label_text, QWidget* control) {
+    auto add_kv = [&](const QString& label_text, QLabel*& label_out, QWidget* control) {
         auto* l = new QLabel(label_text.toUpper(), header);
         l->setObjectName("fnoMSLabel");
         hlay->addWidget(l);
         hlay->addWidget(control);
+        label_out = l;
     };
 
     type_combo_ = new QComboBox(header);
-    for (const auto& t : kTypeDefs)
-        type_combo_->addItem(QString::fromLatin1(t.label));
-    add_kv("Type", type_combo_);
+    for (int i = 0; i < int(sizeof(kTypeDefs) / sizeof(kTypeDefs[0])); ++i)
+        type_combo_->addItem(type_label_text(i));
+    add_kv(tr("Type"), type_label_, type_combo_);
 
     strike_combo_ = new QComboBox(header);
-    add_kv("Anchor", strike_combo_);
+    add_kv(tr("Anchor"), anchor_label_, strike_combo_);
 
-    add_btn_ = new QPushButton("ADD", header);
+    add_btn_ = new QPushButton(tr("ADD"), header);
     add_btn_->setObjectName("fnoMSAdd");
     add_btn_->setCursor(Qt::PointingHandCursor);
     add_btn_->setEnabled(false);
@@ -139,7 +152,7 @@ void MultiStraddleSubTab::setup_ui() {
     split->setChildrenCollapsible(false);
 
     selection_list_ = new QListWidget(split);
-    selection_list_->setToolTip("Double-click an entry to remove it.");
+    selection_list_->setToolTip(tr("Double-click an entry to remove it."));
     chart_ = new MultiStraddleChart(split);
 
     split->addWidget(selection_list_);
@@ -179,6 +192,35 @@ void MultiStraddleSubTab::showEvent(QShowEvent* e) {
 
 void MultiStraddleSubTab::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+}
+
+void MultiStraddleSubTab::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void MultiStraddleSubTab::retranslateUi() {
+    if (type_label_)   type_label_->setText(tr("Type").toUpper());
+    if (anchor_label_) anchor_label_->setText(tr("Anchor").toUpper());
+    if (add_btn_)      add_btn_->setText(tr("ADD"));
+    if (selection_list_) selection_list_->setToolTip(tr("Double-click an entry to remove it."));
+
+    // Re-translate the fixed type combo items, preserving the selection.
+    if (type_combo_) {
+        const int keep = type_combo_->currentIndex();
+        for (int i = 0; i < type_combo_->count(); ++i)
+            type_combo_->setItemText(i, type_label_text(i));
+        if (keep >= 0 && keep < type_combo_->count())
+            type_combo_->setCurrentIndex(keep);
+    }
+    // Rebuild the strike combo so the "(ATM)" suffix re-translates.
+    if (strike_combo_ && strike_combo_->count() > 0 && !last_chain_.rows.isEmpty()) {
+        const int keep = strike_combo_->currentIndex();
+        rebuild_strike_combo(last_chain_);
+        if (keep >= 0 && keep < strike_combo_->count())
+            strike_combo_->setCurrentIndex(keep);
+    }
 }
 
 void MultiStraddleSubTab::on_chain_published(const QVariant& v) {
@@ -240,9 +282,9 @@ void MultiStraddleSubTab::on_add_clicked() {
         return;
     }
     if (wing == 0) {
-        sel.label = QString("Straddle %1").arg(last_chain_.rows[anchor_idx].strike, 0, 'f', 0);
+        sel.label = tr("Straddle %1").arg(last_chain_.rows[anchor_idx].strike, 0, 'f', 0);
     } else {
-        sel.label = QString("Strangle %1C / %2P")
+        sel.label = tr("Strangle %1C / %2P")
                         .arg(last_chain_.rows[ce_idx].strike, 0, 'f', 0)
                         .arg(last_chain_.rows[pe_idx].strike, 0, 'f', 0);
     }
@@ -255,7 +297,7 @@ void MultiStraddleSubTab::on_add_clicked() {
     selections_.append(sel);
 
     auto* item = new QListWidgetItem(sel.label);
-    item->setToolTip("Double-click to remove.");
+    item->setToolTip(tr("Double-click to remove."));
     selection_list_->addItem(item);
 
     subscribe_token(sel.broker, sel.ce_token);

@@ -19,16 +19,16 @@ ConditionSection::ConditionSection(Type type, QWidget* parent)
     // ── Header: title + section AND/OR toggle ───────────────────────────────
     auto* header = new QHBoxLayout();
     header->setSpacing(6);
-    auto* title = new QLabel(
+    title_ = new QLabel(
         type == Type::Entry ? tr("ENTRY CONDITIONS") : tr("EXIT CONDITIONS"), this);
-    title->setObjectName(type == Type::Entry ? QStringLiteral("condSectionHeaderEntry")
-                                             : QStringLiteral("condSectionHeaderExit"));
-    header->addWidget(title);
+    title_->setObjectName(type == Type::Entry ? QStringLiteral("condSectionHeaderEntry")
+                                              : QStringLiteral("condSectionHeaderExit"));
+    header->addWidget(title_);
     header->addStretch();
 
-    auto* match = new QLabel(tr("Match:"), this);
-    match->setObjectName(QStringLiteral("condSectionMatchLabel"));
-    header->addWidget(match);
+    match_label_ = new QLabel(tr("Match:"), this);
+    match_label_->setObjectName(QStringLiteral("condSectionMatchLabel"));
+    header->addWidget(match_label_);
     and_btn_ = new QPushButton(tr("ALL (AND)"), this);
     and_btn_->setObjectName(QStringLiteral("logicBtnAnd"));
     and_btn_->setCheckable(true);
@@ -50,12 +50,12 @@ ConditionSection::ConditionSection(Type type, QWidget* parent)
     // ── Add buttons ─────────────────────────────────────────────────────────
     auto* add_row = new QHBoxLayout();
     add_row->setSpacing(6);
-    auto* add_cond = new QPushButton(tr("+ Add Condition"), this);
-    add_cond->setObjectName(QStringLiteral("condSectionAddBtn"));
-    auto* add_grp = new QPushButton(tr("+ Add Group"), this);
-    add_grp->setObjectName(QStringLiteral("condSectionAddGroupBtn"));
-    add_row->addWidget(add_cond);
-    add_row->addWidget(add_grp);
+    add_cond_btn_ = new QPushButton(tr("+ Add Condition"), this);
+    add_cond_btn_->setObjectName(QStringLiteral("condSectionAddBtn"));
+    add_group_btn_ = new QPushButton(tr("+ Add Group"), this);
+    add_group_btn_->setObjectName(QStringLiteral("condSectionAddGroupBtn"));
+    add_row->addWidget(add_cond_btn_);
+    add_row->addWidget(add_group_btn_);
     add_row->addStretch();
     main_layout->addLayout(add_row);
 
@@ -63,11 +63,30 @@ ConditionSection::ConditionSection(Type type, QWidget* parent)
 
     connect(and_btn_, &QPushButton::clicked, this, [this]() { set_logic(QStringLiteral("AND")); emit conditions_changed(); });
     connect(or_btn_, &QPushButton::clicked, this, [this]() { set_logic(QStringLiteral("OR")); emit conditions_changed(); });
-    connect(add_cond, &QPushButton::clicked, this, &ConditionSection::add_condition);
-    connect(add_grp, &QPushButton::clicked, this, &ConditionSection::add_group);
+    connect(add_cond_btn_, &QPushButton::clicked, this, &ConditionSection::add_condition);
+    connect(add_group_btn_, &QPushButton::clicked, this, &ConditionSection::add_group);
 
     update_logic_buttons();
     add_condition();
+}
+
+void ConditionSection::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ConditionSection::retranslateUi() {
+    if (title_)
+        title_->setText(type_ == Type::Entry ? tr("ENTRY CONDITIONS") : tr("EXIT CONDITIONS"));
+    if (match_label_) match_label_->setText(tr("Match:"));
+    if (and_btn_) and_btn_->setText(tr("ALL (AND)"));
+    if (or_btn_) or_btn_->setText(tr("ANY (OR)"));
+    if (add_cond_btn_) add_cond_btn_->setText(tr("+ Add Condition"));
+    if (add_group_btn_) add_group_btn_->setText(tr("+ Add Group"));
+    // Connector labels between rows are built from tr("AND")/tr("OR") — rebuild
+    // so they pick up the new locale too.
+    rebuild_layout();
 }
 
 void ConditionSection::set_logic(const QString& logic) {

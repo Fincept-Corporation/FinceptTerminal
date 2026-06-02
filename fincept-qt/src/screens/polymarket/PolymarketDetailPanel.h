@@ -5,8 +5,10 @@
 #include "services/prediction/PredictionTypes.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QList>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTableWidget>
@@ -70,6 +72,9 @@ class PolymarketDetailPanel : public QWidget {
 
     void clear();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   signals:
     void tab_changed(int index);
     void interval_changed(const QString& interval);
@@ -91,9 +96,18 @@ class PolymarketDetailPanel : public QWidget {
     void render_status_badge(const fincept::services::prediction::PredictionMarket& market);
     void refresh_ticket_side_style();
     void on_submit_clicked();
+    void retranslateUi();
 
     QList<QPushButton*> tab_btns_;
     QStackedWidget* stack_ = nullptr;
+
+    // Fixed-text captions cached for retranslateUi.
+    QLabel* outcomes_header_ = nullptr;
+    QList<QLabel*> stat_caption_lbls_;        // VOLUME / LIQUIDITY / OPEN INT / END DATE / MIDPOINT / SPREAD / LAST TRADE
+    QLabel* no_acct_msg_lbl_ = nullptr;       // "Connect an account…"
+    QLabel* bal_caption_lbl_ = nullptr;       // "AVAILABLE"
+    QLabel* pos_caption_lbl_ = nullptr;       // "POSITION"
+    QList<QLabel*> trade_form_caption_lbls_;  // OUTCOME / PRICE (0–1) / SIZE / ORDER TYPE
 
     // Overview
     QLabel* question_label_ = nullptr;

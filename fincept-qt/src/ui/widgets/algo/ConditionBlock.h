@@ -5,6 +5,7 @@
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QEvent>
 #include <QFrame>
 #include <QJsonObject>
 #include <QLabel>
@@ -29,10 +30,17 @@ signals:
     void remove_requested();
     void changed();
 
+protected:
+    void changeEvent(QEvent* event) override;
+
 private:
     void build_ui();
     void populate_operators();
     void on_operator_changed();
+
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
 
     bool is_entry_;
 

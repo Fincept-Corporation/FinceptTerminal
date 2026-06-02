@@ -2,9 +2,12 @@
 #include "screens/markets/MarketPanel.h"
 #include "screens/markets/MarketPanelConfig.h"
 
+#include <QComboBox>
 #include <QDateTime>
+#include <QEvent>
 #include <QHideEvent>
 #include <QLabel>
+#include <QPushButton>
 #include <QShowEvent>
 #include <QSplitter>
 #include <QTimer>
@@ -24,8 +27,15 @@ class MarketsScreen : public QWidget {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
+    /// Re-applies the AUTO button's localized label + amber/dim styling.
+    void update_auto_style();
+
     // Layout
     void build_splitter_layout();
     void rebuild_splitter_layout();
@@ -58,13 +68,24 @@ class MarketsScreen : public QWidget {
     QVector<QSplitter*> col_splitters_;            // vertical — panels within each column
 
     // Header bar widgets
-    QWidget* header_bar_    = nullptr;
-    QLabel*  session_label_ = nullptr;
-    QLabel*  ny_label_      = nullptr;
-    QLabel*  lon_label_     = nullptr;
-    QLabel*  tok_label_     = nullptr;
-    QLabel*  status_label_  = nullptr;
-    QLabel*  last_upd_label_ = nullptr;
+    QWidget*     header_bar_     = nullptr;
+    QLabel*      brand_label_    = nullptr;
+    QLabel*      session_label_  = nullptr;
+    QLabel*      ny_label_       = nullptr;
+    QLabel*      lon_label_      = nullptr;
+    QLabel*      tok_label_      = nullptr;
+    QLabel*      status_label_   = nullptr;
+    QLabel*      last_upd_label_ = nullptr;
+    QPushButton* refresh_btn_    = nullptr;
+    QPushButton* auto_btn_       = nullptr;
+    QPushButton* add_panel_btn_  = nullptr;
+    QPushButton* reset_btn_      = nullptr;
+    QComboBox*   interval_combo_ = nullptr;
+
+    // Current status badge state — so retranslateUi() can re-apply the right
+    // localized label (● READY / ● LOADING / ● TIMEOUT) on language switch.
+    enum class StatusState { Ready, Loading, Timeout };
+    StatusState status_state_ = StatusState::Ready;
 
     // Timers
     QTimer* auto_refresh_timer_ = nullptr;

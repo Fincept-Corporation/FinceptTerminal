@@ -23,13 +23,19 @@ class EiaPanel : public EconPanelBase {
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
     void on_result(const QString& request_id, const services::EconomicsResult& result) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void on_source_changed(int index);
+    void retranslateUi() override;
 
     QComboBox* source_combo_ = nullptr;   // WPSR | STEO
     QComboBox* category_combo_ = nullptr; // WPSR categories or STEO tables
     QLabel* apikey_notice_ = nullptr;
+
+    // Cached for retranslateUi
+    QLabel* source_lbl_ = nullptr;
+    QLabel* category_lbl_ = nullptr;
 };
 
 } // namespace fincept::screens

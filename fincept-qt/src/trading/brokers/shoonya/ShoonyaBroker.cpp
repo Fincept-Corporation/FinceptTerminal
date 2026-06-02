@@ -1,6 +1,7 @@
 #include "trading/brokers/shoonya/ShoonyaBroker.h"
 
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -144,7 +145,10 @@ TokenExchangeResponse ShoonyaBroker::exchange_token(const QString& api_key, cons
     if (token.isEmpty())
         return {false, "", "", "", "Login: no susertoken in response", ""};
 
-    return {true, token, "", uid, "", ""};
+    // Shoonya session tokens lapse at the daily reset; factor2 (TOTP/OTP) is a
+    // one-time code we can't replay, so detect-only. Startup hint.
+    const QString extra = with_token_expiry({}, next_ist_flush_epoch(6, 0));
+    return {true, token, "", uid, extra, ""};
 }
 
 // ---------- place_order ----------

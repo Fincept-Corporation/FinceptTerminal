@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QEvent>
 #include <QGraphicsView>
 #include <QPixmap>
 
@@ -27,6 +28,7 @@ class NodeCanvas : public QGraphicsView {
     void drawForeground(QPainter* painter, const QRectF& rect) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;

@@ -37,7 +37,7 @@ OecdPanel::OecdPanel(QWidget* parent) : EconPanelBase(kOecdSourceId, kOecdColor,
 }
 
 void OecdPanel::activate() {
-    show_empty("Select a dataset and country, then click FETCH");
+    show_empty(tr("Select a dataset and country, then click FETCH"));
 }
 
 void OecdPanel::build_controls(QHBoxLayout* thl) {
@@ -58,16 +58,16 @@ void OecdPanel::build_controls(QHBoxLayout* thl) {
     country_combo_->setFixedHeight(26);
 
     frequency_combo_ = new QComboBox;
-    frequency_combo_->addItem("Annual", "A");
-    frequency_combo_->addItem("Quarterly", "Q");
-    frequency_combo_->addItem("Monthly", "M");
+    frequency_combo_->addItem(tr("Annual"), "A");
+    frequency_combo_->addItem(tr("Quarterly"), "Q");
+    frequency_combo_->addItem(tr("Monthly"), "M");
     frequency_combo_->setFixedHeight(26);
 
-    thl->addWidget(lbl("DATASET"));
+    thl->addWidget(dataset_lbl_ = lbl(tr("DATASET")));
     thl->addWidget(dataset_combo_);
-    thl->addWidget(lbl("COUNTRY"));
+    thl->addWidget(country_lbl_ = lbl(tr("COUNTRY")));
     thl->addWidget(country_combo_);
-    thl->addWidget(lbl("FREQ"));
+    thl->addWidget(freq_lbl_ = lbl(tr("FREQ")));
     thl->addWidget(frequency_combo_);
 }
 
@@ -76,7 +76,7 @@ void OecdPanel::on_fetch() {
     const QString country = country_combo_->currentData().toString();
     const QString freq = frequency_combo_->currentData().toString();
 
-    show_loading("Fetching OECD data…");
+    show_loading(tr("Fetching OECD data…"));
     services::EconomicsService::instance().execute(kOecdSourceId, kOecdScript, cmd, {country, freq},
                                                    "oecd_" + cmd + "_" + country);
 }
@@ -94,6 +94,29 @@ void OecdPanel::on_result(const QString& request_id, const services::EconomicsRe
         display(arr, title);
         LOG_INFO("OecdPanel", QString("Displayed %1 rows").arg(arr.size()));
     }
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void OecdPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void OecdPanel::retranslateUi() {
+    if (dataset_lbl_)
+        dataset_lbl_->setText(tr("DATASET"));
+    if (country_lbl_)
+        country_lbl_->setText(tr("COUNTRY"));
+    if (freq_lbl_)
+        freq_lbl_->setText(tr("FREQ"));
+    if (frequency_combo_) {
+        frequency_combo_->setItemText(0, tr("Annual"));
+        frequency_combo_->setItemText(1, tr("Quarterly"));
+        frequency_combo_->setItemText(2, tr("Monthly"));
+    }
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

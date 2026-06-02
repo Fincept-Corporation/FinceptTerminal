@@ -12,6 +12,8 @@
 // Reference: fincept-qt/.grill-me/alpha-arena-grill.md §10.3 (ModelChat tab).
 
 #include <QComboBox>
+#include <QEvent>
+#include <QLabel>
 #include <QListWidget>
 #include <QString>
 #include <QWidget>
@@ -34,11 +36,16 @@ class ModelChatPanel : public QWidget {
     /// current selection, refresh().
     void on_decision_received(const QString& decision_id, const QString& agent_id);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void show_decision_detail(const QString& decision_id);
     void reload_agent_picker();
+    void retranslateUi();
 
     QString competition_id_;
+    QLabel* agent_label_ = nullptr;
     QComboBox* agent_picker_;
     QListWidget* timeline_;
 };

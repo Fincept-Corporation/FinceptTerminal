@@ -164,7 +164,7 @@ void MaritimeScreen::apply_theme() {
                                        .arg(C(ui::colors::BG_SURFACE), C(ui::colors::BORDER_DIM)));
 
     if (status_label_)
-        set_status("READY", ui::colors::POSITIVE);
+        set_status(tr("READY"), ui::colors::POSITIVE);
 
     if (route_detail_)
         route_detail_->setStyleSheet(
@@ -177,6 +177,83 @@ void MaritimeScreen::apply_theme() {
 
     if (imo_edit_)
         imo_edit_->setStyleSheet(input_ss());
+}
+
+void MaritimeScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void MaritimeScreen::retranslateUi() {
+    // Top bar
+    if (brand_label_)      brand_label_->setText(tr("FINCEPT MARITIME INTELLIGENCE"));
+    if (classified_label_) classified_label_->setText(tr("VESSEL TRACKING // FINCEPT MARINE API"));
+    // credits_label_ / vessel_count_label_ carry live counts and refresh on the
+    // next data update; only their idle defaults are re-applied here.
+    if (credits_label_ && credits_label_->text() == QStringLiteral("CREDITS: —"))
+        credits_label_->setText(tr("CREDITS: —"));
+
+    // Left panel
+    if (global_btn_)   global_btn_->setText(tr("GLOBAL VIEW (200 VESSELS)"));
+    if (load_btn_)     load_btn_->setText(tr("LOAD VESSELS IN AREA"));
+    if (draw_title_)   draw_title_->setText(tr("DRAW AREA ON MAP"));
+    if (sq_btn_)       sq_btn_->setText(tr("◻ SQUARE"));
+    if (ci_btn_)       ci_btn_->setText(tr("◯ CIRCLE"));
+    if (clr_btn_)      clr_btn_->setText(tr("✕ CLEAR"));
+    if (intel_title_)  intel_title_->setText(tr("INTELLIGENCE"));
+    if (stat_vessels_cap_)   stat_vessels_cap_->setText(tr("TOTAL IN AREA"));
+    if (stat_displayed_cap_) stat_displayed_cap_->setText(tr("DISPLAYED"));
+    if (stat_routes_cap_)    stat_routes_cap_->setText(tr("ROUTES"));
+    if (stat_ports_cap_)     stat_ports_cap_->setText(tr("PORTS"));
+    if (routes_title_) routes_title_->setText(tr("TRADE CORRIDORS"));
+    if (routes_table_) routes_table_->setHorizontalHeaderLabels({tr("Route"), tr("Vessels"), tr("Status")});
+
+    // Center
+    if (center_title_) center_title_->setText(tr("VESSEL TRACKING"));
+    if (vessels_table_)
+        vessels_table_->setHorizontalHeaderLabels(
+            {tr("Name"), tr("IMO"), tr("Lat"), tr("Lng"), tr("Speed (kn)"), tr("Angle"),
+             tr("From"), tr("To"), tr("Progress")});
+
+    // Right panel
+    if (search_title_) search_title_->setText(tr("VESSEL SEARCH"));
+    if (imo_cap_)      imo_cap_->setText(tr("IMO NUMBER"));
+    if (imo_edit_)     imo_edit_->setPlaceholderText(tr("e.g. 9344745"));
+    if (track_btn_)    track_btn_->setText(tr("TRACK"));
+    if (history_btn_)  history_btn_->setText(tr("VOYAGE HISTORY"));
+    if (place_title_)  place_title_->setText(tr("PLACE SEARCH"));
+    if (place_cap_)    place_cap_->setText(tr("PLACE NAME"));
+    if (place_query_edit_) place_query_edit_->setPlaceholderText(tr("e.g. Strait of Malacca"));
+    if (place_btn_)    place_btn_->setText(tr("SEARCH PLACES"));
+    if (place_table_)  place_table_->setHorizontalHeaderLabels({tr("Place"), tr("Type")});
+    if (area_toggle_)
+        area_toggle_->setText(area_toggle_->isChecked() ? tr("▾ ADVANCED: RAW BBOX")
+                                                        : tr("▸ ADVANCED: RAW BBOX"));
+    if (coord_min_lat_cap_) coord_min_lat_cap_->setText(tr("MIN LATITUDE"));
+    if (coord_max_lat_cap_) coord_max_lat_cap_->setText(tr("MAX LATITUDE"));
+    if (coord_min_lng_cap_) coord_min_lng_cap_->setText(tr("MIN LONGITUDE"));
+    if (coord_max_lng_cap_) coord_max_lng_cap_->setText(tr("MAX LONGITUDE"));
+    if (area_btn_)     area_btn_->setText(tr("SEARCH AREA"));
+    if (ports_title_)  ports_title_->setText(tr("PORTS"));
+    if (ports_cap_)    ports_cap_->setText(tr("PORT NAME"));
+    if (ports_query_edit_) ports_query_edit_->setPlaceholderText(tr("e.g. Rotterdam"));
+    if (ports_btn_)    ports_btn_->setText(tr("SEARCH PORTS"));
+    if (ports_in_view_btn_) ports_in_view_btn_->setText(tr("PORTS IN AREA"));
+    if (ports_table_)  ports_table_->setHorizontalHeaderLabels({tr("Name"), tr("Country"), tr("Source")});
+    if (rd_title_)     rd_title_->setText(tr("SELECTED ROUTE"));
+    if (classified_footer_) classified_footer_->setText(tr("CLASSIFIED — AUTHORIZED PERSONNEL ONLY"));
+
+    // Status bar
+    if (sb_source_cap_)  sb_source_cap_->setText(tr("SOURCE:"));
+    if (sb_records_cap_) sb_records_cap_->setText(tr("RECORDS:"));
+    if (sb_refresh_cap_) sb_refresh_cap_->setText(tr("REFRESH:"));
+    if (sb_refresh_val_) sb_refresh_val_->setText(tr("5 MIN"));
+    // status_label_ reflects the last operation; re-apply the idle READY label.
+    if (status_label_) set_status(tr("READY"), ui::colors::POSITIVE);
+
+    // Detail-card rows + table cells + search-result labels are filled from
+    // live data and refresh on the next selection / fetch.
 }
 
 void MaritimeScreen::show_map_loading(const QString& msg) {

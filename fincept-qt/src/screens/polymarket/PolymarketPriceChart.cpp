@@ -11,7 +11,6 @@ namespace fincept::screens::polymarket {
 using namespace fincept::ui;
 using namespace fincept::services::prediction;
 
-static const QStringList INTERVAL_LABELS = {"1H", "6H", "1D", "1W", "1M", "ALL"};
 static const QStringList INTERVAL_VALUES = {"1h", "6h", "1d", "1w", "1m", "max"};
 
 PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
@@ -37,7 +36,8 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
                 "QComboBox QAbstractItemView { background: %1; color: %2; border: 1px solid %3; }")
             .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_MED());
 
-    auto* lbl = new QLabel("INTERVAL");
+    interval_lbl_ = new QLabel(tr("INTERVAL"));
+    auto* lbl = interval_lbl_;
     lbl->setStyleSheet(
         QString("color: %1; font-size: 8px; font-weight: 700; letter-spacing: 0.5px; "
                 "background: transparent;")
@@ -45,7 +45,7 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
     toolbar->addWidget(lbl);
 
     interval_combo_ = new QComboBox;
-    interval_combo_->addItems(INTERVAL_LABELS);
+    interval_combo_->addItems({tr("1H"), tr("6H"), tr("1D"), tr("1W"), tr("1M"), tr("ALL")});
     interval_combo_->setCurrentIndex(2);
     interval_combo_->setFixedSize(62, 24);
     interval_combo_->setStyleSheet(combo_css);
@@ -57,7 +57,8 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
 
     toolbar->addSpacing(10);
 
-    auto* olbl = new QLabel("OUTCOME");
+    outcome_lbl_ = new QLabel(tr("OUTCOME"));
+    auto* olbl = outcome_lbl_;
     olbl->setStyleSheet(lbl->styleSheet());
     toolbar->addWidget(olbl);
 
@@ -82,7 +83,7 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
     chart_container_->setStyleSheet(QString("background: %1;").arg(colors::BG_BASE()));
     auto* ccl = new QVBoxLayout(chart_container_);
     ccl->setContentsMargins(8, 8, 8, 8);
-    auto* empty = new QLabel("Select a market to view its price chart");
+    auto* empty = new QLabel(tr("Select a market to view its price chart"));
     empty->setStyleSheet(
         QString("color: %1; font-size: 12px; background: transparent;").arg(colors::TEXT_DIM()));
     empty->setAlignment(Qt::AlignCenter);
@@ -103,7 +104,7 @@ void PolymarketPriceChart::set_price_history(const PriceHistory& history) {
     }
 
     if (history.points.isEmpty()) {
-        auto* empty = new QLabel("No price history available");
+        auto* empty = new QLabel(tr("No price history available"));
         empty->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(colors::TEXT_DIM()));
         empty->setAlignment(Qt::AlignCenter);
         layout->addWidget(empty);
@@ -148,6 +149,28 @@ void PolymarketPriceChart::set_outcome_labels(const QStringList& labels) {
     outcome_combo_->addItems(labels);
     if (!labels.isEmpty())
         outcome_combo_->setCurrentIndex(0);
+}
+
+void PolymarketPriceChart::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PolymarketPriceChart::retranslateUi() {
+    if (interval_lbl_) interval_lbl_->setText(tr("INTERVAL"));
+    if (outcome_lbl_)  outcome_lbl_->setText(tr("OUTCOME"));
+    if (interval_combo_) {
+        const QSignalBlocker block(interval_combo_);
+        const int idx = interval_combo_->currentIndex();
+        const QStringList labels = {tr("1H"), tr("6H"), tr("1D"), tr("1W"), tr("1M"), tr("ALL")};
+        for (int i = 0; i < interval_combo_->count() && i < labels.size(); ++i)
+            interval_combo_->setItemText(i, labels[i]);
+        interval_combo_->setCurrentIndex(idx);
+    }
+    // Outcome combo items are market outcome names (data) — not retranslated.
+    // The empty-state placeholder re-renders via set_price_history().
+    if (has_last_history_) set_price_history(last_history_);
 }
 
 } // namespace fincept::screens::polymarket

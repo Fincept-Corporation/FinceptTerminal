@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QEvent>
 #include <QString>
 #include <QWidget>
 
@@ -40,11 +41,15 @@ class CryptoCenterScreen : public QWidget {
     explicit CryptoCenterScreen(QWidget* parent = nullptr);
     ~CryptoCenterScreen() override;
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
     void build_empty_page();
     void build_connected_page();
     void apply_theme();
+    void retranslateUi();
 
     void on_wallet_connected(const QString& pubkey, const QString& label);
     void on_wallet_disconnected();
@@ -55,6 +60,10 @@ class CryptoCenterScreen : public QWidget {
     QLabel* header_route_ = nullptr;
     QLabel* header_separator_ = nullptr;
     QLabel* header_status_ = nullptr;
+
+    // Empty-state panel head (fixed UI labels — cached for retranslateUi)
+    QLabel* empty_head_title_ = nullptr;
+    QLabel* empty_head_status_ = nullptr;
 
     // Stack
     QStackedWidget* stack_ = nullptr;

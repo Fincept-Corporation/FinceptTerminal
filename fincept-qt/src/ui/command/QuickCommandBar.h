@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QEvent>
 #include <QFrame>
 #include <QString>
 
@@ -19,9 +20,13 @@ class QuickCommandBar : public QFrame {
     /// Show + focus. Used by palette/launchpad "type a command" dispatch.
     void surface();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void on_submit();
     void show_hint(const QString& text, bool is_error);
+    void retranslateUi();
 
     QLineEdit* input_ = nullptr;
     QLabel* hint_ = nullptr;

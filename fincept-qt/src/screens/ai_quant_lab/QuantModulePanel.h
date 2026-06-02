@@ -6,6 +6,7 @@
 #include <QComboBox>
 #include <QDateEdit>
 #include <QDoubleSpinBox>
+#include <QEvent>
 #include <QHash>
 #include <QJsonObject>
 #include <QLabel>
@@ -26,6 +27,9 @@ class QuantModulePanel : public QWidget {
   public:
     explicit QuantModulePanel(const fincept::services::quant::QuantModule& mod, QWidget* parent = nullptr);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_result(const QString& module_id, const QString& command, const QJsonObject& data);
     void on_error(const QString& module_id, const QString& message);
@@ -33,6 +37,13 @@ class QuantModulePanel : public QWidget {
   private:
     void build_ui();
     void connect_service();
+
+    /// Re-apply tr() lookups to persistent, member-stored widgets after a
+    /// QEvent::LanguageChange. Module header label/category are data-derived
+    /// (services::quant::QuantModule) and kept verbatim; dynamically-rebuilt
+    /// input forms and result cards re-render in the active language on their
+    /// next build/fetch.
+    void retranslateUi();
 
     // Module-specific builders
     QWidget* build_deep_agent_panel();

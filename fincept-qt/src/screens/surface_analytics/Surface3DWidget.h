@@ -2,6 +2,7 @@
 // Surface3DWidget — 3D surface renderer using QPainter
 // Supports drag-to-rotate, scroll-to-zoom, color mapping (sequential + diverging)
 
+#include <QEvent>
 #include <QWidget>
 
 #include <string>
@@ -31,6 +32,8 @@ class Surface3DWidget : public QWidget {
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
+    // Repaint on language change so the painter-drawn overlay strings refresh.
+    void changeEvent(QEvent* event) override;
 
   private:
     struct Vec3 {

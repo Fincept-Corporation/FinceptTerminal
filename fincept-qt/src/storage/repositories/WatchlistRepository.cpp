@@ -1,5 +1,7 @@
 #include "storage/repositories/WatchlistRepository.h"
 
+#include "storage/sync/SyncOutbox.h"
+
 namespace fincept {
 
 WatchlistRepository& WatchlistRepository::instance() {
@@ -26,6 +28,7 @@ Result<Watchlist> WatchlistRepository::create(const QString& name, const QString
     auto r = exec_write("INSERT INTO watchlists (id, name, color) VALUES (?, ?, ?)", {id, name, color});
     if (r.is_err())
         return Result<Watchlist>::err(r.error());
+    SyncOutbox::record("watchlist", id, "create");
     return get(id);
 }
 
@@ -42,25 +45,37 @@ Result<Watchlist> WatchlistRepository::get(const QString& id) {
 }
 
 Result<void> WatchlistRepository::update(const Watchlist& w) {
-    return exec_write("UPDATE watchlists SET name = ?, description = ?, color = ?, sort_order = ?, "
-                      "is_default = ?, updated_at = datetime('now') WHERE id = ?",
-                      {w.name, w.description, w.color, w.sort_order, w.is_default ? 1 : 0, w.id});
+    auto r = exec_write("UPDATE watchlists SET name = ?, description = ?, color = ?, sort_order = ?, "
+                        "is_default = ?, updated_at = datetime('now') WHERE id = ?",
+                        {w.name, w.description, w.color, w.sort_order, w.is_default ? 1 : 0, w.id});
+    if (r.is_ok())
+        SyncOutbox::record("watchlist", w.id, "update");
+    return r;
 }
 
 Result<void> WatchlistRepository::remove(const QString& id) {
-    return exec_write("DELETE FROM watchlists WHERE id = ?", {id});
+    auto r = exec_write("DELETE FROM watchlists WHERE id = ?", {id});
+    if (r.is_ok())
+        SyncOutbox::record("watchlist", id, "delete");
+    return r;
 }
 
 Result<void> WatchlistRepository::add_stock(const QString& watchlist_id, const QString& symbol, const QString& name,
                                             const QString& exchange) {
-    return exec_write("INSERT OR IGNORE INTO watchlist_stocks (watchlist_id, symbol, name, exchange) "
-                      "VALUES (?, ?, ?, ?)",
-                      {watchlist_id, symbol.toUpper(), name, exchange});
+    auto r = exec_write("INSERT OR IGNORE INTO watchlist_stocks (watchlist_id, symbol, name, exchange) "
+                        "VALUES (?, ?, ?, ?)",
+                        {watchlist_id, symbol.toUpper(), name, exchange});
+    if (r.is_ok())
+        SyncOutbox::record("watchlist", watchlist_id, "stock_add", symbol.toUpper());
+    return r;
 }
 
 Result<void> WatchlistRepository::remove_stock(const QString& watchlist_id, const QString& symbol) {
-    return exec_write("DELETE FROM watchlist_stocks WHERE watchlist_id = ? AND symbol = ?",
-                      {watchlist_id, symbol.toUpper()});
+    auto r = exec_write("DELETE FROM watchlist_stocks WHERE watchlist_id = ? AND symbol = ?",
+                        {watchlist_id, symbol.toUpper()});
+    if (r.is_ok())
+        SyncOutbox::record("watchlist", watchlist_id, "stock_remove", symbol.toUpper());
+    return r;
 }
 
 Result<QVector<WatchlistStock>> WatchlistRepository::get_stocks(const QString& watchlist_id) {

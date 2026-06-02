@@ -86,9 +86,9 @@ void FiiDiiSubTab::setup_ui() {
     auto* hlay = new QHBoxLayout(header);
     hlay->setContentsMargins(12, 8, 12, 8);
     hlay->setSpacing(8);
-    lbl_status_ = new QLabel(QStringLiteral("FII / DII flows — fetching…"), header);
+    lbl_status_ = new QLabel(tr("FII / DII flows — fetching…"), header);
     lbl_status_->setObjectName("fnoFiiStatus");
-    refresh_btn_ = new QPushButton(QStringLiteral("REFRESH"), header);
+    refresh_btn_ = new QPushButton(tr("REFRESH"), header);
     refresh_btn_->setObjectName("fnoFiiRefresh");
     refresh_btn_->setCursor(Qt::PointingHandCursor);
     hlay->addWidget(lbl_status_);
@@ -103,7 +103,8 @@ void FiiDiiSubTab::setup_ui() {
 
     table_ = new QTableWidget(split);
     table_->setColumnCount(7);
-    table_->setHorizontalHeaderLabels({"Date", "FII Buy", "FII Sell", "FII Net", "DII Buy", "DII Sell", "DII Net"});
+    table_->setHorizontalHeaderLabels({tr("Date"), tr("FII Buy"), tr("FII Sell"), tr("FII Net"),
+                                       tr("DII Buy"), tr("DII Sell"), tr("DII Net")});
     table_->verticalHeader()->setVisible(false);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -138,7 +139,7 @@ void FiiDiiSubTab::showEvent(QShowEvent* e) {
     });
     hub.subscribe_errors(this, kTopic, [self](const QString& err) {
         if (!self) return;
-        self->lbl_status_->setText(QStringLiteral("FII / DII flows — error: ") + err);
+        self->lbl_status_->setText(FiiDiiSubTab::tr("FII / DII flows — error: %1").arg(err));
     });
     hub.request(kTopic, /*force*/ false);
     subscribed_ = true;
@@ -155,7 +156,20 @@ void FiiDiiSubTab::hideEvent(QHideEvent* e) {
 
 void FiiDiiSubTab::on_refresh_clicked() {
     fincept::datahub::DataHub::instance().request(kTopic, /*force*/ true);
-    lbl_status_->setText(QStringLiteral("FII / DII flows — refreshing…"));
+    lbl_status_->setText(tr("FII / DII flows — refreshing…"));
+}
+
+void FiiDiiSubTab::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void FiiDiiSubTab::retranslateUi() {
+    if (refresh_btn_) refresh_btn_->setText(tr("REFRESH"));
+    if (table_)
+        table_->setHorizontalHeaderLabels({tr("Date"), tr("FII Buy"), tr("FII Sell"), tr("FII Net"),
+                                           tr("DII Buy"), tr("DII Sell"), tr("DII Net")});
 }
 
 void FiiDiiSubTab::on_data_arrived(const QVariant& v) {
@@ -189,9 +203,9 @@ void FiiDiiSubTab::apply_data(const QVector<FiiDiiDay>& rows) {
 
     if (rows.isEmpty()) {
         lbl_status_->setText(
-            QStringLiteral("FII / DII flows — no data yet. Try refreshing after 6 PM IST."));
+            tr("FII / DII flows — no data yet. Try refreshing after 6 PM IST."));
     } else {
-        lbl_status_->setText(QStringLiteral("FII / DII flows — last update: %1   ·   %2 days cached")
+        lbl_status_->setText(tr("FII / DII flows — last update: %1   ·   %2 days cached")
                                   .arg(rows.last().date_iso)
                                   .arg(rows.size()));
     }

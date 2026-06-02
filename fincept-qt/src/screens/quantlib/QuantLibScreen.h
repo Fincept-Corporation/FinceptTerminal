@@ -3,6 +3,7 @@
 #include "screens/common/IStatefulScreen.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
@@ -39,6 +40,9 @@ class QuantLibScreen : public QWidget, public IStatefulScreen {
     QString state_key() const override { return "quantlib"; }
     int state_version() const override { return 1; }
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_module_changed(int index);
     void on_panel_changed(QListWidgetItem* item);
@@ -47,6 +51,7 @@ class QuantLibScreen : public QWidget, public IStatefulScreen {
 
   private:
     void setup_ui();
+    void retranslateUi();
     QWidget* create_header();
     QWidget* create_sidebar();
     QWidget* create_center_panel();
@@ -68,6 +73,16 @@ class QuantLibScreen : public QWidget, public IStatefulScreen {
     int active_module_ = 0;
     QString active_panel_;
     bool loading_ = false;
+
+    // Fixed chrome labels (cached for retranslateUi)
+    QLabel* header_title_ = nullptr;
+    QLabel* header_sub_ = nullptr;
+    QLabel* header_badge_ = nullptr;
+    QLabel* sidebar_title_ = nullptr;
+    QLabel* endpoint_panel_title_ = nullptr;
+    QLabel* json_body_label_ = nullptr;
+    QLabel* results_title_ = nullptr;
+    QLabel* status_left_ = nullptr;
 
     // Sidebar
     QTreeWidget* module_tree_ = nullptr;

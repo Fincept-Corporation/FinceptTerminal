@@ -121,9 +121,9 @@ void PolymarketOrderBook::rebuild_cache() {
     p.setFont(header_font);
     p.setPen(QColor(colors::TEXT_SECONDARY()));
     int col_w = w / 3;
-    p.drawText(8, 0, col_w, HEADER_HEIGHT, Qt::AlignLeft | Qt::AlignVCenter, "PRICE");
-    p.drawText(col_w, 0, col_w, HEADER_HEIGHT, Qt::AlignRight | Qt::AlignVCenter, "SIZE");
-    p.drawText(2 * col_w, 0, col_w - 8, HEADER_HEIGHT, Qt::AlignRight | Qt::AlignVCenter, "TOTAL");
+    p.drawText(8, 0, col_w, HEADER_HEIGHT, Qt::AlignLeft | Qt::AlignVCenter, tr("PRICE"));
+    p.drawText(col_w, 0, col_w, HEADER_HEIGHT, Qt::AlignRight | Qt::AlignVCenter, tr("SIZE"));
+    p.drawText(2 * col_w, 0, col_w - 8, HEADER_HEIGHT, Qt::AlignRight | Qt::AlignVCenter, tr("TOTAL"));
 
     // Separator
     p.setPen(QColor(colors::BORDER_DIM()));
@@ -177,7 +177,7 @@ void PolymarketOrderBook::rebuild_cache() {
     p.fillRect(0, y, w, ROW_HEIGHT, QColor(colors::BG_RAISED()));
     p.setPen(QColor(colors::AMBER()));
     p.setFont(header_font);
-    p.drawText(4, y, w - 8, ROW_HEIGHT, Qt::AlignCenter, QString("SPREAD %1").arg(QString::number(spread_, 'f', 4)));
+    p.drawText(4, y, w - 8, ROW_HEIGHT, Qt::AlignCenter, tr("SPREAD %1").arg(QString::number(spread_, 'f', 4)));
     y += ROW_HEIGHT;
 
     // Bids (highest first)
@@ -205,8 +205,18 @@ void PolymarketOrderBook::rebuild_cache() {
 
     if (bids_.isEmpty() && asks_.isEmpty()) {
         p.setPen(QColor(colors::TEXT_DIM()));
-        p.drawText(rect(), Qt::AlignCenter, "No order book data");
+        p.drawText(rect(), Qt::AlignCenter, tr("No order book data"));
     }
+}
+
+void PolymarketOrderBook::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        // Painted text reads tr() at paint time; invalidate the cached pixmap
+        // so the next repaint re-evaluates the new language.
+        cache_dirty_ = true;
+        update();
+    }
+    QWidget::changeEvent(event);
 }
 
 } // namespace fincept::screens::polymarket

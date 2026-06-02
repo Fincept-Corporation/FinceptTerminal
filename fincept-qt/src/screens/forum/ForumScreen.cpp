@@ -164,7 +164,7 @@ void ForumScreen::build_ui() {
                 return;
             // Profile popup
             auto* dlg = new QDialog(this);
-            dlg->setWindowTitle("USER PROFILE");
+            dlg->setWindowTitle(tr("USER PROFILE"));
             dlg->setFixedSize(380, 340);
             dlg->setStyleSheet(QString("QDialog{background:%1;border:1px solid %2;}"
                                        "QLabel{background:transparent;"
@@ -248,14 +248,14 @@ void ForumScreen::build_ui() {
                 return cell;
             };
 
-            gh->addWidget(mk_stat(QString::number(profile.reputation), "REP", ui::colors::AMBER()));
-            gh->addWidget(mk_stat(QString::number(profile.posts_count), "POSTS", ui::colors::TEXT_PRIMARY()));
-            gh->addWidget(mk_stat(QString::number(profile.comments_count), "REPLIES", ui::colors::CYAN()));
-            gh->addWidget(mk_stat(QString::number(profile.likes_received), "LIKES", ui::colors::POSITIVE()));
+            gh->addWidget(mk_stat(QString::number(profile.reputation), tr("REP"), ui::colors::AMBER()));
+            gh->addWidget(mk_stat(QString::number(profile.posts_count), tr("POSTS"), ui::colors::TEXT_PRIMARY()));
+            gh->addWidget(mk_stat(QString::number(profile.comments_count), tr("REPLIES"), ui::colors::CYAN()));
+            gh->addWidget(mk_stat(QString::number(profile.likes_received), tr("LIKES"), ui::colors::POSITIVE()));
             vl->addWidget(grid);
 
             if (profile.is_own_profile) {
-                auto* edit_btn = new QPushButton("EDIT MY PROFILE");
+                auto* edit_btn = new QPushButton(tr("EDIT MY PROFILE"));
                 edit_btn->setFixedHeight(32);
                 edit_btn->setCursor(Qt::PointingHandCursor);
                 edit_btn->setStyleSheet(
@@ -395,7 +395,7 @@ void ForumScreen::on_search(const QString& query) {
         return;
     active_category_id_ = 0;
     active_category_color_ = ui::colors::CYAN();
-    feed_->set_header("SEARCH: " + query);
+    feed_->set_header(tr("SEARCH: %1").arg(query));
     feed_->set_loading(true);
     feed_->clear_active();
     main_stack_->setCurrentIndex(0);
@@ -411,7 +411,7 @@ void ForumScreen::on_search(const QString& query) {
 void ForumScreen::on_trending() {
     active_category_id_ = 0;
     active_category_color_ = ui::colors::AMBER();
-    feed_->set_header("TRENDING");
+    feed_->set_header(tr("TRENDING"));
     feed_->set_loading(true);
     feed_->clear_active();
     main_stack_->setCurrentIndex(0);
@@ -433,7 +433,7 @@ void ForumScreen::on_new_post_requested() {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 void ForumScreen::show_new_post_dialog(int category_id) {
     auto* dlg = new QDialog(this);
-    dlg->setWindowTitle("NEW POST");
+    dlg->setWindowTitle(tr("NEW POST"));
     dlg->setMinimumSize(560, 400);
     dlg->setStyleSheet(QString("QDialog{background:%1;border:1px solid %2;}"
                                "QLabel{color:%3;font-size:11px;background:transparent;"
@@ -456,29 +456,29 @@ void ForumScreen::show_new_post_dialog(int category_id) {
                               .arg(ui::colors::AMBER(), ui::colors::ORANGE()));
     vl->addWidget(accent);
 
-    auto* hdr = new QLabel("CREATE NEW POST");
+    auto* hdr = new QLabel(tr("CREATE NEW POST"));
     hdr->setStyleSheet(QString("color:%1;font-size:15px;font-weight:700;letter-spacing:1.5px;%2")
                            .arg(ui::colors::TEXT_PRIMARY(), M(15)));
     vl->addWidget(hdr);
 
-    auto* sub = new QLabel("Share your insights with the community");
+    auto* sub = new QLabel(tr("Share your insights with the community"));
     sub->setStyleSheet(QString("color:%1;font-size:11px;%2").arg(ui::colors::TEXT_TERTIARY(), M(11)));
     vl->addWidget(sub);
 
     vl->addSpacing(4);
 
-    auto* title_lbl = new QLabel("TITLE");
+    auto* title_lbl = new QLabel(tr("TITLE"));
     title_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;%2")
                                  .arg(ui::colors::TEXT_TERTIARY(), M(10)));
     auto* title_edit = new QLineEdit;
-    title_edit->setPlaceholderText("Give your post a descriptive title...");
+    title_edit->setPlaceholderText(tr("Give your post a descriptive title..."));
     title_edit->setFixedHeight(36);
 
-    auto* content_lbl = new QLabel("CONTENT");
+    auto* content_lbl = new QLabel(tr("CONTENT"));
     content_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;%2")
                                    .arg(ui::colors::TEXT_TERTIARY(), M(10)));
     auto* body_edit = new QTextEdit;
-    body_edit->setPlaceholderText("Write your thoughts...");
+    body_edit->setPlaceholderText(tr("Write your thoughts..."));
 
     vl->addWidget(title_lbl);
     vl->addWidget(title_edit);
@@ -491,7 +491,7 @@ void ForumScreen::show_new_post_dialog(int category_id) {
     btn_hl->setContentsMargins(0, 4, 0, 0);
     btn_hl->setSpacing(10);
 
-    auto* cancel = new QPushButton("CANCEL");
+    auto* cancel = new QPushButton(tr("CANCEL"));
     cancel->setFixedHeight(32);
     cancel->setCursor(Qt::PointingHandCursor);
     cancel->setStyleSheet(QString("QPushButton{background:transparent;color:%1;"
@@ -502,7 +502,7 @@ void ForumScreen::show_new_post_dialog(int category_id) {
                                    ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED()));
     connect(cancel, &QPushButton::clicked, dlg, &QDialog::reject);
 
-    auto* submit = new QPushButton("PUBLISH POST");
+    auto* submit = new QPushButton(tr("PUBLISH POST"));
     submit->setFixedHeight(32);
     submit->setCursor(Qt::PointingHandCursor);
     submit->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.12);color:%1;"
@@ -536,7 +536,7 @@ void ForumScreen::show_new_post_dialog(int category_id) {
 
 void ForumScreen::show_edit_profile_dialog(const services::ForumProfile& profile) {
     auto* dlg = new QDialog(this);
-    dlg->setWindowTitle("EDIT PROFILE");
+    dlg->setWindowTitle(tr("EDIT PROFILE"));
     dlg->setMinimumSize(440, 320);
     dlg->setStyleSheet(QString("QDialog{background:%1;border:1px solid %2;}"
                                "QLabel{color:%3;font-size:11px;background:transparent;"
@@ -559,7 +559,7 @@ void ForumScreen::show_edit_profile_dialog(const services::ForumProfile& profile
                               .arg(ui::colors::CYAN(), ui::colors::AMBER()));
     vl->addWidget(accent);
 
-    auto* hdr = new QLabel("EDIT PROFILE");
+    auto* hdr = new QLabel(tr("EDIT PROFILE"));
     hdr->setStyleSheet(QString("color:%1;font-size:15px;font-weight:700;letter-spacing:1.5px;%2")
                            .arg(ui::colors::TEXT_PRIMARY(), M(15)));
     vl->addWidget(hdr);
@@ -575,10 +575,10 @@ void ForumScreen::show_edit_profile_dialog(const services::ForumProfile& profile
         vl->addWidget(e);
         return e;
     };
-    auto* name_e = mk("DISPLAY NAME", profile.display_name);
-    auto* bio_e = mk("BIO", profile.bio);
-    auto* sig_e = mk("SIGNATURE", profile.signature);
-    auto* col_e = mk("AVATAR COLOR (HEX)", profile.avatar_color);
+    auto* name_e = mk(tr("DISPLAY NAME"), profile.display_name);
+    auto* bio_e = mk(tr("BIO"), profile.bio);
+    auto* sig_e = mk(tr("SIGNATURE"), profile.signature);
+    auto* col_e = mk(tr("AVATAR COLOR (HEX)"), profile.avatar_color);
 
     auto* btn_row = new QWidget(this);
     btn_row->setStyleSheet("background:transparent;");
@@ -586,7 +586,7 @@ void ForumScreen::show_edit_profile_dialog(const services::ForumProfile& profile
     bh->setContentsMargins(0, 4, 0, 0);
     bh->setSpacing(10);
 
-    auto* cc = new QPushButton("CANCEL");
+    auto* cc = new QPushButton(tr("CANCEL"));
     cc->setFixedHeight(32);
     cc->setStyleSheet(
         QString("QPushButton{background:transparent;color:%1;"
@@ -596,7 +596,7 @@ void ForumScreen::show_edit_profile_dialog(const services::ForumProfile& profile
             .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), M(11), ui::colors::TEXT_SECONDARY()));
     connect(cc, &QPushButton::clicked, dlg, &QDialog::reject);
 
-    auto* sc = new QPushButton("SAVE CHANGES");
+    auto* sc = new QPushButton(tr("SAVE CHANGES"));
     sc->setFixedHeight(32);
     sc->setCursor(Qt::PointingHandCursor);
     sc->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.12);color:%1;"

@@ -31,7 +31,7 @@ QString fmt_compact(qint64 v) {
     return QLocale(QLocale::English).toString(v);
 }
 
-QWidget* make_kv(QWidget* parent, QLabel*& value_out, const QString& key) {
+QWidget* make_kv(QWidget* parent, QLabel*& value_out, QLabel*& key_out, const QString& key) {
     auto* wrap = new QWidget(parent);
     auto* lay = new QVBoxLayout(wrap);
     lay->setContentsMargins(0, 0, 0, 0);
@@ -43,6 +43,7 @@ QWidget* make_kv(QWidget* parent, QLabel*& value_out, const QString& key) {
     lay->addWidget(k);
     lay->addWidget(v);
     value_out = v;
+    key_out = k;
     return wrap;
 }
 
@@ -84,17 +85,21 @@ void FnoHeaderBar::setup_ui() {
     broker_combo_ = new QComboBox(this);
     under_combo_ = new QComboBox(this);
     expiry_combo_ = new QComboBox(this);
-    refresh_btn_ = new QPushButton("REFRESH", this);
+    refresh_btn_ = new QPushButton(tr("REFRESH"), this);
     refresh_btn_->setObjectName("fnoRefreshBtn");
     refresh_btn_->setCursor(Qt::PointingHandCursor);
 
-    picker_lay->addWidget(new QLabel("Broker:", this));
+    lbl_broker_field_ = new QLabel(tr("Broker:"), this);
+    lbl_under_field_ = new QLabel(tr("Underlying:"), this);
+    lbl_expiry_field_ = new QLabel(tr("Expiry:"), this);
+
+    picker_lay->addWidget(lbl_broker_field_);
     picker_lay->addWidget(broker_combo_);
     picker_lay->addSpacing(6);
-    picker_lay->addWidget(new QLabel("Underlying:", this));
+    picker_lay->addWidget(lbl_under_field_);
     picker_lay->addWidget(under_combo_);
     picker_lay->addSpacing(6);
-    picker_lay->addWidget(new QLabel("Expiry:", this));
+    picker_lay->addWidget(lbl_expiry_field_);
     picker_lay->addWidget(expiry_combo_);
     picker_lay->addSpacing(6);
     picker_lay->addWidget(refresh_btn_);
@@ -107,14 +112,14 @@ void FnoHeaderBar::setup_ui() {
     auto* ribbon_lay = new QHBoxLayout(ribbon);
     ribbon_lay->setContentsMargins(0, 0, 0, 0);
     ribbon_lay->setSpacing(20);
-    ribbon_lay->addWidget(make_kv(ribbon, lbl_spot_, "Spot"));
-    ribbon_lay->addWidget(make_kv(ribbon, lbl_change_, "Day Change"));
-    ribbon_lay->addWidget(make_kv(ribbon, lbl_atm_, "ATM"));
-    ribbon_lay->addWidget(make_kv(ribbon, lbl_pcr_, "PCR"));
-    ribbon_lay->addWidget(make_kv(ribbon, lbl_max_pain_, "Max Pain"));
-    ribbon_lay->addWidget(make_kv(ribbon, lbl_ce_oi_, "CE OI"));
-    ribbon_lay->addWidget(make_kv(ribbon, lbl_pe_oi_, "PE OI"));
-    ribbon_lay->addWidget(make_kv(ribbon, lbl_iv_pctile_, "IV Pctile"));
+    ribbon_lay->addWidget(make_kv(ribbon, lbl_spot_, key_spot_, tr("Spot")));
+    ribbon_lay->addWidget(make_kv(ribbon, lbl_change_, key_change_, tr("Day Change")));
+    ribbon_lay->addWidget(make_kv(ribbon, lbl_atm_, key_atm_, tr("ATM")));
+    ribbon_lay->addWidget(make_kv(ribbon, lbl_pcr_, key_pcr_, tr("PCR")));
+    ribbon_lay->addWidget(make_kv(ribbon, lbl_max_pain_, key_max_pain_, tr("Max Pain")));
+    ribbon_lay->addWidget(make_kv(ribbon, lbl_ce_oi_, key_ce_oi_, tr("CE OI")));
+    ribbon_lay->addWidget(make_kv(ribbon, lbl_pe_oi_, key_pe_oi_, tr("PE OI")));
+    ribbon_lay->addWidget(make_kv(ribbon, lbl_iv_pctile_, key_iv_pctile_, tr("IV Pctile")));
     root->addWidget(ribbon, 0, Qt::AlignVCenter);
 
     lbl_status_ = new QLabel("", this);
@@ -227,13 +232,13 @@ void FnoHeaderBar::update_from_chain(const OptionChain& chain) {
                             ++below;
                     const double pctile = 100.0 * double(below) / double(hist.size());
                     lbl_iv_pctile_->setText(QString::number(pctile, 'f', 0) + "%");
-                    lbl_iv_pctile_->setToolTip(QString("Current ATM IV %1 ranks at %2th percentile of %3 days of history.")
+                    lbl_iv_pctile_->setToolTip(tr("Current ATM IV %1 ranks at %2th percentile of %3 days of history.")
                                                    .arg(atm_iv * 100.0, 0, 'f', 1)
                                                    .arg(pctile, 0, 'f', 0)
                                                    .arg(hist.size()));
                 } else {
                     lbl_iv_pctile_->setText("—");
-                    lbl_iv_pctile_->setToolTip(QString("Needs ≥30 days of data — have %1.").arg(hist.size()));
+                    lbl_iv_pctile_->setToolTip(tr("Needs ≥30 days of data — have %1.").arg(hist.size()));
                 }
             } else {
                 lbl_iv_pctile_->setText("—");
@@ -244,7 +249,7 @@ void FnoHeaderBar::update_from_chain(const OptionChain& chain) {
     }
 
     const QDateTime ts = QDateTime::fromMSecsSinceEpoch(chain.timestamp_ms);
-    lbl_status_->setText(QString("Updated %1").arg(ts.toString("hh:mm:ss")));
+    lbl_status_->setText(tr("Updated %1").arg(ts.toString("hh:mm:ss")));
 }
 
 void FnoHeaderBar::clear_ribbon() {
@@ -254,6 +259,29 @@ void FnoHeaderBar::clear_ribbon() {
             l->setText("--");
     if (lbl_status_)
         lbl_status_->setText("");
+}
+
+void FnoHeaderBar::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void FnoHeaderBar::retranslateUi() {
+    if (refresh_btn_)       refresh_btn_->setText(tr("REFRESH"));
+    if (lbl_broker_field_)  lbl_broker_field_->setText(tr("Broker:"));
+    if (lbl_under_field_)   lbl_under_field_->setText(tr("Underlying:"));
+    if (lbl_expiry_field_)  lbl_expiry_field_->setText(tr("Expiry:"));
+
+    // Ribbon keys mirror make_kv's .toUpper() rendering.
+    if (key_spot_)       key_spot_->setText(tr("Spot").toUpper());
+    if (key_change_)     key_change_->setText(tr("Day Change").toUpper());
+    if (key_atm_)        key_atm_->setText(tr("ATM").toUpper());
+    if (key_pcr_)        key_pcr_->setText(tr("PCR").toUpper());
+    if (key_max_pain_)   key_max_pain_->setText(tr("Max Pain").toUpper());
+    if (key_ce_oi_)      key_ce_oi_->setText(tr("CE OI").toUpper());
+    if (key_pe_oi_)      key_pe_oi_->setText(tr("PE OI").toUpper());
+    if (key_iv_pctile_)  key_iv_pctile_->setText(tr("IV Pctile").toUpper());
 }
 
 } // namespace fincept::screens::fno

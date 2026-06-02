@@ -1,7 +1,10 @@
 #pragma once
 #include "services/notifications/NotificationService.h"
 
+#include <QEvent>
 #include <QFrame>
+#include <QLabel>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -24,8 +27,14 @@ class NotifPanel : public QFrame {
 
   protected:
     void showEvent(QShowEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
+    /// Re-apply tr() lookups to header + empty-state text after a language switch.
+    void retranslateUi();
+
+    QLabel* title_lbl_ = nullptr;
+    QPushButton* mark_all_btn_ = nullptr;
     QWidget* list_container_ = nullptr;
     QVBoxLayout* list_layout_ = nullptr;
     QScrollArea* scroll_ = nullptr;

@@ -4,6 +4,7 @@
 #include "services/prediction/PredictionTypes.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QLabel>
 #include <QPushButton>
 #include <QWidget>
@@ -30,11 +31,18 @@ class PolymarketPriceChart : public QWidget {
     void interval_changed(const QString& interval);
     void outcome_changed(int index);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    void retranslateUi();
+
     QWidget* chart_container_ = nullptr;
     QComboBox* interval_combo_ = nullptr;
     QComboBox* outcome_combo_ = nullptr;
     QLabel* price_label_ = nullptr;
+    QLabel* interval_lbl_ = nullptr;
+    QLabel* outcome_lbl_ = nullptr;
 
     // Cached last history so set_presentation() can re-render.
     fincept::services::prediction::PriceHistory last_history_;

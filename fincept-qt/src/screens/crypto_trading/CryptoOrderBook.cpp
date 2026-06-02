@@ -87,12 +87,12 @@ CryptoOrderBook::CryptoOrderBook(QWidget* parent) : QWidget(parent) {
     h_layout->setContentsMargins(8, 0, 8, 0);
     h_layout->setSpacing(2);
 
-    auto* title = new QLabel("ORDER BOOK");
-    title->setObjectName("cryptoObTitle");
-    h_layout->addWidget(title);
+    title_label_ = new QLabel(tr("ORDER BOOK"));
+    title_label_->setObjectName("cryptoObTitle");
+    h_layout->addWidget(title_label_);
     h_layout->addStretch();
 
-    const char* mode_labels[] = {"Book", "Vol", "Imb", "Sig"};
+    const QString mode_labels[] = {tr("Book"), tr("Vol"), tr("Imb"), tr("Sig")};
     for (int i = 0; i < 4; ++i) {
         mode_btns_[i] = new QPushButton(mode_labels[i]);
         mode_btns_[i]->setObjectName("cryptoObModeBtn");
@@ -106,7 +106,7 @@ CryptoOrderBook::CryptoOrderBook(QWidget* parent) : QWidget(parent) {
     layout->addWidget(header);
 
     // Spread label
-    spread_label_ = new QLabel("Spread: --");
+    spread_label_ = new QLabel(tr("Spread: --"));
     spread_label_->setObjectName("cryptoObSpread");
     spread_label_->setAlignment(Qt::AlignCenter);
     spread_label_->setFixedHeight(SPREAD_H);
@@ -140,6 +140,28 @@ void CryptoOrderBook::hideEvent(QHideEvent* e) {
         repaint_timer_->stop();
 }
 
+void CryptoOrderBook::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+        // Column headers / signal labels are painted (not widgets); force a
+        // cache rebuild so the painted text picks up the new language.
+        cache_dirty_ = true;
+        update();
+    }
+    QWidget::changeEvent(event);
+}
+
+void CryptoOrderBook::retranslateUi() {
+    if (title_label_) title_label_->setText(tr("ORDER BOOK"));
+    const QString mode_labels[] = {tr("Book"), tr("Vol"), tr("Imb"), tr("Sig")};
+    for (int i = 0; i < 4; ++i)
+        if (mode_btns_[i]) mode_btns_[i]->setText(mode_labels[i]);
+    // Spread label: only reset to the idle placeholder when no live spread
+    // has been received yet; a real spread value is data and stays as-is.
+    if (spread_label_ && !has_spread_data_)
+        spread_label_->setText(tr("Spread: --"));
+}
+
 void CryptoOrderBook::set_active_mode(int idx) {
     view_mode_ = static_cast<ObViewMode>(idx);
     for (int i = 0; i < 4; ++i) {
@@ -161,7 +183,8 @@ void CryptoOrderBook::set_data(const QVector<QPair<double, double>>& bids, const
         spread_ = spread;
         spread_pct_ = spread_pct;
     }
-    spread_label_->setText(QString("SPREAD  %1  (%2%)").arg(spread, 0, 'f', 2).arg(spread_pct, 0, 'f', 4));
+    spread_label_->setText(tr("SPREAD  %1  (%2%)").arg(spread, 0, 'f', 2).arg(spread_pct, 0, 'f', 4));
+    has_spread_data_ = true;
     cache_dirty_ = true;
     if (repaint_timer_ && !repaint_timer_->isActive())
         repaint_timer_->start();
@@ -277,10 +300,10 @@ void CryptoOrderBook::rebuild_cache() {
 
         // Column headers
         p.setPen(kTextDim());
-        p.drawText(QRect(4, 0, price_col_w, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, "BID");
-        p.drawText(QRect(4, 0, half_w - 4, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "QTY");
-        p.drawText(QRect(half_w + 4, 0, price_col_w, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, "ASK");
-        p.drawText(QRect(half_w + 4, 0, half_w - 8, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "QTY");
+        p.drawText(QRect(4, 0, price_col_w, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, tr("BID"));
+        p.drawText(QRect(4, 0, half_w - 4, ROW_H), Qt::AlignRight | Qt::AlignVCenter, tr("QTY"));
+        p.drawText(QRect(half_w + 4, 0, price_col_w, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, tr("ASK"));
+        p.drawText(QRect(half_w + 4, 0, half_w - 8, ROW_H), Qt::AlignRight | Qt::AlignVCenter, tr("QTY"));
 
         // Draw bid side (left) — prices descending from center
         const int rows_start_y = ROW_H;
@@ -341,13 +364,13 @@ void CryptoOrderBook::rebuild_cache() {
         // Header
         p.setPen(kTextDim());
         if (is_signals) {
-            p.drawText(QRect(4, 0, w / 3, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, "TIME");
-            p.drawText(QRect(w / 3, 0, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "RISE%");
-            p.drawText(QRect(2 * w / 3, 0, w / 3 - 4, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "ACTION");
+            p.drawText(QRect(4, 0, w / 3, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, tr("TIME"));
+            p.drawText(QRect(w / 3, 0, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, tr("RISE%"));
+            p.drawText(QRect(2 * w / 3, 0, w / 3 - 4, ROW_H), Qt::AlignRight | Qt::AlignVCenter, tr("ACTION"));
         } else {
-            p.drawText(QRect(4, 0, w / 3, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, "TIME");
-            p.drawText(QRect(w / 3, 0, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "IMBALANCE");
-            p.drawText(QRect(2 * w / 3, 0, w / 3 - 4, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "SIGNAL");
+            p.drawText(QRect(4, 0, w / 3, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, tr("TIME"));
+            p.drawText(QRect(w / 3, 0, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, tr("IMBALANCE"));
+            p.drawText(QRect(2 * w / 3, 0, w / 3 - 4, ROW_H), Qt::AlignRight | Qt::AlignVCenter, tr("SIGNAL"));
         }
 
         for (int i = 0; i < count && (i + 1) * ROW_H < h; ++i) {
@@ -369,19 +392,19 @@ void CryptoOrderBook::rebuild_cache() {
                            QString("%1%").arg(snap.rise_ratio_60 * 100.0, 0, 'f', 2));
 
                 // Action
-                QString action = "HOLD";
+                QString action = tr("HOLD");
                 QColor c = kTextTertiary();
                 if (snap.imbalance > OB_IMBALANCE_BUY_THRESHOLD && snap.rise_ratio_60 > 0.001) {
-                    action = "STRONG BUY";
+                    action = tr("STRONG BUY");
                     c = kColorBid();
                 } else if (snap.imbalance < OB_IMBALANCE_SELL_THRESHOLD && snap.rise_ratio_60 < -0.001) {
-                    action = "STRONG SELL";
+                    action = tr("STRONG SELL");
                     c = kColorAsk();
                 } else if (snap.imbalance > OB_IMBALANCE_BUY_THRESHOLD) {
-                    action = "BUY";
+                    action = tr("BUY");
                     c = kColorBid();
                 } else if (snap.imbalance < OB_IMBALANCE_SELL_THRESHOLD) {
-                    action = "SELL";
+                    action = tr("SELL");
                     c = kColorAsk();
                 }
                 p.setPen(c);
@@ -393,13 +416,13 @@ void CryptoOrderBook::rebuild_cache() {
                            QString("%1").arg(snap.imbalance, 0, 'f', 3));
 
                 // Signal
-                QString signal = "NEUTRAL";
+                QString signal = tr("NEUTRAL");
                 QColor c = kTextTertiary();
                 if (snap.imbalance > OB_IMBALANCE_BUY_THRESHOLD) {
-                    signal = "BUY PRESSURE";
+                    signal = tr("BUY PRESSURE");
                     c = kColorBid();
                 } else if (snap.imbalance < OB_IMBALANCE_SELL_THRESHOLD) {
-                    signal = "SELL PRESSURE";
+                    signal = tr("SELL PRESSURE");
                     c = kColorAsk();
                 }
                 p.setPen(c);

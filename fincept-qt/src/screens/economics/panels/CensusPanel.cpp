@@ -73,22 +73,22 @@ CensusPanel::CensusPanel(QWidget* parent) : EconPanelBase(kCensusSourceId, kCens
 }
 
 void CensusPanel::activate() {
-    show_empty("Select a dataset and click FETCH\n"
-               "Source: US Census Bureau — American Community Survey (ACS 5-year)");
+    show_empty(tr("Select a dataset and click FETCH\n"
+                  "Source: US Census Bureau — American Community Survey (ACS 5-year)"));
 }
 
 void CensusPanel::build_controls(QHBoxLayout* thl) {
-    auto* lbl = new QLabel("DATASET");
-    lbl->setStyleSheet(ctrl_label_style());
+    dataset_lbl_ = new QLabel(tr("DATASET"));
+    dataset_lbl_->setStyleSheet(ctrl_label_style());
 
     dataset_combo_ = new QComboBox;
     for (const auto& d : kCensusDatasets)
         dataset_combo_->addItem(d.label, d.command);
     dataset_combo_->setFixedHeight(26);
     dataset_combo_->setMinimumWidth(220);
-    dataset_combo_->setToolTip("ACS 5-year estimates, state level");
+    dataset_combo_->setToolTip(tr("ACS 5-year estimates, state level"));
 
-    thl->addWidget(lbl);
+    thl->addWidget(dataset_lbl_);
     thl->addWidget(dataset_combo_);
 }
 
@@ -96,7 +96,7 @@ void CensusPanel::on_fetch() {
     const int idx = dataset_combo_->currentIndex();
     const auto& dataset = kCensusDatasets[idx];
 
-    show_loading("Fetching Census: " + dataset.label + "…");
+    show_loading(tr("Fetching Census: %1…").arg(dataset.label));
     services::EconomicsService::instance().execute(kCensusSourceId, kCensusScript, dataset.command, {},
                                                    "census_" + dataset.command);
 }
@@ -120,7 +120,7 @@ void CensusPanel::on_result(const QString& request_id, const services::Economics
 
     if (rows.isEmpty()) {
         const QString err = result.data["error"].toString();
-        show_error(err.isEmpty() ? "No data returned" : err);
+        show_error(err.isEmpty() ? tr("No data returned") : err);
         return;
     }
 
@@ -129,6 +129,22 @@ void CensusPanel::on_result(const QString& request_id, const services::Economics
         "Census: " + (idx >= 0 && idx < kCensusDatasets.size() ? kCensusDatasets[idx].label : request_id.mid(7));
     display(rows, title);
     LOG_INFO("CensusPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(title));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void CensusPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void CensusPanel::retranslateUi() {
+    if (dataset_lbl_)
+        dataset_lbl_->setText(tr("DATASET"));
+    if (dataset_combo_)
+        dataset_combo_->setToolTip(tr("ACS 5-year estimates, state level"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

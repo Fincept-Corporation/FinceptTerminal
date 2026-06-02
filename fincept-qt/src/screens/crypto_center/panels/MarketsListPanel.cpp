@@ -75,9 +75,9 @@ void MarketsListPanel::build_ui() {
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(0);
 
-    title_ = new QLabel(QStringLiteral("MARKETS"), head);
+    title_ = new QLabel(tr("MARKETS"), head);
     title_->setObjectName(QStringLiteral("marketsListTitle"));
-    status_pill_ = new QLabel(QStringLiteral("DEMO"), head);
+    status_pill_ = new QLabel(tr("DEMO"), head);
     status_pill_->setObjectName(QStringLiteral("marketsListStatusDemo"));
 
     hl->addWidget(title_);
@@ -190,6 +190,36 @@ void MarketsListPanel::hideEvent(QHideEvent* e) {
     subscribed_ = false;
 }
 
+void MarketsListPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void MarketsListPanel::retranslateUi() {
+    if (title_) title_->setText(tr("MARKETS"));
+    if (table_) {
+        table_->setHorizontalHeaderLabels({
+            tr("MARKET"), tr("YES"), tr("NO"), tr("24h VOL"), tr("EXPIRES")
+        });
+    }
+    if (footer_note_)
+        footer_note_->setText(tr(
+            "Demo dataset. Set `fincept.markets_endpoint` in SecureStorage and "
+            "deploy the fincept_market Anchor program for live trading."));
+    // Re-apply the status pill text using its objectName as the state flag so
+    // the live DEMO/LIVE/ERROR state survives the locale switch.
+    if (status_pill_) {
+        const QString on = status_pill_->objectName();
+        if (on == QLatin1String("marketsListStatusError"))
+            status_pill_->setText(tr("ERROR"));
+        else if (on == QLatin1String("marketsListStatusLive"))
+            status_pill_->setText(tr("● LIVE"));
+        else
+            status_pill_->setText(tr("DEMO"));
+    }
+}
+
 // ── Adapter callbacks ──────────────────────────────────────────────────────
 
 void MarketsListPanel::on_markets_ready(
@@ -218,10 +248,10 @@ void MarketsListPanel::on_row_double_clicked(int row, int /*column*/) {
 
 void MarketsListPanel::set_status_demo(bool demo) {
     if (demo) {
-        status_pill_->setText(QStringLiteral("DEMO"));
+        status_pill_->setText(tr("DEMO"));
         status_pill_->setObjectName(QStringLiteral("marketsListStatusDemo"));
     } else {
-        status_pill_->setText(QStringLiteral("● LIVE"));
+        status_pill_->setText(tr("● LIVE"));
         status_pill_->setObjectName(QStringLiteral("marketsListStatusLive"));
     }
     status_pill_->style()->unpolish(status_pill_);
@@ -229,7 +259,7 @@ void MarketsListPanel::set_status_demo(bool demo) {
 }
 
 void MarketsListPanel::set_status_error(const QString& message) {
-    status_pill_->setText(QStringLiteral("ERROR"));
+    status_pill_->setText(tr("ERROR"));
     status_pill_->setObjectName(QStringLiteral("marketsListStatusError"));
     status_pill_->setToolTip(message);
     status_pill_->style()->unpolish(status_pill_);

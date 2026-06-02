@@ -118,10 +118,10 @@ QWidget* ExcelScreen::build_toolbar() {
     hl->setSpacing(4);
 
     // Title
-    auto* title = new QLabel("EXCEL SPREADSHEET", bar);
-    title->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px; font-weight:700; margin-right:12px;")
-                             .arg(kAccent(), fonts::DATA_FAMILY));
-    hl->addWidget(title);
+    toolbar_title_ = new QLabel(tr("EXCEL SPREADSHEET"), bar);
+    toolbar_title_->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px; font-weight:700; margin-right:12px;")
+                                      .arg(kAccent(), fonts::DATA_FAMILY));
+    hl->addWidget(toolbar_title_);
 
     // Button factory
     auto make_btn = [&](const QString& text, const QString& tooltip = {}) -> QPushButton* {
@@ -136,17 +136,17 @@ QWidget* ExcelScreen::build_toolbar() {
         return btn;
     };
 
-    auto* import_btn = make_btn("IMPORT", "Import XLSX/CSV file");
-    connect(import_btn, &QPushButton::clicked, this, &ExcelScreen::on_import);
-    hl->addWidget(import_btn);
+    import_btn_ = make_btn(tr("IMPORT"), tr("Import XLSX/CSV file"));
+    connect(import_btn_, &QPushButton::clicked, this, &ExcelScreen::on_import);
+    hl->addWidget(import_btn_);
 
-    auto* export_btn = make_btn("EXPORT", "Export as XLSX");
-    connect(export_btn, &QPushButton::clicked, this, &ExcelScreen::on_export);
-    hl->addWidget(export_btn);
+    export_btn_ = make_btn(tr("EXPORT"), tr("Export as XLSX"));
+    connect(export_btn_, &QPushButton::clicked, this, &ExcelScreen::on_export);
+    hl->addWidget(export_btn_);
 
-    auto* export_csv_btn = make_btn("CSV", "Export active sheet as CSV");
-    connect(export_csv_btn, &QPushButton::clicked, this, &ExcelScreen::on_export_csv);
-    hl->addWidget(export_csv_btn);
+    export_csv_btn_ = make_btn(tr("CSV"), tr("Export active sheet as CSV"));
+    connect(export_csv_btn_, &QPushButton::clicked, this, &ExcelScreen::on_export_csv);
+    hl->addWidget(export_csv_btn_);
 
     // Separator
     auto* sep1 = new QWidget(bar);
@@ -154,21 +154,21 @@ QWidget* ExcelScreen::build_toolbar() {
     sep1->setStyleSheet(QString("background:%1;").arg(colors::TEXT_TERTIARY()));
     hl->addWidget(sep1);
 
-    auto* add_btn = make_btn("+ SHEET", "Add new sheet");
-    connect(add_btn, &QPushButton::clicked, this, &ExcelScreen::on_add_sheet);
-    hl->addWidget(add_btn);
+    add_sheet_btn_ = make_btn(tr("+ SHEET"), tr("Add new sheet"));
+    connect(add_sheet_btn_, &QPushButton::clicked, this, &ExcelScreen::on_add_sheet);
+    hl->addWidget(add_sheet_btn_);
 
-    auto* rename_btn = make_btn("RENAME", "Rename current sheet");
-    connect(rename_btn, &QPushButton::clicked, this, &ExcelScreen::on_rename_sheet);
-    hl->addWidget(rename_btn);
+    rename_btn_ = make_btn(tr("RENAME"), tr("Rename current sheet"));
+    connect(rename_btn_, &QPushButton::clicked, this, &ExcelScreen::on_rename_sheet);
+    hl->addWidget(rename_btn_);
 
-    auto* del_btn = make_btn("DELETE", "Delete current sheet");
-    del_btn->setStyleSheet(QString("QPushButton { background:%2; color:%3; border:none;"
-                                   " font-family:%1; font-size:10px; font-weight:600; padding:6px 12px; }"
-                                   "QPushButton:hover { background:%4; }")
-                               .arg(fonts::DATA_FAMILY, colors::TEXT_DIM(), colors::TEXT_PRIMARY(), colors::NEGATIVE()));
-    connect(del_btn, &QPushButton::clicked, this, &ExcelScreen::on_delete_sheet);
-    hl->addWidget(del_btn);
+    delete_btn_ = make_btn(tr("DELETE"), tr("Delete current sheet"));
+    delete_btn_->setStyleSheet(QString("QPushButton { background:%2; color:%3; border:none;"
+                                       " font-family:%1; font-size:10px; font-weight:600; padding:6px 12px; }"
+                                       "QPushButton:hover { background:%4; }")
+                                   .arg(fonts::DATA_FAMILY, colors::TEXT_DIM(), colors::TEXT_PRIMARY(), colors::NEGATIVE()));
+    connect(delete_btn_, &QPushButton::clicked, this, &ExcelScreen::on_delete_sheet);
+    hl->addWidget(delete_btn_);
 
     hl->addStretch();
 
@@ -187,8 +187,8 @@ QWidget* ExcelScreen::build_toolbar() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void ExcelScreen::on_import() {
-    QString path = QFileDialog::getOpenFileName(this, "Import Spreadsheet", {},
-                                                "Spreadsheet Files (*.xlsx *.xls *.csv);;All Files (*)");
+    QString path = QFileDialog::getOpenFileName(this, tr("Import Spreadsheet"), {},
+                                                tr("Spreadsheet Files (*.xlsx *.xls *.csv);;All Files (*)"));
     if (path.isEmpty())
         return;
 
@@ -244,10 +244,10 @@ void ExcelScreen::on_import() {
     // Register with File Manager so it appears in the Files tab
     services::FileManagerService::instance().import_file(path, "excel");
 #else
-    QMessageBox::information(this, "Excel Import",
-        "Excel (.xlsx) import requires Qt6 private headers.\n"
-        "This build was compiled without QXlsx support.\n\n"
-        "CSV files can still be imported via the toolbar.");
+    QMessageBox::information(this, tr("Excel Import"),
+        tr("Excel (.xlsx) import requires Qt6 private headers.\n"
+           "This build was compiled without QXlsx support.\n\n"
+           "CSV files can still be imported via the toolbar."));
 #endif
 }
 
@@ -257,7 +257,7 @@ void ExcelScreen::on_import() {
 
 void ExcelScreen::on_export() {
 #ifdef FINCEPT_HAS_QXLSX
-    QString path = QFileDialog::getSaveFileName(this, "Export as XLSX", file_name_, "Excel Files (*.xlsx)");
+    QString path = QFileDialog::getSaveFileName(this, tr("Export as XLSX"), file_name_, tr("Excel Files (*.xlsx)"));
     if (path.isEmpty())
         return;
 
@@ -311,10 +311,10 @@ void ExcelScreen::on_export() {
         LOG_ERROR("ExcelScreen", "Failed to save XLSX file");
     }
 #else
-    QMessageBox::information(this, "Excel Export",
-        "Excel (.xlsx) export requires Qt6 private headers.\n"
-        "This build was compiled without QXlsx support.\n\n"
-        "CSV export is still available via the toolbar.");
+    QMessageBox::information(this, tr("Excel Export"),
+        tr("Excel (.xlsx) export requires Qt6 private headers.\n"
+           "This build was compiled without QXlsx support.\n\n"
+           "CSV export is still available via the toolbar."));
 #endif
 }
 
@@ -327,13 +327,14 @@ void ExcelScreen::on_export_csv() {
     if (!sheet)
         return;
 
-    QString path = QFileDialog::getSaveFileName(this, "Export CSV", sheet->sheet_name() + ".csv", "CSV Files (*.csv)");
+    QString path =
+        QFileDialog::getSaveFileName(this, tr("Export CSV"), sheet->sheet_name() + ".csv", tr("CSV Files (*.csv)"));
     if (path.isEmpty())
         return;
 
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, "Export failed", "Could not open file for writing:\n" + path);
+        QMessageBox::warning(this, tr("Export failed"), tr("Could not open file for writing:\n%1").arg(path));
         return;
     }
 
@@ -384,14 +385,14 @@ void ExcelScreen::on_add_sheet() {
 
 void ExcelScreen::on_delete_sheet() {
     if (sheet_tabs_->count() <= 1) {
-        QMessageBox::warning(this, "Cannot Delete", "Cannot delete the last sheet.");
+        QMessageBox::warning(this, tr("Cannot Delete"), tr("Cannot delete the last sheet."));
         return;
     }
 
     int idx = sheet_tabs_->currentIndex();
     QString name = sheet_tabs_->tabText(idx);
 
-    auto reply = QMessageBox::question(this, "Delete Sheet", QString("Delete \"%1\"? This cannot be undone.").arg(name),
+    auto reply = QMessageBox::question(this, tr("Delete Sheet"), tr("Delete \"%1\"? This cannot be undone.").arg(name),
                                        QMessageBox::Yes | QMessageBox::No);
 
     if (reply == QMessageBox::Yes) {
@@ -409,7 +410,7 @@ void ExcelScreen::on_rename_sheet() {
 
     bool ok = false;
     QString current = sheet_tabs_->tabText(idx);
-    QString name = QInputDialog::getText(this, "Rename Sheet", "New name:", QLineEdit::Normal, current, &ok);
+    QString name = QInputDialog::getText(this, tr("Rename Sheet"), tr("New name:"), QLineEdit::Normal, current, &ok);
 
     if (ok && !name.trimmed().isEmpty()) {
         sheet_tabs_->setTabText(idx, name.trimmed());
@@ -445,15 +446,52 @@ QString ExcelScreen::generate_sheet_name() const {
 
 void ExcelScreen::update_status() {
     auto* sheet = current_sheet();
-    QString info = QString("File: %1  |  Sheets: %2").arg(file_name_).arg(sheet_tabs_->count());
+    QString info = tr("File: %1  |  Sheets: %2").arg(file_name_).arg(sheet_tabs_->count());
     if (sheet) {
-        info += QString("  |  Active: %1  |  %2 rows x %3 cols")
+        info += tr("  |  Active: %1  |  %2 rows x %3 cols")
                     .arg(sheet->sheet_name())
                     .arg(sheet->row_count())
                     .arg(sheet->col_count());
     }
     if (status_label_)
         status_label_->setText(info);
+}
+
+// ── Live language switch ─────────────────────────────────────────────────────
+
+void ExcelScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ExcelScreen::retranslateUi() {
+    if (toolbar_title_) toolbar_title_->setText(tr("EXCEL SPREADSHEET"));
+    if (import_btn_) {
+        import_btn_->setText(tr("IMPORT"));
+        import_btn_->setToolTip(tr("Import XLSX/CSV file"));
+    }
+    if (export_btn_) {
+        export_btn_->setText(tr("EXPORT"));
+        export_btn_->setToolTip(tr("Export as XLSX"));
+    }
+    if (export_csv_btn_) {
+        export_csv_btn_->setText(tr("CSV"));
+        export_csv_btn_->setToolTip(tr("Export active sheet as CSV"));
+    }
+    if (add_sheet_btn_) {
+        add_sheet_btn_->setText(tr("+ SHEET"));
+        add_sheet_btn_->setToolTip(tr("Add new sheet"));
+    }
+    if (rename_btn_) {
+        rename_btn_->setText(tr("RENAME"));
+        rename_btn_->setToolTip(tr("Rename current sheet"));
+    }
+    if (delete_btn_) {
+        delete_btn_->setText(tr("DELETE"));
+        delete_btn_->setToolTip(tr("Delete current sheet"));
+    }
+    update_status(); // re-render the status bar summary in the new language
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────

@@ -72,9 +72,9 @@ void CryptoCenterScreen::build_ui() {
     header_brand_->setObjectName(QStringLiteral("cryptoCenterBrand"));
     header_separator_ = new QLabel(QStringLiteral("/"));
     header_separator_->setObjectName(QStringLiteral("cryptoCenterSep"));
-    header_route_ = new QLabel(QStringLiteral("CRYPTO CENTER"));
+    header_route_ = new QLabel(tr("CRYPTO CENTER"));
     header_route_->setObjectName(QStringLiteral("cryptoCenterRoute"));
-    header_status_ = new QLabel(QStringLiteral("● DISCONNECTED"));
+    header_status_ = new QLabel(tr("● DISCONNECTED"));
     header_status_->setObjectName(QStringLiteral("cryptoCenterHeaderStatusOff"));
 
     hl->addWidget(header_brand_);
@@ -116,13 +116,13 @@ void CryptoCenterScreen::build_empty_page() {
     auto* head_l = new QHBoxLayout(head);
     head_l->setContentsMargins(12, 0, 12, 0);
     head_l->setSpacing(0);
-    auto* head_title = new QLabel(QStringLiteral("CONNECT WALLET"), head);
-    head_title->setObjectName(QStringLiteral("cryptoCenterPanelTitle"));
-    head_l->addWidget(head_title);
+    empty_head_title_ = new QLabel(tr("CONNECT WALLET"), head);
+    empty_head_title_->setObjectName(QStringLiteral("cryptoCenterPanelTitle"));
+    head_l->addWidget(empty_head_title_);
     head_l->addStretch();
-    auto* head_status = new QLabel(QStringLiteral("READY"), head);
-    head_status->setObjectName(QStringLiteral("cryptoCenterPanelStatus"));
-    head_l->addWidget(head_status);
+    empty_head_status_ = new QLabel(tr("READY"), head);
+    empty_head_status_->setObjectName(QStringLiteral("cryptoCenterPanelStatus"));
+    head_l->addWidget(empty_head_status_);
     panel_l->addWidget(head);
 
     auto* body = new QWidget(empty_panel_);
@@ -144,7 +144,7 @@ void CryptoCenterScreen::build_empty_page() {
 
     body_l->addSpacing(4);
 
-    empty_security_label_ = new QLabel(QStringLiteral("SECURITY"), body);
+    empty_security_label_ = new QLabel(tr("SECURITY"), body);
     empty_security_label_->setObjectName(QStringLiteral("cryptoCenterCaptionAccent"));
     body_l->addWidget(empty_security_label_);
 
@@ -315,7 +315,7 @@ void CryptoCenterScreen::apply_theme() {
 
 void CryptoCenterScreen::on_wallet_connected(const QString& /*pubkey*/,
                                              const QString& /*label*/) {
-    header_status_->setText(QStringLiteral("● CONNECTED"));
+    header_status_->setText(tr("● CONNECTED"));
     header_status_->setObjectName(QStringLiteral("cryptoCenterHeaderStatusOn"));
     header_status_->style()->unpolish(header_status_);
     header_status_->style()->polish(header_status_);
@@ -323,11 +323,59 @@ void CryptoCenterScreen::on_wallet_connected(const QString& /*pubkey*/,
 }
 
 void CryptoCenterScreen::on_wallet_disconnected() {
-    header_status_->setText(QStringLiteral("● DISCONNECTED"));
+    header_status_->setText(tr("● DISCONNECTED"));
     header_status_->setObjectName(QStringLiteral("cryptoCenterHeaderStatusOff"));
     header_status_->style()->unpolish(header_status_);
     header_status_->style()->polish(header_status_);
     stack_->setCurrentWidget(empty_page_);
+}
+
+// ── i18n ───────────────────────────────────────────────────────────────────
+
+void CryptoCenterScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void CryptoCenterScreen::retranslateUi() {
+    // Header (brand + separator are not translatable).
+    if (header_route_) header_route_->setText(tr("CRYPTO CENTER"));
+    if (header_status_) {
+        const bool connected =
+            fincept::wallet::WalletService::instance().is_connected();
+        header_status_->setText(connected ? tr("● CONNECTED")
+                                          : tr("● DISCONNECTED"));
+    }
+
+    // Empty-state panel.
+    if (empty_head_title_) empty_head_title_->setText(tr("CONNECT WALLET"));
+    if (empty_head_status_) empty_head_status_->setText(tr("READY"));
+    if (empty_title_) empty_title_->setText(tr("No wallet connected"));
+    if (empty_lede_)
+        empty_lede_->setText(
+            tr("Connect a Solana wallet to view your $FNCPT balance, SOL holdings, "
+               "and live USD valuation. Your private keys never leave your wallet."));
+    if (empty_security_label_) empty_security_label_->setText(tr("SECURITY"));
+    if (empty_security_text_)
+        empty_security_text_->setText(
+            tr("· public address read-only\n"
+               "· no private keys, no seed phrases\n"
+               "· local handshake on 127.0.0.1, single-use token\n"
+               "· cryptographic signature challenge before connect"));
+    if (connect_button_) connect_button_->setText(tr("CONNECT WALLET"));
+
+    // Tab labels — re-apply by index so the live tab bar reflects the new
+    // language. Order matches build_connected_page().
+    if (tab_widget_) {
+        if (home_tab_)     tab_widget_->setTabText(tab_widget_->indexOf(home_tab_), tr("HOME"));
+        if (trade_tab_)    tab_widget_->setTabText(tab_widget_->indexOf(trade_tab_), tr("TRADE"));
+        if (activity_tab_) tab_widget_->setTabText(tab_widget_->indexOf(activity_tab_), tr("ACTIVITY"));
+        if (settings_tab_) tab_widget_->setTabText(tab_widget_->indexOf(settings_tab_), tr("SETTINGS"));
+        if (stake_tab_)    tab_widget_->setTabText(tab_widget_->indexOf(stake_tab_), tr("STAKE"));
+        if (markets_tab_)  tab_widget_->setTabText(tab_widget_->indexOf(markets_tab_), tr("MARKETS"));
+        if (roadmap_tab_)  tab_widget_->setTabText(tab_widget_->indexOf(roadmap_tab_), tr("ROADMAP"));
+    }
 }
 
 } // namespace fincept::screens

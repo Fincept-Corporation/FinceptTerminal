@@ -19,8 +19,8 @@ SignTransactionDialog::SignTransactionDialog(const QString& tx_base64,
                                              const QString& title,
                                              const QString& lede,
                                              QWidget* parent)
-    : QDialog(parent), tx_base64_(tx_base64), lede_(lede) {
-    setWindowTitle(title.isEmpty() ? tr("Sign transaction") : title);
+    : QDialog(parent), tx_base64_(tx_base64), title_(title), lede_(lede) {
+    setWindowTitle(title_.isEmpty() ? tr("Sign transaction") : title_);
     setModal(true);
     resize(440, 220);
 
@@ -28,17 +28,17 @@ SignTransactionDialog::SignTransactionDialog(const QString& tx_base64,
     layout->setContentsMargins(24, 20, 24, 20);
     layout->setSpacing(12);
 
-    auto* heading = new QLabel(title.isEmpty() ? tr("Sign transaction") : title, this);
-    heading->setObjectName(QStringLiteral("walletDialogTitle"));
-    layout->addWidget(heading);
+    heading_label_ = new QLabel(title_.isEmpty() ? tr("Sign transaction") : title_, this);
+    heading_label_->setObjectName(QStringLiteral("walletDialogTitle"));
+    layout->addWidget(heading_label_);
 
-    auto* lede_label = new QLabel(
+    lede_label_ = new QLabel(
         lede_.isEmpty()
             ? tr("Approve the transaction in your wallet to complete this action.")
             : lede_,
         this);
-    lede_label->setWordWrap(true);
-    layout->addWidget(lede_label);
+    lede_label_->setWordWrap(true);
+    layout->addWidget(lede_label_);
 
     status_label_ = new QLabel(this);
     status_label_->setObjectName(QStringLiteral("walletDialogStatus"));
@@ -70,6 +70,29 @@ SignTransactionDialog::SignTransactionDialog(const QString& tx_base64,
 }
 
 SignTransactionDialog::~SignTransactionDialog() = default;
+
+void SignTransactionDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void SignTransactionDialog::retranslateUi() {
+    // title_ / lede_ are caller-supplied (already localised at the call site);
+    // only the empty-state fallbacks are translated here.
+    setWindowTitle(title_.isEmpty() ? tr("Sign transaction") : title_);
+    if (heading_label_)
+        heading_label_->setText(title_.isEmpty() ? tr("Sign transaction") : title_);
+    if (lede_label_)
+        lede_label_->setText(
+            lede_.isEmpty()
+                ? tr("Approve the transaction in your wallet to complete this action.")
+                : lede_);
+    // status_label_ is stateful (relay progress text set live in start_signing)
+    // — do not clobber it here.
+    if (reopen_button_) reopen_button_->setText(tr("Reopen browser"));
+    if (cancel_button_) cancel_button_->setText(tr("Cancel"));
+}
 
 void SignTransactionDialog::showEvent(QShowEvent* e) {
     QDialog::showEvent(e);

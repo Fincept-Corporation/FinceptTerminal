@@ -130,20 +130,20 @@ BeaPanel::BeaPanel(QWidget* parent) : EconPanelBase(kBeaSourceId, kBeaColor, par
     cat_hdr->setFixedHeight(32);
     auto* chl = new QHBoxLayout(cat_hdr);
     chl->setContentsMargins(8, 0, 8, 0);
-    auto* cat_lbl = new QLabel("CATEGORY");
-    cat_lbl->setStyleSheet(ctrl_label_style());
+    category_lbl_ = new QLabel(tr("CATEGORY"));
+    category_lbl_->setStyleSheet(ctrl_label_style());
     category_combo_ = new QComboBox;
     for (const auto& c : kBeaCategories)
         category_combo_->addItem(c.label);
     category_combo_->setFixedHeight(22);
     connect(category_combo_, &QComboBox::currentIndexChanged, this, &BeaPanel::on_category_changed);
-    chl->addWidget(cat_lbl);
+    chl->addWidget(category_lbl_);
     chl->addWidget(category_combo_, 1);
     lvl->addWidget(cat_hdr);
 
     // Indicator search
     indicator_search_ = new QLineEdit;
-    indicator_search_->setPlaceholderText("Filter indicators…");
+    indicator_search_->setPlaceholderText(tr("Filter indicators…"));
     indicator_search_->setStyleSheet(search_input_style());
     indicator_search_->setFixedHeight(28);
     connect(indicator_search_, &QLineEdit::textChanged, this, &BeaPanel::on_indicator_filter);
@@ -168,12 +168,15 @@ BeaPanel::BeaPanel(QWidget* parent) : EconPanelBase(kBeaSourceId, kBeaColor, par
 
     connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
             &BeaPanel::on_result);
+
+    // Localize fixed category-combo item text to the active language.
+    retranslateUi();
 }
 
 void BeaPanel::activate() {
-    show_empty("Select a category and indicator, then click FETCH\n"
-               "Requires BEA_API_KEY — free at: www.bea.gov/data/api/register\n"
-               "All data is US national accounts (NIPA)");
+    show_empty(tr("Select a category and indicator, then click FETCH\n"
+                  "Requires BEA_API_KEY — free at: www.bea.gov/data/api/register\n"
+                  "All data is US national accounts (NIPA)"));
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -186,26 +189,26 @@ void BeaPanel::build_controls(QHBoxLayout* thl) {
     };
 
     start_input_ = new QLineEdit;
-    start_input_->setPlaceholderText("Start year");
+    start_input_->setPlaceholderText(tr("Start year"));
     start_input_->setText("2000");
     start_input_->setFixedHeight(26);
     start_input_->setFixedWidth(75);
 
     end_input_ = new QLineEdit;
-    end_input_->setPlaceholderText("End year");
+    end_input_->setPlaceholderText(tr("End year"));
     end_input_->setText(QString::number(QDate::currentDate().year()));
     end_input_->setFixedHeight(26);
     end_input_->setFixedWidth(75);
 
-    thl->addWidget(make_lbl("FROM"));
+    thl->addWidget(from_lbl_ = make_lbl(tr("FROM")));
     thl->addWidget(start_input_);
-    thl->addWidget(make_lbl("TO"));
+    thl->addWidget(to_lbl_ = make_lbl(tr("TO")));
     thl->addWidget(end_input_);
 
     // API key notice
-    auto* notice_lbl = new QLabel("Requires BEA_API_KEY");
-    notice_lbl->setStyleSheet(notice_style());
-    thl->addWidget(notice_lbl);
+    notice_lbl_ = new QLabel(tr("Requires BEA_API_KEY"));
+    notice_lbl_->setStyleSheet(notice_style());
+    thl->addWidget(notice_lbl_);
 }
 
 void BeaPanel::on_category_changed(int index) {
@@ -240,7 +243,7 @@ void BeaPanel::on_indicator_filter(const QString& text) {
 void BeaPanel::on_fetch() {
     const auto* sel = indicator_list_->currentItem();
     if (!sel) {
-        show_empty("Select an indicator from the list");
+        show_empty(tr("Select an indicator from the list"));
         return;
     }
     const QString indicator_id = sel->data(Qt::UserRole).toString();
@@ -248,12 +251,12 @@ void BeaPanel::on_fetch() {
     const QString end = end_input_->text().trimmed();
 
     if (start.isEmpty() || end.isEmpty()) {
-        show_empty("Enter start and end years");
+        show_empty(tr("Enter start and end years"));
         return;
     }
 
     // CLI: fetch <indicator_id> <start_year>-01-01 <end_year>-12-31
-    show_loading("Fetching BEA: " + sel->text().split("  [").first() + "…");
+    show_loading(tr("Fetching BEA: %1…").arg(sel->text().split("  [").first()));
     services::EconomicsService::instance().execute(kBeaSourceId, kBeaScript, "fetch",
                                                    {indicator_id, start + "-01-01", end + "-12-31"},
                                                    "bea_fetch_" + indicator_id);
@@ -269,9 +272,9 @@ void BeaPanel::on_result(const QString& request_id, const services::EconomicsRes
 
     if (!result.success) {
         if (result.error.contains("API key") || result.error.contains("UserID") || result.error.contains("register")) {
-            show_error("BEA API key not configured.\n"
-                       "Set BEA_API_KEY environment variable.\n"
-                       "Free registration at: www.bea.gov/data/api/register");
+            show_error(tr("BEA API key not configured.\n"
+                          "Set BEA_API_KEY environment variable.\n"
+                          "Free registration at: www.bea.gov/data/api/register"));
         } else {
             show_error(result.error);
         }
@@ -283,16 +286,50 @@ void BeaPanel::on_result(const QString& request_id, const services::EconomicsRes
     QJsonArray rows = result.data["data"].toArray();
 
     if (rows.isEmpty()) {
-        show_empty("No data returned — check API key and year range");
+        show_empty(tr("No data returned — check API key and year range"));
         return;
     }
 
     const QJsonObject meta = result.data["metadata"].toObject();
     const QString ind_name = meta["indicator_name"].toString(
-        indicator_list_->currentItem() ? indicator_list_->currentItem()->text().split("  [").first() : "Indicator");
+        indicator_list_->currentItem() ? indicator_list_->currentItem()->text().split("  [").first() : tr("Indicator"));
 
     display(rows, "BEA: " + ind_name);
     LOG_INFO("BeaPanel", QString("Displayed %1 data points for %2").arg(rows.size()).arg(request_id));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void BeaPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void BeaPanel::retranslateUi() {
+    if (category_lbl_)
+        category_lbl_->setText(tr("CATEGORY"));
+    // Category names are fixed UI labels (order matches kBeaCategories).
+    if (category_combo_ && category_combo_->count() >= 5) {
+        category_combo_->setItemText(0, tr("GDP & Output"));
+        category_combo_->setItemText(1, tr("Consumption & Investment"));
+        category_combo_->setItemText(2, tr("Trade & External"));
+        category_combo_->setItemText(3, tr("Income & Saving"));
+        category_combo_->setItemText(4, tr("Government"));
+    }
+    if (indicator_search_)
+        indicator_search_->setPlaceholderText(tr("Filter indicators…"));
+    if (from_lbl_)
+        from_lbl_->setText(tr("FROM"));
+    if (to_lbl_)
+        to_lbl_->setText(tr("TO"));
+    if (start_input_)
+        start_input_->setPlaceholderText(tr("Start year"));
+    if (end_input_)
+        end_input_->setPlaceholderText(tr("End year"));
+    if (notice_lbl_)
+        notice_lbl_->setText(tr("Requires BEA_API_KEY"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

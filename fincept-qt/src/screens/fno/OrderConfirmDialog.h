@@ -13,6 +13,7 @@
 #include "trading/TradingTypes.h"
 
 #include <QDialog>
+#include <QEvent>
 #include <QLabel>
 #include <QPointer>
 #include <QPushButton>
@@ -37,20 +38,29 @@ class OrderConfirmDialog : public QDialog {
 
     const fincept::services::options::Strategy& strategy() const { return strategy_; }
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void setup_ui(double premium, double max_profit, double max_loss);
     void populate_legs();
     void start_margin_fetch();
     void on_margin_loaded(bool ok, fincept::trading::BasketMargin margin, QString error);
+    void retranslateUi();
 
     fincept::services::options::Strategy strategy_;
     fincept::services::options::OptionChain chain_;
     std::optional<fincept::trading::BasketMargin> margin_;
 
     QTableWidget* legs_table_ = nullptr;
+    QLabel* title_label_ = nullptr;
+    QLabel* sub_label_ = nullptr;
     QLabel* lbl_premium_ = nullptr;
     QLabel* lbl_max_pnl_ = nullptr;
     QLabel* lbl_margin_ = nullptr;
+    QLabel* key_premium_ = nullptr;
+    QLabel* key_max_pnl_ = nullptr;
+    QLabel* key_margin_ = nullptr;
     QPushButton* place_btn_ = nullptr;
     QPushButton* cancel_btn_ = nullptr;
 };

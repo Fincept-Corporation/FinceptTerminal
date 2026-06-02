@@ -3,6 +3,7 @@
 #include "screens/common/IStatefulScreen.h"
 #include "services/algo_trading/AlgoTradingTypes.h"
 
+#include <QEvent>
 #include <QHideEvent>
 #include <QLabel>
 #include <QPushButton>
@@ -33,6 +34,7 @@ class AlgoTradingScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_tab_changed(int index);
@@ -42,6 +44,7 @@ class AlgoTradingScreen : public QWidget, public IStatefulScreen {
     QWidget* build_top_bar();
     QWidget* build_status_bar();
     void update_tab_buttons();
+    void retranslateUi();
 
     QStackedWidget* content_stack_ = nullptr;
     StrategyBuilderPanel* builder_ = nullptr;
@@ -51,6 +54,9 @@ class AlgoTradingScreen : public QWidget, public IStatefulScreen {
 
     QVector<QPushButton*> tab_buttons_;
     int active_tab_ = 0;
+    int active_deployments_ = 0;
+    QLabel* title_label_ = nullptr;
+    QLabel* engine_caption_ = nullptr;
     QLabel* deploy_count_label_ = nullptr;
     QLabel* status_label_ = nullptr;
     QTimer* poll_timer_ = nullptr;

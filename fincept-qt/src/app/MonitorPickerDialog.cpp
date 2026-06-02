@@ -179,10 +179,10 @@ MonitorPickerDialog::MonitorPickerDialog(QWidget* parent, QScreen* current) : QD
     vl->setContentsMargins(16, 14, 16, 14);
     vl->setSpacing(10);
 
-    auto* title = new QLabel(tr("Open new window on:"), this);
-    title->setStyleSheet(QStringLiteral("color: %1; font-size: 13px; font-weight: 600;")
+    title_label_ = new QLabel(tr("Open new window on:"), this);
+    title_label_->setStyleSheet(QStringLiteral("color: %1; font-size: 13px; font-weight: 600;")
                              .arg(QString(ui::colors::TEXT_PRIMARY())));
-    vl->addWidget(title);
+    vl->addWidget(title_label_);
 
     auto* map = new MonitorMapWidget(
         current,
@@ -191,17 +191,35 @@ MonitorPickerDialog::MonitorPickerDialog(QWidget* parent, QScreen* current) : QD
             accept();
         },
         this);
+    map_widget_ = map;
     vl->addWidget(map, /*stretch=*/1);
 
-    auto* hint = new QLabel(
+    hint_label_ = new QLabel(
         tr("★ = primary monitor.  Click a monitor to open the new window there."), this);
-    hint->setStyleSheet(QStringLiteral("color: %1; font-size: 10px;")
+    hint_label_->setStyleSheet(QStringLiteral("color: %1; font-size: 10px;")
                             .arg(QString(ui::colors::TEXT_SECONDARY())));
-    vl->addWidget(hint);
+    vl->addWidget(hint_label_);
 
     auto* bb = new QDialogButtonBox(QDialogButtonBox::Cancel, this);
     connect(bb, &QDialogButtonBox::rejected, this, &QDialog::reject);
     vl->addWidget(bb);
+}
+
+void MonitorPickerDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void MonitorPickerDialog::retranslateUi() {
+    setWindowTitle(tr("Choose Monitor"));
+    if (title_label_) title_label_->setText(tr("Open new window on:"));
+    if (hint_label_)
+        hint_label_->setText(
+            tr("★ = primary monitor.  Click a monitor to open the new window there."));
+    // Force a repaint so the per-screen "CURRENT" overlay (painted via tr() in
+    // MonitorMapWidget::paintEvent) re-evaluates under the new language.
+    if (map_widget_) map_widget_->update();
 }
 
 QScreen* MonitorPickerDialog::pick(QWidget* parent, QScreen* current) {

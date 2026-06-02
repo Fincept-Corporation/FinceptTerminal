@@ -10,6 +10,7 @@
 
 #include "services/options/OptionChainTypes.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QString>
 #include <QWidget>
@@ -36,8 +37,12 @@ class BuilderAnalyticsRibbon : public QWidget {
     /// Reset the margin cell to "—" (e.g. while a fetch is in flight).
     void clear_margin();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void setup_ui();
+    void retranslateUi();
 
     QLabel* lbl_premium_ = nullptr;
     QLabel* lbl_max_profit_ = nullptr;
@@ -49,6 +54,18 @@ class BuilderAnalyticsRibbon : public QWidget {
     QLabel* lbl_theta_ = nullptr;
     QLabel* lbl_vega_ = nullptr;
     QLabel* lbl_margin_ = nullptr;
+
+    // Key labels (cached for retranslateUi)
+    QLabel* key_premium_ = nullptr;
+    QLabel* key_max_profit_ = nullptr;
+    QLabel* key_max_loss_ = nullptr;
+    QLabel* key_breakevens_ = nullptr;
+    QLabel* key_pop_ = nullptr;
+    QLabel* key_delta_ = nullptr;
+    QLabel* key_gamma_ = nullptr;
+    QLabel* key_theta_ = nullptr;
+    QLabel* key_vega_ = nullptr;
+    QLabel* key_margin_ = nullptr;
 };
 
 } // namespace fincept::screens::fno

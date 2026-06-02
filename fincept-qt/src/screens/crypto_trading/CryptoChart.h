@@ -5,6 +5,7 @@
 #include "trading/TradingTypes.h"
 #include "ui/charts/ChartOverlayManager.h"
 
+#include <QEvent>
 #include <QPushButton>
 #include <QVector>
 #include <QWidget>
@@ -42,7 +43,11 @@ class CryptoChart : public QWidget {
   signals:
     void timeframe_changed(const QString& tf);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    void retranslateUi();
     void rebuild_chart();
     void update_axes(double min_price, double max_price, qint64 min_time, qint64 max_time);
     void set_active_tf(int idx);
@@ -73,6 +78,9 @@ class CryptoChart : public QWidget {
 
     // OHLC tooltip pinned to the chart's top-left corner
     QLabel* ohlc_tooltip_ = nullptr;
+
+    // Header title (cached for retranslateUi)
+    QLabel* title_label_ = nullptr;
 
     // Timeframe toggle buttons
     QPushButton* tf_buttons_[6] = {};

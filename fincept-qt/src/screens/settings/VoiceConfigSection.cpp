@@ -76,8 +76,10 @@ static QString btn_secondary_ss() {
              ui::colors::BORDER_BRIGHT(), ui::colors::BG_HOVER());
 }
 
-// Helper to build a labelled row [label | stretch | control].
-static QWidget* labelled_row(const QString& label_text, QWidget* control) {
+// Helper to build a labelled row [label | stretch | control]. When
+// label_out is non-null it receives the inner QLabel so its text can be
+// re-applied on a live language switch.
+static QWidget* labelled_row(const QString& label_text, QWidget* control, QLabel** label_out = nullptr) {
     auto* row = new QWidget;
     auto* hl = new QHBoxLayout(row);
     hl->setContentsMargins(0, 0, 0, 0);
@@ -86,6 +88,8 @@ static QWidget* labelled_row(const QString& label_text, QWidget* control) {
     hl->addWidget(lbl);
     hl->addStretch();
     hl->addWidget(control);
+    if (label_out)
+        *label_out = lbl;
     return row;
 }
 
@@ -111,28 +115,28 @@ void VoiceConfigSection::build_ui() {
     vl->setSpacing(14);
 
     // ── Title + blurb ────────────────────────────────────────────────────────
-    auto* title = new QLabel(tr("VOICE — SPEECH-TO-TEXT & TEXT-TO-SPEECH"));
-    title->setStyleSheet(title_ss());
-    vl->addWidget(title);
+    title_lbl_ = new QLabel(tr("VOICE — SPEECH-TO-TEXT & TEXT-TO-SPEECH"));
+    title_lbl_->setStyleSheet(title_ss());
+    vl->addWidget(title_lbl_);
 
-    auto* blurb = new QLabel(
+    blurb_lbl_ = new QLabel(
         tr("Pick a provider for each direction independently. Free options work "
            "out of the box; Deepgram requires an API key but offers higher accuracy "
            "(STT) and natural-sounding voices (TTS)."));
-    blurb->setStyleSheet(label_ss());
-    blurb->setWordWrap(true);
-    vl->addWidget(blurb);
+    blurb_lbl_->setStyleSheet(label_ss());
+    blurb_lbl_->setWordWrap(true);
+    vl->addWidget(blurb_lbl_);
 
     // ── STT provider ─────────────────────────────────────────────────────────
-    auto* stt_section = new QLabel(tr("SPEECH-TO-TEXT (microphone -> text)"));
-    stt_section->setStyleSheet(subtitle_ss());
-    vl->addWidget(stt_section);
+    stt_section_lbl_ = new QLabel(tr("SPEECH-TO-TEXT (microphone -> text)"));
+    stt_section_lbl_->setStyleSheet(subtitle_ss());
+    vl->addWidget(stt_section_lbl_);
 
     stt_provider_combo_ = new QComboBox;
     stt_provider_combo_->setStyleSheet(combo_ss());
-    stt_provider_combo_->addItem("Google (free, default)", "google");
-    stt_provider_combo_->addItem("Deepgram (API key required)", "deepgram");
-    vl->addWidget(labelled_row("Provider", stt_provider_combo_));
+    stt_provider_combo_->addItem(tr("Google (free, default)"), "google");
+    stt_provider_combo_->addItem(tr("Deepgram (API key required)"), "deepgram");
+    vl->addWidget(labelled_row(tr("Provider"), stt_provider_combo_, &stt_provider_row_lbl_));
 
     // STT Deepgram-only rows
     stt_dg_group_ = new QWidget;
@@ -142,25 +146,25 @@ void VoiceConfigSection::build_ui() {
 
     stt_model_combo_ = new QComboBox;
     stt_model_combo_->setStyleSheet(combo_ss());
-    stt_model_combo_->addItem("nova-3 (recommended)", "nova-3");
+    stt_model_combo_->addItem(tr("nova-3 (recommended)"), "nova-3");
     stt_model_combo_->addItem("nova-2", "nova-2");
-    stt_model_combo_->addItem("enhanced", "enhanced");
-    stt_model_combo_->addItem("base", "base");
-    stt_dg_vl->addWidget(labelled_row("STT Model", stt_model_combo_));
+    stt_model_combo_->addItem(tr("enhanced"), "enhanced");
+    stt_model_combo_->addItem(tr("base"), "base");
+    stt_dg_vl->addWidget(labelled_row(tr("STT Model"), stt_model_combo_, &stt_model_row_lbl_));
 
     stt_language_combo_ = new QComboBox;
     stt_language_combo_->setStyleSheet(combo_ss());
-    stt_language_combo_->addItem("English (auto)", "en");
-    stt_language_combo_->addItem("English (US)", "en-US");
-    stt_language_combo_->addItem("English (UK)", "en-GB");
-    stt_language_combo_->addItem("Multilingual (nova-3 only)", "multi");
-    stt_dg_vl->addWidget(labelled_row("Language", stt_language_combo_));
+    stt_language_combo_->addItem(tr("English (auto)"), "en");
+    stt_language_combo_->addItem(tr("English (US)"), "en-US");
+    stt_language_combo_->addItem(tr("English (UK)"), "en-GB");
+    stt_language_combo_->addItem(tr("Multilingual (nova-3 only)"), "multi");
+    stt_dg_vl->addWidget(labelled_row(tr("Language"), stt_language_combo_, &stt_language_row_lbl_));
 
     keyterms_edit_ = new QLineEdit;
-    keyterms_edit_->setPlaceholderText("AAPL, BTCUSD, Nifty (comma-separated)");
+    keyterms_edit_->setPlaceholderText(tr("AAPL, BTCUSD, Nifty (comma-separated)"));
     keyterms_edit_->setStyleSheet(input_ss());
     keyterms_edit_->setMinimumWidth(320);
-    stt_dg_vl->addWidget(labelled_row("Key terms", keyterms_edit_));
+    stt_dg_vl->addWidget(labelled_row(tr("Key terms"), keyterms_edit_, &keyterms_row_lbl_));
 
     gain_spin_ = new QDoubleSpinBox;
     gain_spin_->setRange(1.0, 10.0);
@@ -169,26 +173,26 @@ void VoiceConfigSection::build_ui() {
     gain_spin_->setSuffix("x");
     gain_spin_->setStyleSheet(input_ss());
     gain_spin_->setMinimumWidth(120);
-    stt_dg_vl->addWidget(labelled_row("Mic gain (raise if mic is quiet)", gain_spin_));
+    stt_dg_vl->addWidget(labelled_row(tr("Mic gain (raise if mic is quiet)"), gain_spin_, &gain_row_lbl_));
 
     device_edit_ = new QLineEdit;
-    device_edit_->setPlaceholderText("e.g. 'Headset' (substring match, blank = system default)");
+    device_edit_->setPlaceholderText(tr("e.g. 'Headset' (substring match, blank = system default)"));
     device_edit_->setStyleSheet(input_ss());
     device_edit_->setMinimumWidth(320);
-    stt_dg_vl->addWidget(labelled_row("Mic device", device_edit_));
+    stt_dg_vl->addWidget(labelled_row(tr("Mic device"), device_edit_, &device_row_lbl_));
 
     vl->addWidget(stt_dg_group_);
 
     // ── TTS provider ─────────────────────────────────────────────────────────
-    auto* tts_section = new QLabel("TEXT-TO-SPEECH (assistant reply -> spoken audio)");
-    tts_section->setStyleSheet(subtitle_ss());
-    vl->addWidget(tts_section);
+    tts_section_lbl_ = new QLabel(tr("TEXT-TO-SPEECH (assistant reply -> spoken audio)"));
+    tts_section_lbl_->setStyleSheet(subtitle_ss());
+    vl->addWidget(tts_section_lbl_);
 
     tts_provider_combo_ = new QComboBox;
     tts_provider_combo_->setStyleSheet(combo_ss());
-    tts_provider_combo_->addItem("Free / pyttsx3 (offline, default)", "pyttsx3");
-    tts_provider_combo_->addItem("Deepgram Aura-2 (API key required)", "deepgram");
-    vl->addWidget(labelled_row("Provider", tts_provider_combo_));
+    tts_provider_combo_->addItem(tr("Free / pyttsx3 (offline, default)"), "pyttsx3");
+    tts_provider_combo_->addItem(tr("Deepgram Aura-2 (API key required)"), "deepgram");
+    vl->addWidget(labelled_row(tr("Provider"), tts_provider_combo_, &tts_provider_row_lbl_));
 
     // TTS Deepgram-only rows
     tts_dg_group_ = new QWidget;
@@ -200,16 +204,16 @@ void VoiceConfigSection::build_ui() {
     tts_model_combo_->setStyleSheet(combo_ss());
     // Aura-2 voice catalogue (subset — most popular). Format the label as
     // "Display name (gender)" so users know what they're picking.
-    tts_model_combo_->addItem("Thalia — female, American",     "aura-2-thalia-en");
-    tts_model_combo_->addItem("Helena — female, American",     "aura-2-helena-en");
-    tts_model_combo_->addItem("Andromeda — female, American",  "aura-2-andromeda-en");
-    tts_model_combo_->addItem("Apollo — male, American",       "aura-2-apollo-en");
-    tts_model_combo_->addItem("Orion — male, American",        "aura-2-orion-en");
-    tts_model_combo_->addItem("Arcas — male, American",        "aura-2-arcas-en");
-    tts_model_combo_->addItem("Aurora — female, American",     "aura-2-aurora-en");
-    tts_model_combo_->addItem("Luna — female, American",       "aura-2-luna-en");
-    tts_model_combo_->addItem("Zeus — male, American",         "aura-2-zeus-en");
-    tts_dg_vl->addWidget(labelled_row("Voice", tts_model_combo_));
+    tts_model_combo_->addItem(tr("Thalia — female, American"),     "aura-2-thalia-en");
+    tts_model_combo_->addItem(tr("Helena — female, American"),     "aura-2-helena-en");
+    tts_model_combo_->addItem(tr("Andromeda — female, American"),  "aura-2-andromeda-en");
+    tts_model_combo_->addItem(tr("Apollo — male, American"),       "aura-2-apollo-en");
+    tts_model_combo_->addItem(tr("Orion — male, American"),        "aura-2-orion-en");
+    tts_model_combo_->addItem(tr("Arcas — male, American"),        "aura-2-arcas-en");
+    tts_model_combo_->addItem(tr("Aurora — female, American"),     "aura-2-aurora-en");
+    tts_model_combo_->addItem(tr("Luna — female, American"),       "aura-2-luna-en");
+    tts_model_combo_->addItem(tr("Zeus — male, American"),         "aura-2-zeus-en");
+    tts_dg_vl->addWidget(labelled_row(tr("Voice"), tts_model_combo_, &tts_voice_row_lbl_));
 
     vl->addWidget(tts_dg_group_);
 
@@ -219,25 +223,25 @@ void VoiceConfigSection::build_ui() {
     dg_vl->setContentsMargins(0, 8, 0, 0);
     dg_vl->setSpacing(10);
 
-    auto* dg_title = new QLabel("DEEPGRAM CREDENTIALS (shared by STT + TTS)");
-    dg_title->setStyleSheet(subtitle_ss());
-    dg_vl->addWidget(dg_title);
+    dg_title_lbl_ = new QLabel(tr("DEEPGRAM CREDENTIALS (shared by STT + TTS)"));
+    dg_title_lbl_->setStyleSheet(subtitle_ss());
+    dg_vl->addWidget(dg_title_lbl_);
 
     // API key row with show/hide toggle
     auto* key_row = new QWidget;
     auto* key_hl = new QHBoxLayout(key_row);
     key_hl->setContentsMargins(0, 0, 0, 0);
-    auto* key_lbl = new QLabel("API Key");
-    key_lbl->setStyleSheet(label_ss());
+    key_lbl_ = new QLabel(tr("API Key"));
+    key_lbl_->setStyleSheet(label_ss());
     api_key_edit_ = new QLineEdit;
     api_key_edit_->setEchoMode(QLineEdit::Password);
-    api_key_edit_->setPlaceholderText("Paste your Deepgram API key");
+    api_key_edit_->setPlaceholderText(tr("Paste your Deepgram API key"));
     api_key_edit_->setStyleSheet(input_ss());
     api_key_edit_->setMinimumWidth(320);
-    show_key_btn_ = new QPushButton("Show");
+    show_key_btn_ = new QPushButton(tr("Show"));
     show_key_btn_->setStyleSheet(btn_secondary_ss());
     show_key_btn_->setCheckable(true);
-    key_hl->addWidget(key_lbl);
+    key_hl->addWidget(key_lbl_);
     key_hl->addStretch();
     key_hl->addWidget(api_key_edit_);
     key_hl->addWidget(show_key_btn_);
@@ -246,11 +250,11 @@ void VoiceConfigSection::build_ui() {
     vl->addWidget(deepgram_group_);
 
     // ── Clap-to-start (independent — works with Google or Deepgram) ──────────
-    auto* clap_section = new QLabel("WAKE TRIGGER");
-    clap_section->setStyleSheet(subtitle_ss());
-    vl->addWidget(clap_section);
+    clap_section_lbl_ = new QLabel(tr("WAKE TRIGGER"));
+    clap_section_lbl_->setStyleSheet(subtitle_ss());
+    vl->addWidget(clap_section_lbl_);
 
-    clap_enabled_cb_ = new QCheckBox("Clap to open mic");
+    clap_enabled_cb_ = new QCheckBox(tr("Clap to open mic"));
     clap_enabled_cb_->setStyleSheet(QString("QCheckBox{color:%1;background:transparent;}"
                                             "QCheckBox::indicator{width:14px;height:14px;}"
                                             "QCheckBox::indicator:unchecked{border:1px solid %2;background:%3;}"
@@ -261,26 +265,26 @@ void VoiceConfigSection::build_ui() {
                                              ui::colors::AMBER()));
     vl->addWidget(clap_enabled_cb_);
 
-    auto* clap_blurb = new QLabel(
-        "Listens to the mic in the background and opens the chat bubble when "
-        "you clap. Audio is analysed locally and never sent over the network.");
-    clap_blurb->setStyleSheet(label_ss());
-    clap_blurb->setWordWrap(true);
-    vl->addWidget(clap_blurb);
+    clap_blurb_lbl_ = new QLabel(
+        tr("Listens to the mic in the background and opens the chat bubble when "
+           "you clap. Audio is analysed locally and never sent over the network."));
+    clap_blurb_lbl_->setStyleSheet(label_ss());
+    clap_blurb_lbl_->setWordWrap(true);
+    vl->addWidget(clap_blurb_lbl_);
 
     clap_mode_combo_ = new QComboBox;
     clap_mode_combo_->setStyleSheet(combo_ss());
-    clap_mode_combo_->addItem("Double clap (recommended)", "double");
-    clap_mode_combo_->addItem("Single clap (more reactive, more false positives)", "single");
-    vl->addWidget(labelled_row("Trigger", clap_mode_combo_));
+    clap_mode_combo_->addItem(tr("Double clap (recommended)"), "double");
+    clap_mode_combo_->addItem(tr("Single clap (more reactive, more false positives)"), "single");
+    vl->addWidget(labelled_row(tr("Trigger"), clap_mode_combo_, &clap_trigger_row_lbl_));
 
     // ── Save / Test row ──────────────────────────────────────────────────────
     auto* btn_row = new QWidget;
     auto* btn_hl = new QHBoxLayout(btn_row);
     btn_hl->setContentsMargins(0, 8, 0, 0);
-    save_btn_ = new QPushButton("Save");
+    save_btn_ = new QPushButton(tr("Save"));
     save_btn_->setStyleSheet(btn_primary_ss());
-    test_btn_ = new QPushButton("Test Deepgram key");
+    test_btn_ = new QPushButton(tr("Test Deepgram key"));
     test_btn_->setStyleSheet(btn_secondary_ss());
     btn_hl->addWidget(save_btn_);
     btn_hl->addWidget(test_btn_);
@@ -378,10 +382,10 @@ void VoiceConfigSection::on_provider_changed() {
 void VoiceConfigSection::on_show_hide_key() {
     if (show_key_btn_->isChecked()) {
         api_key_edit_->setEchoMode(QLineEdit::Normal);
-        show_key_btn_->setText("Hide");
+        show_key_btn_->setText(tr("Hide"));
     } else {
         api_key_edit_->setEchoMode(QLineEdit::Password);
-        show_key_btn_->setText("Show");
+        show_key_btn_->setText(tr("Show"));
     }
 }
 
@@ -413,13 +417,13 @@ void VoiceConfigSection::on_save() {
     } else {
         auto r = SecureStorage::instance().store(kSecureKey, api_key);
         if (r.is_err()) {
-            set_status(QStringLiteral("Failed to save API key: ") + QString::fromStdString(r.error()), true);
+            set_status(tr("Failed to save API key: ") + QString::fromStdString(r.error()), true);
             return;
         }
     }
 
     LOG_INFO(TAG, QString("Voice config saved (stt=%1 tts=%2)").arg(stt, tts));
-    set_status(QStringLiteral("Saved. Changes apply on next voice session."), false);
+    set_status(tr("Saved. Changes apply on next voice session."), false);
     emit config_changed();
 }
 
@@ -428,7 +432,7 @@ void VoiceConfigSection::on_save() {
 void VoiceConfigSection::on_test() {
     const QString api_key = api_key_edit_->text().trimmed();
     if (api_key.isEmpty()) {
-        set_status("Enter an API key first.", true);
+        set_status(tr("Enter an API key first."), true);
         return;
     }
 
@@ -450,14 +454,14 @@ void VoiceConfigSection::on_test() {
 #endif
         if (sp.isEmpty() || !QFileInfo::exists(sp)) {
             set_status(
-                "Deepgram Python SDK is missing from venv-numpy2. "
-                "Open Settings -> Python Env -> Reinstall packages, then test again.",
+                tr("Deepgram Python SDK is missing from venv-numpy2. "
+                   "Open Settings -> Python Env -> Reinstall packages, then test again."),
                 true);
             return;
         }
     }
 
-    set_status("Testing Deepgram key…", false);
+    set_status(tr("Testing Deepgram key…"), false);
     test_btn_->setEnabled(false);
 
     // Lightweight verification: GET /v1/projects — succeeds iff the key is
@@ -478,13 +482,13 @@ void VoiceConfigSection::on_test() {
         self->test_btn_->setEnabled(true);
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (reply->error() == QNetworkReply::NoError && status == 200) {
-            self->set_status("Deepgram key is valid (STT + TTS available).", false);
+            self->set_status(tr("Deepgram key is valid (STT + TTS available)."), false);
         } else if (status == 401) {
-            self->set_status("Invalid API key (401).", true);
+            self->set_status(tr("Invalid API key (401)."), true);
         } else if (status == 402) {
-            self->set_status("Deepgram credits exhausted (402).", true);
+            self->set_status(tr("Deepgram credits exhausted (402)."), true);
         } else {
-            self->set_status(QString("Test failed: HTTP %1 — %2").arg(status).arg(reply->errorString()), true);
+            self->set_status(tr("Test failed: HTTP %1 — %2").arg(status).arg(reply->errorString()), true);
         }
     });
 }
@@ -497,6 +501,94 @@ void VoiceConfigSection::set_status(const QString& msg, bool error) {
     status_lbl_->setText(msg);
     status_lbl_->setStyleSheet(QString("color:%1;background:transparent;")
                                    .arg(error ? ui::colors::NEGATIVE() : ui::colors::POSITIVE()));
+}
+
+void VoiceConfigSection::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void VoiceConfigSection::retranslateUi() {
+    // Section titles + blurbs.
+    if (title_lbl_) title_lbl_->setText(tr("VOICE — SPEECH-TO-TEXT & TEXT-TO-SPEECH"));
+    if (blurb_lbl_)
+        blurb_lbl_->setText(tr("Pick a provider for each direction independently. Free options work "
+                               "out of the box; Deepgram requires an API key but offers higher accuracy "
+                               "(STT) and natural-sounding voices (TTS)."));
+
+    // STT section.
+    if (stt_section_lbl_)      stt_section_lbl_->setText(tr("SPEECH-TO-TEXT (microphone -> text)"));
+    if (stt_provider_row_lbl_) stt_provider_row_lbl_->setText(tr("Provider"));
+    if (stt_model_row_lbl_)    stt_model_row_lbl_->setText(tr("STT Model"));
+    if (stt_language_row_lbl_) stt_language_row_lbl_->setText(tr("Language"));
+    if (keyterms_row_lbl_)     keyterms_row_lbl_->setText(tr("Key terms"));
+    if (gain_row_lbl_)         gain_row_lbl_->setText(tr("Mic gain (raise if mic is quiet)"));
+    if (device_row_lbl_)       device_row_lbl_->setText(tr("Mic device"));
+
+    if (keyterms_edit_) keyterms_edit_->setPlaceholderText(tr("AAPL, BTCUSD, Nifty (comma-separated)"));
+    if (device_edit_)   device_edit_->setPlaceholderText(tr("e.g. 'Headset' (substring match, blank = system default)"));
+
+    if (stt_provider_combo_) {
+        stt_provider_combo_->setItemText(0, tr("Google (free, default)"));
+        stt_provider_combo_->setItemText(1, tr("Deepgram (API key required)"));
+    }
+    if (stt_model_combo_) {
+        stt_model_combo_->setItemText(0, tr("nova-3 (recommended)"));
+        stt_model_combo_->setItemText(2, tr("enhanced"));
+        stt_model_combo_->setItemText(3, tr("base"));
+    }
+    if (stt_language_combo_) {
+        stt_language_combo_->setItemText(0, tr("English (auto)"));
+        stt_language_combo_->setItemText(1, tr("English (US)"));
+        stt_language_combo_->setItemText(2, tr("English (UK)"));
+        stt_language_combo_->setItemText(3, tr("Multilingual (nova-3 only)"));
+    }
+
+    // TTS section.
+    if (tts_section_lbl_)      tts_section_lbl_->setText(tr("TEXT-TO-SPEECH (assistant reply -> spoken audio)"));
+    if (tts_provider_row_lbl_) tts_provider_row_lbl_->setText(tr("Provider"));
+    if (tts_voice_row_lbl_)    tts_voice_row_lbl_->setText(tr("Voice"));
+
+    if (tts_provider_combo_) {
+        tts_provider_combo_->setItemText(0, tr("Free / pyttsx3 (offline, default)"));
+        tts_provider_combo_->setItemText(1, tr("Deepgram Aura-2 (API key required)"));
+    }
+    if (tts_model_combo_) {
+        tts_model_combo_->setItemText(0, tr("Thalia — female, American"));
+        tts_model_combo_->setItemText(1, tr("Helena — female, American"));
+        tts_model_combo_->setItemText(2, tr("Andromeda — female, American"));
+        tts_model_combo_->setItemText(3, tr("Apollo — male, American"));
+        tts_model_combo_->setItemText(4, tr("Orion — male, American"));
+        tts_model_combo_->setItemText(5, tr("Arcas — male, American"));
+        tts_model_combo_->setItemText(6, tr("Aurora — female, American"));
+        tts_model_combo_->setItemText(7, tr("Luna — female, American"));
+        tts_model_combo_->setItemText(8, tr("Zeus — male, American"));
+    }
+
+    // Deepgram credentials block.
+    if (dg_title_lbl_) dg_title_lbl_->setText(tr("DEEPGRAM CREDENTIALS (shared by STT + TTS)"));
+    if (key_lbl_)      key_lbl_->setText(tr("API Key"));
+    if (api_key_edit_) api_key_edit_->setPlaceholderText(tr("Paste your Deepgram API key"));
+    // Show/Hide button reflects current echo mode — keep state, not a stale label.
+    if (show_key_btn_)
+        show_key_btn_->setText(show_key_btn_->isChecked() ? tr("Hide") : tr("Show"));
+
+    // Wake trigger / clap.
+    if (clap_section_lbl_) clap_section_lbl_->setText(tr("WAKE TRIGGER"));
+    if (clap_enabled_cb_)  clap_enabled_cb_->setText(tr("Clap to open mic"));
+    if (clap_blurb_lbl_)
+        clap_blurb_lbl_->setText(tr("Listens to the mic in the background and opens the chat bubble when "
+                                    "you clap. Audio is analysed locally and never sent over the network."));
+    if (clap_trigger_row_lbl_) clap_trigger_row_lbl_->setText(tr("Trigger"));
+    if (clap_mode_combo_) {
+        clap_mode_combo_->setItemText(0, tr("Double clap (recommended)"));
+        clap_mode_combo_->setItemText(1, tr("Single clap (more reactive, more false positives)"));
+    }
+
+    // Action buttons.
+    if (save_btn_) save_btn_->setText(tr("Save"));
+    if (test_btn_) test_btn_->setText(tr("Test Deepgram key"));
 }
 
 } // namespace fincept::screens

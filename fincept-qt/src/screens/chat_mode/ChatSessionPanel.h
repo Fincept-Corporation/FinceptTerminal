@@ -1,6 +1,7 @@
 #pragma once
 #include "screens/chat_mode/ChatModeTypes.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -16,6 +17,9 @@ class ChatSessionPanel : public QWidget {
     explicit ChatSessionPanel(QWidget* parent = nullptr);
 
     void refresh_sessions();
+
+  protected:
+    void changeEvent(QEvent* event) override;
 
   signals:
     void session_selected(const QString& uuid);
@@ -46,13 +50,16 @@ class ChatSessionPanel : public QWidget {
     QPushButton* export_btn_ = nullptr;
     QPushButton* exit_btn_ = nullptr;
     QLabel* stats_lbl_ = nullptr;
+    QLabel* title_lbl_ = nullptr;
 
     QTimer* search_timer_ = nullptr; // debounce server search
 
     QString active_uuid_;
     QVector<ChatSession> sessions_;
+    ChatStats last_stats_{};
 
     void build_ui();
+    void retranslateUi();
     void apply_filter(const QString& text);
     void populate_list(const QVector<ChatSession>& sessions);
 };

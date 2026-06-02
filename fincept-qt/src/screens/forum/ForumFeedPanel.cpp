@@ -4,6 +4,7 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -30,12 +31,12 @@ static QString rel_time(const QString& iso) {
     if (sec < 0)
         sec = 0;
     if (sec < 60)
-        return QString("%1s ago").arg(sec);
+        return QCoreApplication::translate("ForumFeedPanel", "%1s ago").arg(sec);
     if (sec < 3600)
-        return QString("%1m ago").arg(sec / 60);
+        return QCoreApplication::translate("ForumFeedPanel", "%1m ago").arg(sec / 60);
     if (sec < 86400)
-        return QString("%1h ago").arg(sec / 3600);
-    return QString("%1d ago").arg(sec / 86400);
+        return QCoreApplication::translate("ForumFeedPanel", "%1h ago").arg(sec / 3600);
+    return QCoreApplication::translate("ForumFeedPanel", "%1d ago").arg(sec / 86400);
 }
 
 static QString det_color(const QString& s) {
@@ -128,7 +129,7 @@ void ForumFeedPanel::build_toolbar() {
     hash->setStyleSheet(
         QString("color:%1;font-size:22px;font-weight:700;background:transparent;%2").arg(ui::colors::AMBER(), M(22)));
 
-    header_lbl_ = new QLabel("DISCUSSIONS");
+    header_lbl_ = new QLabel(tr("DISCUSSIONS"));
     header_lbl_->setStyleSheet(QString("color:%1;font-size:15px;font-weight:700;letter-spacing:1px;"
                                        "background:transparent;%2")
                                    .arg(ui::colors::TEXT_PRIMARY(), M(15)));
@@ -138,22 +139,22 @@ void ForumFeedPanel::build_toolbar() {
         QString("color:%1;font-size:11px;background:transparent;%2").arg(ui::colors::TEXT_TERTIARY(), M(11)));
 
     // New post button
-    auto* new_btn = new QPushButton("+ NEW POST");
-    new_btn->setFixedHeight(30);
-    new_btn->setCursor(Qt::PointingHandCursor);
-    new_btn->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;"
+    new_post_btn_ = new QPushButton(tr("+ NEW POST"));
+    new_post_btn_->setFixedHeight(30);
+    new_post_btn_->setCursor(Qt::PointingHandCursor);
+    new_post_btn_->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;"
                                    "border:1px solid rgba(217,119,6,0.25);padding:0 16px;"
                                    "font-size:11px;font-weight:700;letter-spacing:0.5px;%2}"
                                    "QPushButton:hover{background:rgba(217,119,6,0.2);color:%3;"
                                    "border-color:rgba(217,119,6,0.5);}")
                                .arg(ui::colors::TEXT_SECONDARY(), M(11), ui::colors::AMBER()));
-    connect(new_btn, &QPushButton::clicked, this, [this]() { emit new_post_clicked(); });
+    connect(new_post_btn_, &QPushButton::clicked, this, [this]() { emit new_post_clicked(); });
 
     top_hl->addWidget(hash);
     top_hl->addWidget(header_lbl_);
     top_hl->addWidget(header_count_lbl_);
     top_hl->addStretch();
-    top_hl->addWidget(new_btn);
+    top_hl->addWidget(new_post_btn_);
     tb_vl->addWidget(top_row);
 
     // ── Bottom row: scrollable category chips ─────────────────────────────────
@@ -284,7 +285,7 @@ void ForumFeedPanel::rebuild_posts() {
         delete item;
     }
 
-    header_count_lbl_->setText(page_.total > 0 ? QString("%1 posts").arg(page_.total) : "");
+    header_count_lbl_->setText(page_.total > 0 ? tr("%1 posts").arg(page_.total) : QString());
 
     if (page_.posts.isEmpty()) {
         auto* empty = new QWidget(this);
@@ -298,13 +299,13 @@ void ForumFeedPanel::rebuild_posts() {
         icon->setAlignment(Qt::AlignCenter);
         icon->setStyleSheet(QString("color:%1;font-size:32px;background:transparent;").arg(ui::colors::BORDER_DIM()));
 
-        auto* msg = new QLabel("NO DISCUSSIONS YET");
+        auto* msg = new QLabel(tr("NO DISCUSSIONS YET"));
         msg->setAlignment(Qt::AlignCenter);
         msg->setStyleSheet(QString("color:%1;font-size:14px;font-weight:700;letter-spacing:1.5px;"
                                    "background:transparent;%2")
                                .arg(ui::colors::TEXT_TERTIARY(), M(14)));
 
-        auto* sub = new QLabel("Be the first to start a conversation");
+        auto* sub = new QLabel(tr("Be the first to start a conversation"));
         sub->setAlignment(Qt::AlignCenter);
         sub->setStyleSheet(
             QString("color:%1;font-size:11px;background:transparent;%2").arg(ui::colors::TEXT_DIM(), M(11)));
@@ -456,13 +457,13 @@ void ForumFeedPanel::rebuild_posts() {
         QString rep_col = p.reply_count > 0 ? ui::colors::CYAN() : QString(ui::colors::BORDER_DIM());
 
         eng_hl->addWidget(up_btn);
-        eng_hl->addWidget(mk_eng("◆", QString("%1 replies").arg(p.reply_count), rep_col));
-        eng_hl->addWidget(mk_eng("◉", fmt_n(p.views) + " views", QString(ui::colors::BORDER_DIM())));
+        eng_hl->addWidget(mk_eng("◆", tr("%1 replies").arg(p.reply_count), rep_col));
+        eng_hl->addWidget(mk_eng("◉", tr("%1 views").arg(fmt_n(p.views)), QString(ui::colors::BORDER_DIM())));
         eng_hl->addStretch();
 
         // Badges
         if (voted_up) {
-            auto* voted = new QLabel("✓ VOTED");
+            auto* voted = new QLabel(tr("✓ VOTED"));
             voted->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;"
                                          "background:rgba(217,119,6,0.08);padding:2px 6px;"
                                          "border-radius:8px;%2")
@@ -470,14 +471,14 @@ void ForumFeedPanel::rebuild_posts() {
             eng_hl->addWidget(voted);
         }
         if (p.reply_count > 5) {
-            auto* hot = new QLabel("● HOT");
+            auto* hot = new QLabel(tr("● HOT"));
             hot->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;"
                                        "background:rgba(220,38,38,0.08);padding:2px 6px;"
                                        "border-radius:8px;%2")
                                    .arg(ui::colors::NEGATIVE(), M(9)));
             eng_hl->addWidget(hot);
         } else if (p.reply_count > 2) {
-            auto* active_badge = new QLabel("● ACTIVE");
+            auto* active_badge = new QLabel(tr("● ACTIVE"));
             active_badge->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;"
                                                 "background:rgba(16,185,129,0.08);padding:2px 6px;"
                                                 "border-radius:8px;%2")
@@ -507,7 +508,7 @@ void ForumFeedPanel::rebuild_posts() {
     // ── Load more button ──────────────────────────────────────────────────────
     if (page_.page < page_.pages) {
         int remaining = page_.total - page_.posts.size();
-        auto* more = new QPushButton(QString("Load %1 more posts").arg(remaining));
+        auto* more = new QPushButton(tr("Load %1 more posts").arg(remaining));
         more->setFixedHeight(36);
         more->setCursor(Qt::PointingHandCursor);
         more->setStyleSheet(QString("QPushButton{background:%1;color:%2;"
@@ -619,6 +620,18 @@ void ForumFeedPanel::pulse_skeleton() {
                 bi->widget()->setStyleSheet(bg);
         }
     }
+}
+
+void ForumFeedPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ForumFeedPanel::retranslateUi() {
+    if (new_post_btn_) new_post_btn_->setText(tr("+ NEW POST"));
+    // header_lbl_ / header_count_lbl_ and the post cards reflect live data and
+    // are re-rendered (in the active language) on the next category/feed load.
 }
 
 } // namespace fincept::screens

@@ -62,6 +62,12 @@ class ZerodhaBroker : public IBroker {
                                           const QString& api_key, const QString& api_secret,
                                           const QString& totp_secret,
                                           std::function<void(const QString&)> progress = {});
+
+    // Silent refresh replays the stored TOTP auto-login (Kite has no retail
+    // refresh token). Needs user_id + password + totp_secret in storage.
+    bool supports_silent_refresh() const override { return true; }
+    TokenExchangeResponse refresh_session(const BrokerCredentials& creds) override;
+
     OrderPlaceResponse place_order(const BrokerCredentials& creds, const UnifiedOrder& order) override;
     ApiResponse<QJsonObject> modify_order(const BrokerCredentials& creds, const QString& order_id,
                                           const QJsonObject& mods) override;

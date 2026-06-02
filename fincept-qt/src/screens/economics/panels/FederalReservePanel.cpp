@@ -41,14 +41,14 @@ FederalReservePanel::FederalReservePanel(QWidget* parent)
 }
 
 void FederalReservePanel::activate() {
-    show_empty("Select a series and click FETCH\n"
-               "Source: Federal Reserve Economic Data — federal_reserve_data.py\n"
-               "No API key required");
+    show_empty(tr("Select a series and click FETCH\n"
+                  "Source: Federal Reserve Economic Data — federal_reserve_data.py\n"
+                  "No API key required"));
 }
 
 void FederalReservePanel::build_controls(QHBoxLayout* thl) {
-    auto* lbl = new QLabel("SERIES");
-    lbl->setStyleSheet(ctrl_label_style());
+    series_lbl_ = new QLabel(tr("SERIES"));
+    series_lbl_->setStyleSheet(ctrl_label_style());
 
     series_combo_ = new QComboBox;
     for (const auto& s : kFedReserveSeries)
@@ -56,7 +56,7 @@ void FederalReservePanel::build_controls(QHBoxLayout* thl) {
     series_combo_->setFixedHeight(26);
     series_combo_->setMinimumWidth(240);
 
-    thl->addWidget(lbl);
+    thl->addWidget(series_lbl_);
     thl->addWidget(series_combo_);
 }
 
@@ -64,7 +64,7 @@ void FederalReservePanel::on_fetch() {
     const int idx = series_combo_->currentIndex();
     const auto& series = kFedReserveSeries[idx];
 
-    show_loading("Fetching Federal Reserve: " + series.label + "…");
+    show_loading(tr("Fetching Federal Reserve: %1…").arg(series.label));
     services::EconomicsService::instance().execute(kFederalReserveSourceId, kFederalReserveScript, series.command,
                                                    series.args, "fed_" + series.command);
 }
@@ -110,7 +110,7 @@ void FederalReservePanel::on_result(const QString& request_id, const services::E
     }
 
     if (clean.isEmpty()) {
-        show_error("No data returned");
+        show_error(tr("No data returned"));
         return;
     }
 
@@ -121,6 +121,20 @@ void FederalReservePanel::on_result(const QString& request_id, const services::E
 
     display(clean, title);
     LOG_INFO("FederalReservePanel", QString("Displayed %1 rows: %2").arg(clean.size()).arg(title));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void FederalReservePanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void FederalReservePanel::retranslateUi() {
+    if (series_lbl_)
+        series_lbl_->setText(tr("SERIES"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

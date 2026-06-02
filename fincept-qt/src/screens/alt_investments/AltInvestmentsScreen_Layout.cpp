@@ -77,18 +77,18 @@ QWidget* AltInvestmentsScreen::create_header() {
 
     auto* tc = new QVBoxLayout;
     tc->setSpacing(1);
-    auto* title = new QLabel("ALTERNATIVE INVESTMENTS");
-    title->setObjectName("altHeaderTitle");
-    auto* sub = new QLabel("27 ANALYZERS  \xB7  10 ASSET CLASSES  \xB7  MULTI-ASSET ANALYTICS");
-    sub->setObjectName("altHeaderSub");
-    tc->addWidget(title);
-    tc->addWidget(sub);
+    header_title_ = new QLabel(tr("ALTERNATIVE INVESTMENTS"));
+    header_title_->setObjectName("altHeaderTitle");
+    header_sub_ = new QLabel(tr("27 ANALYZERS  \xB7  10 ASSET CLASSES  \xB7  MULTI-ASSET ANALYTICS"));
+    header_sub_->setObjectName("altHeaderSub");
+    tc->addWidget(header_title_);
+    tc->addWidget(header_sub_);
     hl->addLayout(tc);
     hl->addStretch(1);
 
-    auto* badge = new QLabel("PYTHON ANALYTICS ENGINE");
-    badge->setObjectName("altHeaderBadge");
-    hl->addWidget(badge);
+    header_badge_ = new QLabel(tr("PYTHON ANALYTICS ENGINE"));
+    header_badge_->setObjectName("altHeaderBadge");
+    hl->addWidget(header_badge_);
     return bar;
 }
 
@@ -99,9 +99,9 @@ QWidget* AltInvestmentsScreen::create_left_panel() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    auto* title = new QLabel("ASSET CLASSES");
-    title->setObjectName("altLeftTitle");
-    vl->addWidget(title);
+    left_title_ = new QLabel(tr("ASSET CLASSES"));
+    left_title_->setObjectName("altLeftTitle");
+    vl->addWidget(left_title_);
 
     for (int i = 0; i < categories_.size(); ++i) {
         auto* btn = new QPushButton(categories_[i].name);
@@ -147,13 +147,13 @@ QWidget* AltInvestmentsScreen::create_center_panel() {
 
     auto* combo_col = new QVBoxLayout;
     combo_col->setSpacing(3);
-    auto* combo_lbl = new QLabel("ANALYZER");
-    combo_lbl->setObjectName("altComboLabel");
+    combo_label_ = new QLabel(tr("ANALYZER"));
+    combo_label_->setObjectName("altComboLabel");
     analyzer_combo_ = new QComboBox;
     analyzer_combo_->setFixedWidth(210);
     connect(analyzer_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &AltInvestmentsScreen::on_analyzer_changed);
-    combo_col->addWidget(combo_lbl);
+    combo_col->addWidget(combo_label_);
     combo_col->addWidget(analyzer_combo_);
     tbl->addLayout(combo_col);
     vl->addWidget(title_bar);
@@ -170,14 +170,14 @@ QWidget* AltInvestmentsScreen::create_center_panel() {
     fhdr->setFixedHeight(36);
     auto* fhl = new QHBoxLayout(fhdr);
     fhl->setContentsMargins(12, 0, 12, 0);
-    auto* fhtitle = new QLabel("INPUT PARAMETERS");
-    fhtitle->setObjectName("altFormTitle");
-    analyze_btn_ = new QPushButton("ANALYZE");
+    form_title_ = new QLabel(tr("INPUT PARAMETERS"));
+    form_title_->setObjectName("altFormTitle");
+    analyze_btn_ = new QPushButton(tr("ANALYZE"));
     analyze_btn_->setObjectName("altAnalyzeBtn");
     analyze_btn_->setCursor(Qt::PointingHandCursor);
     analyze_btn_->setFixedHeight(26);
     connect(analyze_btn_, &QPushButton::clicked, this, &AltInvestmentsScreen::on_analyze);
-    fhl->addWidget(fhtitle);
+    fhl->addWidget(form_title_);
     fhl->addStretch(1);
     fhl->addWidget(analyze_btn_);
     fpvl->addWidget(fhdr);
@@ -206,9 +206,9 @@ QWidget* AltInvestmentsScreen::create_right_panel() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    auto* hdr = new QLabel("ANALYSIS RESULTS");
-    hdr->setObjectName("altRightTitle");
-    vl->addWidget(hdr);
+    right_title_ = new QLabel(tr("ANALYSIS RESULTS"));
+    right_title_->setObjectName("altRightTitle");
+    vl->addWidget(right_title_);
 
     // Verdict summary
     auto* verdict_area = new QWidget(this);
@@ -217,7 +217,7 @@ QWidget* AltInvestmentsScreen::create_right_panel() {
     val->setContentsMargins(12, 10, 12, 8);
     val->setSpacing(5);
 
-    verdict_badge_ = new QLabel("AWAITING ANALYSIS");
+    verdict_badge_ = new QLabel(tr("AWAITING ANALYSIS"));
     verdict_badge_->setObjectName("altVerdictBadge");
     verdict_badge_->setAlignment(Qt::AlignCenter);
     verdict_badge_->setStyleSheet(QString("color:%1; background:%2; font-size:13px; font-weight:700;"
@@ -266,9 +266,9 @@ QWidget* AltInvestmentsScreen::create_status_bar() {
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(16, 0, 16, 0);
     hl->setSpacing(8);
-    auto* lbl = new QLabel("ALTERNATIVE INVESTMENTS");
-    lbl->setObjectName("altStatusText");
-    hl->addWidget(lbl);
+    status_left_ = new QLabel(tr("ALTERNATIVE INVESTMENTS"));
+    status_left_->setObjectName("altStatusText");
+    hl->addWidget(status_left_);
     hl->addStretch(1);
     status_category_ = new QLabel;
     status_category_->setObjectName("altStatusText");

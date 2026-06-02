@@ -5,6 +5,7 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -29,12 +30,12 @@ static QString rel_time(const QString& iso) {
     if (sec < 0)
         sec = 0;
     if (sec < 60)
-        return QString("%1s ago").arg(sec);
+        return QCoreApplication::translate("ForumPostReaderPanel", "%1s ago").arg(sec);
     if (sec < 3600)
-        return QString("%1m ago").arg(sec / 60);
+        return QCoreApplication::translate("ForumPostReaderPanel", "%1m ago").arg(sec / 60);
     if (sec < 86400)
-        return QString("%1h ago").arg(sec / 3600);
-    return QString("%1d ago").arg(sec / 86400);
+        return QCoreApplication::translate("ForumPostReaderPanel", "%1h ago").arg(sec / 3600);
+    return QCoreApplication::translate("ForumPostReaderPanel", "%1d ago").arg(sec / 86400);
 }
 
 static QString det_color(const QString& s) {
@@ -70,21 +71,21 @@ void ForumPostReaderPanel::build_ui() {
         icon->setAlignment(Qt::AlignCenter);
         icon->setStyleSheet(QString("color:%1;font-size:40px;background:transparent;").arg(ui::colors::BORDER_DIM()));
 
-        auto* lbl = new QLabel("SELECT A POST");
-        lbl->setAlignment(Qt::AlignCenter);
-        lbl->setStyleSheet(QString("color:%1;font-size:14px;font-weight:700;letter-spacing:2px;"
+        empty_title_ = new QLabel(tr("SELECT A POST"));
+        empty_title_->setAlignment(Qt::AlignCenter);
+        empty_title_->setStyleSheet(QString("color:%1;font-size:14px;font-weight:700;letter-spacing:2px;"
                                    "background:transparent;%2")
                                .arg(ui::colors::TEXT_TERTIARY(), M(14)));
 
-        auto* sub = new QLabel("Click any post from the feed to read it");
-        sub->setAlignment(Qt::AlignCenter);
-        sub->setStyleSheet(
+        empty_sub_ = new QLabel(tr("Click any post from the feed to read it"));
+        empty_sub_->setAlignment(Qt::AlignCenter);
+        empty_sub_->setStyleSheet(
             QString("color:%1;font-size:11px;background:transparent;%2").arg(ui::colors::TEXT_DIM(), M(11)));
 
         vl->addWidget(icon);
         vl->addSpacing(4);
-        vl->addWidget(lbl);
-        vl->addWidget(sub);
+        vl->addWidget(empty_title_);
+        vl->addWidget(empty_sub_);
     }
     stack_->addWidget(empty_page); // 0
 
@@ -101,13 +102,13 @@ void ForumPostReaderPanel::build_ui() {
         spin_label_->setStyleSheet(
             QString("color:%1;font-size:24px;background:transparent;%2").arg(ui::colors::AMBER(), M(24)));
 
-        auto* lt = new QLabel("Loading...");
-        lt->setAlignment(Qt::AlignCenter);
-        lt->setStyleSheet(
+        loading_text_ = new QLabel(tr("Loading..."));
+        loading_text_->setAlignment(Qt::AlignCenter);
+        loading_text_->setStyleSheet(
             QString("color:%1;font-size:11px;background:transparent;%2").arg(ui::colors::TEXT_TERTIARY(), M(11)));
 
         vl->addWidget(spin_label_);
-        vl->addWidget(lt);
+        vl->addWidget(loading_text_);
     }
     stack_->addWidget(load_page); // 1
 
@@ -225,17 +226,17 @@ void ForumPostReaderPanel::build_ui() {
     eng_hl->setContentsMargins(20, 0, 20, 0);
     eng_hl->setSpacing(14);
 
-    auto* up_btn = new QPushButton("▲  Upvote");
-    up_btn->setFixedHeight(26);
-    up_btn->setCursor(Qt::PointingHandCursor);
-    up_btn->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.06);"
+    up_btn_ = new QPushButton(tr("▲  Upvote"));
+    up_btn_->setFixedHeight(26);
+    up_btn_->setCursor(Qt::PointingHandCursor);
+    up_btn_->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.06);"
                                   "color:%1;border:1px solid rgba(217,119,6,0.2);"
                                   "font-size:10px;font-weight:700;padding:0 12px;"
                                   "border-radius:13px;%2}"
                                   "QPushButton:hover{background:rgba(217,119,6,0.12);"
                                   "color:%3;border-color:rgba(217,119,6,0.5);}")
                               .arg(ui::colors::TEXT_SECONDARY(), M(10), ui::colors::AMBER()));
-    connect(up_btn, &QPushButton::clicked, this, [this]() {
+    connect(up_btn_, &QPushButton::clicked, this, [this]() {
         if (!current_detail_.post.post_uuid.isEmpty())
             emit vote_post(current_detail_.post.post_uuid, "up");
     });
@@ -244,15 +245,15 @@ void ForumPostReaderPanel::build_ui() {
     likes_label_->setStyleSheet(
         QString("color:%1;font-size:11px;background:transparent;%2").arg(ui::colors::TEXT_TERTIARY(), M(11)));
 
-    replies_label_ = new QLabel("◆ 0 replies");
+    replies_label_ = new QLabel(tr("◆ %1 replies").arg(0));
     replies_label_->setStyleSheet(
         QString("color:%1;font-size:11px;background:transparent;%2").arg(ui::colors::TEXT_TERTIARY(), M(11)));
 
-    views_label_ = new QLabel("◉ 0 views");
+    views_label_ = new QLabel(tr("◉ %1 views").arg(0));
     views_label_->setStyleSheet(
         QString("color:%1;font-size:11px;background:transparent;%2").arg(ui::colors::TEXT_DIM(), M(11)));
 
-    eng_hl->addWidget(up_btn);
+    eng_hl->addWidget(up_btn_);
     eng_hl->addWidget(likes_label_);
     eng_hl->addWidget(replies_label_);
     eng_hl->addStretch();
@@ -269,12 +270,12 @@ void ForumPostReaderPanel::build_ui() {
     com_hdr_hl->setSpacing(6);
     auto* com_dot = new QLabel("◆");
     com_dot->setStyleSheet(QString("color:%1;font-size:7px;background:transparent;").arg(ui::colors::CYAN()));
-    auto* com_hdr_lbl = new QLabel("REPLIES");
-    com_hdr_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1.5px;"
+    replies_hdr_ = new QLabel(tr("REPLIES"));
+    replies_hdr_->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1.5px;"
                                        "background:transparent;%2")
                                    .arg(ui::colors::TEXT_TERTIARY(), M(10)));
     com_hdr_hl->addWidget(com_dot);
-    com_hdr_hl->addWidget(com_hdr_lbl);
+    com_hdr_hl->addWidget(replies_hdr_);
     com_hdr_hl->addStretch();
     scroll_vl->addWidget(com_hdr);
 
@@ -300,7 +301,7 @@ void ForumPostReaderPanel::build_ui() {
     compose_hl->setSpacing(8);
 
     reply_input_ = new QLineEdit;
-    reply_input_->setPlaceholderText("Write a reply...");
+    reply_input_->setPlaceholderText(tr("Write a reply..."));
     reply_input_->setFixedHeight(32);
     reply_input_->setStyleSheet(QString("QLineEdit{background:rgba(255,255,255,0.03);color:%1;"
                                         "border:1px solid %2;padding:4px 12px;font-size:12px;"
@@ -311,10 +312,10 @@ void ForumPostReaderPanel::build_ui() {
                                          ui::colors::BORDER_BRIGHT(), ui::colors::TEXT_PRIMARY(),
                                          ui::colors::TEXT_DIM()));
 
-    auto* send_btn = new QPushButton("Reply");
-    send_btn->setFixedSize(72, 32);
-    send_btn->setCursor(Qt::PointingHandCursor);
-    send_btn->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;"
+    send_btn_ = new QPushButton(tr("Reply"));
+    send_btn_->setFixedSize(72, 32);
+    send_btn_->setCursor(Qt::PointingHandCursor);
+    send_btn_->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;"
                                     "border:1px solid rgba(217,119,6,0.25);font-size:11px;"
                                     "font-weight:700;border-radius:4px;%2}"
                                     "QPushButton:hover{background:rgba(217,119,6,0.2);"
@@ -328,11 +329,11 @@ void ForumPostReaderPanel::build_ui() {
         emit comment_submitted(current_detail_.post.post_uuid, text);
         reply_input_->clear();
     };
-    connect(send_btn, &QPushButton::clicked, this, submit);
+    connect(send_btn_, &QPushButton::clicked, this, submit);
     connect(reply_input_, &QLineEdit::returnPressed, this, submit);
 
     compose_hl->addWidget(reply_input_, 1);
-    compose_hl->addWidget(send_btn);
+    compose_hl->addWidget(send_btn_);
     content_root->addWidget(compose);
 
     stack_->addWidget(content_page_); // 2
@@ -395,10 +396,10 @@ void ForumPostReaderPanel::show_post(const services::ForumPostDetail& detail) {
                                         "background:transparent;%2")
                                     .arg(lc, M(11)));
 
-    replies_label_->setText(
-        QString("◆ %1 %2").arg(detail.total_comments).arg(detail.total_comments == 1 ? "reply" : "replies"));
+    replies_label_->setText(detail.total_comments == 1 ? tr("◆ %1 reply").arg(detail.total_comments)
+                                                        : tr("◆ %1 replies").arg(detail.total_comments));
 
-    views_label_->setText(QString("◉ %1 views").arg(detail.post.views));
+    views_label_->setText(tr("◉ %1 views").arg(detail.post.views));
 
     rebuild_comments();
     stack_->setCurrentIndex(2);
@@ -424,7 +425,7 @@ void ForumPostReaderPanel::rebuild_comments() {
         icon->setAlignment(Qt::AlignCenter);
         icon->setStyleSheet(QString("color:%1;font-size:18px;background:transparent;").arg(ui::colors::BORDER_DIM()));
 
-        auto* lbl = new QLabel("NO REPLIES YET");
+        auto* lbl = new QLabel(tr("NO REPLIES YET"));
         lbl->setAlignment(Qt::AlignCenter);
         lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;"
                                    "background:transparent;%2")
@@ -525,13 +526,33 @@ void ForumPostReaderPanel::rebuild_comments() {
             return btn;
         };
 
-        act_hl->addWidget(make_act("▲ upvote", ui::colors::AMBER(), "up"));
-        act_hl->addWidget(make_act("▼ downvote", ui::colors::TEXT_TERTIARY(), "down"));
+        act_hl->addWidget(make_act(tr("▲ upvote"), ui::colors::AMBER(), "up"));
+        act_hl->addWidget(make_act(tr("▼ downvote"), ui::colors::TEXT_TERTIARY(), "down"));
         act_hl->addStretch();
         row_vl->addWidget(act_row);
 
         comments_layout_->addWidget(row);
     }
+}
+
+void ForumPostReaderPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ForumPostReaderPanel::retranslateUi() {
+    if (empty_title_)   empty_title_->setText(tr("SELECT A POST"));
+    if (empty_sub_)     empty_sub_->setText(tr("Click any post from the feed to read it"));
+    if (loading_text_)  loading_text_->setText(tr("Loading..."));
+    if (up_btn_)        up_btn_->setText(tr("▲  Upvote"));
+    if (replies_hdr_)   replies_hdr_->setText(tr("REPLIES"));
+    if (reply_input_)   reply_input_->setPlaceholderText(tr("Write a reply..."));
+    if (send_btn_)      send_btn_->setText(tr("Reply"));
+    // Post header/body, counters and comments are live data; re-show the
+    // current post so they re-render in the new language.
+    if (!current_detail_.post.post_uuid.isEmpty() && stack_ && stack_->currentIndex() == 2)
+        show_post(current_detail_);
 }
 
 } // namespace fincept::screens

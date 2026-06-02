@@ -3,6 +3,7 @@
 #include "screens/polymarket/ExchangePresentation.h"
 #include "services/prediction/PredictionTypes.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QListView>
 #include <QPushButton>
@@ -38,6 +39,9 @@ class PolymarketBrowsePanel : public QWidget {
     void market_selected(const fincept::services::prediction::PredictionMarket& market);
     void event_selected(const fincept::services::prediction::PredictionEvent& event);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_item_clicked(const QModelIndex& index);
     void on_prev();
@@ -45,6 +49,7 @@ class PolymarketBrowsePanel : public QWidget {
 
   private:
     void update_page();
+    void retranslateUi();
 
     PolymarketMarketCardModel* model_ = nullptr;
     PolymarketMarketCardDelegate* delegate_ = nullptr;

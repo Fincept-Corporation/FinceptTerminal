@@ -3,6 +3,7 @@
 
 #include "screens/crypto_trading/CryptoTypes.h"
 
+#include <QEvent>
 #include <QMutex>
 #include <QPixmap>
 #include <QTimer>
@@ -24,6 +25,7 @@ class CryptoTimeSales : public QWidget {
     void resizeEvent(QResizeEvent* event) override;
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void rebuild_cache();

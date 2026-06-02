@@ -63,7 +63,7 @@ void StrategyListPanel::build_ui() {
     top_hl->setSpacing(8);
 
     search_edit_ = new QLineEdit(top_bar);
-    search_edit_->setPlaceholderText("Search strategies...");
+    search_edit_->setPlaceholderText(tr("Search strategies..."));
     search_edit_->setFixedHeight(28);
     search_edit_->setStyleSheet(
         QString("QLineEdit { background:%1; border:1px solid %2; color:%3;"
@@ -78,7 +78,7 @@ void StrategyListPanel::build_ui() {
     cat_combo_ = new QComboBox(top_bar);
     cat_combo_->setFixedHeight(28);
     cat_combo_->setFixedWidth(150);
-    cat_combo_->addItem("All Categories");
+    cat_combo_->addItem(tr("All Categories"));
     const QString combo_style =
         QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
                 " padding:2px 6px; font-size:%4px; font-family:%5; }"
@@ -92,22 +92,22 @@ void StrategyListPanel::build_ui() {
     top_hl->addWidget(cat_combo_);
 
     // Sort
-    auto* sort_lbl = new QLabel("SORT:", top_bar);
-    sort_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                                    " background:transparent; border:none;")
-                                .arg(colors::TEXT_TERTIARY())
-                                .arg(fonts::TINY)
-                                .arg(fonts::DATA_FAMILY()));
-    top_hl->addWidget(sort_lbl);
+    sort_caption_ = new QLabel(tr("SORT:"), top_bar);
+    sort_caption_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
+                                         " background:transparent; border:none;")
+                                     .arg(colors::TEXT_TERTIARY())
+                                     .arg(fonts::TINY)
+                                     .arg(fonts::DATA_FAMILY()));
+    top_hl->addWidget(sort_caption_);
 
     sort_combo_ = new QComboBox(top_bar);
     sort_combo_->setFixedHeight(28);
     sort_combo_->setFixedWidth(120);
-    sort_combo_->addItems({"Name A→Z", "Name Z→A", "Category"});
+    sort_combo_->addItems({tr("Name A→Z"), tr("Name Z→A"), tr("Category")});
     sort_combo_->setStyleSheet(combo_style);
     top_hl->addWidget(sort_combo_);
 
-    count_label_ = new QLabel("0 strategies", top_bar);
+    count_label_ = new QLabel(tr("%1 strategies").arg(0), top_bar);
     count_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                         " background:transparent; border:none;")
                                     .arg(colors::TEXT_SECONDARY())
@@ -120,7 +120,8 @@ void StrategyListPanel::build_ui() {
     // ── Table ────────────────────────────────────────────────────────────────
     table_ = new QTableWidget(this);
     table_->setColumnCount(8); // #, NAME, CATEGORY, ID, EDIT, BACKTEST, DEPLOY, DELETE
-    table_->setHorizontalHeaderLabels({"#", "STRATEGY NAME", "CATEGORY", "ID", "", "", "", ""});
+    table_->setHorizontalHeaderLabels(
+        {tr("#"), tr("STRATEGY NAME"), tr("CATEGORY"), tr("ID"), QString(), QString(), QString(), QString()});
     table_->verticalHeader()->setVisible(false);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -175,13 +176,13 @@ void StrategyListPanel::build_ui() {
             .arg(fonts::TINY)
             .arg(fonts::DATA_FAMILY(), colors::CYAN());
 
-    prev_btn_ = new QPushButton("◀ PREV", page_bar);
+    prev_btn_ = new QPushButton(tr("◀ PREV"), page_bar);
     prev_btn_->setFixedHeight(24);
     prev_btn_->setCursor(Qt::PointingHandCursor);
     prev_btn_->setStyleSheet(btn_style);
     page_hl->addWidget(prev_btn_);
 
-    page_label_ = new QLabel("Page 1 of 1", page_bar);
+    page_label_ = new QLabel(tr("Page %1 of %2").arg(1).arg(1), page_bar);
     page_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                        " background:transparent; border:none;")
                                    .arg(colors::TEXT_SECONDARY())
@@ -190,7 +191,7 @@ void StrategyListPanel::build_ui() {
     page_label_->setAlignment(Qt::AlignCenter);
     page_hl->addWidget(page_label_, 1);
 
-    next_btn_ = new QPushButton("NEXT ▶", page_bar);
+    next_btn_ = new QPushButton(tr("NEXT ▶"), page_bar);
     next_btn_->setFixedHeight(24);
     next_btn_->setCursor(Qt::PointingHandCursor);
     next_btn_->setStyleSheet(btn_style);
@@ -268,20 +269,20 @@ void StrategyListPanel::render_page() {
         };
 
         // Col 4: EDIT (Builder). 5: BACKTEST. 6: DEPLOY. 7: DELETE.
-        make_btn("EDIT", colors::CYAN(), "rgba(34,211,238,0.1)", 4, [this, row]() { on_edit_clicked(row); });
-        make_btn("BACKTEST", colors::POSITIVE(), "rgba(22,163,74,0.1)", 5, [this, row]() { on_backtest_clicked(row); });
-        make_btn("DEPLOY", colors::AMBER(), "rgba(217,119,6,0.1)", 6, [this, row]() { on_deploy_clicked(row); });
-        make_btn("DELETE", colors::NEGATIVE(), "rgba(220,38,38,0.1)", 7, [this, row]() { on_delete_clicked(row); });
+        make_btn(tr("EDIT"), colors::CYAN(), "rgba(34,211,238,0.1)", 4, [this, row]() { on_edit_clicked(row); });
+        make_btn(tr("BACKTEST"), colors::POSITIVE(), "rgba(22,163,74,0.1)", 5, [this, row]() { on_backtest_clicked(row); });
+        make_btn(tr("DEPLOY"), colors::AMBER(), "rgba(217,119,6,0.1)", 6, [this, row]() { on_deploy_clicked(row); });
+        make_btn(tr("DELETE"), colors::NEGATIVE(), "rgba(220,38,38,0.1)", 7, [this, row]() { on_delete_clicked(row); });
     }
 
     update_pagination_controls();
 
     page_label_->setText(total > 0
-        ? QString("Page %1 of %2  ·  %3 strategies").arg(page_num).arg(total_pages).arg(total)
-        : "No strategies");
+        ? tr("Page %1 of %2  ·  %3 strategies").arg(page_num).arg(total_pages).arg(total)
+        : tr("No strategies"));
 
     count_label_->setText(
-        QString("%1 of %2").arg(total).arg(strategies_.size()));
+        tr("%1 of %2").arg(total).arg(strategies_.size()));
 }
 
 void StrategyListPanel::update_pagination_controls() {
@@ -345,7 +346,7 @@ void StrategyListPanel::on_strategies_loaded(QVector<AlgoStrategy> strategies) {
     const QString prev_cat = cat_combo_->currentIndex() > 0 ? cat_combo_->currentText() : QString();
     cat_combo_->blockSignals(true);
     cat_combo_->clear();
-    cat_combo_->addItem("All Categories");
+    cat_combo_->addItem(tr("All Categories"));
     QStringList cats;
     for (const auto& s : strategies_)
         if (!cats.contains(s.description))
@@ -445,13 +446,49 @@ void StrategyListPanel::on_delete_clicked(int row) {
         return;
 
     const auto& strategy = filtered_[abs_index];
-    auto answer = QMessageBox::question(this, "Delete Strategy",
-                                        QString("Delete \"%1\"?").arg(strategy.name),
+    auto answer = QMessageBox::question(this, tr("Delete Strategy"),
+                                        tr("Delete \"%1\"?").arg(strategy.name),
                                         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (answer == QMessageBox::Yes) {
         AlgoTradingService::instance().delete_strategy(strategy.id);
         LOG_INFO("AlgoTrading", QString("Delete requested: %1").arg(strategy.name));
     }
+}
+
+// ── Live language switch ──────────────────────────────────────────────────────
+
+void StrategyListPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void StrategyListPanel::retranslateUi() {
+    if (search_edit_)  search_edit_->setPlaceholderText(tr("Search strategies..."));
+    if (sort_caption_) sort_caption_->setText(tr("SORT:"));
+
+    // cat_combo_ item 0 is the fixed "All Categories" entry; remaining items are
+    // category data names and stay as-is.
+    if (cat_combo_ && cat_combo_->count() > 0)
+        cat_combo_->setItemText(0, tr("All Categories"));
+
+    // sort_combo_ — selection index drives logic, only the visible labels change.
+    if (sort_combo_ && sort_combo_->count() >= 3) {
+        sort_combo_->setItemText(0, tr("Name A→Z"));
+        sort_combo_->setItemText(1, tr("Name Z→A"));
+        sort_combo_->setItemText(2, tr("Category"));
+    }
+
+    if (prev_btn_) prev_btn_->setText(tr("◀ PREV"));
+    if (next_btn_) next_btn_->setText(tr("NEXT ▶"));
+
+    if (table_) {
+        table_->setHorizontalHeaderLabels(
+            {tr("#"), tr("STRATEGY NAME"), tr("CATEGORY"), tr("ID"), QString(), QString(), QString(), QString()});
+    }
+
+    // render_page() re-applies per-row button labels, page_label_, and count_label_.
+    render_page();
 }
 
 } // namespace fincept::screens

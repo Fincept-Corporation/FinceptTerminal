@@ -3,9 +3,11 @@
 #include "services/geopolitics/GeopoliticsTypes.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QStringList>
 #include <QTableWidget>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -18,6 +20,9 @@ class HDXDataPanel : public QWidget {
   public:
     explicit HDXDataPanel(QWidget* parent = nullptr);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_hdx_results(const QString& context, QVector<fincept::services::geo::HDXDataset> datasets);
     void on_view_changed(int index);
@@ -27,6 +32,7 @@ class HDXDataPanel : public QWidget {
     void connect_service();
     void populate_table(const QVector<fincept::services::geo::HDXDataset>& datasets);
     void show_loading(bool on);
+    void retranslateUi();
 
     // View tab buttons
     QVector<QPushButton*> view_buttons_;
@@ -46,6 +52,14 @@ class HDXDataPanel : public QWidget {
 
     // Stats badge
     QLabel* dataset_count_ = nullptr;
+
+    // Static text widgets (cached for retranslateUi)
+    QLabel* title_lbl_ = nullptr;
+    QLabel* country_lbl_ = nullptr;
+    QLabel* topic_lbl_ = nullptr;
+    QPushButton* explore_btn_ = nullptr;
+    // Fixed English view-tab labels, re-applied in retranslateUi (upper-cased).
+    QStringList view_labels_;
 
     // Per-view result cache (avoids re-fetching on tab switch)
     QVector<fincept::services::geo::HDXDataset> cache_conflicts_;

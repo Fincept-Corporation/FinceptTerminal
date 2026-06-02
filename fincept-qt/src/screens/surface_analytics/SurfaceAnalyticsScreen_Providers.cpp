@@ -40,7 +40,7 @@ using namespace fincept::ui;
 
 void SurfaceAnalyticsScreen::on_vol_surface_received(const fincept::DatabentoVolSurfaceResult& r) {
     if (data_inspector_)
-        data_inspector_->set_status(r.success ? "Vol surface loaded" : "Vol fetch failed", r.success);
+        data_inspector_->set_status(r.success ? tr("Vol surface loaded") : tr("Vol fetch failed"), r.success);
     if (!r.success) {
         if (data_inspector_)
             data_inspector_->set_error(r.error);
@@ -104,7 +104,7 @@ void SurfaceAnalyticsScreen::on_vol_surface_received(const fincept::DatabentoVol
 
 void SurfaceAnalyticsScreen::on_ohlcv_received(const fincept::DatabentoOhlcvResult& r) {
     if (data_inspector_) {
-        data_inspector_->set_status(r.success ? "OHLCV loaded" : "OHLCV fetch failed", r.success);
+        data_inspector_->set_status(r.success ? tr("OHLCV loaded") : tr("OHLCV fetch failed"), r.success);
         if (!r.success)
             data_inspector_->set_error(r.error);
         else {
@@ -131,7 +131,7 @@ void SurfaceAnalyticsScreen::on_ohlcv_received(const fincept::DatabentoOhlcvResu
 
 void SurfaceAnalyticsScreen::on_futures_received(const fincept::DatabentoFuturesResult& r) {
     if (data_inspector_) {
-        data_inspector_->set_status(r.success ? "Futures curve loaded" : "Futures fetch failed", r.success);
+        data_inspector_->set_status(r.success ? tr("Futures curve loaded") : tr("Futures fetch failed"), r.success);
         if (!r.success)
             data_inspector_->set_error(r.error);
     }
@@ -148,7 +148,7 @@ void SurfaceAnalyticsScreen::on_futures_received(const fincept::DatabentoFutures
 
 void SurfaceAnalyticsScreen::on_surface_received(const fincept::DatabentoSurfaceResult& r) {
     if (data_inspector_) {
-        data_inspector_->set_status(r.success ? "Surface loaded" : "Surface fetch failed", r.success);
+        data_inspector_->set_status(r.success ? tr("Surface loaded") : tr("Surface fetch failed"), r.success);
         if (!r.success)
             data_inspector_->set_error(r.error);
     }
@@ -204,7 +204,7 @@ void SurfaceAnalyticsScreen::on_db_fetch_started(const QString& desc) {
 
 void SurfaceAnalyticsScreen::on_db_fetch_failed(const QString& err) {
     if (data_inspector_) {
-        data_inspector_->set_status("Fetch failed", false);
+        data_inspector_->set_status(tr("Fetch failed"), false);
         data_inspector_->set_error(err);
     }
 }

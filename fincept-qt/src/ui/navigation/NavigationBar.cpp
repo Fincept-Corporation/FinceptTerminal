@@ -22,11 +22,13 @@ NavigationBar::NavigationBar(QWidget* parent) : QWidget(parent) {
         return l;
     };
 
+    // FINCEPT / TERMINAL are brand marks — set raw, never translated.
     hl->addWidget(mk("FINCEPT", "navBrand"));
     hl->addWidget(mk("TERMINAL", "navTitle"));
     hl->addWidget(mk("   ", "navSpacer"));
-    hl->addWidget(mk("\xe2\x97\x8f", "navLiveDot"));
-    hl->addWidget(mk(" LIVE", "navLive"));
+    hl->addWidget(mk("\xe2\x97\x8f", "navLiveDot")); // U+25CF — pure icon, no translation
+    live_label_ = mk(tr(" LIVE"), "navLive");
+    hl->addWidget(live_label_);
     hl->addStretch();
     clock_label_ = mk("", "navClock");
     hl->addWidget(clock_label_);
@@ -41,7 +43,7 @@ NavigationBar::NavigationBar(QWidget* parent) : QWidget(parent) {
     hl->addWidget(plan_label_);
     hl->addWidget(mk("  |  ", "navSep"));
 
-    logout_btn_ = new QPushButton("LOGOUT");
+    logout_btn_ = new QPushButton(tr("LOGOUT"));
     logout_btn_->setFixedHeight(24);
     logout_btn_->setCursor(Qt::PointingHandCursor);
     logout_btn_->setObjectName("navLogout");
@@ -62,6 +64,17 @@ NavigationBar::NavigationBar(QWidget* parent) : QWidget(parent) {
 
     refresh_user_display();
     refresh_theme();
+}
+
+void NavigationBar::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void NavigationBar::retranslateUi() {
+    if (live_label_) live_label_->setText(tr(" LIVE"));
+    if (logout_btn_) logout_btn_->setText(tr("LOGOUT"));
 }
 
 void NavigationBar::refresh_theme() {

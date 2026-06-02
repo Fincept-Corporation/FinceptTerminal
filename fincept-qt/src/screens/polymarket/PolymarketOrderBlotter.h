@@ -3,6 +3,9 @@
 #include "screens/polymarket/ExchangePresentation.h"
 #include "services/prediction/PredictionTypes.h"
 
+#include <QEvent>
+#include <QLabel>
+#include <QPushButton>
 #include <QTableWidget>
 #include <QVector>
 #include <QWidget>
@@ -47,6 +50,9 @@ class PolymarketOrderBlotter : public QWidget {
     /// User clicked "CANCEL ALL" — emits every currently-displayed order_id.
     void cancel_all(const QStringList& order_ids);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_cell_double_clicked(int row, int column);
     void on_cancel_all_clicked();
@@ -54,7 +60,10 @@ class PolymarketOrderBlotter : public QWidget {
   private:
     void rebuild_rows();
     void install_row_controls(int row, const fincept::services::prediction::OpenOrder& order);
+    void retranslateUi();
 
+    QLabel* title_label_ = nullptr;
+    QPushButton* cancel_all_btn_ = nullptr;
     QTableWidget* table_ = nullptr;
     QVector<fincept::services::prediction::OpenOrder> orders_;
     ExchangePresentation presentation_ = ExchangePresentation::for_polymarket();

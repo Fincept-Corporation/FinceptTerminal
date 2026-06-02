@@ -4,6 +4,7 @@
 #include "storage/repositories/DataMappingRepository.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -86,7 +87,13 @@ class DataMappingScreen : public QWidget, public IStatefulScreen {
 
   protected:
     void showEvent(QShowEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
+  private:
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    void retranslateUi();
+
+  protected:
     // State
     int current_view_ = 0; // 0=list, 1=create, 2=templates
     int current_step_ = 0; // 0..4
@@ -160,6 +167,51 @@ class DataMappingScreen : public QWidget, public IStatefulScreen {
     QLabel* right_schema_info_ = nullptr;
     QLabel* right_fields_info_ = nullptr;
     QLabel* right_test_info_ = nullptr;
+
+    // ── Static chrome cached for retranslateUi ──
+    QLabel* header_title_ = nullptr;
+    QLabel* header_sub_ = nullptr;
+    QLabel* header_badge_ = nullptr;
+    QLabel* left_panel_title_ = nullptr;
+    QList<QPushButton*> left_step_btns_;
+    QLabel* quick_stats_title_ = nullptr;
+    QLabel* schemas_count_lbl_ = nullptr;
+    QLabel* parsers_count_lbl_ = nullptr;
+    QLabel* right_panel_title_ = nullptr;
+    QLabel* mapping_engine_title_ = nullptr;
+    QLabel* parser_engines_title_ = nullptr;
+    QLabel* security_title_ = nullptr;
+    QLabel* current_mapping_title_ = nullptr;
+    QLabel* api_panel_title_ = nullptr;
+    QWidget* api_name_row_ = nullptr;
+    QWidget* api_base_url_row_ = nullptr;
+    QWidget* api_endpoint_row_ = nullptr;
+    QWidget* api_method_row_ = nullptr;
+    QWidget* api_auth_type_row_ = nullptr;
+    QWidget* api_auth_value_row_ = nullptr;
+    QWidget* api_headers_row_ = nullptr;
+    QWidget* api_body_row_ = nullptr;
+    QWidget* api_timeout_row_ = nullptr;
+    QLabel* schema_panel_title_ = nullptr;
+    QWidget* schema_type_row_ = nullptr;
+    QWidget* schema_select_row_ = nullptr;
+    QLabel* field_panel_title_ = nullptr;
+    QLabel* parser_label_ = nullptr;
+    QLabel* cache_panel_title_ = nullptr;
+    QWidget* cache_enabled_row_ = nullptr;
+    QWidget* cache_ttl_row_ = nullptr;
+    QLabel* encryption_title_ = nullptr;
+    QLabel* encryption_detail_ = nullptr;
+    QLabel* test_save_panel_title_ = nullptr;
+    QLabel* list_title_ = nullptr;
+    QPushButton* list_run_btn_ = nullptr;
+    QPushButton* list_del_btn_ = nullptr;
+    QPushButton* list_new_btn_ = nullptr;
+    QLabel* list_empty_ = nullptr;
+    QPushButton* template_use_btn_ = nullptr;
+    QLabel* template_toolbar_title_ = nullptr;
+    QLabel* template_count_lbl_ = nullptr;
+    QLabel* status_version_ = nullptr;
 
     // Sample data from API test
     QJsonDocument sample_data_;

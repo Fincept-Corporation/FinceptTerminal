@@ -3,6 +3,7 @@
 #include "screens/crypto_center/WalletActionSummary.h"
 
 #include <QDialog>
+#include <QEvent>
 
 class QLabel;
 class QPushButton;
@@ -44,15 +45,18 @@ class WalletActionConfirmDialog : public QDialog {
 
   protected:
     void showEvent(QShowEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
     void apply_theme();
+    void retranslateUi();
     void on_arm_tick();
 
     WalletActionSummary summary_;
 
     QLabel* title_label_ = nullptr;
+    QLabel* head_status_label_ = nullptr;
     QLabel* lede_label_ = nullptr;
     QVBoxLayout* rows_layout_ = nullptr;
     QVBoxLayout* warnings_layout_ = nullptr;

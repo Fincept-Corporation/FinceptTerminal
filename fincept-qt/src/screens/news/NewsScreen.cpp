@@ -11,6 +11,7 @@
 #include "screens/news/NewsSidePanel.h"
 #include "screens/news/NewsTickerStrip.h"
 #include "screens/news/dialogs/RssFeedManagerDialog.h"
+#include "services/cloud/CloudSyncEngine.h"
 #include "services/news/NewsCorrelationService.h"
 #include "services/news/NewsNlpService.h"
 #include "services/notifications/NotificationService.h"
@@ -332,6 +333,9 @@ void NewsScreen::showEvent(QShowEvent* e) {
     visible_ = true;
     ticker_strip_->resume();
     pulse_timer_->start();
+    // Rate-gated pull of cloud news monitors + feeds on screen entry (no-op when sync is off).
+    fincept::services::cloud::CloudSyncEngine::instance().request_pull(QStringLiteral("news_monitor"));
+    fincept::services::cloud::CloudSyncEngine::instance().request_pull(QStringLiteral("news_feed"));
     {
         QSettings s;
         s.beginGroup("news");

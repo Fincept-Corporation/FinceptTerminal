@@ -49,39 +49,39 @@ QWidget* MAModulePanel::build_industry_panel() {
                                    .arg(ui::fonts::DATA_FAMILY)
                                    .arg(ui::fonts::SMALL));
     combo_inputs_["tech_sector"] = tech_sector;
-    tech_vl->addWidget(build_input_row("Sector", tech_sector, tech));
+    tech_vl->addWidget(build_input_row(tr("Sector"), tech_sector, tech));
 
     auto* tech_arr = make_double_spin(0, 1e15, 100e6, 0, "", tech);
     double_inputs_["tech_arr"] = tech_arr;
-    tech_vl->addWidget(build_input_row("ARR/Revenue ($)", tech_arr, tech));
+    tech_vl->addWidget(build_input_row(tr("ARR/Revenue") + " ($)", tech_arr, tech));
 
     auto* tech_growth = make_double_spin(-100, 500, 40, 1, "%", tech);
     double_inputs_["tech_growth"] = tech_growth;
-    tech_vl->addWidget(build_input_row("Growth Rate", tech_growth, tech));
+    tech_vl->addWidget(build_input_row(tr("Growth Rate"), tech_growth, tech));
 
     auto* tech_gm = make_double_spin(0, 100, 75, 1, "%", tech);
     double_inputs_["tech_gross_margin"] = tech_gm;
-    tech_vl->addWidget(build_input_row("Gross Margin", tech_gm, tech));
+    tech_vl->addWidget(build_input_row(tr("Gross Margin"), tech_gm, tech));
 
     auto* tech_nrr = make_double_spin(50, 200, 115, 0, "%", tech);
     double_inputs_["tech_nrr"] = tech_nrr;
-    tech_vl->addWidget(build_input_row("Net Revenue Retention", tech_nrr, tech));
+    tech_vl->addWidget(build_input_row(tr("Net Revenue Retention"), tech_nrr, tech));
 
     auto* tech_cac = make_double_spin(0, 120, 18, 0, " mo", tech);
     double_inputs_["tech_cac_payback"] = tech_cac;
-    tech_vl->addWidget(build_input_row("CAC Payback (months)", tech_cac, tech));
+    tech_vl->addWidget(build_input_row(tr("CAC Payback (months)"), tech_cac, tech));
 
     auto* tech_ltv = make_double_spin(0, 20, 3.5, 1, "x", tech);
     double_inputs_["tech_ltv_cac"] = tech_ltv;
-    tech_vl->addWidget(build_input_row("LTV/CAC Ratio", tech_ltv, tech));
+    tech_vl->addWidget(build_input_row(tr("LTV/CAC Ratio"), tech_ltv, tech));
 
     auto* tech_r40 = make_double_spin(-50, 200, 55, 0, "", tech);
     double_inputs_["tech_rule_of_40"] = tech_r40;
-    tech_vl->addWidget(build_input_row("Rule of 40 Score", tech_r40, tech));
+    tech_vl->addWidget(build_input_row(tr("Rule of 40 Score"), tech_r40, tech));
 
-    auto* tech_run = make_run_button("CALCULATE TECH METRICS", tech);
+    auto* tech_run = make_run_button(tr("CALCULATE TECH METRICS"), tech);
     connect(tech_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Calculating Tech Metrics...");
+        status_label_->setText(tr("Calculating Tech Metrics..."));
         QJsonObject params;
         params["sector"] = combo_inputs_["tech_sector"]->currentText();
         params["arr"] = double_inputs_["tech_arr"]->value();
@@ -95,7 +95,7 @@ QWidget* MAModulePanel::build_industry_panel() {
     });
     tech_vl->addWidget(tech_run);
     tech_vl->addStretch();
-    sub_tabs_->addTab(tech, "Technology");
+    add_sub_tab(tech, QT_TR_NOOP("Technology"));
 
     // ── Healthcare ──
     auto* hc = new QWidget(this);
@@ -107,35 +107,35 @@ QWidget* MAModulePanel::build_industry_panel() {
     hc_sector->addItems({"pharma", "biotech", "devices", "services"});
     hc_sector->setStyleSheet(tech_sector->styleSheet());
     combo_inputs_["hc_sector"] = hc_sector;
-    hc_vl->addWidget(build_input_row("Sector", hc_sector, hc));
+    hc_vl->addWidget(build_input_row(tr("Sector"), hc_sector, hc));
 
     auto* hc_rev = make_double_spin(0, 1e15, 5e9, 0, "", hc);
     double_inputs_["hc_revenue"] = hc_rev;
-    hc_vl->addWidget(build_input_row("Revenue ($)", hc_rev, hc));
+    hc_vl->addWidget(build_input_row(tr("Revenue") + " ($)", hc_rev, hc));
 
     auto* hc_margin = make_double_spin(0, 100, 35, 1, "%", hc);
     double_inputs_["hc_ebitda_margin"] = hc_margin;
-    hc_vl->addWidget(build_input_row("EBITDA Margin", hc_margin, hc));
+    hc_vl->addWidget(build_input_row(tr("EBITDA Margin"), hc_margin, hc));
 
     auto* hc_pipeline = make_double_spin(0, 1e15, 3e9, 0, "", hc);
     double_inputs_["hc_pipeline_npv"] = hc_pipeline;
-    hc_vl->addWidget(build_input_row("Pipeline NPV ($)", hc_pipeline, hc));
+    hc_vl->addWidget(build_input_row(tr("Pipeline NPV") + " ($)", hc_pipeline, hc));
 
     auto* hc_p3 = make_int_spin(0, 50, 5, hc);
     int_inputs_["hc_phase3_count"] = hc_p3;
-    hc_vl->addWidget(build_input_row("Phase 3 Candidates", hc_p3, hc));
+    hc_vl->addWidget(build_input_row(tr("Phase 3 Candidates"), hc_p3, hc));
 
     auto* hc_patent = make_double_spin(0, 100, 25, 0, "%", hc);
     double_inputs_["hc_patent_expiry_rev"] = hc_patent;
-    hc_vl->addWidget(build_input_row("Patent Expiry Rev %", hc_patent, hc));
+    hc_vl->addWidget(build_input_row(tr("Patent Expiry Rev %"), hc_patent, hc));
 
     auto* hc_rd = make_double_spin(0, 1e15, 800e6, 0, "", hc);
     double_inputs_["hc_rd_spend"] = hc_rd;
-    hc_vl->addWidget(build_input_row("R&D Spend ($)", hc_rd, hc));
+    hc_vl->addWidget(build_input_row(tr("R&D Spend") + " ($)", hc_rd, hc));
 
-    auto* hc_run = make_run_button("CALCULATE HC METRICS", hc);
+    auto* hc_run = make_run_button(tr("CALCULATE HC METRICS"), hc);
     connect(hc_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Calculating Healthcare Metrics...");
+        status_label_->setText(tr("Calculating Healthcare Metrics..."));
         QJsonObject params;
         params["sector"] = combo_inputs_["hc_sector"]->currentText();
         params["revenue"] = double_inputs_["hc_revenue"]->value();
@@ -148,7 +148,7 @@ QWidget* MAModulePanel::build_industry_panel() {
     });
     hc_vl->addWidget(hc_run);
     hc_vl->addStretch();
-    sub_tabs_->addTab(hc, "Healthcare");
+    add_sub_tab(hc, QT_TR_NOOP("Healthcare"));
 
     // ── Financial Services ──
     auto* fs = new QWidget(this);
@@ -160,39 +160,39 @@ QWidget* MAModulePanel::build_industry_panel() {
     fs_sector->addItems({"banking", "insurance", "asset_management"});
     fs_sector->setStyleSheet(tech_sector->styleSheet());
     combo_inputs_["fs_sector"] = fs_sector;
-    fs_vl->addWidget(build_input_row("Sector", fs_sector, fs));
+    fs_vl->addWidget(build_input_row(tr("Sector"), fs_sector, fs));
 
     auto* fs_assets = make_double_spin(0, 1e18, 50e9, 0, "", fs);
     double_inputs_["fs_total_assets"] = fs_assets;
-    fs_vl->addWidget(build_input_row("Total Assets ($)", fs_assets, fs));
+    fs_vl->addWidget(build_input_row(tr("Total Assets") + " ($)", fs_assets, fs));
 
     auto* fs_roe = make_double_spin(-100, 200, 12, 1, "%", fs);
     double_inputs_["fs_roe"] = fs_roe;
-    fs_vl->addWidget(build_input_row("ROE", fs_roe, fs));
+    fs_vl->addWidget(build_input_row(tr("ROE"), fs_roe, fs));
 
     auto* fs_deposits = make_double_spin(0, 1e18, 40e9, 0, "", fs);
     double_inputs_["fs_deposits"] = fs_deposits;
-    fs_vl->addWidget(build_input_row("Deposits ($)", fs_deposits, fs));
+    fs_vl->addWidget(build_input_row(tr("Deposits") + " ($)", fs_deposits, fs));
 
     auto* fs_nim = make_double_spin(0, 20, 3.2, 2, "%", fs);
     double_inputs_["fs_nim"] = fs_nim;
-    fs_vl->addWidget(build_input_row("Net Interest Margin", fs_nim, fs));
+    fs_vl->addWidget(build_input_row(tr("Net Interest Margin"), fs_nim, fs));
 
     auto* fs_efficiency = make_double_spin(0, 200, 58, 1, "%", fs);
     double_inputs_["fs_efficiency_ratio"] = fs_efficiency;
-    fs_vl->addWidget(build_input_row("Efficiency Ratio", fs_efficiency, fs));
+    fs_vl->addWidget(build_input_row(tr("Efficiency Ratio"), fs_efficiency, fs));
 
     auto* fs_cet1 = make_double_spin(0, 30, 12.5, 1, "%", fs);
     double_inputs_["fs_cet1"] = fs_cet1;
-    fs_vl->addWidget(build_input_row("CET1 Ratio", fs_cet1, fs));
+    fs_vl->addWidget(build_input_row(tr("CET1 Ratio"), fs_cet1, fs));
 
     auto* fs_npl = make_double_spin(0, 30, 0.8, 2, "%", fs);
     double_inputs_["fs_npl_ratio"] = fs_npl;
-    fs_vl->addWidget(build_input_row("NPL Ratio", fs_npl, fs));
+    fs_vl->addWidget(build_input_row(tr("NPL Ratio"), fs_npl, fs));
 
-    auto* fs_run = make_run_button("CALCULATE FINSERV METRICS", fs);
+    auto* fs_run = make_run_button(tr("CALCULATE FINSERV METRICS"), fs);
     connect(fs_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Calculating FinServ Metrics...");
+        status_label_->setText(tr("Calculating FinServ Metrics..."));
         QJsonObject params;
         params["sector"] = combo_inputs_["fs_sector"]->currentText();
         params["total_assets"] = double_inputs_["fs_total_assets"]->value();
@@ -206,7 +206,7 @@ QWidget* MAModulePanel::build_industry_panel() {
     });
     fs_vl->addWidget(fs_run);
     fs_vl->addStretch();
-    sub_tabs_->addTab(fs, "Financial Services");
+    add_sub_tab(fs, QT_TR_NOOP("Financial Services"));
 
     vl->addWidget(sub_tabs_);
 

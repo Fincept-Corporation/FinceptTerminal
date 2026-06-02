@@ -60,16 +60,17 @@ WorldBankPanel::WorldBankPanel(QWidget* parent) : EconPanelBase(kWorldBankSource
     lvl->setContentsMargins(0, 0, 0, 0);
     lvl->setSpacing(0);
 
-    auto section_header = [](const QString& text) {
+    auto section_header = [](const QString& text, QLabel*& out) {
         auto* lbl = new QLabel(text);
         lbl->setStyleSheet(section_lbl_style() + section_hdr_style());
+        out = lbl;
         return lbl;
     };
 
     // Country
-    lvl->addWidget(section_header("COUNTRY"));
+    lvl->addWidget(section_header(tr("COUNTRY"), country_hdr_));
     country_search_ = new QLineEdit;
-    country_search_->setPlaceholderText("Filter countries…");
+    country_search_->setPlaceholderText(tr("Filter countries…"));
     country_search_->setStyleSheet(search_input_style());
     connect(country_search_, &QLineEdit::textChanged, this, &WorldBankPanel::on_country_filter);
     lvl->addWidget(country_search_);
@@ -83,9 +84,9 @@ WorldBankPanel::WorldBankPanel(QWidget* parent) : EconPanelBase(kWorldBankSource
     lvl->addWidget(country_list_, 2);
 
     // Indicator
-    lvl->addWidget(section_header("INDICATOR"));
+    lvl->addWidget(section_header(tr("INDICATOR"), indicator_hdr_));
     indicator_search_ = new QLineEdit;
-    indicator_search_->setPlaceholderText("Filter indicators…");
+    indicator_search_->setPlaceholderText(tr("Filter indicators…"));
     indicator_search_->setStyleSheet(search_input_style());
     connect(indicator_search_, &QLineEdit::textChanged, this, &WorldBankPanel::on_indicator_filter);
     lvl->addWidget(indicator_search_);
@@ -120,7 +121,7 @@ void WorldBankPanel::activate() {
 
 void WorldBankPanel::load_countries() {
     countries_loaded_ = true;
-    show_loading("Loading countries…");
+    show_loading(tr("Loading countries…"));
     services::EconomicsService::instance().execute(kWorldBankSourceId, kWorldBankScript, "countries", {},
                                                    "wb_countries");
 }
@@ -128,16 +129,16 @@ void WorldBankPanel::load_countries() {
 // ── Controls ──────────────────────────────────────────────────────────────────
 
 void WorldBankPanel::build_controls(QHBoxLayout* thl) {
-    auto* lbl = new QLabel("YEARS");
-    lbl->setStyleSheet(ctrl_label_style());
+    years_lbl_ = new QLabel(tr("YEARS"));
+    years_lbl_->setStyleSheet(ctrl_label_style());
     date_preset_ = new QComboBox;
-    date_preset_->addItem("5 Years", 5);
-    date_preset_->addItem("10 Years", 10);
-    date_preset_->addItem("20 Years", 20);
-    date_preset_->addItem("50 Years", 50);
+    date_preset_->addItem(tr("5 Years"), 5);
+    date_preset_->addItem(tr("10 Years"), 10);
+    date_preset_->addItem(tr("20 Years"), 20);
+    date_preset_->addItem(tr("50 Years"), 50);
     date_preset_->setCurrentIndex(1);
     date_preset_->setFixedHeight(26);
-    thl->addWidget(lbl);
+    thl->addWidget(years_lbl_);
     thl->addWidget(date_preset_);
 }
 
@@ -145,12 +146,12 @@ void WorldBankPanel::build_controls(QHBoxLayout* thl) {
 
 void WorldBankPanel::on_fetch() {
     if (selected_country_.isEmpty()) {
-        show_empty("Select a country from the left panel");
+        show_empty(tr("Select a country from the left panel"));
         return;
     }
     auto* ind_item = indicator_list_->currentItem();
     if (!ind_item) {
-        show_empty("Select an indicator from the left panel");
+        show_empty(tr("Select an indicator from the left panel"));
         return;
     }
     selected_indicator_ = ind_item->data(Qt::UserRole).toString();
@@ -158,7 +159,7 @@ void WorldBankPanel::on_fetch() {
     int end_year = QDate::currentDate().year();
     QString range = QString::number(end_year - years) + ":" + QString::number(end_year);
 
-    show_loading("Fetching World Bank data…");
+    show_loading(tr("Fetching World Bank data…"));
     services::EconomicsService::instance().execute(kWorldBankSourceId, kWorldBankScript, "indicators",
                                                    {selected_country_, selected_indicator_, range},
                                                    "wb_data_" + selected_country_ + "_" + selected_indicator_);
@@ -194,7 +195,7 @@ void WorldBankPanel::on_result(const QString& request_id, const services::Econom
             country_list_->setCurrentItem(hits.first());
             selected_country_ = "US";
         }
-        show_empty("Select a country and indicator, then click FETCH");
+        show_empty(tr("Select a country and indicator, then click FETCH"));
         LOG_INFO("WorldBankPanel", QString("Loaded %1 countries").arg(arr.size()));
         return;
     }
@@ -222,6 +223,34 @@ void WorldBankPanel::on_country_filter(const QString& text) {
 
 void WorldBankPanel::on_indicator_filter(const QString& text) {
     filter_list(indicator_list_, text);
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void WorldBankPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void WorldBankPanel::retranslateUi() {
+    if (country_hdr_)
+        country_hdr_->setText(tr("COUNTRY"));
+    if (indicator_hdr_)
+        indicator_hdr_->setText(tr("INDICATOR"));
+    if (country_search_)
+        country_search_->setPlaceholderText(tr("Filter countries…"));
+    if (indicator_search_)
+        indicator_search_->setPlaceholderText(tr("Filter indicators…"));
+    if (years_lbl_)
+        years_lbl_->setText(tr("YEARS"));
+    if (date_preset_) {
+        date_preset_->setItemText(0, tr("5 Years"));
+        date_preset_->setItemText(1, tr("10 Years"));
+        date_preset_->setItemText(2, tr("20 Years"));
+        date_preset_->setItemText(3, tr("50 Years"));
+    }
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

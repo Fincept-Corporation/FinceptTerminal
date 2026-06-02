@@ -176,6 +176,34 @@ void QuantModulePanel::refresh_theme() {
         status_label_->setStyleSheet(QString("color:%1; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
 }
 
+// ── Re-translation ───────────────────────────────────────────────────────────
+// Static chrome only: re-apply tr() text to the persistent, member-stored
+// widgets. The module header (label/category) is data-derived and kept
+// verbatim; status_label_ is transient state set per-operation; dynamically
+// built input forms and result cards re-render in the active language on their
+// next build/fetch.
+
+void QuantModulePanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void QuantModulePanel::retranslateUi() {
+    // deep_agent / rd_agent persistent output surfaces
+    if (agent_output_)
+        agent_output_->setPlaceholderText(tr("Analysis results will appear here..."));
+    if (rd_agent_output_)
+        rd_agent_output_->setPlaceholderText(tr("Select a task and click GET FACTORS / GET MODEL to view results..."));
+    if (rd_task_table_)
+        rd_task_table_->setHorizontalHeaderLabels(
+            {tr("Task ID"), tr("Type"), tr("Status"), tr("Progress"), tr("Best IC"), tr("Elapsed")});
+
+    // rl_trading persistent controls
+    if (rl_train_button_)
+        rl_train_button_->setText(tr("TRAIN RL AGENT"));
+}
+
 void QuantModulePanel::connect_service() {
     auto& svc = AIQuantLabService::instance();
     connect(&svc, &AIQuantLabService::result_ready, this, &QuantModulePanel::on_result);

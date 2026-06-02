@@ -127,7 +127,7 @@ QVariant LegEditorModel::data(const QModelIndex& index, int role) const {
     if (role == Qt::DisplayRole || role == Qt::EditRole) {
         switch (col) {
             case ColActive:   return QVariant();  // checkstate-only
-            case ColBuySell:  return leg.lots >= 0 ? "BUY" : "SELL";
+            case ColBuySell:  return leg.lots >= 0 ? tr("BUY") : tr("SELL");
             case ColType:     return type_str(leg.type);
             case ColStrike:   return QString::number(leg.strike, 'f', leg.strike < 100 ? 2 : 0);
             case ColLots:     return leg.lots;
@@ -208,12 +208,14 @@ Qt::ItemFlags LegEditorModel::flags(const QModelIndex& index) const {
 QVariant LegEditorModel::headerData(int section, Qt::Orientation orient, int role) const {
     if (orient != Qt::Horizontal || role != Qt::DisplayRole)
         return {};
-    static const char* kHeaders[ColCount] = {
-        "On", "B/S", "Type", "Strike", "Lots", "Entry", "IV", "LTP", "Delta", "P&L", ""
+    // tr() per-call — owning QHeaderView re-polls on QEvent::LanguageChange.
+    const QString headers[ColCount] = {
+        tr("On"), tr("B/S"), tr("Type"), tr("Strike"), tr("Lots"), tr("Entry"),
+        tr("IV"), tr("LTP"), tr("Delta"), tr("P&L"), QString()
     };
     if (section < 0 || section >= ColCount)
         return {};
-    return QString::fromLatin1(kHeaders[section]);
+    return headers[section];
 }
 
 void LegEditorModel::set_legs(const QVector<StrategyLeg>& legs) {

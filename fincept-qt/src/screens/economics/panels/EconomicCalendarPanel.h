@@ -21,10 +21,17 @@ class EconomicCalendarPanel : public EconPanelBase {
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
     void on_result(const QString& request_id, const services::EconomicsResult& result) override;
+    void changeEvent(QEvent* event) override;
 
   private:
+    void retranslateUi() override;
+
     QDateEdit* date_edit_ = nullptr;
     QComboBox* filter_combo_ = nullptr; // filter by impact level
+
+    // Cached for retranslateUi
+    QLabel* date_lbl_ = nullptr;
+    QLabel* impact_lbl_ = nullptr;
 };
 
 } // namespace fincept::screens

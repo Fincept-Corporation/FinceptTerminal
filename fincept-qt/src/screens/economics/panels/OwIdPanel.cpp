@@ -41,9 +41,9 @@ OwIdPanel::OwIdPanel(QWidget* parent) : EconPanelBase(kOwIdSourceId, kOwIdColor,
 }
 
 void OwIdPanel::activate() {
-    show_empty("Select a series, enter a country and year range, then click FETCH\n"
-               "Source: Our World in Data (ourworldindata.org) — no API key required\n"
-               "Country examples: United States, China, Germany, India, Japan, World");
+    show_empty(tr("Select a series, enter a country and year range, then click FETCH\n"
+                  "Source: Our World in Data (ourworldindata.org) — no API key required\n"
+                  "Country examples: United States, China, Germany, India, Japan, World"));
 }
 
 void OwIdPanel::build_controls(QHBoxLayout* thl) {
@@ -62,7 +62,7 @@ void OwIdPanel::build_controls(QHBoxLayout* thl) {
     country_edit_ = new QLineEdit("United States");
     country_edit_->setFixedHeight(26);
     country_edit_->setFixedWidth(130);
-    country_edit_->setPlaceholderText("Country…");
+    country_edit_->setPlaceholderText(tr("Country…"));
 
     start_edit_ = new QLineEdit("2000");
     start_edit_->setFixedHeight(26);
@@ -78,15 +78,15 @@ void OwIdPanel::build_controls(QHBoxLayout* thl) {
             country_edit_->setText(kOwIdSeries[idx].default_country);
     });
 
-    thl->addWidget(mk_lbl("SERIES"));
+    thl->addWidget(series_lbl_ = mk_lbl(tr("SERIES")));
     thl->addWidget(series_combo_);
     thl->addSpacing(6);
-    thl->addWidget(mk_lbl("COUNTRY"));
+    thl->addWidget(country_lbl_ = mk_lbl(tr("COUNTRY")));
     thl->addWidget(country_edit_);
     thl->addSpacing(6);
-    thl->addWidget(mk_lbl("FROM"));
+    thl->addWidget(from_lbl_ = mk_lbl(tr("FROM")));
     thl->addWidget(start_edit_);
-    thl->addWidget(mk_lbl("TO"));
+    thl->addWidget(to_lbl_ = mk_lbl(tr("TO")));
     thl->addWidget(end_edit_);
 }
 
@@ -99,11 +99,11 @@ void OwIdPanel::on_fetch() {
     const QString end = end_edit_->text().trimmed();
 
     if (country.isEmpty()) {
-        show_error("Please enter a country name");
+        show_error(tr("Please enter a country name"));
         return;
     }
 
-    show_loading("Fetching OWID: " + series.label + " — " + country + "…");
+    show_loading(tr("Fetching OWID: %1 — %2…").arg(series.label, country));
 
     services::EconomicsService::instance().execute(kOwIdSourceId, kOwIdScript, series.command, {country, start, end},
                                                    "owid_" + series.command);
@@ -129,7 +129,7 @@ void OwIdPanel::on_result(const QString& request_id, const services::EconomicsRe
     QJsonArray rows = result.data["data"].toArray();
 
     if (rows.isEmpty()) {
-        show_error("No data returned — try a different country or year range");
+        show_error(tr("No data returned — try a different country or year range"));
         return;
     }
 
@@ -143,6 +143,28 @@ void OwIdPanel::on_result(const QString& request_id, const services::EconomicsRe
 
     display(rows, display_title);
     LOG_INFO("OwIdPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(display_title));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void OwIdPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void OwIdPanel::retranslateUi() {
+    if (series_lbl_)
+        series_lbl_->setText(tr("SERIES"));
+    if (country_lbl_)
+        country_lbl_->setText(tr("COUNTRY"));
+    if (from_lbl_)
+        from_lbl_->setText(tr("FROM"));
+    if (to_lbl_)
+        to_lbl_->setText(tr("TO"));
+    if (country_edit_)
+        country_edit_->setPlaceholderText(tr("Country…"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

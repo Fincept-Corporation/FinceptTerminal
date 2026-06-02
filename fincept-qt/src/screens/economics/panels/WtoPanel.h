@@ -23,15 +23,23 @@ class WtoPanel : public EconPanelBase {
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
     void on_result(const QString& request_id, const services::EconomicsResult& result) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void on_section_changed(int index);
+    void retranslateUi() override;
 
     QComboBox* section_combo_ = nullptr;   // Trade Statistics | QR Members | QR Notifications
     QComboBox* indicator_combo_ = nullptr; // timeseries indicators
     QLineEdit* reporter_input_ = nullptr;  // reporter member code e.g. US, CN
     QLineEdit* years_input_ = nullptr;     // period e.g. 2015-2023
     QLabel* apikey_notice_ = nullptr;
+
+    // Cached for retranslateUi
+    QLabel* section_lbl_ = nullptr;
+    QLabel* indicator_lbl_ = nullptr;
+    QLabel* reporter_lbl_ = nullptr;
+    QLabel* years_lbl_ = nullptr;
 };
 
 } // namespace fincept::screens

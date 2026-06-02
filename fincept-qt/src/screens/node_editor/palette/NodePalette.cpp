@@ -33,11 +33,11 @@ void NodePalette::build_ui() {
     header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_HOVER()));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(10, 0, 10, 0);
-    auto* title = new QLabel("NODES");
-    title->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 12px;"
-                                 "font-weight: bold; letter-spacing: 0.5px;")
-                             .arg(ui::colors::AMBER()));
-    hl->addWidget(title);
+    header_title_ = new QLabel(tr("NODES"));
+    header_title_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 12px;"
+                                         "font-weight: bold; letter-spacing: 0.5px;")
+                                     .arg(ui::colors::AMBER()));
+    hl->addWidget(header_title_);
     hl->addStretch();
     root->addWidget(header);
 
@@ -54,7 +54,7 @@ void NodePalette::build_ui() {
     sl->setContentsMargins(8, 6, 8, 6);
 
     search_input_ = new QLineEdit;
-    search_input_->setPlaceholderText("Search nodes...");
+    search_input_->setPlaceholderText(tr("Search nodes..."));
     search_input_->setStyleSheet(
         QString("QLineEdit {"
                 "  background: %1; color: %2; border: 1px solid %3;"
@@ -235,6 +235,20 @@ void NodePalette::start_drag(const QString& type_id) {
     drag->setPixmap(pixmap);
     drag->setHotSpot(QPoint(text_w / 2, h / 2));
     drag->exec(Qt::CopyAction);
+}
+
+void NodePalette::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void NodePalette::retranslateUi() {
+    if (header_title_) header_title_->setText(tr("NODES"));
+    if (search_input_) search_input_->setPlaceholderText(tr("Search nodes..."));
+    // Category headers and node buttons are rebuilt from NodeRegistry data
+    // (display names are data, not UI labels) — refresh to pick up any changes.
+    rebuild_categories(search_input_ ? search_input_->text() : QString());
 }
 
 } // namespace fincept::workflow

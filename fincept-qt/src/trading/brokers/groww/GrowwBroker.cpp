@@ -1,6 +1,7 @@
 #include "trading/brokers/groww/GrowwBroker.h"
 
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -216,7 +217,18 @@ TokenExchangeResponse GrowwBroker::exchange_token(const QString& api_key, const 
     if (token.isEmpty())
         return {false, "", "", "", checked_error(resp, "No token in response"), ""};
 
-    return {true, token, "", "", "", ""};
+    // Groww daily access tokens are minted purely from the api_key + api_secret
+    // (checksum flow) — both are stored, so the session can be silently
+    // re-minted without any user interaction.
+    const QString extra = with_token_expiry({}, next_ist_flush_epoch(6, 0));
+    return {true, token, "", "", extra, ""};
+}
+
+// Silent refresh = re-mint the daily token from the stored api_key + api_secret.
+TokenExchangeResponse GrowwBroker::refresh_session(const BrokerCredentials& creds) {
+    if (creds.api_key.isEmpty() || creds.api_secret.isEmpty())
+        return {false, "", "", "", "", "Groww silent refresh requires stored API key and secret"};
+    return exchange_token(creds.api_key, creds.api_secret, QString());
 }
 
 // ============================================================================

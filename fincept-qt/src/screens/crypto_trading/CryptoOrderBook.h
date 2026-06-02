@@ -3,6 +3,7 @@
 
 #include "screens/crypto_trading/CryptoTypes.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QMutex>
 #include <QPair>
@@ -33,14 +34,18 @@ class CryptoOrderBook : public QWidget {
     void mousePressEvent(QMouseEvent* event) override;
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void rebuild_cache();
     void set_active_mode(int idx);
+    void retranslateUi();
 
     // Mode buttons
     QPushButton* mode_btns_[4] = {};
+    QLabel* title_label_ = nullptr;
     QLabel* spread_label_ = nullptr;
+    bool has_spread_data_ = false; // gates whether spread_label_ shows live data vs placeholder
     QWidget* canvas_ = nullptr;
 
     // Data (mutex-protected)

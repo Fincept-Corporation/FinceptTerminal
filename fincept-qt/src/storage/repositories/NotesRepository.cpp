@@ -1,5 +1,7 @@
 #include "storage/repositories/NotesRepository.h"
 
+#include "storage/sync/SyncOutbox.h"
+
 namespace fincept {
 
 NotesRepository& NotesRepository::instance() {
@@ -40,12 +42,15 @@ static const char* kNoteColumns = "id, title, content, category, priority, tags,
                                   "reminder_date, word_count";
 
 Result<qint64> NotesRepository::create(const FinancialNote& n) {
-    return exec_insert("INSERT INTO financial_notes "
-                       "(title, content, category, priority, tags, tickers, sentiment, "
-                       " is_favorite, is_archived, color_code, reminder_date, word_count) "
-                       "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                       {n.title, n.content, n.category, n.priority, n.tags, n.tickers, n.sentiment,
-                        n.is_favorite ? 1 : 0, n.is_archived ? 1 : 0, n.color_code, n.reminder_date, n.word_count});
+    auto r = exec_insert("INSERT INTO financial_notes "
+                         "(title, content, category, priority, tags, tickers, sentiment, "
+                         " is_favorite, is_archived, color_code, reminder_date, word_count) "
+                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                         {n.title, n.content, n.category, n.priority, n.tags, n.tickers, n.sentiment,
+                          n.is_favorite ? 1 : 0, n.is_archived ? 1 : 0, n.color_code, n.reminder_date, n.word_count});
+    if (r.is_ok())
+        SyncOutbox::record("note", QString::number(r.value()), "create");
+    return r;
 }
 
 Result<FinancialNote> NotesRepository::get(int id) {
@@ -75,29 +80,41 @@ Result<QVector<FinancialNote>> NotesRepository::search(const QString& query) {
 }
 
 Result<void> NotesRepository::update(const FinancialNote& n) {
-    return exec_write("UPDATE financial_notes SET title = ?, content = ?, category = ?, priority = ?, "
-                      "tags = ?, tickers = ?, sentiment = ?, is_favorite = ?, is_archived = ?, "
-                      "color_code = ?, reminder_date = ?, word_count = ?, updated_at = datetime('now') "
-                      "WHERE id = ?",
-                      {n.title, n.content, n.category, n.priority, n.tags, n.tickers, n.sentiment,
-                       n.is_favorite ? 1 : 0, n.is_archived ? 1 : 0, n.color_code, n.reminder_date, n.word_count,
-                       n.id});
+    auto r = exec_write("UPDATE financial_notes SET title = ?, content = ?, category = ?, priority = ?, "
+                        "tags = ?, tickers = ?, sentiment = ?, is_favorite = ?, is_archived = ?, "
+                        "color_code = ?, reminder_date = ?, word_count = ?, updated_at = datetime('now') "
+                        "WHERE id = ?",
+                        {n.title, n.content, n.category, n.priority, n.tags, n.tickers, n.sentiment,
+                         n.is_favorite ? 1 : 0, n.is_archived ? 1 : 0, n.color_code, n.reminder_date, n.word_count,
+                         n.id});
+    if (r.is_ok())
+        SyncOutbox::record("note", QString::number(n.id), "update");
+    return r;
 }
 
 Result<void> NotesRepository::remove(int id) {
-    return exec_write("DELETE FROM financial_notes WHERE id = ?", {id});
+    auto r = exec_write("DELETE FROM financial_notes WHERE id = ?", {id});
+    if (r.is_ok())
+        SyncOutbox::record("note", QString::number(id), "delete");
+    return r;
 }
 
 Result<void> NotesRepository::toggle_favorite(int id) {
-    return exec_write("UPDATE financial_notes SET is_favorite = NOT is_favorite, "
-                      "updated_at = datetime('now') WHERE id = ?",
-                      {id});
+    auto r = exec_write("UPDATE financial_notes SET is_favorite = NOT is_favorite, "
+                        "updated_at = datetime('now') WHERE id = ?",
+                        {id});
+    if (r.is_ok())
+        SyncOutbox::record("note", QString::number(id), "favorite");
+    return r;
 }
 
 Result<void> NotesRepository::toggle_archive(int id) {
-    return exec_write("UPDATE financial_notes SET is_archived = NOT is_archived, "
-                      "updated_at = datetime('now') WHERE id = ?",
-                      {id});
+    auto r = exec_write("UPDATE financial_notes SET is_archived = NOT is_archived, "
+                        "updated_at = datetime('now') WHERE id = ?",
+                        {id});
+    if (r.is_ok())
+        SyncOutbox::record("note", QString::number(id), "archive");
+    return r;
 }
 
 Result<QVector<NoteTemplate>> NotesRepository::list_templates() {

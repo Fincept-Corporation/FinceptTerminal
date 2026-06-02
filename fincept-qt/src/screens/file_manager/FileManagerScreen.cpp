@@ -6,6 +6,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QButtonGroup>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QFile>
 #include <QFileDialog>
@@ -60,23 +61,24 @@ void FileManagerScreen::build_ui() {
     hhl->setContentsMargins(14, 10, 14, 10);
     hhl->setSpacing(8);
 
-    auto* title = new QLabel("FILE MANAGER");
-    title->setStyleSheet(
+    title_label_ = new QLabel(tr("FILE MANAGER"));
+    title_label_->setStyleSheet(
         QString("color:%1;font-size:14px;font-weight:700;letter-spacing:0.5px;background:transparent;%2")
             .arg(colors::AMBER(), MF));
-    hhl->addWidget(title);
+    hhl->addWidget(title_label_);
 
-    auto* sub = new QLabel("Manage files across the terminal");
-    sub->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;%2").arg(colors::TEXT_TERTIARY(), MF));
-    hhl->addWidget(sub);
+    subtitle_label_ = new QLabel(tr("Manage files across the terminal"));
+    subtitle_label_->setStyleSheet(
+        QString("color:%1;font-size:12px;background:transparent;%2").arg(colors::TEXT_TERTIARY(), MF));
+    hhl->addWidget(subtitle_label_);
     hhl->addStretch();
 
-    stats_label_ = new QLabel("0 files | 0 B");
+    stats_label_ = new QLabel(tr("%1 files | %2").arg(0).arg(format_size(0)));
     stats_label_->setStyleSheet(
         QString("color:%1;font-size:11px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
     hhl->addWidget(stats_label_);
 
-    refresh_btn_ = new QPushButton("REFRESH");
+    refresh_btn_ = new QPushButton(tr("REFRESH"));
     refresh_btn_->setCursor(Qt::PointingHandCursor);
     refresh_btn_->setStyleSheet(
         QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
@@ -89,7 +91,7 @@ void FileManagerScreen::build_ui() {
     });
     hhl->addWidget(refresh_btn_);
 
-    upload_btn_ = new QPushButton("UPLOAD FILES");
+    upload_btn_ = new QPushButton(tr("UPLOAD FILES"));
     upload_btn_->setCursor(Qt::PointingHandCursor);
     upload_btn_->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;border:1px solid %3;"
                                        "padding:4px 12px;font-size:11px;font-weight:700;%2}"
@@ -113,12 +115,12 @@ void FileManagerScreen::build_ui() {
     bbl->setContentsMargins(14, 6, 14, 6);
     bbl->setSpacing(10);
 
-    auto* sel_lbl = new QLabel("Selected files:");
-    sel_lbl->setStyleSheet(
+    bulk_sel_label_ = new QLabel(tr("Selected files:"));
+    bulk_sel_label_->setStyleSheet(
         QString("color:%1;font-size:11px;background:transparent;%2").arg(colors::TEXT_SECONDARY(), MF));
-    bbl->addWidget(sel_lbl);
+    bbl->addWidget(bulk_sel_label_);
 
-    bulk_delete_btn_ = new QPushButton("DELETE SELECTED");
+    bulk_delete_btn_ = new QPushButton(tr("DELETE SELECTED"));
     bulk_delete_btn_->setCursor(Qt::PointingHandCursor);
     bulk_delete_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid #7f1d1d;"
                                             "padding:3px 12px;font-size:11px;font-weight:700;%2}"
@@ -128,18 +130,18 @@ void FileManagerScreen::build_ui() {
     bbl->addWidget(bulk_delete_btn_);
     bbl->addStretch();
 
-    auto* desel_btn = new QPushButton("CLEAR SELECTION");
-    desel_btn->setCursor(Qt::PointingHandCursor);
-    desel_btn->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                                     "padding:3px 12px;font-size:11px;%3}"
-                                     "QPushButton:hover{color:%4;}")
-                                 .arg(colors::TEXT_DIM(), colors::BORDER_DIM(), MF, colors::TEXT_PRIMARY()));
-    connect(desel_btn, &QPushButton::clicked, this, [this]() {
+    bulk_clear_btn_ = new QPushButton(tr("CLEAR SELECTION"));
+    bulk_clear_btn_->setCursor(Qt::PointingHandCursor);
+    bulk_clear_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
+                                           "padding:3px 12px;font-size:11px;%3}"
+                                           "QPushButton:hover{color:%4;}")
+                                       .arg(colors::TEXT_DIM(), colors::BORDER_DIM(), MF, colors::TEXT_PRIMARY()));
+    connect(bulk_clear_btn_, &QPushButton::clicked, this, [this]() {
         for (auto* btn : check_btns_)
             btn->setChecked(false);
         update_bulk_bar();
     });
-    bbl->addWidget(desel_btn);
+    bbl->addWidget(bulk_clear_btn_);
     root->addWidget(bulk_bar_);
 
     // ── Splitter: file list | preview ─────────────────────────────────────────
@@ -170,6 +172,9 @@ void FileManagerScreen::build_ui() {
     preview_panel_->setVisible(false);
 
     root->addWidget(splitter_, 1);
+
+    // Populate empty-display combo items and apply translatable text.
+    retranslateUi();
 }
 
 void FileManagerScreen::build_quota_bar(QVBoxLayout* root) {
@@ -180,7 +185,7 @@ void FileManagerScreen::build_quota_bar(QVBoxLayout* root) {
     ql->setContentsMargins(14, 6, 14, 6);
     ql->setSpacing(10);
 
-    quota_label_ = new QLabel("Storage: 0 B / 500 MB");
+    quota_label_ = new QLabel(tr("Storage: %1 / 500 MB").arg(format_size(0)));
     quota_label_->setStyleSheet(
         QString("color:%1;font-size:11px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
     ql->addWidget(quota_label_);
@@ -214,7 +219,7 @@ void FileManagerScreen::build_filter_bar(QVBoxLayout* root) {
     r1l->setSpacing(8);
 
     search_input_ = new QLineEdit;
-    search_input_->setPlaceholderText("Search files by name, type, or source...");
+    search_input_->setPlaceholderText(tr("Search files by name, type, or source..."));
     search_input_->setStyleSheet(
         QString("QLineEdit{background:%1;color:%2;border:1px solid %3;"
                 "padding:5px 10px;font-size:12px;%4}"
@@ -223,13 +228,15 @@ void FileManagerScreen::build_filter_bar(QVBoxLayout* root) {
     connect(search_input_, &QLineEdit::textChanged, this, [this]() { render_files(); });
     r1l->addWidget(search_input_, 1);
 
-    auto* sort_lbl = new QLabel("Sort:");
-    sort_lbl->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
-    r1l->addWidget(sort_lbl);
+    sort_label_ = new QLabel(tr("Sort:"));
+    sort_label_->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
+    r1l->addWidget(sort_label_);
 
+    // Sort combo — logic uses currentIndex(), so display text is set/refreshed
+    // in retranslateUi (items added empty here to fix index → option mapping).
     sort_combo_ = new QComboBox;
-    sort_combo_->addItems(
-        {"Date (newest)", "Date (oldest)", "Name (A-Z)", "Name (Z-A)", "Size (largest)", "Size (smallest)", "Type"});
+    for (int i = 0; i < 7; ++i)
+        sort_combo_->addItem(QString());
     sort_combo_->setStyleSheet(
         QString("QComboBox{background:%1;color:%2;border:1px solid %3;"
                 "padding:4px 8px;font-size:11px;%4}"
@@ -299,10 +306,11 @@ QWidget* FileManagerScreen::build_preview_panel() {
     auto* hhl = new QHBoxLayout(hdr);
     hhl->setContentsMargins(12, 8, 12, 8);
 
-    auto* plbl = new QLabel("PREVIEW");
-    plbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;background:transparent;%2")
-                            .arg(colors::AMBER(), MF));
-    hhl->addWidget(plbl);
+    preview_header_label_ = new QLabel(tr("PREVIEW"));
+    preview_header_label_->setStyleSheet(
+        QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;background:transparent;%2")
+            .arg(colors::AMBER(), MF));
+    hhl->addWidget(preview_header_label_);
     hhl->addStretch();
 
     auto* close_btn = new QPushButton("✕");
@@ -359,7 +367,7 @@ QWidget* FileManagerScreen::build_preview_panel() {
     vl->addWidget(preview_table_, 1);
 
     // Empty/binary state
-    preview_empty_ = new QLabel("Select a file to preview");
+    preview_empty_ = new QLabel(tr("Select a file to preview"));
     preview_empty_->setAlignment(Qt::AlignCenter);
     preview_empty_->setWordWrap(true);
     preview_empty_->setStyleSheet(
@@ -383,7 +391,7 @@ void FileManagerScreen::showEvent(QShowEvent* event) {
 // ── File operations ───────────────────────────────────────────────────────────
 
 void FileManagerScreen::upload_files() {
-    QStringList paths = QFileDialog::getOpenFileNames(this, "Select Files to Upload");
+    QStringList paths = QFileDialog::getOpenFileNames(this, tr("Select Files to Upload"));
     if (paths.isEmpty())
         return;
     for (const QString& path : paths)
@@ -394,14 +402,14 @@ void FileManagerScreen::download_file(const QString& file_id) {
     auto f = FileManagerService::instance().find_by_id(file_id);
     if (f.id.isEmpty())
         return;
-    QString dest = QFileDialog::getSaveFileName(this, "Save File As", f.original_name);
+    QString dest = QFileDialog::getSaveFileName(this, tr("Save File As"), f.original_name);
     if (dest.isEmpty())
         return;
     QString src = FileManagerService::instance().full_path(f.name);
     if (QFile::exists(dest))
         QFile::remove(dest);
     if (!QFile::copy(src, dest))
-        QMessageBox::warning(this, "Download Failed", "Could not save file to selected location.");
+        QMessageBox::warning(this, tr("Download Failed"), tr("Could not save file to selected location."));
     else
         LOG_INFO("FileManager", "Downloaded: " + f.original_name);
 }
@@ -410,8 +418,8 @@ void FileManagerScreen::delete_file(const QString& file_id) {
     auto f = FileManagerService::instance().find_by_id(file_id);
     if (f.id.isEmpty())
         return;
-    auto reply = QMessageBox::question(this, "Delete File",
-                                       QString("Delete \"%1\"? This cannot be undone.").arg(f.original_name),
+    auto reply = QMessageBox::question(this, tr("Delete File"),
+                                       tr("Delete \"%1\"? This cannot be undone.").arg(f.original_name),
                                        QMessageBox::Yes | QMessageBox::No);
     if (reply == QMessageBox::Yes)
         FileManagerService::instance().remove_file(file_id);
@@ -426,7 +434,8 @@ void FileManagerScreen::delete_selected() {
     if (to_delete.isEmpty())
         return;
     auto reply = QMessageBox::question(
-        this, "Delete Files", QString("Delete %1 selected file(s)? This cannot be undone.").arg(to_delete.size()),
+        this, tr("Delete Files"),
+        tr("Delete %n selected file(s)? This cannot be undone.", "", to_delete.size()),
         QMessageBox::Yes | QMessageBox::No);
     if (reply != QMessageBox::Yes)
         return;
@@ -466,7 +475,7 @@ void FileManagerScreen::show_preview(const QString& file_id) {
     if (f.mime_type.contains("image") || f.mime_type.contains("video") || f.mime_type.contains("audio") ||
         f.mime_type.contains("zip") || f.mime_type.contains("spreadsheet") || f.mime_type.contains("excel") ||
         f.mime_type.contains("vnd.openxmlformats")) {
-        preview_empty_->setText("Binary file — preview not available.\nUse SAVE to download.");
+        preview_empty_->setText(tr("Binary file — preview not available.\nUse SAVE to download."));
         preview_empty_->setVisible(true);
         return;
     }
@@ -474,7 +483,7 @@ void FileManagerScreen::show_preview(const QString& file_id) {
     QString path = FileManagerService::instance().full_path(f.name);
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        preview_empty_->setText("Cannot open file for preview.");
+        preview_empty_->setText(tr("Cannot open file for preview."));
         preview_empty_->setVisible(true);
         return;
     }
@@ -532,7 +541,7 @@ void FileManagerScreen::show_preview(const QString& file_id) {
 
     preview_text_->setPlainText(content);
     if (content.length() == 64000)
-        preview_text_->append("\n\n[... truncated at 64K characters ...]");
+        preview_text_->append("\n\n" + tr("[... truncated at 64K characters ...]"));
     preview_text_->setVisible(true);
 }
 
@@ -544,7 +553,7 @@ void FileManagerScreen::clear_preview() {
     preview_table_->setVisible(false);
     preview_title_->clear();
     preview_meta_->clear();
-    preview_empty_->setText("Select a file to preview");
+    preview_empty_->setText(tr("Select a file to preview"));
     preview_empty_->setVisible(true);
     preview_panel_->setVisible(false);
 }
@@ -556,7 +565,7 @@ void FileManagerScreen::update_bulk_bar() {
             selected++;
     bulk_bar_->setVisible(selected > 0);
     if (selected > 0)
-        bulk_delete_btn_->setText(QString("DELETE %1 SELECTED").arg(selected));
+        bulk_delete_btn_->setText(tr("DELETE %1 SELECTED").arg(selected));
 }
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
@@ -631,15 +640,15 @@ void FileManagerScreen::render_files() {
                 QString("color:%1;font-size:36px;font-weight:700;background:transparent;%2").arg(colors::AMBER(), MF));
             skl->addWidget(hero_lbl);
 
-            auto* hero_sub = new QLabel("Your terminal file index is empty.");
+            auto* hero_sub = new QLabel(tr("Your terminal file index is empty."));
             hero_sub->setAlignment(Qt::AlignCenter);
             hero_sub->setStyleSheet(
                 QString("color:%1;font-size:14px;background:transparent;%2").arg(colors::TEXT_SECONDARY(), MF));
             skl->addWidget(hero_sub);
 
             auto* hero_hint =
-                new QLabel("Files are registered automatically when you export, save, or generate output\n"
-                           "from any screen. You can also upload files manually using the button above.");
+                new QLabel(tr("Files are registered automatically when you export, save, or generate output\n"
+                              "from any screen. You can also upload files manually using the button above."));
             hero_hint->setAlignment(Qt::AlignCenter);
             hero_hint->setWordWrap(true);
             hero_hint->setStyleSheet(
@@ -651,7 +660,7 @@ void FileManagerScreen::render_files() {
             div->setStyleSheet(QString("background:%1;max-height:1px;border:none;").arg(colors::BORDER_DIM()));
             skl->addWidget(div);
 
-            auto* sources_lbl = new QLabel("FILES ARE COLLECTED FROM");
+            auto* sources_lbl = new QLabel(tr("FILES ARE COLLECTED FROM"));
             sources_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;"
                                                "background:transparent;%2")
                                            .arg(colors::TEXT_DIM(), MF));
@@ -700,11 +709,11 @@ void FileManagerScreen::render_files() {
                 auto* tl = new QVBoxLayout(txt);
                 tl->setContentsMargins(0, 0, 0, 0);
                 tl->setSpacing(1);
-                auto* nl = new QLabel(s.name);
+                auto* nl = new QLabel(tr(s.name.toUtf8().constData()));
                 nl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:600;background:transparent;%2")
                                       .arg(colors::TEXT_PRIMARY(), MF));
                 tl->addWidget(nl);
-                auto* dl = new QLabel(s.desc);
+                auto* dl = new QLabel(tr(s.desc.toUtf8().constData()));
                 dl->setStyleSheet(
                     QString("color:%1;font-size:10px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
                 tl->addWidget(dl);
@@ -718,18 +727,19 @@ void FileManagerScreen::render_files() {
             div2->setStyleSheet(QString("background:%1;max-height:1px;border:none;").arg(colors::BORDER_DIM()));
             skl->addWidget(div2);
 
-            auto* tips_lbl = new QLabel("TIPS");
+            auto* tips_lbl = new QLabel(tr("TIPS"));
             tips_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;"
                                             "background:transparent;%2")
                                         .arg(colors::TEXT_DIM(), MF));
             skl->addWidget(tips_lbl);
 
-            for (const char* tip : {
-                     "Use the filter chips above to narrow files by source screen.",
-                     "Click any file card to preview its contents in the right panel.",
-                     "Use checkboxes on file cards to bulk-delete multiple files at once.",
-                     "MCP tools can list and read your files directly in AI Chat.",
-                 }) {
+            const QStringList tips = {
+                tr("Use the filter chips above to narrow files by source screen."),
+                tr("Click any file card to preview its contents in the right panel."),
+                tr("Use checkboxes on file cards to bulk-delete multiple files at once."),
+                tr("MCP tools can list and read your files directly in AI Chat."),
+            };
+            for (const QString& tip : tips) {
                 auto* tl2 = new QLabel(QString("•  ") + tip);
                 tl2->setWordWrap(true);
                 tl2->setStyleSheet(
@@ -739,7 +749,7 @@ void FileManagerScreen::render_files() {
             skl->addStretch();
             file_layout_->addWidget(skeleton);
         } else {
-            auto* empty = new QLabel("No files match your search or filter.");
+            auto* empty = new QLabel(tr("No files match your search or filter."));
             empty->setAlignment(Qt::AlignCenter);
             empty->setStyleSheet(QString("color:%1;font-size:13px;padding:40px;%2").arg(colors::TEXT_DIM(), MF));
             file_layout_->addWidget(empty);
@@ -819,7 +829,7 @@ void FileManagerScreen::render_files() {
         info->installEventFilter(this);
         connect(name_lbl, &QLabel::linkActivated, this, [this, fid]() { show_preview(fid); });
         // Use a transparent button overlay trick — simpler: connect via QPushButton
-        auto* preview_btn = new QPushButton("PREVIEW");
+        auto* preview_btn = new QPushButton(tr("PREVIEW"));
         preview_btn->setCursor(Qt::PointingHandCursor);
         preview_btn->setFixedHeight(26);
         preview_btn->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
@@ -845,7 +855,7 @@ void FileManagerScreen::render_files() {
         }
 
         // Save button
-        auto* dl_btn = new QPushButton("SAVE");
+        auto* dl_btn = new QPushButton(tr("SAVE"));
         dl_btn->setCursor(Qt::PointingHandCursor);
         dl_btn->setFixedSize(54, 26);
         dl_btn->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
@@ -856,7 +866,7 @@ void FileManagerScreen::render_files() {
         hl->addWidget(dl_btn);
 
         // Delete button
-        auto* del_btn = new QPushButton("DEL");
+        auto* del_btn = new QPushButton(tr("DEL"));
         del_btn->setCursor(Qt::PointingHandCursor);
         del_btn->setFixedSize(44, 26);
         del_btn->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
@@ -880,13 +890,13 @@ void FileManagerScreen::update_stats() {
         if (v.isObject())
             total_size += v.toObject()["size"].toInteger();
 
-    stats_label_->setText(QString("%1 files | %2").arg(files.size()).arg(format_size(total_size)));
+    stats_label_->setText(tr("%1 files | %2").arg(files.size()).arg(format_size(total_size)));
 
     // Quota bar
     if (quota_bar_ && quota_label_) {
         int pct = (int)(total_size * 1000 / kQuotaBytes);
         quota_bar_->setValue(qMin(pct, 1000));
-        quota_label_->setText(QString("Storage: %1 / 500 MB").arg(format_size(total_size)));
+        quota_label_->setText(tr("Storage: %1 / 500 MB").arg(format_size(total_size)));
         // Turn red if > 80%
         QString chunk_color = (pct > 800) ? colors::NEGATIVE() : colors::AMBER();
         quota_bar_->setStyleSheet(QString("QProgressBar{background:%1;border:none;border-radius:3px;}"
@@ -927,12 +937,12 @@ QString FileManagerScreen::file_type_color(const QString& mime) {
 
 QString FileManagerScreen::open_with_label(const QString& mime) {
     if (mime.contains("ipynb") || mime.contains("python"))
-        return "NOTEBOOK";
+        return QCoreApplication::translate("FileManagerScreen", "NOTEBOOK");
     if (mime.contains("spreadsheet") || mime.contains("csv") || mime.contains("excel"))
-        return "EXCEL";
+        return QCoreApplication::translate("FileManagerScreen", "EXCEL");
     if (mime.contains("pdf"))
-        return "REPORT";
-    return "OPEN";
+        return QCoreApplication::translate("FileManagerScreen", "REPORT");
+    return QCoreApplication::translate("FileManagerScreen", "OPEN");
 }
 
 QString FileManagerScreen::route_for_mime(const QString& mime) {
@@ -943,6 +953,49 @@ QString FileManagerScreen::route_for_mime(const QString& mime) {
     if (mime.contains("pdf"))
         return "report_builder";
     return {};
+}
+
+// ── Live language switch ─────────────────────────────────────────────────────
+
+void FileManagerScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void FileManagerScreen::retranslateUi() {
+    // Header
+    if (title_label_) title_label_->setText(tr("FILE MANAGER"));
+    if (subtitle_label_) subtitle_label_->setText(tr("Manage files across the terminal"));
+    if (refresh_btn_) refresh_btn_->setText(tr("REFRESH"));
+    if (upload_btn_) upload_btn_->setText(tr("UPLOAD FILES"));
+
+    // Filter / sort bar
+    if (sort_label_) sort_label_->setText(tr("Sort:"));
+    if (sort_combo_) {
+        const QStringList opts = {tr("Date (newest)"),  tr("Date (oldest)"),  tr("Name (A-Z)"), tr("Name (Z-A)"),
+                                  tr("Size (largest)"), tr("Size (smallest)"), tr("Type")};
+        for (int i = 0; i < opts.size() && i < sort_combo_->count(); ++i)
+            sort_combo_->setItemText(i, opts[i]);
+    }
+    if (search_input_) search_input_->setPlaceholderText(tr("Search files by name, type, or source..."));
+
+    // Bulk action bar
+    if (bulk_sel_label_) bulk_sel_label_->setText(tr("Selected files:"));
+    if (bulk_clear_btn_) bulk_clear_btn_->setText(tr("CLEAR SELECTION"));
+
+    // Preview panel header + empty placeholder (when no file is being previewed)
+    if (preview_header_label_) preview_header_label_->setText(tr("PREVIEW"));
+    if (preview_empty_ && preview_empty_->isVisible() && preview_title_ && preview_title_->text().isEmpty())
+        preview_empty_->setText(tr("Select a file to preview"));
+
+    // Re-render stats footer / quota and the file cards (which carry
+    // translatable button labels and empty-state copy).
+    if (stats_label_)
+        update_stats();
+    update_bulk_bar();
+    if (loaded_)
+        render_files();
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────

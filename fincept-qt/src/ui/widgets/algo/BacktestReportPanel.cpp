@@ -73,6 +73,46 @@ BacktestReportPanel::BacktestReportPanel(QWidget* parent) : QWidget(parent) {
     root->addWidget(body_, 1);
 }
 
+void BacktestReportPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void BacktestReportPanel::retranslateUi() {
+    if (placeholder_)
+        placeholder_->setText(tr("Run a backtest to see performance, equity curve and trades."));
+
+    // KPI titles — keyed lookup so each card's fixed header re-translates.
+    auto kpi_title = [this](const QString& key, const QString& text) {
+        if (auto* l = kpi_title_.value(key, nullptr))
+            l->setText(text);
+    };
+    kpi_title("total_return", tr("TOTAL RETURN"));
+    kpi_title("sharpe", tr("SHARPE"));
+    kpi_title("sortino", tr("SORTINO"));
+    kpi_title("max_dd", tr("MAX DRAWDOWN"));
+    kpi_title("calmar", tr("CALMAR"));
+    kpi_title("win_rate", tr("WIN RATE"));
+    kpi_title("profit_factor", tr("PROFIT FACTOR"));
+    kpi_title("trades", tr("TRADES"));
+    kpi_title("expectancy", tr("EXPECTANCY"));
+    kpi_title("avg_bars", tr("AVG BARS HELD"));
+
+    if (equity_chart_) equity_chart_->setTitle(tr("Equity Curve"));
+    if (equity_series_) equity_series_->setName(tr("Strategy"));
+    if (benchmark_series_) benchmark_series_->setName(tr("Buy & Hold"));
+    if (dd_chart_) dd_chart_->setTitle(tr("Drawdown %"));
+    if (heatmap_title_) heatmap_title_->setText(tr("MONTHLY RETURNS %"));
+
+    if (trades_) {
+        const QStringList headers = {tr("#"),     tr("Entry"), tr("Exit"), tr("Entry $"),
+                                     tr("Exit $"), tr("Qty"),   tr("P&L"),  tr("P&L %"),
+                                     tr("Bars"),   tr("Reason")};
+        trades_->setHorizontalHeaderLabels(headers);
+    }
+}
+
 void BacktestReportPanel::add_kpi(QGridLayout* grid, int row, int col,
                                   const QString& key, const QString& title) {
     auto* card = new QWidget(this);
@@ -92,6 +132,7 @@ void BacktestReportPanel::add_kpi(QGridLayout* grid, int row, int col,
     grid->addWidget(card, row, col);
     kpi_val_[key] = v;
     kpi_sub_[key] = s;
+    kpi_title_[key] = t;
 }
 
 QWidget* BacktestReportPanel::build_kpis() {
@@ -175,9 +216,9 @@ QWidget* BacktestReportPanel::build_heatmap() {
     auto* l = new QVBoxLayout(w);
     l->setContentsMargins(0, 0, 0, 0);
     l->setSpacing(4);
-    auto* title = new QLabel(tr("MONTHLY RETURNS %"), w);
-    title->setObjectName(QStringLiteral("kpiTitle"));
-    l->addWidget(title);
+    heatmap_title_ = new QLabel(tr("MONTHLY RETURNS %"), w);
+    heatmap_title_->setObjectName(QStringLiteral("kpiTitle"));
+    l->addWidget(heatmap_title_);
     auto* host = new QWidget(w);
     heatmap_grid_ = new QGridLayout(host);
     heatmap_grid_->setSpacing(2);

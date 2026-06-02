@@ -15,9 +15,9 @@ RiskManagementPanel::RiskManagementPanel(QWidget* parent)
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(6);
 
-    auto* header = new QLabel(tr("RISK MANAGEMENT"), this);
-    header->setObjectName(QStringLiteral("riskPanelHeader"));
-    layout->addWidget(header);
+    header_ = new QLabel(tr("RISK MANAGEMENT"), this);
+    header_->setObjectName(QStringLiteral("riskPanelHeader"));
+    layout->addWidget(header_);
 
     auto* grid = new QGridLayout();
     grid->setSpacing(6);
@@ -41,24 +41,24 @@ RiskManagementPanel::RiskManagementPanel(QWidget* parent)
     grid->addWidget(capital_pct_.spin, 3, 2);
 
     // Quantity
-    auto* qty_label = new QLabel(tr("Quantity"), this);
+    quantity_label_ = new QLabel(tr("Quantity"), this);
     quantity_spin_ = new QDoubleSpinBox(this);
     quantity_spin_->setObjectName(QStringLiteral("riskQtySpin"));
     quantity_spin_->setRange(1, 100000);
     quantity_spin_->setDecimals(0);
     quantity_spin_->setValue(1);
-    grid->addWidget(qty_label, 4, 0);
+    grid->addWidget(quantity_label_, 4, 0);
     grid->addWidget(quantity_spin_, 4, 1, 1, 2);
 
     // Max order value
-    auto* mov_label = new QLabel(tr("Max Order Value"), this);
+    max_order_label_ = new QLabel(tr("Max Order Value"), this);
     max_order_spin_ = new QDoubleSpinBox(this);
     max_order_spin_->setObjectName(QStringLiteral("riskMaxOrderSpin"));
     max_order_spin_->setRange(0, 10000000);
     max_order_spin_->setDecimals(0);
     max_order_spin_->setValue(0);
     max_order_spin_->setSpecialValueText(tr("No Limit"));
-    grid->addWidget(mov_label, 5, 0);
+    grid->addWidget(max_order_label_, 5, 0);
     grid->addWidget(max_order_spin_, 5, 1, 1, 2);
 
     layout->addLayout(grid);
@@ -67,6 +67,23 @@ RiskManagementPanel::RiskManagementPanel(QWidget* parent)
             this, &RiskManagementPanel::values_changed);
     connect(max_order_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
             this, &RiskManagementPanel::values_changed);
+}
+
+void RiskManagementPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void RiskManagementPanel::retranslateUi() {
+    if (header_) header_->setText(tr("RISK MANAGEMENT"));
+    if (stop_loss_.label) stop_loss_.label->setText(tr("Stop Loss %"));
+    if (take_profit_.label) take_profit_.label->setText(tr("Take Profit %"));
+    if (trailing_stop_.label) trailing_stop_.label->setText(tr("Trailing Stop %"));
+    if (capital_pct_.label) capital_pct_.label->setText(tr("Capital Alloc %"));
+    if (quantity_label_) quantity_label_->setText(tr("Quantity"));
+    if (max_order_label_) max_order_label_->setText(tr("Max Order Value"));
+    if (max_order_spin_) max_order_spin_->setSpecialValueText(tr("No Limit"));
 }
 
 RiskManagementPanel::SliderRow RiskManagementPanel::create_row(

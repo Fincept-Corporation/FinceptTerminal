@@ -41,6 +41,76 @@ EquityBottomPanel::EquityBottomPanel(QWidget* parent) : QWidget(parent) {
     layout->addWidget(tabs_);
 }
 
+void EquityBottomPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void EquityBottomPanel::retranslateUi() {
+    // Tab labels
+    if (tabs_) {
+        if (positions_tab_idx_ >= 0)  tabs_->setTabText(positions_tab_idx_, tr("POSITIONS"));
+        if (holdings_tab_idx_ >= 0)   tabs_->setTabText(holdings_tab_idx_, tr("HOLDINGS"));
+        if (orders_tab_idx_ >= 0)     tabs_->setTabText(orders_tab_idx_, tr("ORDERS"));
+        if (funds_tab_idx_ >= 0)      tabs_->setTabText(funds_tab_idx_, tr("FUNDS"));
+        if (stats_tab_idx_ >= 0)      tabs_->setTabText(stats_tab_idx_, tr("STATS"));
+        if (time_sales_tab_idx_ >= 0) tabs_->setTabText(time_sales_tab_idx_, tr("TIME & SALES"));
+        if (auctions_tab_idx_ >= 0)   tabs_->setTabText(auctions_tab_idx_, tr("AUCTIONS"));
+        if (calendar_tab_idx_ >= 0)   tabs_->setTabText(calendar_tab_idx_, tr("CALENDAR"));
+    }
+
+    // Table headers
+    if (positions_table_)
+        positions_table_->setHorizontalHeaderLabels(
+            {tr("Symbol"), tr("Opened"), tr("Side"), tr("Qty"), tr("Avg Price"), tr("LTP"), tr("P&L"), tr("P&L %")});
+    if (holdings_table_)
+        holdings_table_->setHorizontalHeaderLabels(
+            {tr("Symbol"), tr("Qty"), tr("Avg Price"), tr("LTP"), tr("Invested"), tr("Current"), tr("P&L"),
+             tr("P&L %")});
+    if (orders_table_)
+        orders_table_->setHorizontalHeaderLabels(
+            {tr("Order ID"), tr("Symbol"), tr("Side"), tr("Type"), tr("Qty"), tr("Price"), tr("Status"), tr("Time"),
+             tr("Action")});
+    if (auctions_table_)
+        auctions_table_->setHorizontalHeaderLabels(
+            {tr("Date"), tr("Type"), tr("Time"), tr("Price"), tr("Size"), tr("Exchange")});
+    if (time_sales_table_)
+        time_sales_table_->setHorizontalHeaderLabels(
+            {tr("Time"), tr("Price"), tr("Size"), tr("Exchange"), tr("Conditions"), tr("Tape")});
+    if (calendar_table_)
+        calendar_table_->setHorizontalHeaderLabels(
+            {tr("Date"), tr("Open (ET)"), tr("Close (ET)"), tr("Pre-Market"), tr("After-Hours")});
+
+    // Action buttons
+    if (close_all_btn_)      close_all_btn_->setText(tr("SQUARE OFF ALL"));
+    if (cancel_all_btn_)     cancel_all_btn_->setText(tr("CANCEL ALL ORDERS"));
+    if (holdings_import_btn_) holdings_import_btn_->setText(tr("IMPORT TO PORTFOLIO"));
+
+    // Holdings summary-strip captions
+    if (holdings_count_caption_)    holdings_count_caption_->setText(tr("HOLDINGS"));
+    if (holdings_invested_caption_) holdings_invested_caption_->setText(tr("INVESTED"));
+    if (holdings_current_caption_)  holdings_current_caption_->setText(tr("CURRENT"));
+    if (holdings_pnl_caption_)      holdings_pnl_caption_->setText(tr("TOTAL P&L"));
+    if (holdings_pnl_pct_caption_)  holdings_pnl_pct_caption_->setText(tr("RETURN %"));
+
+    // Funds row captions
+    if (available_caption_)   available_caption_->setText(tr("Available Balance"));
+    if (used_margin_caption_) used_margin_caption_->setText(tr("Used Margin"));
+    if (total_caption_)       total_caption_->setText(tr("Total Balance"));
+    if (collateral_caption_)  collateral_caption_->setText(tr("Collateral"));
+
+    // Stats row captions
+    const QString stat_labels[] = {tr("Total P&L"), tr("Win Rate"), tr("Total Trades"), tr("Largest Win"),
+                                   tr("Largest Loss")};
+    for (int i = 0; i < 5; ++i)
+        if (stat_captions_[i]) stat_captions_[i]->setText(stat_labels[i]);
+
+    // The calendar clock banner ("● MARKET OPEN/CLOSED/--") is live data driven
+    // by set_clock(); it re-renders in the new language on the next clock tick,
+    // so it is intentionally not reapplied here.
+}
+
 QTableWidgetItem* EquityBottomPanel::ensure_item(QTableWidget* table, int row, int col) {
     auto* item = table->item(row, col);
     if (!item) {
@@ -69,7 +139,7 @@ void EquityBottomPanel::setup_positions_tab() {
     bar_layout->setSpacing(8);
     bar_layout->addStretch(1);
 
-    close_all_btn_ = new QPushButton("SQUARE OFF ALL");
+    close_all_btn_ = new QPushButton(tr("SQUARE OFF ALL"));
     close_all_btn_->setCursor(Qt::PointingHandCursor);
     close_all_btn_->setStyleSheet(
         QString("QPushButton{background:rgba(220,38,38,0.12);color:%1;border:1px solid %2;"
@@ -79,8 +149,8 @@ void EquityBottomPanel::setup_positions_tab() {
     connect(close_all_btn_, &QPushButton::clicked, this, [this]() {
         if (account_id_.isEmpty())
             return;
-        auto answer = QMessageBox::warning(this, "Square Off All Positions",
-                                           "This will close ALL open positions.\n\nAre you sure?",
+        auto answer = QMessageBox::warning(this, tr("Square Off All Positions"),
+                                           tr("This will close ALL open positions.\n\nAre you sure?"),
                                            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (answer != QMessageBox::Yes)
             return;
@@ -93,7 +163,7 @@ void EquityBottomPanel::setup_positions_tab() {
     positions_table_->setObjectName("eqTable");
     positions_table_->setColumnCount(8);
     positions_table_->setHorizontalHeaderLabels(
-        {"Symbol", "Opened", "Side", "Qty", "Avg Price", "LTP", "P&L", "P&L %"});
+        {tr("Symbol"), tr("Opened"), tr("Side"), tr("Qty"), tr("Avg Price"), tr("LTP"), tr("P&L"), tr("P&L %")});
     positions_table_->verticalHeader()->setVisible(false);
     positions_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     positions_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -102,7 +172,7 @@ void EquityBottomPanel::setup_positions_tab() {
     positions_table_->verticalHeader()->setDefaultSectionSize(22);
     vlay->addWidget(positions_table_, 1);
 
-    tabs_->addTab(container, "POSITIONS");
+    positions_tab_idx_ = tabs_->addTab(container, tr("POSITIONS"));
 }
 
 // ── Holdings Tab ───────────────────────────────────────────────────────────
@@ -122,7 +192,7 @@ void EquityBottomPanel::setup_holdings_tab() {
     strip_layout->setContentsMargins(12, 6, 12, 6);
     strip_layout->setSpacing(24);
 
-    auto make_stat = [&](const QString& caption) -> QLabel* {
+    auto make_stat = [&](const QString& caption, QLabel*& caption_out) -> QLabel* {
         auto* cell = new QWidget;
         auto* cv = new QVBoxLayout(cell);
         cv->setContentsMargins(0, 0, 0, 0);
@@ -130,6 +200,7 @@ void EquityBottomPanel::setup_holdings_tab() {
         auto* cap = new QLabel(caption);
         cap->setStyleSheet(QString("color:%1;font-size:10px;letter-spacing:0.5px;")
                                .arg(fincept::ui::colors::TEXT_SECONDARY()));
+        caption_out = cap;
         auto* val = new QLabel("--");
         val->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;")
                                .arg(fincept::ui::colors::TEXT_PRIMARY()));
@@ -138,14 +209,14 @@ void EquityBottomPanel::setup_holdings_tab() {
         strip_layout->addWidget(cell);
         return val;
     };
-    holdings_count_label_     = make_stat("HOLDINGS");
-    holdings_invested_label_  = make_stat("INVESTED");
-    holdings_current_label_   = make_stat("CURRENT");
-    holdings_pnl_label_       = make_stat("TOTAL P&L");
-    holdings_pnl_pct_label_   = make_stat("RETURN %");
+    holdings_count_label_     = make_stat(tr("HOLDINGS"),  holdings_count_caption_);
+    holdings_invested_label_  = make_stat(tr("INVESTED"),  holdings_invested_caption_);
+    holdings_current_label_   = make_stat(tr("CURRENT"),   holdings_current_caption_);
+    holdings_pnl_label_       = make_stat(tr("TOTAL P&L"), holdings_pnl_caption_);
+    holdings_pnl_pct_label_   = make_stat(tr("RETURN %"),  holdings_pnl_pct_caption_);
     strip_layout->addStretch(1);
 
-    holdings_import_btn_ = new QPushButton("IMPORT TO PORTFOLIO");
+    holdings_import_btn_ = new QPushButton(tr("IMPORT TO PORTFOLIO"));
     holdings_import_btn_->setCursor(Qt::PointingHandCursor);
     holdings_import_btn_->setEnabled(false);
     holdings_import_btn_->setStyleSheet(
@@ -168,7 +239,7 @@ void EquityBottomPanel::setup_holdings_tab() {
     holdings_table_->setObjectName("eqTable");
     holdings_table_->setColumnCount(8);
     holdings_table_->setHorizontalHeaderLabels(
-        {"Symbol", "Qty", "Avg Price", "LTP", "Invested", "Current", "P&L", "P&L %"});
+        {tr("Symbol"), tr("Qty"), tr("Avg Price"), tr("LTP"), tr("Invested"), tr("Current"), tr("P&L"), tr("P&L %")});
     holdings_table_->verticalHeader()->setVisible(false);
     holdings_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     holdings_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -184,7 +255,7 @@ void EquityBottomPanel::setup_holdings_tab() {
     holdings_table_->horizontalScrollBar()->setSingleStep(16);
 
     v->addWidget(holdings_table_, 1);
-    tabs_->addTab(tab, "HOLDINGS");
+    holdings_tab_idx_ = tabs_->addTab(tab, tr("HOLDINGS"));
 }
 
 // ── Orders Tab ─────────────────────────────────────────────────────────────
@@ -205,7 +276,7 @@ void EquityBottomPanel::setup_orders_tab() {
     bar_layout->setSpacing(8);
     bar_layout->addStretch(1);
 
-    cancel_all_btn_ = new QPushButton("CANCEL ALL ORDERS");
+    cancel_all_btn_ = new QPushButton(tr("CANCEL ALL ORDERS"));
     cancel_all_btn_->setCursor(Qt::PointingHandCursor);
     cancel_all_btn_->setStyleSheet(
         QString("QPushButton{background:rgba(217,119,6,0.12);color:%1;border:1px solid %2;"
@@ -215,8 +286,8 @@ void EquityBottomPanel::setup_orders_tab() {
     connect(cancel_all_btn_, &QPushButton::clicked, this, [this]() {
         if (account_id_.isEmpty())
             return;
-        auto answer = QMessageBox::warning(this, "Cancel All Orders",
-                                           "This will cancel ALL pending orders.\n\nAre you sure?",
+        auto answer = QMessageBox::warning(this, tr("Cancel All Orders"),
+                                           tr("This will cancel ALL pending orders.\n\nAre you sure?"),
                                            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (answer != QMessageBox::Yes)
             return;
@@ -229,7 +300,8 @@ void EquityBottomPanel::setup_orders_tab() {
     orders_table_->setObjectName("eqTable");
     orders_table_->setColumnCount(9);
     orders_table_->setHorizontalHeaderLabels(
-        {"Order ID", "Symbol", "Side", "Type", "Qty", "Price", "Status", "Time", "Action"});
+        {tr("Order ID"), tr("Symbol"), tr("Side"), tr("Type"), tr("Qty"), tr("Price"), tr("Status"), tr("Time"),
+         tr("Action")});
     orders_table_->verticalHeader()->setVisible(false);
     orders_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     orders_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -238,7 +310,7 @@ void EquityBottomPanel::setup_orders_tab() {
     orders_table_->verticalHeader()->setDefaultSectionSize(22);
     vlay->addWidget(orders_table_, 1);
 
-    tabs_->addTab(container, "ORDERS");
+    orders_tab_idx_ = tabs_->addTab(container, tr("ORDERS"));
 }
 
 // ── Funds Tab ──────────────────────────────────────────────────────────────
@@ -249,10 +321,11 @@ void EquityBottomPanel::setup_funds_tab() {
     layout->setContentsMargins(12, 12, 12, 12);
     layout->setSpacing(8);
 
-    auto make_row = [&](const QString& label) -> QLabel* {
+    auto make_row = [&](const QString& label, QLabel*& caption_out) -> QLabel* {
         auto* row = new QHBoxLayout;
         auto* lbl = new QLabel(label);
         lbl->setObjectName("eqOeLabel");
+        caption_out = lbl;
         auto* val = new QLabel("--");
         val->setObjectName("eqOeBalance");
         val->setAlignment(Qt::AlignRight);
@@ -263,13 +336,13 @@ void EquityBottomPanel::setup_funds_tab() {
         return val;
     };
 
-    available_label_ = make_row("Available Balance");
-    used_margin_label_ = make_row("Used Margin");
-    total_label_ = make_row("Total Balance");
-    collateral_label_ = make_row("Collateral");
+    available_label_ = make_row(tr("Available Balance"), available_caption_);
+    used_margin_label_ = make_row(tr("Used Margin"), used_margin_caption_);
+    total_label_ = make_row(tr("Total Balance"), total_caption_);
+    collateral_label_ = make_row(tr("Collateral"), collateral_caption_);
 
     layout->addStretch();
-    tabs_->addTab(widget, "FUNDS");
+    funds_tab_idx_ = tabs_->addTab(widget, tr("FUNDS"));
 }
 
 // ── Stats Tab ──────────────────────────────────────────────────────────────
@@ -280,11 +353,13 @@ void EquityBottomPanel::setup_stats_tab() {
     layout->setContentsMargins(12, 12, 12, 12);
     layout->setSpacing(8);
 
-    const char* stat_labels[] = {"Total P&L", "Win Rate", "Total Trades", "Largest Win", "Largest Loss"};
+    const QString stat_labels[] = {tr("Total P&L"), tr("Win Rate"), tr("Total Trades"), tr("Largest Win"),
+                                   tr("Largest Loss")};
     for (int i = 0; i < 5; ++i) {
         auto* row = new QHBoxLayout;
         auto* lbl = new QLabel(stat_labels[i]);
         lbl->setObjectName("eqOeLabel");
+        stat_captions_[i] = lbl;
         stat_values_[i] = new QLabel("--");
         stat_values_[i]->setObjectName("eqOeBalance");
         stat_values_[i]->setAlignment(Qt::AlignRight);
@@ -295,7 +370,7 @@ void EquityBottomPanel::setup_stats_tab() {
     }
 
     layout->addStretch();
-    tabs_->addTab(widget, "STATS");
+    stats_tab_idx_ = tabs_->addTab(widget, tr("STATS"));
 }
 
 // ── Data Setters ───────────────────────────────────────────────────────────
@@ -373,7 +448,7 @@ void EquityBottomPanel::set_paper_trades(const QVector<trading::PtTrade>& trades
     // Add a separator row
     orders_table_->setRowCount(base + 1 + trades.size());
     auto* sep_item = ensure_item(orders_table_, base, 0);
-    sep_item->setText("--- RECENT TRADES ---");
+    sep_item->setText(tr("--- RECENT TRADES ---"));
     sep_item->setForeground(QColor(fincept::ui::colors::AMBER()));
     for (int c = 1; c < 8; ++c)
         ensure_item(orders_table_, base, c)->setText("");
@@ -524,7 +599,7 @@ void EquityBottomPanel::set_orders(const QVector<trading::BrokerOrderInfo>& orde
         const bool modifiable = (o.status == "new" || o.status == "partially_filled" || o.status == "accepted" ||
                                  o.status == "pending_new");
         if (modifiable) {
-            auto* btn = new QPushButton("EDIT");
+            auto* btn = new QPushButton(tr("EDIT"));
             btn->setObjectName("eqTableBtn");
             btn->setFixedHeight(18);
             btn->setStyleSheet(QString("QPushButton#eqTableBtn { background: rgba(217,119,6,0.15); "
@@ -539,7 +614,7 @@ void EquityBottomPanel::set_orders(const QVector<trading::BrokerOrderInfo>& orde
             connect(btn, &QPushButton::clicked, this, [this, oid, qty, prc]() {
                 // Show inline edit dialog
                 auto* dlg = new QDialog(this);
-                dlg->setWindowTitle("Modify Order");
+                dlg->setWindowTitle(tr("Modify Order"));
                 dlg->setFixedWidth(280);
                 dlg->setStyleSheet(QString("QDialog { background: %1; color: %2; }"
                                            "QLabel { color: %3; font-size: 11px; }"
@@ -557,17 +632,17 @@ void EquityBottomPanel::set_orders(const QVector<trading::BrokerOrderInfo>& orde
                 vlay->setSpacing(6);
                 vlay->setContentsMargins(14, 14, 14, 14);
 
-                auto* qty_lbl = new QLabel("QTY");
+                auto* qty_lbl = new QLabel(tr("QTY"));
                 auto* qty_edit = new QLineEdit(QString::number(qty, 'f', 0));
-                auto* prc_lbl = new QLabel("LIMIT PRICE");
+                auto* prc_lbl = new QLabel(tr("LIMIT PRICE"));
                 auto* prc_edit = new QLineEdit(QString::number(prc, 'f', 2));
 
                 auto* btn_row = new QHBoxLayout;
-                auto* ok_btn = new QPushButton("MODIFY");
+                auto* ok_btn = new QPushButton(tr("MODIFY"));
                 ok_btn->setStyleSheet(QString("background: rgba(217,119,6,0.15); color: %1; border: 1px solid %2;")
                                           .arg(fincept::ui::colors::AMBER())
                                           .arg(fincept::ui::colors::AMBER_DIM()));
-                auto* cancel_btn = new QPushButton("CANCEL");
+                auto* cancel_btn = new QPushButton(tr("CANCEL"));
                 cancel_btn->setStyleSheet(QString("background: rgba(220,38,38,0.1); color: %1; border: 1px solid %2;")
                                               .arg(fincept::ui::colors::NEGATIVE())
                                               .arg(fincept::ui::colors::NEGATIVE_DIM()));
@@ -611,7 +686,8 @@ void EquityBottomPanel::setup_auctions_tab() {
     auctions_table_ = new QTableWidget;
     auctions_table_->setObjectName("eqTable");
     auctions_table_->setColumnCount(6);
-    auctions_table_->setHorizontalHeaderLabels({"Date", "Type", "Time", "Price", "Size", "Exchange"});
+    auctions_table_->setHorizontalHeaderLabels(
+        {tr("Date"), tr("Type"), tr("Time"), tr("Price"), tr("Size"), tr("Exchange")});
     auctions_table_->verticalHeader()->setVisible(false);
     auctions_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     auctions_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -619,7 +695,7 @@ void EquityBottomPanel::setup_auctions_tab() {
     auctions_table_->horizontalHeader()->setStretchLastSection(true);
     auctions_table_->verticalHeader()->setDefaultSectionSize(20);
     auctions_table_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
-    tabs_->addTab(auctions_table_, "AUCTIONS");
+    auctions_tab_idx_ = tabs_->addTab(auctions_table_, tr("AUCTIONS"));
 }
 
 void EquityBottomPanel::set_auctions(const QVector<trading::BrokerAuction>& auctions) {
@@ -644,7 +720,7 @@ void EquityBottomPanel::set_auctions(const QVector<trading::BrokerAuction>& auct
             const QString time_str =
                 QDateTime::fromString(entry.timestamp, Qt::ISODateWithMs).toLocalTime().toString("hh:mm:ss");
             set(0, auction.date, QColor(fincept::ui::colors::TEXT_SECONDARY()));
-            set(1, is_open ? "OPEN" : "CLOSE", type_color);
+            set(1, is_open ? tr("OPEN") : tr("CLOSE"), type_color);
             set(2, time_str, QColor(fincept::ui::colors::TEXT_SECONDARY()));
             set(3, QString::number(entry.price, 'f', 2));
             set(4, QString::number(entry.size, 'f', 0), QColor(fincept::ui::colors::TEXT_SECONDARY()));
@@ -664,7 +740,8 @@ void EquityBottomPanel::setup_time_sales_tab() {
     time_sales_table_ = new QTableWidget;
     time_sales_table_->setObjectName("eqTable");
     time_sales_table_->setColumnCount(6);
-    time_sales_table_->setHorizontalHeaderLabels({"Time", "Price", "Size", "Exchange", "Conditions", "Tape"});
+    time_sales_table_->setHorizontalHeaderLabels(
+        {tr("Time"), tr("Price"), tr("Size"), tr("Exchange"), tr("Conditions"), tr("Tape")});
     time_sales_table_->verticalHeader()->setVisible(false);
     time_sales_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     time_sales_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -673,7 +750,7 @@ void EquityBottomPanel::setup_time_sales_tab() {
     time_sales_table_->verticalHeader()->setDefaultSectionSize(20);
     time_sales_table_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     time_sales_table_->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
-    tabs_->addTab(time_sales_table_, "TIME & SALES");
+    time_sales_tab_idx_ = tabs_->addTab(time_sales_table_, tr("TIME & SALES"));
 }
 
 static void fill_trade_row(QTableWidget* table, int row, const trading::BrokerTrade& t,
@@ -739,7 +816,7 @@ void EquityBottomPanel::setup_calendar_tab() {
     banner_lay->setContentsMargins(10, 0, 10, 0);
     banner_lay->setSpacing(16);
 
-    clock_status_label_ = new QLabel("● MARKET --");
+    clock_status_label_ = new QLabel(tr("● MARKET --"));
     clock_status_label_->setObjectName("calClockStatus");
     clock_status_label_->setStyleSheet(
         QString("color: %1; font-size: 11px; font-weight: 700;").arg(fincept::ui::colors::TEXT_TERTIARY()));
@@ -757,7 +834,8 @@ void EquityBottomPanel::setup_calendar_tab() {
     calendar_table_ = new QTableWidget;
     calendar_table_->setObjectName("eqTable");
     calendar_table_->setColumnCount(5);
-    calendar_table_->setHorizontalHeaderLabels({"Date", "Open (ET)", "Close (ET)", "Pre-Market", "After-Hours"});
+    calendar_table_->setHorizontalHeaderLabels(
+        {tr("Date"), tr("Open (ET)"), tr("Close (ET)"), tr("Pre-Market"), tr("After-Hours")});
     calendar_table_->verticalHeader()->setVisible(false);
     calendar_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     calendar_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -769,7 +847,7 @@ void EquityBottomPanel::setup_calendar_tab() {
     calendar_table_->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     vlay->addWidget(calendar_table_);
 
-    tabs_->addTab(container, "CALENDAR");
+    calendar_tab_idx_ = tabs_->addTab(container, tr("CALENDAR"));
 }
 
 void EquityBottomPanel::set_calendar(const QVector<trading::MarketCalendarDay>& days) {
@@ -808,22 +886,22 @@ void EquityBottomPanel::set_clock(const trading::MarketClock& clock) {
         return;
 
     if (clock.is_open) {
-        clock_status_label_->setText("● MARKET OPEN");
+        clock_status_label_->setText(tr("● MARKET OPEN"));
         clock_status_label_->setStyleSheet(
             QString("color: %1; font-size: 11px; font-weight: 700;").arg(fincept::ui::colors::POSITIVE()));
     } else {
-        clock_status_label_->setText("● MARKET CLOSED");
+        clock_status_label_->setText(tr("● MARKET CLOSED"));
         clock_status_label_->setStyleSheet(
             QString("color: %1; font-size: 11px; font-weight: 700;").arg(fincept::ui::colors::NEGATIVE()));
     }
 
     // Parse ISO timestamps and show local-friendly next event
     if (!clock.next_open.isEmpty() || !clock.next_close.isEmpty()) {
-        const QString next_event = clock.is_open ? QString("Closes %1")
+        const QString next_event = clock.is_open ? tr("Closes %1")
                                                        .arg(QDateTime::fromString(clock.next_close, Qt::ISODateWithMs)
                                                                 .toLocalTime()
                                                                 .toString("MMM d h:mm ap"))
-                                                 : QString("Opens %1")
+                                                 : tr("Opens %1")
                                                        .arg(QDateTime::fromString(clock.next_open, Qt::ISODateWithMs)
                                                                 .toLocalTime()
                                                                 .toString("MMM d h:mm ap"));

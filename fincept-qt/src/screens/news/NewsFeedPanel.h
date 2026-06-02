@@ -4,6 +4,7 @@
 #include "services/news/NewsClusterService.h"
 #include "services/news/NewsService.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QListView>
 #include <QStackedWidget>
@@ -38,6 +39,9 @@ class NewsFeedPanel : public QWidget {
     void cluster_clicked(const services::NewsCluster& cluster);
     void near_bottom();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_item_clicked(const QModelIndex& index);
     void check_scroll_position();
@@ -47,6 +51,10 @@ class NewsFeedPanel : public QWidget {
     void build_skeleton();
     void remove_skeleton();
     bool is_banner_duplicate(const QString& headline) const;
+
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
 
     QStackedWidget* stack_ = nullptr;
     QListView* list_view_ = nullptr;
@@ -79,6 +87,8 @@ class NewsFeedPanel : public QWidget {
 
     // Empty-state widget (shown when loading is done + no articles)
     QWidget* empty_state_ = nullptr;
+    QLabel* empty_state_title_ = nullptr;
+    QLabel* empty_state_hint_ = nullptr;
 };
 
 } // namespace fincept::screens

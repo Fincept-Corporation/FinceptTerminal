@@ -4,9 +4,17 @@
 #include "services/prediction/PredictionExchangeRegistry.h"
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
+
 namespace fincept::screens::polymarket {
 
 namespace pred = fincept::services::prediction;
+
+// ExchangePresentation is a plain struct (not a QObject), so user-facing text
+// is translated via QCoreApplication::translate under a stable context name.
+static QString pm_tr(const char* text) {
+    return QCoreApplication::translate("ExchangePresentation", text);
+}
 
 // ── Formatters ──────────────────────────────────────────────────────────────
 
@@ -55,49 +63,49 @@ ExchangePresentation::StatusBadge ExchangePresentation::status_badge(
 
     if (exchange_id == QStringLiteral("kalshi") && !kalshi_status.isEmpty()) {
         if (kalshi_status == QStringLiteral("settled")) {
-            return {QStringLiteral("SETTLED"), QColor(colors::POSITIVE()),
+            return {pm_tr("SETTLED"), QColor(colors::POSITIVE()),
                     QColor(22, 163, 74, 38),
-                    QStringLiteral("Market has been settled. Final outcome "
-                                   "determined and payouts processed.")};
+                    pm_tr("Market has been settled. Final outcome "
+                          "determined and payouts processed.")};
         }
         if (kalshi_status == QStringLiteral("closed")) {
-            return {QStringLiteral("CLOSED"), accent, accent_bg,
-                    QStringLiteral("Trading halted. Awaiting settlement from "
-                                   "Kalshi's source-of-truth resolution.")};
+            return {pm_tr("CLOSED"), accent, accent_bg,
+                    pm_tr("Trading halted. Awaiting settlement from "
+                          "Kalshi's source-of-truth resolution.")};
         }
         if (kalshi_status == QStringLiteral("paused")) {
-            return {QStringLiteral("PAUSED"), QColor(colors::TEXT_SECONDARY()),
+            return {pm_tr("PAUSED"), QColor(colors::TEXT_SECONDARY()),
                     QColor(0, 0, 0, 0),
-                    QStringLiteral("Trading temporarily halted by the exchange. "
-                                   "Orders cannot be placed until reopened.")};
+                    pm_tr("Trading temporarily halted by the exchange. "
+                          "Orders cannot be placed until reopened.")};
         }
         if (kalshi_status == QStringLiteral("open")) {
-            QString tip = QStringLiteral("Market is open for trading.");
+            QString tip = pm_tr("Market is open for trading.");
             if (!market.end_date_iso.isEmpty())
-                tip += QStringLiteral(" Closes ") + market.end_date_iso + QStringLiteral(".");
-            return {QStringLiteral("OPEN"), accent, accent_bg, tip};
+                tip += pm_tr(" Closes ") + market.end_date_iso + QStringLiteral(".");
+            return {pm_tr("OPEN"), accent, accent_bg, tip};
         }
         if (kalshi_status == QStringLiteral("unopened")) {
-            QString tip = QStringLiteral("Market has not yet opened for trading.");
+            QString tip = pm_tr("Market has not yet opened for trading.");
             if (!market.end_date_iso.isEmpty())
-                tip += QStringLiteral(" Close time: ") + market.end_date_iso + QStringLiteral(".");
-            return {QStringLiteral("PENDING"), QColor(colors::TEXT_DIM()),
+                tip += pm_tr(" Close time: ") + market.end_date_iso + QStringLiteral(".");
+            return {pm_tr("PENDING"), QColor(colors::TEXT_DIM()),
                     QColor(0, 0, 0, 0), tip};
         }
     }
 
     if (market.closed) {
-        return {QStringLiteral("RESOLVED"), QColor(colors::POSITIVE()),
+        return {pm_tr("RESOLVED"), QColor(colors::POSITIVE()),
                 QColor(22, 163, 74, 38),
-                QStringLiteral("Market has resolved. No further trading.")};
+                pm_tr("Market has resolved. No further trading.")};
     }
     if (market.active) {
-        return {QStringLiteral("ACTIVE"), accent, accent_bg,
-                QStringLiteral("Market is accepting orders.")};
+        return {pm_tr("ACTIVE"), accent, accent_bg,
+                pm_tr("Market is accepting orders.")};
     }
-    return {QStringLiteral("INACTIVE"), QColor(colors::TEXT_DIM()),
+    return {pm_tr("INACTIVE"), QColor(colors::TEXT_DIM()),
             QColor(0, 0, 0, 0),
-            QStringLiteral("Market not currently trading.")};
+            pm_tr("Market not currently trading.")};
 }
 
 // ── Factories ───────────────────────────────────────────────────────────────

@@ -17,7 +17,7 @@ static QString deploy_input_style() {
 }
 
 DeployDialog::DeployDialog(const QString& current_name, QWidget* parent) : QDialog(parent) {
-    setWindowTitle("Deploy Workflow");
+    setWindowTitle(tr("Deploy Workflow"));
     setFixedSize(420, 320);
     setStyleSheet(QString("QDialog { background: %1; }").arg(ui::colors::BG_SURFACE()));
     build_ui(current_name);
@@ -36,11 +36,11 @@ void DeployDialog::build_ui(const QString& current_name) {
     root->setSpacing(12);
 
     // ── Title ──────────────────────────────────────────────────────
-    auto* title = new QLabel("DEPLOY WORKFLOW");
-    title->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 14px;"
-                                 "font-weight: bold; letter-spacing: 0.5px;")
-                             .arg(ui::colors::AMBER()));
-    root->addWidget(title);
+    title_label_ = new QLabel(tr("DEPLOY WORKFLOW"));
+    title_label_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 14px;"
+                                         "font-weight: bold; letter-spacing: 0.5px;")
+                                    .arg(ui::colors::AMBER()));
+    root->addWidget(title_label_);
 
     // ── Separator ──────────────────────────────────────────────────
     auto* sep = new QFrame;
@@ -49,10 +49,10 @@ void DeployDialog::build_ui(const QString& current_name) {
     root->addWidget(sep);
 
     // ── Name ───────────────────────────────────────────────────────
-    auto* name_label = new QLabel("WORKFLOW NAME");
-    name_label->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px; font-weight: bold;")
-                                  .arg(ui::colors::TEXT_SECONDARY()));
-    root->addWidget(name_label);
+    name_label_ = new QLabel(tr("WORKFLOW NAME"));
+    name_label_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px; font-weight: bold;")
+                                   .arg(ui::colors::TEXT_SECONDARY()));
+    root->addWidget(name_label_);
 
     name_edit_ = new QLineEdit(current_name);
     name_edit_->setStyleSheet(QString("QLineEdit { %1 } QLineEdit:focus { border: 1px solid %2; }")
@@ -60,13 +60,13 @@ void DeployDialog::build_ui(const QString& current_name) {
     root->addWidget(name_edit_);
 
     // ── Description ────────────────────────────────────────────────
-    auto* desc_label = new QLabel("DESCRIPTION");
-    desc_label->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px; font-weight: bold;")
-                                  .arg(ui::colors::TEXT_SECONDARY()));
-    root->addWidget(desc_label);
+    desc_label_ = new QLabel(tr("DESCRIPTION"));
+    desc_label_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px; font-weight: bold;")
+                                   .arg(ui::colors::TEXT_SECONDARY()));
+    root->addWidget(desc_label_);
 
     desc_edit_ = new QPlainTextEdit;
-    desc_edit_->setPlaceholderText("Describe what this workflow does...");
+    desc_edit_->setPlaceholderText(tr("Describe what this workflow does..."));
     desc_edit_->setMaximumHeight(80);
     desc_edit_->setStyleSheet(QString("QPlainTextEdit { %1 } QPlainTextEdit:focus { border: 1px solid %2; }")
                                   .arg(deploy_input_style(), ui::colors::AMBER()));
@@ -78,38 +78,38 @@ void DeployDialog::build_ui(const QString& current_name) {
     auto* btn_row = new QHBoxLayout;
     btn_row->setSpacing(8);
 
-    auto* cancel_btn = new QPushButton("CANCEL");
-    cancel_btn->setFixedHeight(28);
-    cancel_btn->setStyleSheet(QString("QPushButton {"
-                                      "  background: %1; color: %2; border: 1px solid %3;"
-                                      "  font-family: Consolas; font-size: 11px; font-weight: bold; padding: 0 16px;"
-                                      "}"
-                                      "QPushButton:hover { color: %4; background: %5; }")
-                                  .arg(ui::colors::BG_HOVER(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(),
-                                       ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER()));
-    connect(cancel_btn, &QPushButton::clicked, this, &QDialog::reject);
-    btn_row->addWidget(cancel_btn);
+    cancel_btn_ = new QPushButton(tr("CANCEL"));
+    cancel_btn_->setFixedHeight(28);
+    cancel_btn_->setStyleSheet(QString("QPushButton {"
+                                       "  background: %1; color: %2; border: 1px solid %3;"
+                                       "  font-family: Consolas; font-size: 11px; font-weight: bold; padding: 0 16px;"
+                                       "}"
+                                       "QPushButton:hover { color: %4; background: %5; }")
+                                   .arg(ui::colors::BG_HOVER(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(),
+                                        ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER()));
+    connect(cancel_btn_, &QPushButton::clicked, this, &QDialog::reject);
+    btn_row->addWidget(cancel_btn_);
 
     btn_row->addStretch();
 
-    auto* draft_btn = new QPushButton("SAVE DRAFT");
-    draft_btn->setFixedHeight(28);
-    draft_btn->setStyleSheet(
+    draft_btn_ = new QPushButton(tr("SAVE DRAFT"));
+    draft_btn_->setFixedHeight(28);
+    draft_btn_->setStyleSheet(
         QString("QPushButton {"
                 "  background: %1; color: %2; border: 1px solid %3;"
                 "  font-family: Consolas; font-size: 11px; font-weight: bold; padding: 0 16px;"
                 "}"
                 "QPushButton:hover { background: %4; }")
             .arg(ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
-    connect(draft_btn, &QPushButton::clicked, this, [this]() {
+    connect(draft_btn_, &QPushButton::clicked, this, [this]() {
         deploy_ = false;
         accept();
     });
-    btn_row->addWidget(draft_btn);
+    btn_row->addWidget(draft_btn_);
 
-    auto* deploy_btn = new QPushButton("DEPLOY");
-    deploy_btn->setFixedHeight(28);
-    deploy_btn->setStyleSheet(
+    deploy_btn_ = new QPushButton(tr("DEPLOY"));
+    deploy_btn_->setFixedHeight(28);
+    deploy_btn_->setStyleSheet(
         QString("QPushButton {"
                 "  background: %1; color: %2;"
                 "  border: 1px solid %3; font-family: Consolas;"
@@ -117,13 +117,30 @@ void DeployDialog::build_ui(const QString& current_name) {
                 "}"
                 "QPushButton:hover { background: %2; color: %4; }")
             .arg(ui::colors::ACCENT_BG(), ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
-    connect(deploy_btn, &QPushButton::clicked, this, [this]() {
+    connect(deploy_btn_, &QPushButton::clicked, this, [this]() {
         deploy_ = true;
         accept();
     });
-    btn_row->addWidget(deploy_btn);
+    btn_row->addWidget(deploy_btn_);
 
     root->addLayout(btn_row);
+}
+
+void DeployDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void DeployDialog::retranslateUi() {
+    setWindowTitle(tr("Deploy Workflow"));
+    if (title_label_) title_label_->setText(tr("DEPLOY WORKFLOW"));
+    if (name_label_) name_label_->setText(tr("WORKFLOW NAME"));
+    if (desc_label_) desc_label_->setText(tr("DESCRIPTION"));
+    if (desc_edit_) desc_edit_->setPlaceholderText(tr("Describe what this workflow does..."));
+    if (cancel_btn_) cancel_btn_->setText(tr("CANCEL"));
+    if (draft_btn_) draft_btn_->setText(tr("SAVE DRAFT"));
+    if (deploy_btn_) deploy_btn_->setText(tr("DEPLOY"));
 }
 
 } // namespace fincept::workflow

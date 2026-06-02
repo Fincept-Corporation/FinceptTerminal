@@ -20,12 +20,20 @@ class UnComtradePanel : public EconPanelBase {
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
     void on_result(const QString& request_id, const services::EconomicsResult& result) override;
+    void changeEvent(QEvent* event) override;
 
   private:
+    void retranslateUi() override;
+
     QComboBox* reporter_combo_ = nullptr;
     QComboBox* flow_combo_ = nullptr;
     QComboBox* period_combo_ = nullptr;
     QComboBox* cmd_combo_ = nullptr;
+
+    // Cached for retranslateUi
+    QLabel* reporter_lbl_ = nullptr;
+    QLabel* flow_lbl_ = nullptr;
+    QLabel* year_lbl_ = nullptr;
 };
 
 } // namespace fincept::screens

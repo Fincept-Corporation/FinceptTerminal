@@ -3,6 +3,7 @@
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QEvent>
 #include <QFrame>
 #include <QJsonObject>
 #include <QLabel>
@@ -56,6 +57,7 @@ class AltInvestmentsScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* e) override;
 
   private slots:
     void on_category_changed(int index);
@@ -65,6 +67,7 @@ class AltInvestmentsScreen : public QWidget, public IStatefulScreen {
   private:
     // Setup
     void setup_ui();
+    void retranslateUi();
     QWidget* create_header();
     QWidget* create_left_panel();
     QWidget* create_center_panel();
@@ -88,6 +91,16 @@ class AltInvestmentsScreen : public QWidget, public IStatefulScreen {
     int active_category_ = 0;
     int active_analyzer_ = 0;
     bool loading_ = false;
+
+    // Fixed chrome labels (cached for retranslateUi)
+    QLabel* header_title_ = nullptr;
+    QLabel* header_sub_ = nullptr;
+    QLabel* header_badge_ = nullptr;
+    QLabel* left_title_ = nullptr;
+    QLabel* combo_label_ = nullptr;
+    QLabel* form_title_ = nullptr;
+    QLabel* right_title_ = nullptr;
+    QLabel* status_left_ = nullptr;
 
     // Left panel
     QList<QPushButton*> cat_btns_;

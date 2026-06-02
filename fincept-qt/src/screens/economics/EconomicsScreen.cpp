@@ -181,8 +181,8 @@ void EconomicsScreen::build_ui() {
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(8);
 
-    title_ = new QLabel("ECONOMICS DATA EXPLORER");
-    subtitle_ = new QLabel("32 global data sources · 1000+ indicators");
+    title_ = new QLabel(tr("ECONOMICS DATA EXPLORER"));
+    subtitle_ = new QLabel(tr("32 global data sources · 1000+ indicators"));
 
     hl->addWidget(title_);
     hl->addWidget(subtitle_);
@@ -266,6 +266,22 @@ void EconomicsScreen::refresh_theme() {
     }
 
     stack_->setStyleSheet(QString("background:%1;").arg(BG_BASE()));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void EconomicsScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void EconomicsScreen::retranslateUi() {
+    if (title_)
+        title_->setText(tr("ECONOMICS DATA EXPLORER"));
+    if (subtitle_)
+        subtitle_->setText(tr("32 global data sources · 1000+ indicators"));
+    // Source badge labels are brand/source names (data) and are not translated.
 }
 
 // ── Panel switching ───────────────────────────────────────────────────────────

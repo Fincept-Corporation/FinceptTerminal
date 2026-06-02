@@ -11,6 +11,7 @@
 #include "services/options/OptionChainTypes.h"
 
 #include <QChartView>
+#include <QEvent>
 #include <QPointer>
 #include <QString>
 #include <QTimer>
@@ -39,8 +40,10 @@ class IntradayOIChart : public QChartView {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
+    void retranslateUi();
     void on_history(qint64 token, const QVariant& v);
     void replot();
     void poll_refresh();

@@ -43,23 +43,23 @@ AkShareChinaPanel::AkShareChinaPanel(QWidget* parent)
 }
 
 void AkShareChinaPanel::activate() {
-    show_empty("Select a series and click FETCH\n"
-               "Source: AkShare — China NBS macroeconomic data (no API key required)\n"
-               "Note: column headers are in Chinese as provided by the source");
+    show_empty(tr("Select a series and click FETCH\n"
+                  "Source: AkShare — China NBS macroeconomic data (no API key required)\n"
+                  "Note: column headers are in Chinese as provided by the source"));
 }
 
 void AkShareChinaPanel::build_controls(QHBoxLayout* thl) {
-    auto* lbl = new QLabel("SERIES");
-    lbl->setStyleSheet(ctrl_label_style());
+    series_lbl_ = new QLabel(tr("SERIES"));
+    series_lbl_->setStyleSheet(ctrl_label_style());
 
     series_combo_ = new QComboBox;
     for (const auto& s : kAkShareSeries)
         series_combo_->addItem(s.label, s.command);
     series_combo_->setFixedHeight(26);
     series_combo_->setMinimumWidth(260);
-    series_combo_->setToolTip("Data from China National Bureau of Statistics via AkShare");
+    series_combo_->setToolTip(tr("Data from China National Bureau of Statistics via AkShare"));
 
-    thl->addWidget(lbl);
+    thl->addWidget(series_lbl_);
     thl->addWidget(series_combo_);
 }
 
@@ -67,7 +67,7 @@ void AkShareChinaPanel::on_fetch() {
     const int idx = series_combo_->currentIndex();
     const auto& series = kAkShareSeries[idx];
 
-    show_loading("Fetching AkShare China: " + series.label + "…");
+    show_loading(tr("Fetching AkShare China: %1…").arg(series.label));
     services::EconomicsService::instance().execute(kAkShareChinaSourceId, kAkShareChinaScript, series.command, {},
                                                    "akcn_" + series.command);
 }
@@ -87,7 +87,7 @@ void AkShareChinaPanel::on_result(const QString& request_id, const services::Eco
 
     if (rows.isEmpty()) {
         const QString err = result.data["error"].toString();
-        show_error(err.isEmpty() ? "No data returned" : err);
+        show_error(err.isEmpty() ? tr("No data returned") : err);
         return;
     }
 
@@ -97,6 +97,22 @@ void AkShareChinaPanel::on_result(const QString& request_id, const services::Eco
 
     display(rows, title);
     LOG_INFO("AkShareChinaPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void AkShareChinaPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void AkShareChinaPanel::retranslateUi() {
+    if (series_lbl_)
+        series_lbl_->setText(tr("SERIES"));
+    if (series_combo_)
+        series_combo_->setToolTip(tr("Data from China National Bureau of Statistics via AkShare"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

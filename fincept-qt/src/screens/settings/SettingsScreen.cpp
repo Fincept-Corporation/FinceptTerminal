@@ -9,6 +9,7 @@
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "screens/settings/AppearanceSection.h"
+#include "screens/settings/CloudSyncSection.h"
 #include "screens/settings/CredentialsSection.h"
 #include "screens/settings/DataSourcesSection.h"
 #include "screens/settings/DeveloperSection.h"
@@ -62,7 +63,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     // One factory per stack index. Used at construction AND by the language-
     // change rebuild path so we don't hardcode the type list twice.
     section_factories_.clear();
-    section_factories_.resize(15);
+    section_factories_.resize(16);
     section_factories_[0]  = [] { return new CredentialsSection; };
     section_factories_[1]  = [] { return new AppearanceSection; };
     section_factories_[2]  = [] { return new NotificationsSection; };
@@ -78,6 +79,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     section_factories_[12] = [] { return new DeveloperSection; };
     section_factories_[13] = [] { return new VoiceConfigSection; };
     section_factories_[14] = [] { return new GeneralSection; };
+    section_factories_[15] = [] { return new CloudSyncSection; };
 
     sections_ = new QStackedWidget;
     for (const auto& factory : section_factories_)
@@ -131,6 +133,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     make_btn(QStringLiteral("MCP Servers"),     6);
     make_btn(QStringLiteral("Python Env"),     11);
     make_btn(QStringLiteral("Storage & Cache"), 3);
+    make_btn(QStringLiteral("Cloud Sync"), 15);
 
     first->setChecked(true);
     sections_->setCurrentIndex(14);

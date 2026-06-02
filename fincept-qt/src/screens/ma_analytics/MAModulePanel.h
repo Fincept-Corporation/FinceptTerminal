@@ -5,8 +5,10 @@
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QEvent>
 #include <QJsonObject>
 #include <QLabel>
+#include <QPair>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSpinBox>
@@ -14,6 +16,7 @@
 #include <QTabWidget>
 #include <QTextEdit>
 #include <QVBoxLayout>
+#include <QVector>
 #include <QWidget>
 
 namespace fincept::screens {
@@ -32,6 +35,9 @@ class MAModulePanel : public QWidget {
   public slots:
     void refresh_theme();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_result_ready(const QString& context, const QJsonObject& data);
     void on_error(const QString& context, const QString& message);
@@ -40,6 +46,12 @@ class MAModulePanel : public QWidget {
     void build_ui();
     void connect_service();
     void apply_tab_stylesheet();
+    void retranslateUi();
+
+    // Add a sub-tab and remember its untranslated source label so retranslateUi
+    // can re-apply tr() on a live language change. Pass the label via
+    // QT_TR_NOOP("...") so lupdate still extracts the literal.
+    void add_sub_tab(QWidget* page, const char* source_label);
 
     // Module-specific builders
     QWidget* build_valuation_panel();
@@ -66,6 +78,8 @@ class MAModulePanel : public QWidget {
 
     fincept::services::ma::ModuleInfo module_;
     QTabWidget* sub_tabs_ = nullptr;
+    // (sub-tab page, untranslated source label) — for live retranslateUi.
+    QVector<QPair<QWidget*, QString>> sub_tab_sources_;
     QWidget* header_bar_ = nullptr;
     QLabel* header_title_ = nullptr;
     QLabel* header_category_ = nullptr;

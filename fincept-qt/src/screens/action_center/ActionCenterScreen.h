@@ -14,6 +14,7 @@
 #include "trading/ActionCenter.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QHideEvent>
 #include <QLabel>
 #include <QShowEvent>
@@ -33,9 +34,11 @@ class ActionCenterScreen : public QWidget {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
+    void retranslateUi();
     void reload_accounts();        // refresh the account selector from AccountManager
     void refresh();                // reload table + stats for the active filter
     void refresh_stats();
@@ -52,9 +55,19 @@ class ActionCenterScreen : public QWidget {
     void reject_row(const QString& pending_id);
 
     // ── Widgets ──────────────────────────────────────────────────────────────
+    QLabel* title_label_ = nullptr;
+    QLabel* account_caption_ = nullptr;
+    QLabel* show_caption_ = nullptr;
+    QLabel* mode_caption_ = nullptr;
     QComboBox* account_combo_ = nullptr;
     QComboBox* status_filter_ = nullptr;
     QComboBox* mode_combo_ = nullptr;
+
+    QLabel* stat_pending_cap_ = nullptr;
+    QLabel* stat_approved_cap_ = nullptr;
+    QLabel* stat_rejected_cap_ = nullptr;
+    QLabel* stat_buy_cap_ = nullptr;
+    QLabel* stat_sell_cap_ = nullptr;
 
     QLabel* stat_pending_ = nullptr;
     QLabel* stat_approved_ = nullptr;

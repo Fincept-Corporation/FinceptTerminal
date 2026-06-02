@@ -501,20 +501,20 @@ void SpreadsheetWidget::on_context_menu(const QPoint& pos) {
                 "QMenu::separator { height:1px; background:%3; margin:4px 8px; }")
             .arg(colors::BORDER_MED(), colors::TEXT_PRIMARY(), colors::TEXT_DIM(), fonts::DATA_FAMILY, colors::TEXT_DIM()));
 
-    menu.addAction("Cut", this, [this]() {
+    menu.addAction(tr("Cut"), this, [this]() {
         auto* item = table_->currentItem();
         if (!item)
             return;
         QApplication::clipboard()->setText(item->data(Qt::DisplayRole).toString());
         set_cell(table_->currentRow(), table_->currentColumn(), "");
     });
-    menu.addAction("Copy", this, [this]() {
+    menu.addAction(tr("Copy"), this, [this]() {
         auto* item = table_->currentItem();
         if (!item)
             return;
         QApplication::clipboard()->setText(item->data(Qt::DisplayRole).toString());
     });
-    menu.addAction("Paste", this, [this]() {
+    menu.addAction(tr("Paste"), this, [this]() {
         QString text = QApplication::clipboard()->text();
         if (text.isEmpty())
             return;
@@ -522,15 +522,15 @@ void SpreadsheetWidget::on_context_menu(const QPoint& pos) {
         recalculate();
     });
     menu.addSeparator();
-    menu.addAction("Insert Row Above", this, &SpreadsheetWidget::insert_row_above);
-    menu.addAction("Insert Row Below", this, &SpreadsheetWidget::insert_row_below);
-    menu.addAction("Insert Column Left", this, &SpreadsheetWidget::insert_col_left);
-    menu.addAction("Insert Column Right", this, &SpreadsheetWidget::insert_col_right);
+    menu.addAction(tr("Insert Row Above"), this, &SpreadsheetWidget::insert_row_above);
+    menu.addAction(tr("Insert Row Below"), this, &SpreadsheetWidget::insert_row_below);
+    menu.addAction(tr("Insert Column Left"), this, &SpreadsheetWidget::insert_col_left);
+    menu.addAction(tr("Insert Column Right"), this, &SpreadsheetWidget::insert_col_right);
     menu.addSeparator();
-    menu.addAction("Delete Selected Rows", this, &SpreadsheetWidget::delete_selected_rows);
-    menu.addAction("Delete Selected Columns", this, &SpreadsheetWidget::delete_selected_cols);
+    menu.addAction(tr("Delete Selected Rows"), this, &SpreadsheetWidget::delete_selected_rows);
+    menu.addAction(tr("Delete Selected Columns"), this, &SpreadsheetWidget::delete_selected_cols);
     menu.addSeparator();
-    menu.addAction("Clear Cell", this, [this]() {
+    menu.addAction(tr("Clear Cell"), this, [this]() {
         auto ranges = table_->selectedRanges();
         for (const auto& range : ranges) {
             for (int r = range.topRow(); r <= range.bottomRow(); ++r) {

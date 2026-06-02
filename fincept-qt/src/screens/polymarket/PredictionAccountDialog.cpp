@@ -52,27 +52,93 @@ void PredictionAccountDialog::build_ui() {
 
     auto* bottom = new QHBoxLayout;
     bottom->addStretch(1);
-    auto* close_btn = new QPushButton(tr("Close"), this);
-    connect(close_btn, &QPushButton::clicked, this, &QDialog::accept);
-    bottom->addWidget(close_btn);
+    close_btn_ = new QPushButton(tr("Close"), this);
+    connect(close_btn_, &QPushButton::clicked, this, &QDialog::accept);
+    bottom->addWidget(close_btn_);
     root->addLayout(bottom);
+}
+
+void PredictionAccountDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void PredictionAccountDialog::retranslateUi() {
+    setWindowTitle(tr("Prediction Markets — Connect Account"));
+    if (close_btn_) close_btn_->setText(tr("Close"));
+    if (tabs_) {
+        if (tabs_->count() > 0) tabs_->setTabText(0, tr("Polymarket"));
+        if (tabs_->count() > 1) tabs_->setTabText(1, tr("Kalshi"));
+    }
+
+    auto set_label = [](QFormLayout* form, QWidget* field, const QString& text) {
+        if (!form || !field) return;
+        if (auto* lbl = qobject_cast<QLabel*>(form->labelForField(field)))
+            lbl->setText(text);
+    };
+
+    // ── Polymarket tab ──
+    if (pm_intro_)
+        pm_intro_->setText(
+            tr("<b>Polymarket (Polygon)</b><br>"
+               "Trading requires a Polygon-compatible private key. The key is signed locally "
+               "via <code>py_clob_client</code> and never leaves your machine in plaintext — "
+               "it is stored encrypted in your OS credential manager.<br><br>"
+               "<b>⚠ Security:</b> use a dedicated funding wallet, not your primary wallet."));
+    if (pm_private_key_) pm_private_key_->setPlaceholderText(tr("0x… (64 hex chars)"));
+    if (pm_funder_)      pm_funder_->setPlaceholderText(tr("0x… (optional — derived via CREATE2 for proxy)"));
+    if (pm_signature_type_ && pm_signature_type_->count() >= 3) {
+        pm_signature_type_->setItemText(0, tr("Polymarket Proxy Wallet (default)"));
+        pm_signature_type_->setItemText(1, tr("Externally Owned Account (EOA)"));
+        pm_signature_type_->setItemText(2, tr("Polymarket Gnosis Safe"));
+    }
+    set_label(pm_form_, pm_private_key_, tr("Private Key:"));
+    set_label(pm_form_, pm_funder_, tr("Funder Address:"));
+    set_label(pm_form_, pm_signature_type_, tr("Signature Type:"));
+    if (pm_save_btn_)  pm_save_btn_->setText(tr("Save"));
+    if (pm_test_btn_)  pm_test_btn_->setText(tr("Test Connection"));
+    if (pm_clear_btn_) pm_clear_btn_->setText(tr("Clear"));
+
+    // ── Kalshi tab ──
+    if (ks_intro_)
+        ks_intro_->setText(
+            tr("<b>Kalshi (CFTC-regulated)</b><br>"
+               "Generate an API key + RSA private key in your Kalshi dashboard "
+               "(<code>api.elections.kalshi.com</code>). Requests are signed with RSA-PSS "
+               "(key stays local, encrypted in your OS credential manager).<br><br>"
+               "Use <b>Demo mode</b> to target <code>demo-api.kalshi.co</code> for testing."));
+    if (ks_api_key_id_) ks_api_key_id_->setPlaceholderText(tr("00000000-0000-0000-0000-000000000000"));
+    if (ks_private_key_pem_)
+        ks_private_key_pem_->setPlaceholderText(
+            tr("-----BEGIN RSA PRIVATE KEY-----\n…paste PEM contents here…\n-----END RSA PRIVATE KEY-----"));
+    set_label(ks_form_, ks_api_key_id_, tr("API Key ID:"));
+    set_label(ks_form_, ks_private_key_pem_, tr("Private Key (PEM):"));
+    if (ks_load_pem_btn_) ks_load_pem_btn_->setText(tr("Load from file…"));
+    if (ks_use_demo_)     ks_use_demo_->setText(tr("Use demo (paper trading) environment"));
+    if (ks_save_btn_)  ks_save_btn_->setText(tr("Save"));
+    if (ks_test_btn_)  ks_test_btn_->setText(tr("Test Connection"));
+    if (ks_clear_btn_) ks_clear_btn_->setText(tr("Clear"));
+    // Status labels + derived-credential label reflect runtime state and are
+    // refreshed by load_existing()/save handlers — not forced here.
 }
 
 void PredictionAccountDialog::build_polymarket_tab() {
     auto* page = new QWidget(this);
     auto* vl = new QVBoxLayout(page);
 
-    auto* intro = new QLabel(
+    pm_intro_ = new QLabel(
         tr("<b>Polymarket (Polygon)</b><br>"
            "Trading requires a Polygon-compatible private key. The key is signed locally "
            "via <code>py_clob_client</code> and never leaves your machine in plaintext — "
            "it is stored encrypted in your OS credential manager.<br><br>"
            "<b>⚠ Security:</b> use a dedicated funding wallet, not your primary wallet."),
         page);
-    intro->setWordWrap(true);
-    vl->addWidget(intro);
+    pm_intro_->setWordWrap(true);
+    vl->addWidget(pm_intro_);
 
-    auto* form = new QFormLayout;
+    pm_form_ = new QFormLayout;
+    QFormLayout* form = pm_form_;
 
     pm_private_key_ = new QLineEdit(page);
     pm_private_key_->setEchoMode(QLineEdit::Password);
@@ -123,17 +189,18 @@ void PredictionAccountDialog::build_kalshi_tab() {
     auto* page = new QWidget(this);
     auto* vl = new QVBoxLayout(page);
 
-    auto* intro = new QLabel(
+    ks_intro_ = new QLabel(
         tr("<b>Kalshi (CFTC-regulated)</b><br>"
            "Generate an API key + RSA private key in your Kalshi dashboard "
            "(<code>api.elections.kalshi.com</code>). Requests are signed with RSA-PSS "
            "(key stays local, encrypted in your OS credential manager).<br><br>"
            "Use <b>Demo mode</b> to target <code>demo-api.kalshi.co</code> for testing."),
         page);
-    intro->setWordWrap(true);
-    vl->addWidget(intro);
+    ks_intro_->setWordWrap(true);
+    vl->addWidget(ks_intro_);
 
-    auto* form = new QFormLayout;
+    ks_form_ = new QFormLayout;
+    QFormLayout* form = ks_form_;
 
     ks_api_key_id_ = new QLineEdit(page);
     ks_api_key_id_->setPlaceholderText(tr("00000000-0000-0000-0000-000000000000"));

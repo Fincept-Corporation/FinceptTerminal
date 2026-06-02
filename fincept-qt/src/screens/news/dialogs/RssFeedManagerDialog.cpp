@@ -40,18 +40,43 @@ RssFeedManagerDialog::RssFeedManagerDialog(QWidget* parent) : QDialog(parent) {
     reload_table();
 }
 
+void RssFeedManagerDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void RssFeedManagerDialog::retranslateUi() {
+    setWindowTitle(tr("RSS Feed Sources"));
+    if (header_label_)
+        header_label_->setText(
+            tr("Manage the RSS feeds the News screen pulls from. Built-in feeds (DEF) "
+               "can be disabled or edited; user-added feeds (USR) can be removed."));
+    if (table_)
+        table_->setHorizontalHeaderLabels(
+            {tr("On"), tr("Type"), tr("Source"), tr("Name"), tr("URL"),
+             tr("Category"), tr("Region"), tr("Tier")});
+    if (add_btn_)   add_btn_->setText(tr("Add Feed"));
+    if (edit_btn_)  edit_btn_->setText(tr("Edit"));
+    if (test_btn_)  test_btn_->setText(tr("Test URL"));
+    if (close_btn_) close_btn_->setText(tr("Close"));
+    // toggle_btn_ / delete_btn_ labels + the status label are selection- and
+    // count-dependent; re-derive them so the new language is reflected.
+    on_selection_changed();
+}
+
 void RssFeedManagerDialog::build_ui() {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(14, 14, 14, 12);
     root->setSpacing(10);
 
-    auto* header = new QLabel(
+    header_label_ = new QLabel(
         tr("Manage the RSS feeds the News screen pulls from. Built-in feeds (DEF) "
            "can be disabled or edited; user-added feeds (USR) can be removed."),
         this);
-    header->setObjectName("rssFeedManagerHeader");
-    header->setWordWrap(true);
-    root->addWidget(header);
+    header_label_->setObjectName("rssFeedManagerHeader");
+    header_label_->setWordWrap(true);
+    root->addWidget(header_label_);
 
     table_ = new QTableWidget(this);
     table_->setObjectName("rssFeedManagerTable");

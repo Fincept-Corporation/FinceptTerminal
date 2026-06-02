@@ -43,7 +43,7 @@ MultiStraddleChart::MultiStraddleChart(QWidget* parent) : QChartView(parent) {
     chart_->setPlotAreaBackgroundBrush(QColor(colors::BG_BASE()));
     chart_->setPlotAreaBackgroundVisible(true);
     chart_->setMargins(QMargins(0, 4, 0, 0));
-    chart_->setTitle(QStringLiteral("Synthetic Premium (intraday)"));
+    chart_->setTitle(tr("Synthetic Premium (intraday)"));
     chart_->setTitleBrush(QColor(colors::TEXT_SECONDARY()));
     QFont title_font = chart_->titleFont();
     title_font.setPointSize(9);
@@ -199,6 +199,16 @@ void MultiStraddleChart::hide_crosshair() {
     hover_line_->setVisible(false);
     if (tooltip_)
         tooltip_->hide();
+}
+
+void MultiStraddleChart::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QChartView::changeEvent(event);
+}
+
+void MultiStraddleChart::retranslateUi() {
+    if (chart_) chart_->setTitle(tr("Synthetic Premium (intraday)"));
 }
 
 } // namespace fincept::screens::fno

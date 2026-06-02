@@ -29,11 +29,11 @@ void NodePropertiesPanel::build_ui() {
     auto* el = new QVBoxLayout(empty_page_);
     el->setContentsMargins(20, 40, 20, 20);
     el->setAlignment(Qt::AlignCenter);
-    auto* empty_label = new QLabel("Select a node\nto edit properties");
-    empty_label->setAlignment(Qt::AlignCenter);
-    empty_label->setStyleSheet(
+    empty_label_ = new QLabel(tr("Select a node\nto edit properties"));
+    empty_label_->setAlignment(Qt::AlignCenter);
+    empty_label_->setStyleSheet(
         QString("color: %1; font-family: Consolas; font-size: 12px;").arg(ui::colors::TEXT_TERTIARY()));
-    el->addWidget(empty_label);
+    el->addWidget(empty_label_);
 
     // ── Editor page (populated dynamically) ────────────────────────
     editor_page_ = new QWidget(this);
@@ -106,25 +106,25 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(10, 0, 10, 0);
 
-    auto* title = new QLabel("PROPERTIES");
-    title->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 12px;"
-                                 "font-weight: bold; letter-spacing: 0.5px;")
-                             .arg(ui::colors::AMBER()));
-    hl->addWidget(title);
+    props_title_ = new QLabel(tr("PROPERTIES"));
+    props_title_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 12px;"
+                                        "font-weight: bold; letter-spacing: 0.5px;")
+                                    .arg(ui::colors::AMBER()));
+    hl->addWidget(props_title_);
     hl->addStretch();
 
-    auto* del_btn = new QPushButton("DEL");
-    del_btn->setFixedSize(36, 22);
-    del_btn->setStyleSheet(QString("QPushButton {"
-                                   "  background: %1; color: %2;"
-                                   "  border: 1px solid rgba(220,38,38,0.3); font-family: Consolas;"
-                                   "  font-size: 10px; font-weight: bold;"
-                                   "}"
-                                   "QPushButton:hover { background: %2; color: %3; }")
-                               .arg(ui::colors::NEGATIVE_BG(), ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+    del_btn_ = new QPushButton(tr("DEL"));
+    del_btn_->setFixedSize(36, 22);
+    del_btn_->setStyleSheet(QString("QPushButton {"
+                                    "  background: %1; color: %2;"
+                                    "  border: 1px solid rgba(220,38,38,0.3); font-family: Consolas;"
+                                    "  font-size: 10px; font-weight: bold;"
+                                    "}"
+                                    "QPushButton:hover { background: %2; color: %3; }")
+                                .arg(ui::colors::NEGATIVE_BG(), ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
     QString node_id = node.id;
-    connect(del_btn, &QPushButton::clicked, this, [this, node_id]() { emit delete_requested(node_id); });
-    hl->addWidget(del_btn);
+    connect(del_btn_, &QPushButton::clicked, this, [this, node_id]() { emit delete_requested(node_id); });
+    hl->addWidget(del_btn_);
 
     editor_layout_->insertWidget(pos++, header);
 
@@ -140,10 +140,10 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
     nsl->setContentsMargins(0, 8, 0, 8);
     nsl->setSpacing(4);
 
-    auto* name_label = new QLabel("NAME");
-    name_label->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px; font-weight: bold;")
-                                  .arg(ui::colors::TEXT_SECONDARY()));
-    nsl->addWidget(name_label);
+    name_label_ = new QLabel(tr("NAME"));
+    name_label_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px; font-weight: bold;")
+                                   .arg(ui::colors::TEXT_SECONDARY()));
+    nsl->addWidget(name_label_);
 
     auto* name_edit = new QLineEdit(node.name);
     name_edit->setStyleSheet(
@@ -176,11 +176,11 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
 
     // ── Parameters ─────────────────────────────────────────────────
     if (!type_def.parameters.isEmpty()) {
-        auto* param_header = new QLabel("PARAMETERS");
-        param_header->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px;"
-                                            "font-weight: bold; padding: 8px 0 4px 0; letter-spacing: 0.5px;")
-                                        .arg(ui::colors::AMBER()));
-        editor_layout_->insertWidget(pos++, param_header);
+        param_header_ = new QLabel(tr("PARAMETERS"));
+        param_header_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px;"
+                                             "font-weight: bold; padding: 8px 0 4px 0; letter-spacing: 0.5px;")
+                                         .arg(ui::colors::AMBER()));
+        editor_layout_->insertWidget(pos++, param_header_);
 
         for (const auto& param : type_def.parameters) {
             QJsonValue current = node.parameters.value(param.key);
@@ -201,27 +201,46 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
     sep3->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_MED()));
     editor_layout_->insertWidget(pos++, sep3);
 
-    auto* settings_header = new QLabel("SETTINGS");
-    settings_header->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px;"
-                                           "font-weight: bold; padding: 8px 0 4px 0; letter-spacing: 0.5px;")
-                                       .arg(ui::colors::AMBER()));
-    editor_layout_->insertWidget(pos++, settings_header);
+    settings_header_ = new QLabel(tr("SETTINGS"));
+    settings_header_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px;"
+                                            "font-weight: bold; padding: 8px 0 4px 0; letter-spacing: 0.5px;")
+                                        .arg(ui::colors::AMBER()));
+    editor_layout_->insertWidget(pos++, settings_header_);
 
     // Disabled toggle
-    auto* disabled_check = new QCheckBox("Disabled");
-    disabled_check->setChecked(node.disabled);
-    disabled_check->setStyleSheet(
+    disabled_check_ = new QCheckBox(tr("Disabled"));
+    disabled_check_->setChecked(node.disabled);
+    disabled_check_->setStyleSheet(
         QString("QCheckBox { color: %1; font-family: Consolas; font-size: 12px; }"
                 "QCheckBox::indicator { width: 14px; height: 14px; background: %2; border: 1px solid %3; }"
                 "QCheckBox::indicator:checked { background: %4; }")
             .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
-    editor_layout_->insertWidget(pos++, disabled_check);
+    editor_layout_->insertWidget(pos++, disabled_check_);
 
     // Continue on fail toggle
-    auto* cof_check = new QCheckBox("Continue on Fail");
-    cof_check->setChecked(node.continue_on_fail);
-    cof_check->setStyleSheet(disabled_check->styleSheet());
-    editor_layout_->insertWidget(pos++, cof_check);
+    cof_check_ = new QCheckBox(tr("Continue on Fail"));
+    cof_check_->setChecked(node.continue_on_fail);
+    cof_check_->setStyleSheet(disabled_check_->styleSheet());
+    editor_layout_->insertWidget(pos++, cof_check_);
+}
+
+void NodePropertiesPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void NodePropertiesPanel::retranslateUi() {
+    if (empty_label_) empty_label_->setText(tr("Select a node\nto edit properties"));
+    // Dynamic editor labels (recreated on each node selection) — update the
+    // live instances if a node is currently shown.
+    if (props_title_) props_title_->setText(tr("PROPERTIES"));
+    if (del_btn_) del_btn_->setText(tr("DEL"));
+    if (name_label_) name_label_->setText(tr("NAME"));
+    if (param_header_) param_header_->setText(tr("PARAMETERS"));
+    if (settings_header_) settings_header_->setText(tr("SETTINGS"));
+    if (disabled_check_) disabled_check_->setText(tr("Disabled"));
+    if (cof_check_) cof_check_->setText(tr("Continue on Fail"));
 }
 
 } // namespace fincept::workflow

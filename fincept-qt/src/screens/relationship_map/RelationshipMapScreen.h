@@ -5,11 +5,14 @@
 #include "screens/relationship_map/RelationshipMapTypes.h"
 #include "services/markets/MarketSearchService.h"
 
+#include <QCheckBox>
 #include <QComboBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QList>
 #include <QListWidget>
+#include <QPair>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QTimer>
@@ -38,9 +41,13 @@ class RelationshipMapScreen : public QWidget, public IStatefulScreen {
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
     bool eventFilter(QObject* obj, QEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
     void on_search();
     void on_search_text_changed(const QString& text);
     void fire_asset_search(const QString& query);
@@ -72,10 +79,23 @@ class RelationshipMapScreen : public QWidget, public IStatefulScreen {
     QProgressBar* progress_bar_ = nullptr;
     QLabel* progress_label_ = nullptr;
 
+    // Header static-text widgets (cached for retranslateUi).
+    QLabel* header_title_ = nullptr;
+    QPushButton* search_btn_ = nullptr;
+    QPushButton* fit_btn_ = nullptr;
+
     // Panels
     QWidget* filter_panel_ = nullptr;
     QWidget* detail_panel_ = nullptr;
     QWidget* legend_widget_ = nullptr;
+
+    // Filter panel + legend titles + checkbox handles (cached for retranslateUi).
+    QLabel* filter_title_ = nullptr;
+    QLabel* legend_title_ = nullptr;
+    QList<QCheckBox*> filter_checks_;
+    // Legend entry labels paired with their category so retranslateUi can
+    // re-apply the localized category_label().
+    QList<QPair<QLabel*, relmap::NodeCategory>> legend_entries_;
 
     // Detail panel labels
     QLabel* detail_title_ = nullptr;
