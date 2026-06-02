@@ -96,6 +96,9 @@ static const QHash<QString, QStringList>& query_synonyms() {
         {"strategy", {"backtest"}},
         {"sharpe",   {"risk", "metrics"}},
         {"var",      {"risk"}},
+        // Notes
+        {"memo",     {"note"}},
+        {"journal",  {"note"}},
     };
     return kSyn;
 }
@@ -497,8 +500,8 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
                     }
                 }
             }
-            // Accept if distance is 1 (or 2 for words longer than 6 chars)
-            if (best_dist == 1 || (best_dist == 2 && term.length() > 6)) {
+            // Accept if distance is 1 (or 2 for words of 5 or more chars)
+            if (best_dist == 1 || (best_dist == 2 && term.length() >= 5)) {
                 query_term_weights[best_match] = 0.75;
                 if (!final_query_stems.contains(best_match))
                     final_query_stems.append(best_match);
