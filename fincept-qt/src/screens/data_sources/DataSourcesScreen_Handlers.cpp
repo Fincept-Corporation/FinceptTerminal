@@ -270,7 +270,7 @@ void DataSourcesScreen::update_connection_status_cell(const QString& conn_id, bo
             continue;
         auto* lbl = qobject_cast<QLabel*>(connections_table_->cellWidget(row, 5));
         if (lbl) {
-            lbl->setText(ok ? "OK" : "ERR");
+            lbl->setText(ok ? tr("OK") : tr("ERR"));
             lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
                                    .arg(ok ? col::POSITIVE() : col::NEGATIVE()));
             lbl->setToolTip(msg);
@@ -348,9 +348,9 @@ void DataSourcesScreen::on_bulk_delete_selected() {
         return;
 
     QMessageBox confirm(this);
-    confirm.setWindowTitle("Delete Connections");
-    confirm.setText(QString("Delete %1 selected connection(s)?").arg(selected_ids.size()));
-    confirm.setInformativeText("This cannot be undone.");
+    confirm.setWindowTitle(tr("Delete Connections"));
+    confirm.setText(tr("Delete %1 selected connection(s)?").arg(selected_ids.size()));
+    confirm.setInformativeText(tr("This cannot be undone."));
     confirm.setStandardButtons(QMessageBox::Yes | QMessageBox::Cancel);
     confirm.setDefaultButton(QMessageBox::Cancel);
     confirm.setStyleSheet(
@@ -423,8 +423,8 @@ void DataSourcesScreen::on_poll_timer() {
             QTcpSocket socket;
             socket.connectToHost(cap_host, static_cast<quint16>(cap_port));
             const bool ok = socket.waitForConnected(3000);
-            const QString msg = ok ? QString("Reachable: %1").arg(cap_probe.isEmpty() ? cap_host : cap_probe)
-                                   : QString("Unreachable: %1").arg(socket.errorString());
+            const QString msg = ok ? DataSourcesScreen::tr("Reachable: %1").arg(cap_probe.isEmpty() ? cap_host : cap_probe)
+                                   : DataSourcesScreen::tr("Unreachable: %1").arg(socket.errorString());
             if (ok)
                 socket.disconnectFromHost();
 

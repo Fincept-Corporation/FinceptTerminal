@@ -4,6 +4,7 @@
 #include "storage/repositories/NotesRepository.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -32,6 +33,7 @@ class NotesScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_category_selected(int row);
@@ -49,6 +51,7 @@ class NotesScreen : public QWidget, public IStatefulScreen {
     QWidget* build_category_sidebar();
     QWidget* build_notes_list_panel();
     QWidget* build_editor_panel();
+    void retranslateUi();
     void load_notes();
     void update_notes_list();
     void show_note(const fincept::FinancialNote& note);
@@ -66,18 +69,26 @@ class NotesScreen : public QWidget, public IStatefulScreen {
     // Category sidebar
     QListWidget* category_list_ = nullptr;
     QLabel* stats_label_ = nullptr;
+    QLabel* category_header_ = nullptr; // "CATEGORIES" (cached for retranslateUi)
 
     // Notes list panel
     QListWidget* notes_list_ = nullptr;
     QLineEdit* search_input_ = nullptr;
     QLabel* count_label_ = nullptr;
+    QPushButton* new_btn_ = nullptr; // "+ NEW" (cached for retranslateUi)
 
     // Editor / Viewer panel
     QStackedWidget* right_stack_ = nullptr;
+    QLabel* empty_label_ = nullptr; // empty-state placeholder (cached for retranslateUi)
     // View mode
     QLabel* view_title_ = nullptr;
     QLabel* view_meta_ = nullptr;
     QLabel* view_content_ = nullptr;
+    // View-mode toolbar buttons (cached for retranslateUi)
+    QPushButton* view_edit_btn_ = nullptr;
+    QPushButton* view_fav_btn_ = nullptr;
+    QPushButton* view_archive_btn_ = nullptr;
+    QPushButton* view_delete_btn_ = nullptr;
     // Edit mode
     QLineEdit* edit_title_ = nullptr;
     QTextEdit* edit_content_ = nullptr;
@@ -86,6 +97,16 @@ class NotesScreen : public QWidget, public IStatefulScreen {
     QComboBox* edit_sentiment_ = nullptr;
     QLineEdit* edit_tags_ = nullptr;
     QLineEdit* edit_tickers_ = nullptr;
+    // Edit-mode toolbar buttons (cached for retranslateUi)
+    QPushButton* edit_save_btn_ = nullptr;
+    QPushButton* edit_cancel_btn_ = nullptr;
+    QPushButton* edit_export_btn_ = nullptr;
+    // Edit-mode metadata field labels (cached for retranslateUi)
+    QLabel* lbl_cat_ = nullptr;
+    QLabel* lbl_pri_ = nullptr;
+    QLabel* lbl_sent_ = nullptr;
+    QLabel* lbl_tags_ = nullptr;
+    QLabel* lbl_tickers_ = nullptr;
 
     // EventBus subscriptions — registered in showEvent, released in hideEvent.
     // MCP notes tools publish notes.created / notes.deleted when the LLM

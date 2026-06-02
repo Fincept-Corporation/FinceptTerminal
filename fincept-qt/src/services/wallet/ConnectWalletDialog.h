@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QDialog>
+#include <QEvent>
 #include <QString>
 
 class QLabel;
@@ -26,6 +27,7 @@ class ConnectWalletDialog : public QDialog {
   protected:
     void showEvent(QShowEvent* e) override;
     void closeEvent(QCloseEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void start_handshake();
@@ -33,10 +35,12 @@ class ConnectWalletDialog : public QDialog {
     void on_timed_out();
     void on_bridge_error(QString message);
     void fail_and_close(const QString& reason);
+    void retranslateUi();
 
     LocalWalletBridge* bridge_ = nullptr;
     QByteArray nonce_hex_;
     QByteArray expected_message_;
+    QLabel* title_label_ = nullptr;
     QLabel* status_label_ = nullptr;
     QPushButton* cancel_button_ = nullptr;
     QPushButton* reopen_button_ = nullptr;

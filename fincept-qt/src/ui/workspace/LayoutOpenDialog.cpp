@@ -15,7 +15,7 @@
 namespace fincept::ui {
 
 LayoutOpenDialog::LayoutOpenDialog(QWidget* parent) : QDialog(parent) {
-    setWindowTitle("Open Layout");
+    setWindowTitle(tr("Open Layout"));
     setMinimumSize(560, 400);
 
     auto* vl = new QVBoxLayout(this);
@@ -59,6 +59,18 @@ void LayoutOpenDialog::populate() {
         list_->addItem(item);
     }
     if (list_->count() > 0) list_->setCurrentRow(0);
+}
+
+void LayoutOpenDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void LayoutOpenDialog::retranslateUi() {
+    setWindowTitle(tr("Open Layout"));
+    // List rows hold layout data (name / kind / timestamp) — not translatable.
+    // The Open / Cancel buttons use Qt standard roles, which Qt translates.
 }
 
 } // namespace fincept::ui

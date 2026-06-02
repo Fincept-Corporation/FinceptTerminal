@@ -2,8 +2,10 @@
 #pragma once
 #include "services/forum/ForumModels.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QStackedWidget>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -26,9 +28,21 @@ class ForumPostReaderPanel : public QWidget {
     void vote_comment(const QString& comment_uuid, const QString& vote_type);
     void author_clicked(const QString& username);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
     void rebuild_comments();
+    void retranslateUi();
+
+    // Static chrome (cached for retranslateUi)
+    QLabel* empty_title_ = nullptr;
+    QLabel* empty_sub_ = nullptr;
+    QLabel* loading_text_ = nullptr;
+    QPushButton* up_btn_ = nullptr;
+    QLabel* replies_hdr_ = nullptr;
+    QPushButton* send_btn_ = nullptr;
 
     QStackedWidget* stack_ = nullptr; // 0=empty, 1=loading, 2=content
     QWidget* content_page_ = nullptr;

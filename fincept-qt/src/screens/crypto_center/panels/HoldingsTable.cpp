@@ -96,9 +96,9 @@ void HoldingsTable::build_ui() {
     table_->setObjectName(QStringLiteral("holdingsTableView"));
     table_->setColumnCount(5);
     table_->setHorizontalHeaderLabels(
-        {QStringLiteral("TOKEN"), QStringLiteral("BALANCE"),
-         QStringLiteral("PRICE"), QStringLiteral("USD VALUE"),
-         QStringLiteral("% OF PORT")});
+        {tr("TOKEN"), tr("BALANCE"),
+         tr("PRICE"), tr("USD VALUE"),
+         tr("% OF PORT")});
     table_->verticalHeader()->setVisible(false);
     table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
@@ -383,6 +383,27 @@ void HoldingsTable::hideEvent(QHideEvent* e) {
     fincept::datahub::DataHub::instance().unsubscribe(this);
     current_balance_topic_.clear();
     price_topic_.clear();
+}
+
+void HoldingsTable::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void HoldingsTable::retranslateUi() {
+    if (table_) {
+        table_->setHorizontalHeaderLabels(
+            {tr("TOKEN"), tr("BALANCE"),
+             tr("PRICE"), tr("USD VALUE"),
+             tr("% OF PORT")});
+    }
+    if (show_all_button_) {
+        show_all_button_->setText(show_unverified_ ? tr("Hide unverified")
+                                                   : tr("Show all"));
+    }
+    // Re-render the footer (and any tooltips) in the new locale.
+    rebuild_table();
 }
 
 } // namespace fincept::screens::panels

@@ -78,6 +78,71 @@ void BacktestingScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
 }
 
+void BacktestingScreen::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(e);
+}
+
+void BacktestingScreen::retranslateUi() {
+    // Top bar (provider/command buttons carry service-provided names — data).
+    if (brand_label_) brand_label_->setText(tr("BACKTESTING"));
+    if (run_button_)  run_button_->setText(tr("RUN"));
+
+    // Left panel section/field titles.
+    if (commands_title_)      commands_title_->setText(tr("COMMANDS"));
+    if (strategy_title_)      strategy_title_->setText(tr("STRATEGY"));
+    if (strategy_cat_label_)  strategy_cat_label_->setText(tr("CATEGORY"));
+    if (strategy_pick_label_) strategy_pick_label_->setText(tr("STRATEGY"));
+    if (params_title_)        params_title_->setText(tr("PARAMETERS"));
+
+    // Center panel.
+    if (results_title_)   results_title_->setText(tr("RESULTS"));
+    if (export_json_btn_) export_json_btn_->setText(tr("EXPORT JSON"));
+    if (summary_hint_)
+        summary_hint_->setText(tr("Select a provider, command, and strategy, then click RUN to execute.\n\n"
+                                  "Supported providers: VectorBT, Backtesting.py, FastTrade, Zipline, BT, Fincept\n"
+                                  "Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Returns"));
+    if (equity_hint_)     equity_hint_->setText(tr("Run a backtest to see the equity curve."));
+    if (result_tabs_ && result_tabs_->count() >= 5) {
+        result_tabs_->setTabText(0, tr("SUMMARY"));
+        result_tabs_->setTabText(1, tr("EQUITY CURVE"));
+        result_tabs_->setTabText(2, tr("METRICS"));
+        result_tabs_->setTabText(3, tr("DETAILS"));
+        result_tabs_->setTabText(4, tr("RAW JSON"));
+    }
+    if (metrics_table_)
+        metrics_table_->setHorizontalHeaderLabels({tr("Metric"), tr("Value")});
+
+    // Right panel section/field titles.
+    if (market_data_title_) market_data_title_->setText(tr("MARKET DATA"));
+    if (symbols_label_)     symbols_label_->setText(tr("SYMBOLS"));
+    if (start_label_)       start_label_->setText(tr("START"));
+    if (end_label_)         end_label_->setText(tr("END"));
+    if (interval_label_)    interval_label_->setText(tr("INTERVAL"));
+    if (execution_title_)   execution_title_->setText(tr("EXECUTION"));
+    if (commission_label_)  commission_label_->setText(tr("COMMISSION (%)"));
+    if (slippage_label_)    slippage_label_->setText(tr("SLIPPAGE (%)"));
+    if (risk_free_label_)   risk_free_label_->setText(tr("RISK-FREE RATE (%)"));
+    if (advanced_title_)    advanced_title_->setText(tr("ADVANCED"));
+    if (leverage_label_)    leverage_label_->setText(tr("LEVERAGE"));
+    if (stop_loss_label_)   stop_loss_label_->setText(tr("STOP LOSS (%)"));
+    if (take_profit_label_) take_profit_label_->setText(tr("TAKE PROFIT (%)"));
+    if (pos_sizing_label_)  pos_sizing_label_->setText(tr("POSITION SIZING"));
+    if (benchmark_title_)   benchmark_title_->setText(tr("BENCHMARK"));
+    if (benchmark_label_)   benchmark_label_->setText(tr("SYMBOL"));
+    if (stop_loss_spin_)    stop_loss_spin_->setSpecialValueText(tr("None"));
+    if (take_profit_spin_)  take_profit_spin_->setSpecialValueText(tr("None"));
+    if (allow_short_check_) allow_short_check_->setText(tr("Allow Short Selling"));
+
+    // Status bar.
+    if (providers_caption_)  providers_caption_->setText(tr("PROVIDERS:"));
+    if (strategies_caption_) strategies_caption_->setText(tr("STRATEGIES:"));
+    // status_label_ / status_dot_ carry transient run state — left as-is.
+    // Command-config pages and dynamically rebuilt param rows pick up the new
+    // language when the relevant combo/command rebuilds them.
+}
+
 void BacktestingScreen::connect_service() {
     auto& svc = BacktestingService::instance();
     connect(&svc, &BacktestingService::result_ready, this, &BacktestingScreen::on_result);

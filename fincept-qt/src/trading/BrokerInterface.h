@@ -109,6 +109,24 @@ struct BrokerProfile {
 };
 
 // ============================================================================
+// SessionCheck — result of a live token health-check (IBroker::validate_session)
+// ============================================================================
+// status:
+//   Valid        → token works right now
+//   Expired      → token is definitively dead/invalid (safe to disconnect/purge)
+//   Inconclusive → network/rate-limit/other; caller MUST leave state unchanged
+// expires_at_epoch: the broker's *real* reported expiry when it returns one
+//   (e.g. Dhan /v2/profile tokenValidity). 0 means unknown. On a Valid result
+//   AccountManager writes this back to storage so the persisted hint stops being
+//   stale.
+struct SessionCheck {
+    enum class Status { Valid, Expired, Inconclusive };
+    Status status = Status::Inconclusive;
+    qint64 expires_at_epoch = 0;
+    QString detail;
+};
+
+// ============================================================================
 // IBroker
 // ============================================================================
 
@@ -124,6 +142,36 @@ class IBroker {
     // --- Authentication ---
     virtual TokenExchangeResponse exchange_token(const QString& api_key, const QString& api_secret,
                                                  const QString& auth_code) = 0;
+
+    // --- Session validation (live token health-check) ---
+    // Issues a cheap authenticated call (default: get_funds) and classifies it
+    // into a SessionCheck. Brokers tag auth failures with the "[TOKEN_EXPIRED]"
+    // marker inside their checked_error()/*_check_auth() helpers; this default
+    // relies on that marker, so it works uniformly across every broker without a
+    // per-broker override. Override when the broker exposes a real expiry (so the
+    // persisted hint can be refreshed) or a cheaper dedicated endpoint.
+    virtual SessionCheck validate_session(const BrokerCredentials& creds) {
+        auto r = get_funds(creds);
+        if (r.success)
+            return {SessionCheck::Status::Valid, 0, QString()};
+        if (r.error.contains(QStringLiteral("[TOKEN_EXPIRED]")))
+            return {SessionCheck::Status::Expired, 0, r.error};
+        return {SessionCheck::Status::Inconclusive, 0, r.error};
+    }
+
+    // Whether this broker can obtain a fresh access token with no user
+    // interaction — either via a refresh token or by replaying a stored TOTP
+    // login. AccountManager only attempts refresh_session() when this is true.
+    virtual bool supports_silent_refresh() const { return false; }
+
+    // Attempt a silent token refresh from stored credentials. On success returns
+    // a populated TokenExchangeResponse (access_token [+ refresh_token] +
+    // additional_data carrying an updated "token_expires_at"). Default: not
+    // supported. Uses blocking HTTP internally — call from a worker thread only.
+    virtual TokenExchangeResponse refresh_session(const BrokerCredentials& creds) {
+        Q_UNUSED(creds);
+        return {false, QString(), QString(), QString(), QString(), QStringLiteral("Silent refresh not supported")};
+    }
 
     // --- Orders ---
     virtual OrderPlaceResponse place_order(const BrokerCredentials& creds, const UnifiedOrder& order) = 0;

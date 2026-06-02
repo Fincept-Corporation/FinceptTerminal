@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QEvent>
 #include <QString>
 #include <QWidget>
 
@@ -29,9 +30,13 @@ class SettingsTab : public QWidget {
     explicit SettingsTab(QWidget* parent = nullptr);
     ~SettingsTab() override;
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
     void apply_theme();
+    void retranslateUi();
 
     void on_mode_changed(bool is_stream);
     void on_save_helius_key();
@@ -55,6 +60,20 @@ class SettingsTab : public QWidget {
     QLabel* slippage_value_ = nullptr;
 
     QCheckBox* show_unverified_checkbox_ = nullptr;
+
+    // Fixed UI text (cached for retranslateUi)
+    QLabel* balance_panel_title_ = nullptr;
+    QLabel* balance_panel_sub_ = nullptr;
+    QLabel* balance_hint_ = nullptr;
+    QLabel* helius_panel_title_ = nullptr;
+    QLabel* helius_panel_sub_ = nullptr;
+    QLabel* helius_hint_ = nullptr;
+    QLabel* slippage_panel_title_ = nullptr;
+    QLabel* slippage_panel_sub_ = nullptr;
+    QLabel* slippage_hint_ = nullptr;
+    QLabel* filters_panel_title_ = nullptr;
+    QLabel* filters_panel_sub_ = nullptr;
+    QLabel* filters_hint_ = nullptr;
 };
 
 } // namespace fincept::screens

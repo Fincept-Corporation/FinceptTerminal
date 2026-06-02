@@ -2,6 +2,7 @@
 #include "screens/markets/MarketPanelConfig.h"
 #include "services/markets/MarketDataService.h"
 
+#include <QEvent>
 #include <QHash>
 #include <QLabel>
 #include <QPushButton>
@@ -44,12 +45,18 @@ class MarketPanel : public QWidget {
 
   protected:
     void resizeEvent(QResizeEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void show_row_context_menu(const QPoint& pos);
 
   private:
     void build_ui();
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
+    /// Maps an internal column code to its user-facing translatable label.
+    QString column_label(const QString& code) const;
     void setup_table_columns();
     void populate(const QVector<services::QuoteData>& quotes);
     void update_visible_rows();

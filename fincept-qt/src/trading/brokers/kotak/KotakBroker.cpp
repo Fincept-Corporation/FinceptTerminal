@@ -25,6 +25,7 @@
 
 #include "core/logging/Logger.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 #include "trading/instruments/InstrumentService.h"
 
 #include <QCryptographicHash>
@@ -359,8 +360,25 @@ TokenExchangeResponse KotakBroker::exchange_token(const QString& api_key, const 
     const QString packed = trading_token + ":::" + trading_sid + ":::" + base_url + ":::" + access_token_portal +
                            ":::" + server_id;
 
+    // Persist the TOTP secret (auth_code) so the daily trading session can be
+    // silently re-minted: Step1+Step2 re-run from the stored portal token, MPIN
+    // and TOTP secret. Token lapses at the daily reset.
+    QJsonObject extra_obj{{"totp_secret", auth_code.trimmed()}};
+    const QString extra =
+        with_token_expiry(QString::fromUtf8(QJsonDocument(extra_obj).toJson(QJsonDocument::Compact)),
+                          next_ist_flush_epoch(6, 0));
     LOG_INFO(TAG, "Kotak auth complete, ucc=" + ucc + " base_url=" + base_url + " sId=" + server_id);
-    return {true, packed, /*refresh*/ "", ucc, /*additional*/ "", ""};
+    return {true, packed, /*refresh*/ "", ucc, /*additional*/ extra, ""};
+}
+
+// Silent refresh = replay the TOTP login (Step1) + MPIN validation (Step2) from
+// the stored packed api_key (portal token|||mobile|||UCC), MPIN and TOTP secret.
+TokenExchangeResponse KotakBroker::refresh_session(const BrokerCredentials& creds) {
+    const auto extra = QJsonDocument::fromJson(creds.additional_data.toUtf8()).object();
+    const QString totp_secret = extra.value("totp_secret").toString();
+    if (creds.api_key.isEmpty() || creds.api_secret.isEmpty() || totp_secret.isEmpty())
+        return {false, "", "", "", "", "Kotak silent refresh requires stored portal token, MPIN and TOTP secret"};
+    return exchange_token(creds.api_key, creds.api_secret, totp_secret);
 }
 
 // ── Place Order ───────────────────────────────────────────────────────────────

@@ -44,14 +44,14 @@ StatCanPanel::StatCanPanel(QWidget* parent) : EconPanelBase(kStatCanSourceId, kS
 }
 
 void StatCanPanel::activate() {
-    show_empty("Select a series and click FETCH\n"
-               "Source: Statistics Canada WDS API (www150.statcan.gc.ca)\n"
-               "No API key required — data via vector IDs for reliability");
+    show_empty(tr("Select a series and click FETCH\n"
+                  "Source: Statistics Canada WDS API (www150.statcan.gc.ca)\n"
+                  "No API key required — data via vector IDs for reliability"));
 }
 
 void StatCanPanel::build_controls(QHBoxLayout* thl) {
-    auto* lbl = new QLabel("SERIES");
-    lbl->setStyleSheet(ctrl_label_style());
+    series_lbl_ = new QLabel(tr("SERIES"));
+    series_lbl_->setStyleSheet(ctrl_label_style());
 
     series_combo_ = new QComboBox;
     for (const auto& s : kStatCanSeries)
@@ -63,7 +63,7 @@ void StatCanPanel::build_controls(QHBoxLayout* thl) {
     for (int i = 0; i < kStatCanSeries.size(); ++i)
         series_combo_->setItemData(i, kStatCanSeries[i].description, Qt::ToolTipRole);
 
-    thl->addWidget(lbl);
+    thl->addWidget(series_lbl_);
     thl->addWidget(series_combo_);
 }
 
@@ -71,7 +71,7 @@ void StatCanPanel::on_fetch() {
     const int idx = series_combo_->currentIndex();
     const auto& series = kStatCanSeries[idx];
 
-    show_loading("Fetching StatCan: " + series.label + "…");
+    show_loading(tr("Fetching StatCan: %1…").arg(series.label));
     services::EconomicsService::instance().execute(kStatCanSourceId, kStatCanScript, series.command, {},
                                                    "statcan_" + series.command);
 }
@@ -96,7 +96,7 @@ void StatCanPanel::on_result(const QString& request_id, const services::Economic
     QJsonArray rows = result.data["data"].toArray();
 
     if (rows.isEmpty()) {
-        show_error("No data returned");
+        show_error(tr("No data returned"));
         return;
     }
 
@@ -116,6 +116,20 @@ void StatCanPanel::on_result(const QString& request_id, const services::Economic
 
     display(rows, title);
     LOG_INFO("StatCanPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void StatCanPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void StatCanPanel::retranslateUi() {
+    if (series_lbl_)
+        series_lbl_->setText(tr("SERIES"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

@@ -718,6 +718,7 @@ set(CORE_SOURCES
 # Network
 set(NETWORK_SOURCES
     src/network/http/HttpClient.cpp
+    src/network/cloud/CloudClient.cpp
 )
 # WebSocketClient is always compiled; it stubs out when HAS_QT_WEBSOCKETS is not defined
 list(APPEND NETWORK_SOURCES src/network/websocket/WebSocketClient.cpp)
@@ -781,6 +782,7 @@ set(STORAGE_SOURCES
     src/storage/repositories/IvHistoryRepository.cpp
     src/storage/repositories/WatchlistRepository.cpp
     src/storage/repositories/NotesRepository.cpp
+    src/storage/repositories/NotebookRepository.cpp
     src/storage/repositories/ReportRepository.cpp
     src/storage/repositories/PaperTradingRepository.cpp
     src/storage/repositories/NewsMonitorRepository.cpp
@@ -847,9 +849,16 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v034_strategy_portfolio.cpp
     src/storage/sqlite/migrations/v035_news_analysis.cpp
     src/storage/sqlite/migrations/v036_instrument_broker_token.cpp
+    src/storage/sqlite/migrations/v037_cloud_sync.cpp
+    src/storage/sqlite/migrations/v038_notebooks.cpp
 
     # Historical OHLCV data store (Historify, Phase 3 §13)
     src/storage/HistoricalDataStore.cpp
+
+    # Cloud sync — durable outbox + device-local flags + id map (see CLOUD_SYNC_PLAN.md)
+    src/storage/sync/SyncOutbox.cpp
+    src/storage/sync/CloudSyncSettings.cpp
+    src/storage/sync/SyncMap.cpp
 )
 
 # Python runner
@@ -1065,6 +1074,19 @@ set(ALGO_ENGINE_SOURCES
 
 # Services
 set(SERVICE_SOURCES
+    # Fincept Cloud sync orchestrator + domain adapters (see CLOUD_SYNC_PLAN.md)
+    src/services/cloud/CloudSyncEngine.cpp
+    src/services/cloud/WatchlistCloudAdapter.cpp
+    src/services/cloud/NotesCloudAdapter.cpp
+    src/services/cloud/PortfolioCloudAdapter.cpp
+    src/services/cloud/AgentConfigCloudAdapter.cpp
+    src/services/cloud/ReportCloudAdapter.cpp
+    src/services/cloud/WorkflowCloudAdapter.cpp
+    src/services/cloud/DashboardCloudAdapter.cpp
+    src/services/cloud/SettingsCloudAdapter.cpp
+    src/services/cloud/NewsMonitorCloudAdapter.cpp
+    src/services/cloud/NewsFeedCloudAdapter.cpp
+    src/services/cloud/NotebookCloudAdapter.cpp
     src/services/akshare/AkShareService.cpp
     src/services/alpha_arena/AlphaArenaJson.cpp
     src/services/alpha_arena/Indicators.cpp
@@ -1326,6 +1348,7 @@ set(SCREEN_SOURCES
     src/screens/settings/SettingsScreen.cpp
     src/screens/settings/CredentialsSection.cpp
     src/screens/settings/AppearanceSection.cpp
+    src/screens/settings/CloudSyncSection.cpp
     src/screens/settings/GeneralSection.cpp
     src/screens/settings/NotificationsSection.cpp
     src/screens/settings/StorageSection.cpp
@@ -2264,6 +2287,8 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v034_strategy_portfolio.cpp
     src/storage/sqlite/migrations/v035_news_analysis.cpp
     src/storage/sqlite/migrations/v036_instrument_broker_token.cpp
+    src/storage/sqlite/migrations/v037_cloud_sync.cpp
+    src/storage/sqlite/migrations/v038_notebooks.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp

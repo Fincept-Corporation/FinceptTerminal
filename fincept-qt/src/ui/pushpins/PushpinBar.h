@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include <QEvent>
 #include <QWidget>
 
 class QHBoxLayout;
@@ -21,8 +22,12 @@ class PushpinBar : public QWidget {
   public:
     explicit PushpinBar(QWidget* parent = nullptr);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void rebuild();
+    void retranslateUi();
 
     QScrollArea* scroll_ = nullptr;
     QWidget* strip_ = nullptr;

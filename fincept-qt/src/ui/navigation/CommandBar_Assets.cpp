@@ -169,7 +169,7 @@ void CommandBar::on_asset_results(const QJsonArray& results) {
         row->setStyleSheet("background:transparent;");
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(10, 6, 10, 6);
-        auto* lbl = new QLabel("No results found");
+        auto* lbl = new QLabel(tr("No results found"));
         lbl->setStyleSheet(QString("color:%1;font-size:11px;font-family:'Consolas',monospace;background:transparent;")
                                .arg(colors::TEXT_TERTIARY.get()));
         rl->addWidget(lbl);

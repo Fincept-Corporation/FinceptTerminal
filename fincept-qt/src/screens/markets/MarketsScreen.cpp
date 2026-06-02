@@ -9,6 +9,7 @@
 
 #include <QComboBox>
 #include <QDateTime>
+#include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHideEvent>
@@ -61,8 +62,9 @@ MarketsScreen::MarketsScreen(QWidget* parent) : QWidget(parent) {
         if (!refresh_in_progress_) return;
         refresh_in_progress_ = false;
         pending_refreshes_   = 0;
+        status_state_ = StatusState::Timeout;
         if (status_label_) {
-            status_label_->setText("● TIMEOUT");
+            status_label_->setText(tr("● TIMEOUT"));
             status_label_->setStyleSheet(lbl_ss(ui::colors::NEGATIVE(), true));
         }
     });
@@ -244,8 +246,8 @@ void MarketsScreen::open_editor_for_new_panel(int col_index) {
 
 void MarketsScreen::on_panel_delete(const QString& panel_id) {
     QMessageBox mb(this);
-    mb.setWindowTitle("Remove Panel");
-    mb.setText("Remove this panel?");
+    mb.setWindowTitle(tr("Remove Panel"));
+    mb.setText(tr("Remove this panel?"));
     mb.setStandardButtons(QMessageBox::Yes | QMessageBox::Cancel);
     mb.setDefaultButton(QMessageBox::Cancel);
     mb.setStyleSheet(QString("background:%1;color:%2;")
@@ -285,9 +287,9 @@ QWidget* MarketsScreen::build_header_bar() {
     };
 
     // Branding
-    auto* brand = new QLabel("FINCEPT MARKETS");
-    brand->setStyleSheet(lbl_ss(ui::colors::TEXT_PRIMARY(), true));
-    h->addWidget(brand);
+    brand_label_ = new QLabel(tr("FINCEPT MARKETS"));
+    brand_label_->setStyleSheet(lbl_ss(ui::colors::TEXT_PRIMARY(), true));
+    h->addWidget(brand_label_);
 
     add_sep();
 
@@ -337,45 +339,35 @@ QWidget* MarketsScreen::build_header_bar() {
         return b;
     };
 
-    auto* refresh_btn = make_ctrl_btn("[F5] REFRESH");
-    connect(refresh_btn, &QPushButton::clicked, this, &MarketsScreen::refresh_all);
-    h->addWidget(refresh_btn);
+    refresh_btn_ = make_ctrl_btn(tr("[F5] REFRESH"));
+    connect(refresh_btn_, &QPushButton::clicked, this, &MarketsScreen::refresh_all);
+    h->addWidget(refresh_btn_);
 
     // AUTO toggle — amber when ON
-    auto* auto_btn = make_ctrl_btn(auto_update_ ? "[F9] AUTO: ON" : "[F9] AUTO: OFF");
-    auto update_auto_style = [this, auto_btn]() {
-        auto_btn->setText(auto_update_ ? "[F9] AUTO: ON" : "[F9] AUTO: OFF");
-        auto_btn->setStyleSheet(
-            QString("QPushButton{background:transparent;color:%1;border:none;"
-                    "font-size:%3px;font-family:'%4';padding:0 6px;}"
-                    "QPushButton:hover{color:%2;}")
-                .arg(auto_update_ ? ui::colors::AMBER() : ui::colors::TEXT_DIM(),
-                     ui::colors::TEXT_PRIMARY())
-                .arg(ui::fonts::font_px(-3))
-                .arg(ui::fonts::DATA_FAMILY()));
-    };
+    auto_btn_ = make_ctrl_btn(auto_update_ ? tr("[F9] AUTO: ON") : tr("[F9] AUTO: OFF"));
     update_auto_style();
-    connect(auto_btn, &QPushButton::clicked, this, [this, update_auto_style]() {
+    connect(auto_btn_, &QPushButton::clicked, this, [this]() {
         auto_update_ = !auto_update_;
         update_auto_style();
         if (!isVisible()) return;
         if (auto_update_) auto_refresh_timer_->start();
         else              auto_refresh_timer_->stop();
     });
-    h->addWidget(auto_btn);
+    h->addWidget(auto_btn_);
 
     // Interval combo
     auto* iv = new QComboBox;
     iv->setFixedHeight(24);
     iv->setFixedWidth(56);
-    iv->addItem("5M",   300000);
-    iv->addItem("10M",  600000);
-    iv->addItem("15M",  900000);
-    iv->addItem("30M",  1800000);
-    iv->addItem("1H",   3600000);
-    iv->addItem("4H",   14400000);
-    iv->addItem("1D",   86400000);
+    iv->addItem(tr("5M"),   300000);
+    iv->addItem(tr("10M"),  600000);
+    iv->addItem(tr("15M"),  900000);
+    iv->addItem(tr("30M"),  1800000);
+    iv->addItem(tr("1H"),   3600000);
+    iv->addItem(tr("4H"),   14400000);
+    iv->addItem(tr("1D"),   86400000);
     iv->setCurrentIndex(1);
+    interval_combo_ = iv;
     iv->setStyleSheet(
         QString("QComboBox{background:transparent;color:%1;border:none;"
                 "font-size:%6px;font-family:'%7';padding:0 4px;}"
@@ -393,7 +385,8 @@ QWidget* MarketsScreen::build_header_bar() {
     h->addWidget(iv);
 
     // [+] PANEL — column picker menu
-    auto* add_btn = make_ctrl_btn("[+] PANEL");
+    add_panel_btn_ = make_ctrl_btn(tr("[+] PANEL"));
+    auto* add_btn = add_panel_btn_;
     connect(add_btn, &QPushButton::clicked, this, [this, add_btn]() {
         auto* menu = new QMenu(this);
         menu->setStyleSheet(
@@ -406,7 +399,7 @@ QWidget* MarketsScreen::build_header_bar() {
                 .arg(ui::fonts::font_px(-3))
                 .arg(ui::fonts::DATA_FAMILY()));
         for (int i = 0; i < kNumColumns; ++i) {
-            auto* act = menu->addAction(QString("ADD TO COL %1").arg(i + 1));
+            auto* act = menu->addAction(tr("ADD TO COL %1").arg(i + 1));
             connect(act, &QAction::triggered, this, [this, i]() {
                 open_editor_for_new_panel(i);
             });
@@ -417,11 +410,11 @@ QWidget* MarketsScreen::build_header_bar() {
     h->addWidget(add_btn);
 
     // RESET
-    auto* reset_btn = make_ctrl_btn("RESET");
-    connect(reset_btn, &QPushButton::clicked, this, [this]() {
+    reset_btn_ = make_ctrl_btn(tr("RESET"));
+    connect(reset_btn_, &QPushButton::clicked, this, [this]() {
         QMessageBox mb(this);
-        mb.setWindowTitle("Reset Panels");
-        mb.setText("Reset all panels to defaults?");
+        mb.setWindowTitle(tr("Reset Panels"));
+        mb.setText(tr("Reset all panels to defaults?"));
         mb.setStandardButtons(QMessageBox::Yes | QMessageBox::Cancel);
         mb.setStyleSheet(QString("background:%1;color:%2;")
                              .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
@@ -431,21 +424,36 @@ QWidget* MarketsScreen::build_header_bar() {
         rebuild_splitter_layout();
         refresh_all();
     });
-    h->addWidget(reset_btn);
+    h->addWidget(reset_btn_);
 
     h->addStretch();
 
-    last_upd_label_ = new QLabel("LAST UPDATE  --:--:--");
+    last_upd_label_ = new QLabel(tr("LAST UPDATE  --:--:--"));
     last_upd_label_->setStyleSheet(lbl_ss(ui::colors::TEXT_DIM(), false, 11));
     h->addWidget(last_upd_label_);
 
     h->addWidget(new QLabel("   "));
 
-    status_label_ = new QLabel("● READY");
+    status_label_ = new QLabel(tr("● READY"));
     status_label_->setStyleSheet(lbl_ss(ui::colors::POSITIVE(), true));
     h->addWidget(status_label_);
 
     return w;
+}
+
+// Re-applies the AUTO button label + amber/dim styling from auto_update_.
+// Pulled into a member so retranslateUi() can refresh the localized label.
+void MarketsScreen::update_auto_style() {
+    if (!auto_btn_) return;
+    auto_btn_->setText(auto_update_ ? tr("[F9] AUTO: ON") : tr("[F9] AUTO: OFF"));
+    auto_btn_->setStyleSheet(
+        QString("QPushButton{background:transparent;color:%1;border:none;"
+                "font-size:%3px;font-family:'%4';padding:0 6px;}"
+                "QPushButton:hover{color:%2;}")
+            .arg(auto_update_ ? ui::colors::AMBER() : ui::colors::TEXT_DIM(),
+                 ui::colors::TEXT_PRIMARY())
+            .arg(ui::fonts::font_px(-3))
+            .arg(ui::fonts::DATA_FAMILY()));
 }
 
 // ---------------------------------------------------------------------------
@@ -462,13 +470,13 @@ void MarketsScreen::update_session_status() {
 
     QString label, color;
     if (!weekday || hhmm < 400 || hhmm >= 2000) {
-        label = "NYSE: CLOSED";    color = ui::colors::TEXT_DIM();
+        label = tr("NYSE: CLOSED");    color = ui::colors::TEXT_DIM();
     } else if (hhmm < 930) {
-        label = "NYSE: PRE-MKT";   color = ui::colors::AMBER();
+        label = tr("NYSE: PRE-MKT");   color = ui::colors::AMBER();
     } else if (hhmm < 1600) {
-        label = "NYSE: OPEN";      color = ui::colors::POSITIVE();
+        label = tr("NYSE: OPEN");      color = ui::colors::POSITIVE();
     } else {
-        label = "NYSE: AFTER-HRS"; color = ui::colors::AMBER();
+        label = tr("NYSE: AFTER-HRS"); color = ui::colors::AMBER();
     }
 
     if (session_label_) {
@@ -480,13 +488,13 @@ void MarketsScreen::update_session_status() {
 void MarketsScreen::update_clocks() {
     QDateTime utc = QDateTime::currentDateTimeUtc();
     if (ny_label_)
-        ny_label_ ->setText(QString("NY %1").arg(
+        ny_label_ ->setText(tr("NY %1").arg(
             utc.toTimeZone(QTimeZone("America/New_York")).toString("HH:mm:ss")));
     if (lon_label_)
-        lon_label_->setText(QString("LON %1").arg(
+        lon_label_->setText(tr("LON %1").arg(
             utc.toTimeZone(QTimeZone("Europe/London")).toString("HH:mm:ss")));
     if (tok_label_)
-        tok_label_->setText(QString("TOK %1").arg(
+        tok_label_->setText(tr("TOK %1").arg(
             utc.toTimeZone(QTimeZone("Asia/Tokyo")).toString("HH:mm:ss")));
 }
 
@@ -541,8 +549,9 @@ void MarketsScreen::refresh_all() {
     refresh_in_progress_ = true;
     pending_refreshes_   = panels_.size();
 
+    status_state_ = StatusState::Loading;
     if (status_label_) {
-        status_label_->setText("● LOADING");
+        status_label_->setText(tr("● LOADING"));
         status_label_->setStyleSheet(lbl_ss(ui::colors::AMBER(), true));
     }
 
@@ -557,13 +566,14 @@ void MarketsScreen::refresh_all() {
             refresh_in_progress_ = false;
             last_refresh_time_   = QDateTime::currentDateTime();
             counter->deleteLater();
+            status_state_ = StatusState::Ready;
             if (status_label_) {
-                status_label_->setText("● READY");
+                status_label_->setText(tr("● READY"));
                 status_label_->setStyleSheet(lbl_ss(ui::colors::POSITIVE(), true));
             }
             if (last_upd_label_) {
                 last_upd_label_->setText(
-                    QString("LAST UPDATE  %1")
+                    tr("LAST UPDATE  %1")
                         .arg(QDateTime::currentDateTime().toString("HH:mm:ss")));
                 last_upd_label_->setStyleSheet(lbl_ss(ui::colors::TEXT_SECONDARY(), false, 11));
             }
@@ -591,6 +601,52 @@ void MarketsScreen::refresh_theme() {
 
     for (auto* vs : col_splitters_)
         vs->setStyleSheet(handle_ss);
+}
+
+// ---------------------------------------------------------------------------
+// i18n — live language switch
+// ---------------------------------------------------------------------------
+
+void MarketsScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void MarketsScreen::retranslateUi() {
+    if (brand_label_)   brand_label_->setText(tr("FINCEPT MARKETS"));
+    if (refresh_btn_)   refresh_btn_->setText(tr("[F5] REFRESH"));
+    update_auto_style();  // re-applies localized AUTO: ON/OFF label
+    if (add_panel_btn_) add_panel_btn_->setText(tr("[+] PANEL"));
+    if (reset_btn_)     reset_btn_->setText(tr("RESET"));
+
+    // Interval combo — fixed UI labels, preserve current selection & item data.
+    if (interval_combo_) {
+        const int cur = interval_combo_->currentIndex();
+        const QStringList labels = {tr("5M"), tr("10M"), tr("15M"), tr("30M"),
+                                    tr("1H"), tr("4H"), tr("1D")};
+        for (int i = 0; i < interval_combo_->count() && i < labels.size(); ++i)
+            interval_combo_->setItemText(i, labels[i]);
+        interval_combo_->setCurrentIndex(cur);
+    }
+
+    // Dynamic header labels — re-derive from current state so the new language
+    // takes effect immediately rather than on the next timer tick.
+    update_session_status();
+    update_clocks();
+
+    if (status_label_) {
+        switch (status_state_) {
+            case StatusState::Ready:   status_label_->setText(tr("● READY"));   break;
+            case StatusState::Loading: status_label_->setText(tr("● LOADING")); break;
+            case StatusState::Timeout: status_label_->setText(tr("● TIMEOUT")); break;
+        }
+    }
+
+    // "LAST UPDATE …" — only the never-refreshed placeholder is re-translated;
+    // once a real timestamp is shown it stays as data.
+    if (last_upd_label_ && !last_refresh_time_.isValid())
+        last_upd_label_->setText(tr("LAST UPDATE  --:--:--"));
 }
 
 } // namespace fincept::screens

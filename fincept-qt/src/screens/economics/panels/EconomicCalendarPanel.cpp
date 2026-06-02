@@ -44,8 +44,8 @@ void EconomicCalendarPanel::activate() {
     if (date_edit_) {
         date_edit_->setDate(QDate::currentDate());
     }
-    show_empty("Select a date and click FETCH to load economic events\n"
-               "Source: Forex Factory — global economic calendar (no API key required)");
+    show_empty(tr("Select a date and click FETCH to load economic events\n"
+                  "Source: Forex Factory — global economic calendar (no API key required)"));
 }
 
 void EconomicCalendarPanel::build_controls(QHBoxLayout* thl) {
@@ -62,15 +62,15 @@ void EconomicCalendarPanel::build_controls(QHBoxLayout* thl) {
     date_edit_->setFixedWidth(120);
 
     filter_combo_ = new QComboBox;
-    filter_combo_->addItem("All Events", 0);
-    filter_combo_->addItem("Medium + High", 2);
-    filter_combo_->addItem("High Only", 3);
+    filter_combo_->addItem(tr("All Events"), 0);
+    filter_combo_->addItem(tr("Medium + High"), 2);
+    filter_combo_->addItem(tr("High Only"), 3);
     filter_combo_->setFixedHeight(26);
     filter_combo_->setFixedWidth(110);
 
-    thl->addWidget(lbl("DATE"));
+    thl->addWidget(date_lbl_ = lbl(tr("DATE")));
     thl->addWidget(date_edit_);
-    thl->addWidget(lbl("IMPACT"));
+    thl->addWidget(impact_lbl_ = lbl(tr("IMPACT")));
     thl->addWidget(filter_combo_);
 }
 
@@ -78,7 +78,7 @@ void EconomicCalendarPanel::on_fetch() {
     const QDate date = date_edit_->date();
     const QString ff_date = to_ff_date(date);
 
-    show_loading("Fetching economic calendar for " + date.toString("MMM d, yyyy") + "…");
+    show_loading(tr("Fetching economic calendar for %1…").arg(date.toString("MMM d, yyyy")));
 
     services::EconomicsService::instance().execute(kEconomicCalendarSourceId, kEconomicCalendarScript, ff_date, {},
                                                    "calendar_" + ff_date);
@@ -101,7 +101,7 @@ void EconomicCalendarPanel::on_result(const QString& request_id, const services:
         events = result.data["data"].toArray();
 
     if (events.isEmpty()) {
-        show_empty("No events found for this date");
+        show_empty(tr("No events found for this date"));
         return;
     }
 
@@ -117,16 +117,37 @@ void EconomicCalendarPanel::on_result(const QString& request_id, const services:
     }
 
     if (events.isEmpty()) {
-        show_empty("No events match the selected impact filter");
+        show_empty(tr("No events match the selected impact filter"));
         return;
     }
 
     const QString date_str = date_edit_->date().toString("MMM d, yyyy");
     const int total = result.data["events_count"].toInt(events.size());
-    const QString title = QString("Economic Calendar — %1  (%2 events)").arg(date_str).arg(total);
+    const QString title = tr("Economic Calendar — %1  (%2 events)").arg(date_str).arg(total);
 
     display(events, title);
     LOG_INFO("EconomicCalendarPanel", QString("Displayed %1 events for %2").arg(events.size()).arg(date_str));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void EconomicCalendarPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void EconomicCalendarPanel::retranslateUi() {
+    if (date_lbl_)
+        date_lbl_->setText(tr("DATE"));
+    if (impact_lbl_)
+        impact_lbl_->setText(tr("IMPACT"));
+    if (filter_combo_) {
+        filter_combo_->setItemText(0, tr("All Events"));
+        filter_combo_->setItemText(1, tr("Medium + High"));
+        filter_combo_->setItemText(2, tr("High Only"));
+    }
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

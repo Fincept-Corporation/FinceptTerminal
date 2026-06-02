@@ -15,6 +15,7 @@
 //
 // Reference: fincept-qt/.grill-me/alpha-arena-grill.md §11 (Frontend C++ surface).
 
+#include <QEvent>
 #include <QLabel>
 #include <QListWidget>
 #include <QString>
@@ -30,8 +31,12 @@ class PositionsPanel : public QWidget {
     void set_competition(const QString& competition_id);
   public slots:
     void refresh();
+  protected:
+    void changeEvent(QEvent* event) override;
   private:
+    void retranslateUi();
     QString competition_id_;
+    QLabel* title_ = nullptr;
     QTableWidget* table_;
 };
 
@@ -46,10 +51,14 @@ class HitlPanel : public QWidget {
     void on_hitl_requested(QString approval_id, QString agent_id, QString summary);
   signals:
     void approval_resolved(QString approval_id, bool approved);
+  protected:
+    void changeEvent(QEvent* event) override;
   private:
     void rebuild_buttons_for(const QString& approval_id, const QString& agent_id,
                              const QString& summary);
+    void retranslateUi();
     QString competition_id_;
+    QLabel* title_ = nullptr;
     QListWidget* list_;
 };
 
@@ -60,10 +69,15 @@ class RiskPanel : public QWidget {
     void set_competition(const QString& competition_id);
   public slots:
     void refresh();
+  protected:
+    void changeEvent(QEvent* event) override;
   private:
+    void retranslateUi();
     QString competition_id_;
+    QLabel* title_ = nullptr;
     QTableWidget* table_;
     QLabel* telemetry_label_ = nullptr;  // p50/p99 + rates summary
+    bool telemetry_seen_ = false;        // false until first refresh sets real telemetry
 };
 
 class AuditPanel : public QWidget {
@@ -73,8 +87,12 @@ class AuditPanel : public QWidget {
     void set_competition(const QString& competition_id);
   public slots:
     void refresh();
+  protected:
+    void changeEvent(QEvent* event) override;
   private:
+    void retranslateUi();
     QString competition_id_;
+    QLabel* title_ = nullptr;
     QListWidget* list_;
     qint64 last_seq_ = 0;
 };

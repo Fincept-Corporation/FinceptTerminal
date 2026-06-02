@@ -38,9 +38,9 @@ ConnectWalletDialog::ConnectWalletDialog(QWidget* parent) : QDialog(parent) {
     layout->setContentsMargins(24, 20, 24, 20);
     layout->setSpacing(12);
 
-    auto* title = new QLabel(tr("Connect your Solana wallet"), this);
-    title->setObjectName(QStringLiteral("walletDialogTitle"));
-    layout->addWidget(title);
+    title_label_ = new QLabel(tr("Connect your Solana wallet"), this);
+    title_label_->setObjectName(QStringLiteral("walletDialogTitle"));
+    layout->addWidget(title_label_);
 
     status_label_ = new QLabel(this);
     status_label_->setObjectName(QStringLiteral("walletDialogStatus"));
@@ -71,6 +71,21 @@ ConnectWalletDialog::ConnectWalletDialog(QWidget* parent) : QDialog(parent) {
 }
 
 ConnectWalletDialog::~ConnectWalletDialog() = default;
+
+void ConnectWalletDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void ConnectWalletDialog::retranslateUi() {
+    setWindowTitle(tr("Connect Wallet"));
+    if (title_label_) title_label_->setText(tr("Connect your Solana wallet"));
+    // status_label_ is stateful (handshake progress / error text set live in
+    // start_handshake / on_payload) — do not clobber it here.
+    if (reopen_button_) reopen_button_->setText(tr("Reopen browser"));
+    if (cancel_button_) cancel_button_->setText(tr("Cancel"));
+}
 
 void ConnectWalletDialog::showEvent(QShowEvent* e) {
     QDialog::showEvent(e);

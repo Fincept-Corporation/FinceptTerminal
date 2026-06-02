@@ -5,6 +5,7 @@
 #include "trading/BrokerInterface.h"
 #include "trading/TradingTypes.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QMap>
 #include <QTabWidget>
@@ -48,7 +49,11 @@ class EquityBottomPanel : public QWidget {
     void cancel_all_orders_requested(const QString& account_id);
     void close_all_positions_requested(const QString& account_id);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    void retranslateUi();
     void setup_positions_tab();
     void setup_holdings_tab();
     void setup_orders_tab();
@@ -62,6 +67,16 @@ class EquityBottomPanel : public QWidget {
 
     QTabWidget* tabs_ = nullptr;
 
+    // Tab indices (cached for retranslateUi tab text)
+    int positions_tab_idx_ = -1;
+    int holdings_tab_idx_ = -1;
+    int orders_tab_idx_ = -1;
+    int funds_tab_idx_ = -1;
+    int stats_tab_idx_ = -1;
+    int time_sales_tab_idx_ = -1;
+    int auctions_tab_idx_ = -1;
+    int calendar_tab_idx_ = -1;
+
     QTableWidget* positions_table_ = nullptr;
     QTableWidget* holdings_table_ = nullptr;
     QLabel* holdings_invested_label_ = nullptr;
@@ -69,6 +84,12 @@ class EquityBottomPanel : public QWidget {
     QLabel* holdings_pnl_label_ = nullptr;
     QLabel* holdings_pnl_pct_label_ = nullptr;
     QLabel* holdings_count_label_ = nullptr;
+    // Holdings summary-strip caption labels (cached for retranslateUi)
+    QLabel* holdings_count_caption_ = nullptr;
+    QLabel* holdings_invested_caption_ = nullptr;
+    QLabel* holdings_current_caption_ = nullptr;
+    QLabel* holdings_pnl_caption_ = nullptr;
+    QLabel* holdings_pnl_pct_caption_ = nullptr;
     class QPushButton* holdings_import_btn_ = nullptr;
     QVector<trading::BrokerHolding> last_holdings_;
     QTableWidget* orders_table_ = nullptr;
@@ -87,9 +108,15 @@ class EquityBottomPanel : public QWidget {
     QLabel* used_margin_label_ = nullptr;
     QLabel* total_label_ = nullptr;
     QLabel* collateral_label_ = nullptr;
+    // Funds row caption labels (cached for retranslateUi)
+    QLabel* available_caption_ = nullptr;
+    QLabel* used_margin_caption_ = nullptr;
+    QLabel* total_caption_ = nullptr;
+    QLabel* collateral_caption_ = nullptr;
 
     // Stats labels
     QLabel* stat_values_[5] = {};
+    QLabel* stat_captions_[5] = {};
 
     // Bulk action buttons
     class QPushButton* cancel_all_btn_ = nullptr;

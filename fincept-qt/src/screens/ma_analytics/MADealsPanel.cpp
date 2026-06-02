@@ -40,19 +40,19 @@ QWidget* MAModulePanel::build_deals_panel() {
 
     auto* scan_days = make_int_spin(1, 365, 30, ctl);
     int_inputs_["scan_days"] = scan_days;
-    ctl_hl->addWidget(new QLabel("Scan Days:", ctl));
+    ctl_hl->addWidget(new QLabel(tr("Scan Days:"), ctl));
     ctl_hl->addWidget(scan_days);
 
-    auto* scan_btn = make_run_button("SCAN SEC FILINGS", ctl);
+    auto* scan_btn = make_run_button(tr("SCAN SEC FILINGS"), ctl);
     connect(scan_btn, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Scanning SEC EDGAR...");
+        status_label_->setText(tr("Scanning SEC EDGAR..."));
         MAAnalyticsService::instance().scan_filings(int_inputs_["scan_days"]->value());
     });
     ctl_hl->addWidget(scan_btn);
 
-    auto* load_btn = make_run_button("LOAD ALL DEALS", ctl);
+    auto* load_btn = make_run_button(tr("LOAD ALL DEALS"), ctl);
     connect(load_btn, &QPushButton::clicked, this, [this]() {
-        status_label_->setText("Loading deals...");
+        status_label_->setText(tr("Loading deals..."));
         MAAnalyticsService::instance().get_all_deals();
     });
     ctl_hl->addWidget(load_btn);
@@ -62,7 +62,7 @@ QWidget* MAModulePanel::build_deals_panel() {
     // Search
     auto* search_box = new QComboBox(w);
     search_box->setEditable(true);
-    search_box->setPlaceholderText("Search deals by target, acquirer, or industry...");
+    search_box->setPlaceholderText(tr("Search deals by target, acquirer, or industry..."));
     search_box->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
                                       "font-family:%4; font-size:%5px; padding:6px 10px; }")
                                   .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
@@ -73,7 +73,7 @@ QWidget* MAModulePanel::build_deals_panel() {
     connect(search_box->lineEdit(), &QLineEdit::returnPressed, this, [this]() {
         auto q = combo_inputs_["deal_search"]->currentText();
         if (!q.isEmpty()) {
-            status_label_->setText("Searching deals...");
+            status_label_->setText(tr("Searching deals..."));
             MAAnalyticsService::instance().search_deals(q);
         }
     });

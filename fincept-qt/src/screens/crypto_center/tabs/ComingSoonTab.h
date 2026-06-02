@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QEvent>
 #include <QString>
 #include <QWidget>
 
@@ -22,12 +23,17 @@ class ComingSoonTab : public QWidget {
                            QWidget* parent = nullptr);
     ~ComingSoonTab() override;
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void apply_theme();
+    void retranslateUi();
 
     QLabel* tab_name_label_ = nullptr;
     QLabel* phase_label_ = nullptr;
     QLabel* description_label_ = nullptr;
+    QLabel* status_label_ = nullptr;
 };
 
 } // namespace fincept::screens

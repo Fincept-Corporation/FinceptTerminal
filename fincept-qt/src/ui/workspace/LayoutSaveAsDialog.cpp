@@ -1,6 +1,7 @@
 #include "ui/workspace/LayoutSaveAsDialog.h"
 
 #include <QDialogButtonBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QVBoxLayout>
@@ -9,11 +10,12 @@ namespace fincept::ui {
 
 LayoutSaveAsDialog::LayoutSaveAsDialog(QWidget* parent, const QString& initial_name)
     : QDialog(parent) {
-    setWindowTitle("Save Layout As");
+    setWindowTitle(tr("Save Layout As"));
     setMinimumWidth(360);
 
     auto* vl = new QVBoxLayout(this);
-    vl->addWidget(new QLabel("Layout name:"));
+    name_label_ = new QLabel(tr("Layout name:"));
+    vl->addWidget(name_label_);
 
     name_edit_ = new QLineEdit;
     name_edit_->setText(initial_name);
@@ -36,6 +38,17 @@ LayoutSaveAsDialog::LayoutSaveAsDialog(QWidget* parent, const QString& initial_n
 
 QString LayoutSaveAsDialog::name() const {
     return name_edit_ ? name_edit_->text().trimmed() : QString();
+}
+
+void LayoutSaveAsDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void LayoutSaveAsDialog::retranslateUi() {
+    setWindowTitle(tr("Save Layout As"));
+    if (name_label_) name_label_->setText(tr("Layout name:"));
 }
 
 } // namespace fincept::ui

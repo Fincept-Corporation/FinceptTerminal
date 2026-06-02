@@ -45,6 +45,11 @@ class DhanBroker : public IBroker {
 
     TokenExchangeResponse exchange_token(const QString& api_key, const QString& api_secret,
                                          const QString& auth_code) override;
+
+    // Authoritative token check via GET /v2/profile (DhanHQ-recommended). Logs
+    // the raw response, parses the real tokenValidity, and never disconnects on
+    // transient/rate-limit errors.
+    SessionCheck validate_session(const BrokerCredentials& creds) override;
     OrderPlaceResponse place_order(const BrokerCredentials& creds, const UnifiedOrder& order) override;
     ApiResponse<QJsonObject> modify_order(const BrokerCredentials& creds, const QString& order_id,
                                           const QJsonObject& mods) override;

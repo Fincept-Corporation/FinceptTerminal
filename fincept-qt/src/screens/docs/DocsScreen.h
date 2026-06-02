@@ -1,4 +1,5 @@
 #pragma once
+#include <QEvent>
 #include <QLabel>
 #include <QListWidget>
 #include <QScrollArea>
@@ -6,6 +7,8 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QWidget>
+
+class QSplitter;
 
 namespace fincept::screens {
 
@@ -16,10 +19,19 @@ class DocsScreen : public QWidget {
   public:
     explicit DocsScreen(QWidget* parent = nullptr);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_sidebar();
     void build_content_pages();
     void navigate_to(const QString& section_id);
+
+    /// Re-apply tr() lookups. Static documentation content (sidebar tree + all
+    /// pages) is rebuilt from scratch on QEvent::LanguageChange — caching the
+    /// hundreds of labels that make up the docs would dominate the source.
+    /// The current section is preserved across the rebuild by section_id.
+    void retranslateUi();
 
     // ── Helpers ──────────────────────────────────────────────────────────────
     QWidget* make_page(const QString& title, const QString& subtitle,
@@ -90,10 +102,14 @@ class DocsScreen : public QWidget {
     QWidget* page_profile();
 
     // ── Members ──────────────────────────────────────────────────────────────
+    QSplitter* splitter_ = nullptr; // owns sidebar_ + pages_; reused on rebuild
     QTreeWidget* sidebar_ = nullptr;
     QStackedWidget* pages_ = nullptr;
     QLabel* page_title_ = nullptr;
     QLabel* breadcrumb_ = nullptr;
+    // Command-bar labels (cached for retranslateUi)
+    QLabel* cmd_title_ = nullptr;
+    QLabel* cmd_count_ = nullptr;
     QMap<QString, int> page_index_; // section_id → stacked widget index
 };
 

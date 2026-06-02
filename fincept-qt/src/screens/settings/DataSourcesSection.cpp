@@ -77,6 +77,12 @@ void DataSourcesSection::rebuild() {
     host_layout_->addWidget(content_);
 }
 
+void DataSourcesSection::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        rebuild(); // re-runs every tr() lookup in build_content()
+    QWidget::changeEvent(event);
+}
+
 QWidget* DataSourcesSection::build_content() {
     using namespace settings_styles;
 

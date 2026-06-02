@@ -26,10 +26,12 @@ class BeaPanel : public EconPanelBase {
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
     void on_result(const QString& request_id, const services::EconomicsResult& result) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void on_category_changed(int index);
     void on_indicator_filter(const QString& text);
+    void retranslateUi() override;
 
     // Left sidebar
     QComboBox* category_combo_ = nullptr;
@@ -40,6 +42,12 @@ class BeaPanel : public EconPanelBase {
     QLineEdit* start_input_ = nullptr;
     QLineEdit* end_input_ = nullptr;
     QComboBox* freq_combo_ = nullptr;
+
+    // Cached for retranslateUi
+    QLabel* category_lbl_ = nullptr;
+    QLabel* from_lbl_ = nullptr;
+    QLabel* to_lbl_ = nullptr;
+    QLabel* notice_lbl_ = nullptr;
 
     struct IndicatorDef {
         QString name;

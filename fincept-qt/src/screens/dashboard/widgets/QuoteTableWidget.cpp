@@ -36,6 +36,12 @@ void QuoteTableWidget::on_theme_changed() {
     apply_styles();
 }
 
+void QuoteTableWidget::retranslateUi() {
+    BaseWidget::retranslateUi();
+    if (table_)
+        table_->set_headers({tr("SYMBOL"), tr("PRICE"), tr("CHG"), tr("CHG%")});
+}
+
 void QuoteTableWidget::showEvent(QShowEvent* e) {
     BaseWidget::showEvent(e);
     if (!hub_active_)

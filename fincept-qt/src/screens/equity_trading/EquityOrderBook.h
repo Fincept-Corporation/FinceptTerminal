@@ -3,6 +3,7 @@
 
 #include "screens/equity_trading/EquityTypes.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QMutex>
 #include <QPair>
@@ -31,11 +32,15 @@ class EquityOrderBook : public QWidget {
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void rebuild_cache();
+    void retranslateUi();
 
+    QLabel* title_label_ = nullptr;
     QLabel* spread_label_ = nullptr;
+    bool has_spread_data_ = false; // gates spread_label_ placeholder vs live data
     QWidget* canvas_ = nullptr;
 
     QVector<QPair<double, double>> bids_;

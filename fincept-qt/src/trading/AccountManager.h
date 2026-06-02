@@ -13,6 +13,10 @@
 #include <QString>
 #include <QVector>
 
+#include <atomic>
+
+class QTimer;
+
 namespace fincept::trading {
 
 class IBroker;
@@ -41,12 +45,27 @@ class AccountManager : public QObject {
     BrokerCredentials load_credentials(const QString& account_id) const;
     void clear_credentials(const QString& account_id);
 
+    // Purge only the live session (access_token + refresh_token + the
+    // token_expires_at hint) while KEEPING the reusable login material
+    // (api_key/api_secret + any stored TOTP/secret keys) so the user can
+    // re-authenticate easily. Used when a token is confirmed dead and cannot be
+    // silently refreshed — stops a stale token from lingering and from being
+    // re-validated on every launch/sweep.
+    void clear_session(const QString& account_id);
+
     // --- Connection state (memory-only) ---
     void set_connection_state(const QString& account_id, ConnectionState state, const QString& error = {});
     ConnectionState connection_state(const QString& account_id) const;
 
     // --- Convenience ---
     IBroker* broker_for(const QString& account_id) const;
+
+    // --- Live session monitoring ---
+    // Starts a periodic background sweep that pings each active account's broker
+    // to confirm its token is still valid, silently refreshing (or marking
+    // TokenExpired) as needed. Call once after QApplication is constructed.
+    // Also runs one sweep immediately. Safe to call more than once.
+    void start_session_monitor();
 
   signals:
     void account_added(const QString& account_id);
@@ -58,9 +77,12 @@ class AccountManager : public QObject {
     AccountManager();
     void load_from_db();
     void migrate_legacy_credentials();
+    void validate_all_sessions(); // timer slot — kicks one async validation sweep
 
     QHash<QString, BrokerAccount> accounts_;
     mutable QMutex mutex_;
+    QTimer* validator_timer_ = nullptr;
+    std::atomic<bool> sweeping_{false};
 };
 
 } // namespace fincept::trading

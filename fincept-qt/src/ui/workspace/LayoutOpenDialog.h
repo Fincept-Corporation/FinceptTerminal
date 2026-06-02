@@ -6,6 +6,7 @@
 #include "core/identity/Uuid.h"
 
 #include <QDialog>
+#include <QEvent>
 
 class QListWidget;
 
@@ -19,8 +20,15 @@ class LayoutOpenDialog : public QDialog {
     /// Selected layout id. Null until exec() returns Accepted.
     LayoutId selected_id() const { return selected_id_; }
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void populate();
+
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
 
     QListWidget* list_ = nullptr;
     LayoutId selected_id_;

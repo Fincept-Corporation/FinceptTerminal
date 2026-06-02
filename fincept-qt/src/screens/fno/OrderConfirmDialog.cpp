@@ -64,7 +64,7 @@ OrderConfirmDialog::OrderConfirmDialog(const Strategy& strategy, const OptionCha
                                        double premium, double max_profit, double max_loss,
                                        QWidget* parent)
     : QDialog(parent), strategy_(strategy), chain_(chain) {
-    setWindowTitle(QStringLiteral("Confirm Paper Orders"));
+    setWindowTitle(tr("Confirm Paper Orders"));
     setModal(true);
     resize(680, 520);
     setStyleSheet(QString("QDialog { background:%1; }"
@@ -105,22 +105,22 @@ void OrderConfirmDialog::setup_ui(double premium, double max_profit, double max_
     root->setSpacing(10);
 
     // ── Title ─────────────────────────────────────────────────────────────
-    auto* title = new QLabel(strategy_.name + "  —  paper trade preview", this);
-    title->setObjectName("confirmTitle");
-    auto* sub = new QLabel(
-        QString("%1   ·   Expiry %2   ·   Spot %3")
+    title_label_ = new QLabel(tr("%1  —  paper trade preview").arg(strategy_.name), this);
+    title_label_->setObjectName("confirmTitle");
+    sub_label_ = new QLabel(
+        tr("%1   ·   Expiry %2   ·   Spot %3")
             .arg(strategy_.underlying)
             .arg(strategy_.expiry)
             .arg(chain_.spot, 0, 'f', 2),
         this);
-    sub->setObjectName("confirmSub");
-    root->addWidget(title);
-    root->addWidget(sub);
+    sub_label_->setObjectName("confirmSub");
+    root->addWidget(title_label_);
+    root->addWidget(sub_label_);
 
     // ── Leg table ─────────────────────────────────────────────────────────
     legs_table_ = new QTableWidget(this);
     legs_table_->setColumnCount(5);
-    legs_table_->setHorizontalHeaderLabels({"Symbol", "B/S", "Qty", "Type", "Entry"});
+    legs_table_->setHorizontalHeaderLabels({tr("Symbol"), tr("B/S"), tr("Qty"), tr("Type"), tr("Entry")});
     legs_table_->verticalHeader()->setVisible(false);
     legs_table_->setSelectionMode(QAbstractItemView::NoSelection);
     legs_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -132,7 +132,7 @@ void OrderConfirmDialog::setup_ui(double premium, double max_profit, double max_
     root->addWidget(legs_table_, 1);
 
     // ── Summary block ─────────────────────────────────────────────────────
-    auto add_kv = [this](QHBoxLayout* lay, QLabel*& v_out, const QString& key) {
+    auto add_kv = [this](QHBoxLayout* lay, QLabel*& v_out, QLabel*& k_out, const QString& key) {
         auto* wrap = new QWidget(this);
         auto* w = new QVBoxLayout(wrap);
         w->setContentsMargins(0, 0, 0, 0);
@@ -145,13 +145,14 @@ void OrderConfirmDialog::setup_ui(double premium, double max_profit, double max_
         w->addWidget(v);
         lay->addWidget(wrap);
         v_out = v;
+        k_out = k;
     };
 
     auto* summary = new QHBoxLayout();
     summary->setSpacing(28);
-    add_kv(summary, lbl_premium_, "Net Premium");
-    add_kv(summary, lbl_max_pnl_, "Max Profit / Loss");
-    add_kv(summary, lbl_margin_, "Basket Margin");
+    add_kv(summary, lbl_premium_, key_premium_, tr("Net Premium"));
+    add_kv(summary, lbl_max_pnl_, key_max_pnl_, tr("Max Profit / Loss"));
+    add_kv(summary, lbl_margin_, key_margin_, tr("Basket Margin"));
     summary->addStretch(1);
     root->addLayout(summary);
 
@@ -161,16 +162,16 @@ void OrderConfirmDialog::setup_ui(double premium, double max_profit, double max_
     lbl_premium_->setObjectName(premium > 0 ? "confirmValueNeg"
                                 : premium < 0 ? "confirmValuePos" : "confirmValue");
     lbl_max_pnl_->setText(QString("%1  /  %2").arg(fmt_currency(max_profit), fmt_currency(max_loss)));
-    lbl_margin_->setText("Loading…");
+    lbl_margin_->setText(tr("Loading…"));
 
     // ── Buttons ───────────────────────────────────────────────────────────
     auto* btn_row = new QHBoxLayout();
     btn_row->setSpacing(8);
     btn_row->addStretch(1);
-    cancel_btn_ = new QPushButton("CANCEL", this);
+    cancel_btn_ = new QPushButton(tr("CANCEL"), this);
     cancel_btn_->setObjectName("confirmCancel");
     cancel_btn_->setCursor(Qt::PointingHandCursor);
-    place_btn_ = new QPushButton("PLACE PAPER ORDERS", this);
+    place_btn_ = new QPushButton(tr("PLACE PAPER ORDERS"), this);
     place_btn_->setObjectName("confirmPlace");
     place_btn_->setCursor(Qt::PointingHandCursor);
     btn_row->addWidget(cancel_btn_);
@@ -194,7 +195,7 @@ void OrderConfirmDialog::populate_legs() {
         };
         set_cell(0, leg.symbol);
         const bool buy = leg.lots >= 0;
-        set_cell(1, buy ? "BUY" : "SELL", buy ? QColor(colors::POSITIVE()) : QColor(colors::NEGATIVE()));
+        set_cell(1, buy ? tr("BUY") : tr("SELL"), buy ? QColor(colors::POSITIVE()) : QColor(colors::NEGATIVE()));
         set_cell(2, QString::number(std::abs(leg.lots) * leg.lot_size));
         set_cell(3, leg.type == InstrumentType::CE ? "CE"
                   : leg.type == InstrumentType::PE ? "PE"
@@ -206,7 +207,7 @@ void OrderConfirmDialog::populate_legs() {
 void OrderConfirmDialog::start_margin_fetch() {
     auto* broker = BrokerRegistry::instance().get(chain_.broker_id);
     if (!broker) {
-        on_margin_loaded(false, {}, "Broker " + chain_.broker_id + " not registered");
+        on_margin_loaded(false, {}, tr("Broker %1 not registered").arg(chain_.broker_id));
         return;
     }
     BrokerCredentials creds = broker->load_credentials();
@@ -219,7 +220,7 @@ void OrderConfirmDialog::start_margin_fetch() {
         orders.append(leg_to_unified(leg));
     }
     if (orders.isEmpty()) {
-        on_margin_loaded(false, {}, "no active legs");
+        on_margin_loaded(false, {}, tr("no active legs"));
         return;
     }
 
@@ -245,8 +246,8 @@ void OrderConfirmDialog::start_margin_fetch() {
     QTimer::singleShot(kMarginFetchTimeoutMs, this, [this]() {
         if (margin_)
             return;
-        if (lbl_margin_->text() == QStringLiteral("Loading…"))
-            lbl_margin_->setText("— (timeout)");
+        if (lbl_margin_->text() == tr("Loading…"))
+            lbl_margin_->setText(tr("— (timeout)"));
     });
 }
 
@@ -255,15 +256,39 @@ void OrderConfirmDialog::on_margin_loaded(bool ok, BasketMargin margin, QString 
         margin_ = margin;
         const double m = margin.final_margin > 0 ? margin.final_margin : margin.initial_margin;
         lbl_margin_->setText(QStringLiteral("₹ ") + fmt_currency(m));
-        lbl_margin_->setToolTip(QString("Initial: ₹ %1   ·   Final (after netting): ₹ %2")
+        lbl_margin_->setToolTip(tr("Initial: ₹ %1   ·   Final (after netting): ₹ %2")
                                     .arg(fmt_currency(margin.initial_margin),
                                          fmt_currency(margin.final_margin)));
     } else {
         lbl_margin_->setText("—");
-        lbl_margin_->setToolTip(error.isEmpty() ? QStringLiteral("Margin unavailable")
+        lbl_margin_->setToolTip(error.isEmpty() ? tr("Margin unavailable")
                                                  : error);
         LOG_DEBUG("FnoBuilder", QString("basket margin failed: %1").arg(error));
     }
+}
+
+void OrderConfirmDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void OrderConfirmDialog::retranslateUi() {
+    setWindowTitle(tr("Confirm Paper Orders"));
+    if (title_label_)
+        title_label_->setText(tr("%1  —  paper trade preview").arg(strategy_.name));
+    if (sub_label_)
+        sub_label_->setText(tr("%1   ·   Expiry %2   ·   Spot %3")
+                                .arg(strategy_.underlying)
+                                .arg(strategy_.expiry)
+                                .arg(chain_.spot, 0, 'f', 2));
+    if (legs_table_)
+        legs_table_->setHorizontalHeaderLabels({tr("Symbol"), tr("B/S"), tr("Qty"), tr("Type"), tr("Entry")});
+    if (key_premium_)  key_premium_->setText(tr("Net Premium").toUpper());
+    if (key_max_pnl_)  key_max_pnl_->setText(tr("Max Profit / Loss").toUpper());
+    if (key_margin_)   key_margin_->setText(tr("Basket Margin").toUpper());
+    if (cancel_btn_)   cancel_btn_->setText(tr("CANCEL"));
+    if (place_btn_)    place_btn_->setText(tr("PLACE PAPER ORDERS"));
 }
 
 } // namespace fincept::screens::fno

@@ -4,6 +4,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -24,6 +25,7 @@ class WorkflowsViewPanel : public QWidget {
 
   protected:
     void showEvent(QShowEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
@@ -32,24 +34,32 @@ class WorkflowsViewPanel : public QWidget {
     QWidget* build_output_panel();
     void setup_connections();
 
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
+
     void on_workflow_selected(int row);
     void run_current_workflow();
 
     // ── Left: catalog ────────────────────────────────────────────────────────
+    QLabel* catalog_title_ = nullptr;
     QListWidget* catalog_list_ = nullptr;
     QLabel* wf_desc_label_ = nullptr;
 
     // ── Center: params ───────────────────────────────────────────────────────
     QLabel* params_title_ = nullptr;
+    QLabel* llm_profile_title_ = nullptr;
     QComboBox* llm_profile_combo_ = nullptr;
     QLabel* llm_resolved_lbl_ = nullptr;
 
     // Symbol input (stock analysis)
     QWidget* symbol_row_ = nullptr;
+    QLabel* symbol_label_ = nullptr;
     QLineEdit* symbol_input_ = nullptr;
 
     // Custom query input (multi-query / custom)
     QWidget* query_row_ = nullptr;
+    QLabel* query_label_ = nullptr;
     QTextEdit* query_input_ = nullptr;
 
     QPushButton* run_btn_ = nullptr;
@@ -57,6 +67,8 @@ class WorkflowsViewPanel : public QWidget {
 
     // ── Right: output ────────────────────────────────────────────────────────
     QLabel* output_title_ = nullptr;
+    QLabel* output_log_title_ = nullptr;
+    QLabel* output_result_title_ = nullptr;
     QLabel* output_status_ = nullptr;
     QTextEdit* log_display_ = nullptr;
     QTextEdit* result_display_ = nullptr;

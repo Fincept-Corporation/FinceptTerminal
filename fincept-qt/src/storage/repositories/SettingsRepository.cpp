@@ -1,5 +1,8 @@
 #include "storage/repositories/SettingsRepository.h"
 
+#include "storage/sync/CloudSyncSettings.h"
+#include "storage/sync/SyncOutbox.h"
+
 namespace fincept {
 
 SettingsRepository& SettingsRepository::instance() {
@@ -17,8 +20,11 @@ Setting SettingsRepository::map_row(QSqlQuery& q) {
 }
 
 Result<void> SettingsRepository::set(const QString& key, const QString& value, const QString& category) {
-    return exec_write("INSERT OR REPLACE INTO settings (key, value, category) VALUES (?, ?, ?)",
-                      {key, value, category});
+    auto r = exec_write("INSERT OR REPLACE INTO settings (key, value, category) VALUES (?, ?, ?)",
+                        {key, value, category});
+    if (r.is_ok() && CloudSyncSettings::is_syncable_setting_key(key))
+        SyncOutbox::record("setting", key, "upsert");
+    return r;
 }
 
 Result<QString> SettingsRepository::get(const QString& key, const QString& default_val) {
@@ -33,7 +39,10 @@ Result<QString> SettingsRepository::get(const QString& key, const QString& defau
 }
 
 Result<void> SettingsRepository::remove(const QString& key) {
-    return exec_write("DELETE FROM settings WHERE key = ?", {key});
+    auto r = exec_write("DELETE FROM settings WHERE key = ?", {key});
+    if (r.is_ok() && CloudSyncSettings::is_syncable_setting_key(key))
+        SyncOutbox::record("setting", key, "delete");
+    return r;
 }
 
 Result<QVector<Setting>> SettingsRepository::get_by_category(const QString& category) {

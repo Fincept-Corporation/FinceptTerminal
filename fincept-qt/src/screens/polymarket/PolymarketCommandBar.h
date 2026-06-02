@@ -3,6 +3,7 @@
 #include "screens/polymarket/ExchangePresentation.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -56,11 +57,15 @@ class PolymarketCommandBar : public QWidget {
     void exchange_changed(const QString& exchange_id);
     void account_clicked();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
     void rebuild_view_pills();
     void apply_accent();
     void rebuild_categories();  // called when presentation or tag set changes
+    void retranslateUi();
 
     QComboBox* exchange_combo_ = nullptr;
     QPushButton* account_chip_ = nullptr;
@@ -80,6 +85,9 @@ class PolymarketCommandBar : public QWidget {
 
     ExchangePresentation presentation_ = ExchangePresentation::for_polymarket();
     QStringList current_tags_;
+    bool ws_connected_ = false;
+    bool account_connected_ = false;
+    QString account_label_;
 };
 
 } // namespace fincept::screens::polymarket

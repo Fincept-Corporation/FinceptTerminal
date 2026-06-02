@@ -35,7 +35,7 @@ MaxPainChart::MaxPainChart(QWidget* parent) : QChartView(parent) {
     chart_->setPlotAreaBackgroundBrush(QColor(colors::BG_BASE()));
     chart_->setPlotAreaBackgroundVisible(true);
     chart_->setMargins(QMargins(0, 4, 0, 0));
-    chart_->setTitle(QStringLiteral("Max Pain Profile"));
+    chart_->setTitle(tr("Max Pain Profile"));
     chart_->setTitleBrush(QColor(colors::TEXT_SECONDARY()));
     QFont title_font = chart_->titleFont();
     title_font.setPointSize(9);
@@ -44,8 +44,8 @@ MaxPainChart::MaxPainChart(QWidget* parent) : QChartView(parent) {
     chart_->legend()->setVisible(false);
     setChart(chart_);
 
-    others_set_ = new QBarSet(QStringLiteral("Pain"));
-    min_set_ = new QBarSet(QStringLiteral("Max Pain"));
+    others_set_ = new QBarSet(tr("Pain"));
+    min_set_ = new QBarSet(tr("Max Pain"));
     others_set_->setColor(with_alpha(colors::TEXT_TERTIARY(), 140));
     min_set_->setColor(with_alpha(colors::AMBER(), 220));
     others_set_->setBorderColor(Qt::transparent);
@@ -134,6 +134,18 @@ void MaxPainChart::set_chain(const OptionChain& chain) {
     for (double v : pain_vals)
         max_pain = std::max(max_pain, v);
     axis_y_->setRange(0, max_pain * 1.05);
+}
+
+void MaxPainChart::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QChartView::changeEvent(event);
+}
+
+void MaxPainChart::retranslateUi() {
+    if (chart_) chart_->setTitle(tr("Max Pain Profile"));
+    if (others_set_) others_set_->setLabel(tr("Pain"));
+    if (min_set_) min_set_->setLabel(tr("Max Pain"));
 }
 
 } // namespace fincept::screens::fno

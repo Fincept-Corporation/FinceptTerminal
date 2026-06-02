@@ -1,5 +1,6 @@
 // src/ui/widgets/algo/BacktestReportPanel.h
 #pragma once
+#include <QEvent>
 #include <QHash>
 #include <QJsonObject>
 #include <QWidget>
@@ -26,6 +27,9 @@ public:
     void set_result(const QJsonObject& payload);
     void clear();
 
+protected:
+    void changeEvent(QEvent* event) override;
+
 private:
     QWidget* build_kpis();
     QWidget* build_charts();
@@ -34,8 +38,16 @@ private:
     void add_kpi(QGridLayout* grid, int row, int col, const QString& key, const QString& title);
     void populate_heatmap(const QJsonObject& payload);
 
+    /// Re-apply tr() lookups to every fixed UI label whose widget we keep a handle
+    /// to (KPI titles, chart titles/series, heatmap title, trade-table headers).
+    /// Data-derived result text refreshes on the next set_result(). Called from
+    /// changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
+
     QHash<QString, QLabel*> kpi_val_;
     QHash<QString, QLabel*> kpi_sub_;
+    // KPI key -> fixed title label, so titles re-translate on language switch.
+    QHash<QString, QLabel*> kpi_title_;
 
     QChart* equity_chart_ = nullptr;
     QLineSeries* equity_series_ = nullptr;
@@ -43,6 +55,7 @@ private:
     QValueAxis* eq_x_ = nullptr;
     QValueAxis* eq_y_ = nullptr;
 
+    QLabel* heatmap_title_ = nullptr;
     QGridLayout* heatmap_grid_ = nullptr;
 
     QChart* dd_chart_ = nullptr;

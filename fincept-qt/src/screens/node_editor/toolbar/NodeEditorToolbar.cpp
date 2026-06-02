@@ -76,8 +76,42 @@ void NodeEditorToolbar::set_executing(bool running) {
                                  "QPushButton:hover { background: %2; color: %3; }")
                              .arg(ui::colors::NEGATIVE_BG(), ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY());
 
-    execute_btn_->setText(running ? "STOP" : "EXECUTE");
+    execute_btn_->setText(running ? tr("STOP") : tr("EXECUTE"));
     execute_btn_->setStyleSheet(running ? stop_style : accent_btn_style());
+}
+
+void NodeEditorToolbar::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void NodeEditorToolbar::retranslateUi() {
+    if (name_edit_) name_edit_->setPlaceholderText(tr("Untitled Workflow"));
+    if (status_badge_) status_badge_->setText(tr("DRAFT"));
+    if (undo_btn_) {
+        undo_btn_->setText(tr("UNDO"));
+        undo_btn_->setToolTip(tr("Undo last action (Ctrl+Z)"));
+    }
+    if (redo_btn_) {
+        redo_btn_->setText(tr("REDO"));
+        redo_btn_->setToolTip(tr("Redo last action (Ctrl+Y)"));
+    }
+    if (save_btn_) {
+        save_btn_->setText(tr("SAVE"));
+        save_btn_->setToolTip(tr("Save workflow to database"));
+    }
+    if (load_btn_) {
+        load_btn_->setText(tr("LOAD"));
+        load_btn_->setToolTip(tr("Load a saved workflow"));
+    }
+    if (clear_btn_) clear_btn_->setText(tr("CLEAR"));
+    if (import_btn_) import_btn_->setText(tr("IMPORT"));
+    if (export_btn_) export_btn_->setText(tr("EXPORT"));
+    if (templates_btn_) templates_btn_->setText(tr("TEMPLATES"));
+    if (deploy_btn_) deploy_btn_->setText(tr("DEPLOY"));
+    // Execute button text depends on running state; default to EXECUTE.
+    if (execute_btn_) execute_btn_->setText(tr("EXECUTE"));
 }
 
 void NodeEditorToolbar::build_ui() {
@@ -88,7 +122,7 @@ void NodeEditorToolbar::build_ui() {
     layout->setSpacing(6);
 
     // ── Workflow name ──────────────────────────────────────────────
-    name_edit_ = new QLineEdit("Untitled Workflow");
+    name_edit_ = new QLineEdit(tr("Untitled Workflow"));
     name_edit_->setFixedWidth(200);
     name_edit_->setStyleSheet(QString("QLineEdit {"
                                       "  background: transparent; color: %1; border: none;"
@@ -102,26 +136,26 @@ void NodeEditorToolbar::build_ui() {
     connect(name_edit_, &QLineEdit::textChanged, this, &NodeEditorToolbar::name_changed);
 
     // ── Status badge ───────────────────────────────────────────────
-    auto* status = new QLabel("DRAFT");
-    status->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;"
-                                  "font-weight: bold; letter-spacing: 0.5px; padding: 0 6px;")
-                              .arg(ui::colors::TEXT_TERTIARY()));
-    layout->addWidget(status);
+    status_badge_ = new QLabel(tr("DRAFT"));
+    status_badge_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;"
+                                         "font-weight: bold; letter-spacing: 0.5px; padding: 0 6px;")
+                                     .arg(ui::colors::TEXT_TERTIARY()));
+    layout->addWidget(status_badge_);
 
     layout->addStretch();
 
     // ── Undo / Redo ────────────────────────────────────────────────
-    undo_btn_ = new QPushButton("UNDO");
+    undo_btn_ = new QPushButton(tr("UNDO"));
     undo_btn_->setStyleSheet(btn_style());
     undo_btn_->setEnabled(false);
-    undo_btn_->setToolTip("Undo last action (Ctrl+Z)");
+    undo_btn_->setToolTip(tr("Undo last action (Ctrl+Z)"));
     layout->addWidget(undo_btn_);
     connect(undo_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::undo_clicked);
 
-    redo_btn_ = new QPushButton("REDO");
+    redo_btn_ = new QPushButton(tr("REDO"));
     redo_btn_->setStyleSheet(btn_style());
     redo_btn_->setEnabled(false);
-    redo_btn_->setToolTip("Redo last action (Ctrl+Y)");
+    redo_btn_->setToolTip(tr("Redo last action (Ctrl+Y)"));
     layout->addWidget(redo_btn_);
     connect(redo_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::redo_clicked);
 
@@ -132,22 +166,22 @@ void NodeEditorToolbar::build_ui() {
     layout->addWidget(sep1);
 
     // ── Save / Load / Clear ────────────────────────────────────────
-    auto* save_btn = new QPushButton("SAVE");
-    save_btn->setStyleSheet(btn_style());
-    save_btn->setToolTip("Save workflow to database");
-    layout->addWidget(save_btn);
-    connect(save_btn, &QPushButton::clicked, this, &NodeEditorToolbar::save_clicked);
+    save_btn_ = new QPushButton(tr("SAVE"));
+    save_btn_->setStyleSheet(btn_style());
+    save_btn_->setToolTip(tr("Save workflow to database"));
+    layout->addWidget(save_btn_);
+    connect(save_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::save_clicked);
 
-    auto* load_btn = new QPushButton("LOAD");
-    load_btn->setStyleSheet(btn_style());
-    load_btn->setToolTip("Load a saved workflow");
-    layout->addWidget(load_btn);
-    connect(load_btn, &QPushButton::clicked, this, &NodeEditorToolbar::load_clicked);
+    load_btn_ = new QPushButton(tr("LOAD"));
+    load_btn_->setStyleSheet(btn_style());
+    load_btn_->setToolTip(tr("Load a saved workflow"));
+    layout->addWidget(load_btn_);
+    connect(load_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::load_clicked);
 
-    auto* clear_btn = new QPushButton("CLEAR");
-    clear_btn->setStyleSheet(btn_style());
-    layout->addWidget(clear_btn);
-    connect(clear_btn, &QPushButton::clicked, this, &NodeEditorToolbar::clear_clicked);
+    clear_btn_ = new QPushButton(tr("CLEAR"));
+    clear_btn_->setStyleSheet(btn_style());
+    layout->addWidget(clear_btn_);
+    connect(clear_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::clear_clicked);
 
     // ── Separator ──────────────────────────────────────────────────
     auto* sep2 = new QFrame;
@@ -156,15 +190,15 @@ void NodeEditorToolbar::build_ui() {
     layout->addWidget(sep2);
 
     // ── Import / Export ────────────────────────────────────────────
-    auto* import_btn = new QPushButton("IMPORT");
-    import_btn->setStyleSheet(btn_style());
-    layout->addWidget(import_btn);
-    connect(import_btn, &QPushButton::clicked, this, &NodeEditorToolbar::import_clicked);
+    import_btn_ = new QPushButton(tr("IMPORT"));
+    import_btn_->setStyleSheet(btn_style());
+    layout->addWidget(import_btn_);
+    connect(import_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::import_clicked);
 
-    auto* export_btn = new QPushButton("EXPORT");
-    export_btn->setStyleSheet(btn_style());
-    layout->addWidget(export_btn);
-    connect(export_btn, &QPushButton::clicked, this, &NodeEditorToolbar::export_clicked);
+    export_btn_ = new QPushButton(tr("EXPORT"));
+    export_btn_->setStyleSheet(btn_style());
+    layout->addWidget(export_btn_);
+    connect(export_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::export_clicked);
 
     // ── Separator ──────────────────────────────────────────────────
     auto* sep3 = new QFrame;
@@ -173,16 +207,16 @@ void NodeEditorToolbar::build_ui() {
     layout->addWidget(sep3);
 
     // ── Templates ──────────────────────────────────────────────────
-    auto* templates_btn = new QPushButton("TEMPLATES");
-    templates_btn->setStyleSheet(btn_style());
-    layout->addWidget(templates_btn);
-    connect(templates_btn, &QPushButton::clicked, this, &NodeEditorToolbar::templates_clicked);
+    templates_btn_ = new QPushButton(tr("TEMPLATES"));
+    templates_btn_->setStyleSheet(btn_style());
+    layout->addWidget(templates_btn_);
+    connect(templates_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::templates_clicked);
 
     // ── Deploy ─────────────────────────────────────────────────────
-    auto* deploy_btn = new QPushButton("DEPLOY");
-    deploy_btn->setStyleSheet(btn_style());
-    layout->addWidget(deploy_btn);
-    connect(deploy_btn, &QPushButton::clicked, this, &NodeEditorToolbar::deploy_clicked);
+    deploy_btn_ = new QPushButton(tr("DEPLOY"));
+    deploy_btn_->setStyleSheet(btn_style());
+    layout->addWidget(deploy_btn_);
+    connect(deploy_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::deploy_clicked);
 
     // ── Separator ──────────────────────────────────────────────────
     auto* sep4 = new QFrame;
@@ -191,7 +225,7 @@ void NodeEditorToolbar::build_ui() {
     layout->addWidget(sep4);
 
     // ── Execute ────────────────────────────────────────────────────
-    execute_btn_ = new QPushButton("EXECUTE");
+    execute_btn_ = new QPushButton(tr("EXECUTE"));
     execute_btn_->setStyleSheet(accent_btn_style());
     layout->addWidget(execute_btn_);
     connect(execute_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::execute_clicked);

@@ -38,8 +38,10 @@ QString format_bytes(qint64 bytes) {
     return QString::number(bytes / 1073741824.0, 'f', 2) + " GB";
 }
 
-// Obsidian-standard panel with 34px header bar
-QFrame* make_panel(const QString& title, QWidget* status_widget = nullptr) {
+// Obsidian-standard panel with 34px header bar. title_out (when non-null)
+// receives the header QLabel so its text can be re-applied on a live language
+// switch.
+QFrame* make_panel(const QString& title, QWidget* status_widget = nullptr, QLabel** title_out = nullptr) {
     auto* panel = new QFrame;
     panel->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;}")
                              .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
@@ -66,11 +68,14 @@ QFrame* make_panel(const QString& title, QWidget* status_widget = nullptr) {
     }
     pvl->addWidget(hdr);
 
+    if (title_out)
+        *title_out = lbl;
     return panel;
 }
 
-// Obsidian-standard data row: LABEL ······ VALUE, 26px, bottom border
-QWidget* make_data_row(const QString& label_text, QLabel* value_lbl, bool alt_bg = false) {
+// Obsidian-standard data row: LABEL ······ VALUE, 26px, bottom border.
+// label_out (when non-null) receives the row's text QLabel.
+QWidget* make_data_row(const QString& label_text, QLabel* value_lbl, bool alt_bg = false, QLabel** label_out = nullptr) {
     auto* row = new QWidget(nullptr);
     row->setFixedHeight(26);
     row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
@@ -85,6 +90,8 @@ QWidget* make_data_row(const QString& label_text, QLabel* value_lbl, bool alt_bg
                            .arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(lbl);
     hl->addStretch();
+    if (label_out)
+        *label_out = lbl;
 
     value_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     value_lbl->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;")
@@ -138,7 +145,8 @@ QWidget* make_group_header(const QString& title) {
     return row;
 }
 
-QWidget* make_file_action_row(const QString& name, QLabel* size_lbl, QPushButton* btn, bool alt) {
+QWidget* make_file_action_row(const QString& name, QLabel* size_lbl, QPushButton* btn, bool alt,
+                              QLabel** label_out = nullptr) {
     auto* row = new QWidget(nullptr);
     row->setFixedHeight(26);
     row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
@@ -151,6 +159,8 @@ QWidget* make_file_action_row(const QString& name, QLabel* size_lbl, QPushButton
     auto* lbl = new QLabel(name);
     lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
     hl->addWidget(lbl, 1);
+    if (label_out)
+        *label_out = lbl;
 
     size_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     size_lbl->setFixedWidth(80);
@@ -199,29 +209,29 @@ void StorageSection::build_ui() {
     vl->setContentsMargins(14, 14, 14, 14);
     vl->setSpacing(10);
 
-    auto* t = new QLabel(tr("STORAGE & DATA MANAGEMENT"));
-    t->setStyleSheet(section_title_ss());
-    vl->addWidget(t);
+    page_title_ = new QLabel(tr("STORAGE & DATA MANAGEMENT"));
+    page_title_->setStyleSheet(section_title_ss());
+    vl->addWidget(page_title_);
     vl->addSpacing(4);
 
-    auto* info = new QLabel(tr("Manage all persistent data, databases, and files. "
+    page_info_ = new QLabel(tr("Manage all persistent data, databases, and files. "
                                "Execute SQL queries directly against terminal databases."));
-    info->setWordWrap(true);
-    info->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
-    vl->addWidget(info);
+    page_info_->setWordWrap(true);
+    page_info_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+    vl->addWidget(page_info_);
     vl->addSpacing(10);
 
     // ── SECTION 1: DISK USAGE ──────────────────────────────────────────────────
     {
-        auto* refresh_btn = new QPushButton("Refresh");
-        refresh_btn->setFixedSize(70, 22);
-        refresh_btn->setStyleSheet(
+        disk_refresh_btn_ = new QPushButton(tr("Refresh"));
+        disk_refresh_btn_->setFixedSize(70, 22);
+        disk_refresh_btn_->setStyleSheet(
             QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;border:1px solid %2;font-weight:700;}"
                     "QPushButton:hover{background:%1;color:%3;}")
                 .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
-        connect(refresh_btn, &QPushButton::clicked, this, [this]() { refresh_storage_stats(); });
+        connect(disk_refresh_btn_, &QPushButton::clicked, this, [this]() { refresh_storage_stats(); });
 
-        auto* panel = make_panel("DISK USAGE", refresh_btn);
+        auto* panel = make_panel(tr("DISK USAGE"), disk_refresh_btn_, &disk_panel_title_);
         auto* body = new QWidget(this);
         body->setStyleSheet("background:transparent;");
         auto* bvl = new QVBoxLayout(body);
@@ -234,7 +244,7 @@ void StorageSection::build_ui() {
         shl->setContentsMargins(10, 10, 10, 10);
         shl->setSpacing(10);
 
-        auto make_stat_box = [&](const QString& label, QLabel*& val_out) {
+        auto make_stat_box = [&](const QString& label, QLabel*& val_out, QLabel** label_out) {
             auto* box = new QFrame;
             box->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;}")
                                    .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
@@ -254,20 +264,22 @@ void StorageSection::build_ui() {
             ll->setStyleSheet(
                 QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
             bx->addWidget(ll);
+            if (label_out)
+                *label_out = ll;
 
             shl->addWidget(box, 1);
         };
 
-        make_stat_box("MAIN DB",    storage_main_db_);
-        make_stat_box("CACHE DB",   storage_cache_db_);
-        make_stat_box("LOG FILES",  storage_log_size_);
-        make_stat_box("WORKSPACES", storage_ws_size_);
-        make_stat_box("TOTAL",      storage_total_size_);
+        make_stat_box(tr("MAIN DB"),    storage_main_db_,    &main_db_box_lbl_);
+        make_stat_box(tr("CACHE DB"),   storage_cache_db_,   &cache_db_box_lbl_);
+        make_stat_box(tr("LOG FILES"),  storage_log_size_,   &log_box_lbl_);
+        make_stat_box(tr("WORKSPACES"), storage_ws_size_,    &ws_box_lbl_);
+        make_stat_box(tr("TOTAL"),      storage_total_size_, &total_box_lbl_);
 
         bvl->addWidget(stat_row);
 
         storage_count_ = new QLabel("—");
-        bvl->addWidget(make_data_row("Cache Entries", storage_count_, false));
+        bvl->addWidget(make_data_row(tr("Cache Entries"), storage_count_, false, &cache_entries_row_lbl_));
 
         static_cast<QVBoxLayout*>(panel->layout())->addWidget(body);
         vl->addWidget(panel);
@@ -277,7 +289,7 @@ void StorageSection::build_ui() {
 
     // ── SECTION 2: DATA CATEGORIES ─────────────────────────────────────────────
     {
-        auto* panel = make_panel("DATA CATEGORIES");
+        auto* panel = make_panel(tr("DATA CATEGORIES"), nullptr, &categories_panel_title_);
         auto* body = new QWidget(this);
         body->setStyleSheet("background:transparent;");
 
@@ -292,19 +304,19 @@ void StorageSection::build_ui() {
         auto* thl = new QHBoxLayout(th);
         thl->setContentsMargins(12, 0, 12, 0);
         thl->setSpacing(8);
-        auto* th1 = new QLabel("CATEGORY");
-        th1->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
-        thl->addWidget(th1, 1);
-        auto* th2 = new QLabel("ENTRIES");
-        th2->setFixedWidth(70);
-        th2->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        th2->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
-        thl->addWidget(th2);
-        auto* th3 = new QLabel("ACTION");
-        th3->setFixedWidth(56);
-        th3->setAlignment(Qt::AlignCenter);
-        th3->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
-        thl->addWidget(th3);
+        cat_hdr_category_ = new QLabel(tr("CATEGORY"));
+        cat_hdr_category_->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        thl->addWidget(cat_hdr_category_, 1);
+        cat_hdr_entries_ = new QLabel(tr("ENTRIES"));
+        cat_hdr_entries_->setFixedWidth(70);
+        cat_hdr_entries_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        cat_hdr_entries_->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        thl->addWidget(cat_hdr_entries_);
+        cat_hdr_action_ = new QLabel(tr("ACTION"));
+        cat_hdr_action_->setFixedWidth(56);
+        cat_hdr_action_->setAlignment(Qt::AlignCenter);
+        cat_hdr_action_->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        thl->addWidget(cat_hdr_action_);
         storage_categories_->addWidget(th);
 
         auto& sm = StorageManager::instance();
@@ -320,14 +332,14 @@ void StorageSection::build_ui() {
             }
 
             auto* count_lbl = new QLabel(QString::number(cat.count));
-            auto* clear_btn = new QPushButton("CLR");
+            auto* clear_btn = new QPushButton(tr("CLR"));
 
             QString cat_id = cat.id;
             QString cat_label = cat.label;
             connect(clear_btn, &QPushButton::clicked, this, [this, cat_id, cat_label, count_lbl]() {
-                auto answer = QMessageBox::warning(this, "Clear " + cat_label,
-                                                   "Permanently delete all " + cat_label.toLower() +
-                                                       "?\n\nThis cannot be undone.",
+                auto answer = QMessageBox::warning(this, tr("Clear %1").arg(cat_label),
+                                                   tr("Permanently delete all %1?\n\nThis cannot be undone.")
+                                                       .arg(cat_label.toLower()),
                                                    QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
                 if (answer != QMessageBox::Yes) return;
 
@@ -336,8 +348,8 @@ void StorageSection::build_ui() {
                     count_lbl->setText("0");
                     LOG_INFO("Settings", "Cleared: " + cat_label);
                 } else {
-                    QMessageBox::critical(this, "Error",
-                                          "Failed to clear " + cat_label + ":\n" + QString::fromStdString(r.error()));
+                    QMessageBox::critical(this, tr("Error"),
+                                          tr("Failed to clear %1:\n%2").arg(cat_label, QString::fromStdString(r.error())));
                 }
                 refresh_storage_stats();
             });
@@ -354,7 +366,7 @@ void StorageSection::build_ui() {
 
     // ── SECTION 3: FILE & STATE MANAGEMENT ─────────────────────────────────────
     {
-        auto* panel = make_panel("FILE & STATE MANAGEMENT");
+        auto* panel = make_panel(tr("FILE & STATE MANAGEMENT"), nullptr, &files_panel_title_);
         auto* body = new QWidget(this);
         body->setStyleSheet("background:transparent;");
         auto* bvl = new QVBoxLayout(body);
@@ -368,24 +380,25 @@ void StorageSection::build_ui() {
         auto* thl = new QHBoxLayout(th);
         thl->setContentsMargins(12, 0, 12, 0);
         thl->setSpacing(8);
-        auto* th1 = new QLabel("STORE");
-        th1->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
-        thl->addWidget(th1, 1);
-        auto* th2 = new QLabel("SIZE");
-        th2->setFixedWidth(80);
-        th2->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        th2->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
-        thl->addWidget(th2);
-        auto* th3 = new QLabel("ACTION");
-        th3->setFixedWidth(56);
-        th3->setAlignment(Qt::AlignCenter);
-        th3->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
-        thl->addWidget(th3);
+        file_hdr_store_ = new QLabel(tr("STORE"));
+        file_hdr_store_->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        thl->addWidget(file_hdr_store_, 1);
+        file_hdr_size_ = new QLabel(tr("SIZE"));
+        file_hdr_size_->setFixedWidth(80);
+        file_hdr_size_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        file_hdr_size_->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        thl->addWidget(file_hdr_size_);
+        file_hdr_action_ = new QLabel(tr("ACTION"));
+        file_hdr_action_->setFixedWidth(56);
+        file_hdr_action_->setAlignment(Qt::AlignCenter);
+        file_hdr_action_->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        thl->addWidget(file_hdr_action_);
         bvl->addWidget(th);
 
         auto add_file_row = [&](const QString& name, QLabel* size_lbl, const QString& confirm_title,
-                                const QString& confirm_msg, std::function<void()> action, bool alt) {
-            auto* btn = new QPushButton("CLR");
+                                const QString& confirm_msg, std::function<void()> action, bool alt,
+                                QLabel** label_out) {
+            auto* btn = new QPushButton(tr("CLR"));
             connect(btn, &QPushButton::clicked, this, [this, confirm_title, confirm_msg, action]() {
                 auto answer = QMessageBox::warning(this, confirm_title, confirm_msg,
                                                    QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
@@ -393,27 +406,27 @@ void StorageSection::build_ui() {
                 action();
                 refresh_storage_stats();
             });
-            bvl->addWidget(make_file_action_row(name, size_lbl, btn, alt));
+            bvl->addWidget(make_file_action_row(name, size_lbl, btn, alt, label_out));
         };
 
         auto* log_sz = new QLabel("—");
         auto* ws_sz  = new QLabel("—");
-        auto* qs_lbl = new QLabel("Registry");
+        auto* qs_lbl = new QLabel(tr("Registry"));
 
-        add_file_row("Log Files", log_sz, "Clear Logs",
-                     "Clear all application log files?\nCurrent log data will be lost.",
+        add_file_row(tr("Log Files"), log_sz, tr("Clear Logs"),
+                     tr("Clear all application log files?\nCurrent log data will be lost."),
                      []() { StorageManager::instance().clear_log_files(); LOG_INFO("Settings", "Logs cleared"); },
-                     false);
+                     false, &file_row_logs_lbl_);
 
-        add_file_row("Workspace Files (.fwsp)", ws_sz, "Delete Workspaces",
-                     "Delete all saved workspace files?\nThis cannot be undone.",
+        add_file_row(tr("Workspace Files (.fwsp)"), ws_sz, tr("Delete Workspaces"),
+                     tr("Delete all saved workspace files?\nThis cannot be undone."),
                      []() { StorageManager::instance().clear_workspace_files(); LOG_INFO("Settings", "Workspaces deleted"); },
-                     true);
+                     true, &file_row_ws_lbl_);
 
-        add_file_row("Window & UI State", qs_lbl, "Reset UI State",
-                     "Reset all window positions, dock layouts, and perspectives?\nTakes effect on next restart.",
+        add_file_row(tr("Window & UI State"), qs_lbl, tr("Reset UI State"),
+                     tr("Reset all window positions, dock layouts, and perspectives?\nTakes effect on next restart."),
                      []() { StorageManager::instance().clear_qsettings(); LOG_INFO("Settings", "QSettings cleared"); },
-                     false);
+                     false, &file_row_ui_lbl_);
 
         // Cache subcategories
         auto* cache_row = new QWidget(this);
@@ -423,10 +436,10 @@ void StorageSection::build_ui() {
         auto* chl = new QHBoxLayout(cache_row);
         chl->setContentsMargins(12, 0, 12, 0);
         chl->setSpacing(4);
-        auto* cache_label = new QLabel("Cache:");
-        cache_label->setStyleSheet(
+        cache_subcat_lbl_ = new QLabel(tr("Cache:"));
+        cache_subcat_lbl_->setStyleSheet(
             QString("color:%1;font-weight:600;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
-        chl->addWidget(cache_label);
+        chl->addWidget(cache_subcat_lbl_);
 
         static const QStringList CACHE_CATS = {"market_data", "news", "quotes", "charts", "general"};
         for (const QString& cat : CACHE_CATS) {
@@ -455,18 +468,18 @@ void StorageSection::build_ui() {
 
     // ── SECTION 4: SQL CONSOLE ─────────────────────────────────────────────────
     {
-        auto* panel = make_panel("SQL CONSOLE");
+        auto* panel = make_panel(tr("SQL CONSOLE"), nullptr, &sql_panel_title_);
         auto* body = new QWidget(this);
         body->setStyleSheet("background:transparent;");
         auto* bvl = new QVBoxLayout(body);
         bvl->setContentsMargins(10, 8, 10, 8);
         bvl->setSpacing(6);
 
-        auto* hint = new QLabel("Execute SQL queries directly against terminal databases. "
-                                "Use SELECT to inspect data, or INSERT/UPDATE/DELETE to modify.");
-        hint->setWordWrap(true);
-        hint->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
-        bvl->addWidget(hint);
+        sql_hint_lbl_ = new QLabel(tr("Execute SQL queries directly against terminal databases. "
+                                      "Use SELECT to inspect data, or INSERT/UPDATE/DELETE to modify."));
+        sql_hint_lbl_->setWordWrap(true);
+        sql_hint_lbl_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        bvl->addWidget(sql_hint_lbl_);
 
         auto* input_row = new QWidget(this);
         input_row->setStyleSheet("background:transparent;");
@@ -486,17 +499,17 @@ void StorageSection::build_ui() {
         sql_input_->setStyleSheet(input_ss());
         irl->addWidget(sql_input_, 1);
 
-        auto* exec_btn = new QPushButton("EXEC");
-        exec_btn->setFixedSize(56, 28);
-        exec_btn->setStyleSheet(
+        sql_exec_btn_ = new QPushButton(tr("EXEC"));
+        sql_exec_btn_->setFixedSize(56, 28);
+        sql_exec_btn_->setStyleSheet(
             QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;border:1px solid %2;font-weight:700;}"
                     "QPushButton:hover{background:%1;color:%3;}")
                 .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
-        irl->addWidget(exec_btn);
+        irl->addWidget(sql_exec_btn_);
 
         bvl->addWidget(input_row);
 
-        sql_status_ = new QLabel("Ready");
+        sql_status_ = new QLabel(tr("Ready"));
         sql_status_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
         bvl->addWidget(sql_status_);
 
@@ -529,9 +542,9 @@ void StorageSection::build_ui() {
         auto* trhl = new QHBoxLayout(tables_row);
         trhl->setContentsMargins(0, 0, 0, 0);
         trhl->setSpacing(4);
-        auto* trl = new QLabel("Quick:");
-        trl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
-        trhl->addWidget(trl);
+        sql_quick_lbl_ = new QLabel(tr("Quick:"));
+        sql_quick_lbl_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        trhl->addWidget(sql_quick_lbl_);
 
         static const QStringList QUICK_TABLES = {"chat_sessions", "news_articles", "financial_notes", "portfolios",
                                                  "watchlists",    "pt_portfolios", "workflows",       "settings"};
@@ -570,11 +583,11 @@ void StorageSection::build_ui() {
                             upper.startsWith("DROP")   || upper.startsWith("ALTER")  || upper.startsWith("CREATE");
 
             if (is_write) {
-                auto answer = QMessageBox::warning(this, "Execute Write Query",
-                                                   "This will modify the database:\n\n" + sql + "\n\nContinue?",
+                auto answer = QMessageBox::warning(this, tr("Execute Write Query"),
+                                                   tr("This will modify the database:\n\n%1\n\nContinue?").arg(sql),
                                                    QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
                 if (answer != QMessageBox::Yes) {
-                    sql_status_->setText("Cancelled");
+                    sql_status_->setText(tr("Cancelled"));
                     sql_status_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::WARNING()));
                     return;
                 }
@@ -582,7 +595,7 @@ void StorageSection::build_ui() {
 
             QSqlQuery query(use_cache ? CacheDatabase::instance().raw_db() : Database::instance().raw_db());
             if (!query.exec(sql)) {
-                sql_status_->setText("Error: " + query.lastError().text());
+                sql_status_->setText(tr("Error: %1").arg(query.lastError().text()));
                 sql_status_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::NEGATIVE()));
                 LOG_ERROR("SQL Console", "Query failed: " + query.lastError().text());
                 return;
@@ -590,7 +603,7 @@ void StorageSection::build_ui() {
 
             if (is_write) {
                 int affected = query.numRowsAffected();
-                sql_status_->setText(QString("OK — %1 row(s) affected").arg(affected));
+                sql_status_->setText(tr("OK — %1 row(s) affected").arg(affected));
                 sql_status_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::POSITIVE()));
                 refresh_storage_stats();
                 LOG_INFO("SQL Console", QString("Write query: %1 rows affected").arg(affected));
@@ -600,7 +613,7 @@ void StorageSection::build_ui() {
             auto rec = query.record();
             int cols = rec.count();
             if (cols == 0) {
-                sql_status_->setText("OK — no columns returned");
+                sql_status_->setText(tr("OK — no columns returned"));
                 sql_status_->setStyleSheet(
                     QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
                 return;
@@ -642,14 +655,14 @@ void StorageSection::build_ui() {
                 ++row_count;
             }
 
-            sql_status_->setText(QString("OK — %1 row(s) returned%2")
+            sql_status_->setText(tr("OK — %1 row(s) returned%2")
                                      .arg(row_count)
-                                     .arg(row_count >= 100 ? " (limited to 100)" : ""));
+                                     .arg(row_count >= 100 ? tr(" (limited to 100)") : QString()));
             sql_status_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::POSITIVE()));
         };
 
-        connect(exec_btn,    &QPushButton::clicked,    this, execute_sql);
-        connect(sql_input_,  &QLineEdit::returnPressed, this, execute_sql);
+        connect(sql_exec_btn_, &QPushButton::clicked,    this, execute_sql);
+        connect(sql_input_,    &QLineEdit::returnPressed, this, execute_sql);
 
         static_cast<QVBoxLayout*>(panel->layout())->addWidget(body);
         vl->addWidget(panel);
@@ -672,10 +685,10 @@ void StorageSection::build_ui() {
                                .arg(ui::colors::NEGATIVE_DIM()));
         auto* hhl = new QHBoxLayout(hdr);
         hhl->setContentsMargins(12, 0, 12, 0);
-        auto* hlbl = new QLabel("DANGER ZONE");
-        hlbl->setStyleSheet(QString("color:%1;font-weight:700;letter-spacing:0.5px;background:transparent;")
+        danger_panel_title_ = new QLabel(tr("DANGER ZONE"));
+        danger_panel_title_->setStyleSheet(QString("color:%1;font-weight:700;letter-spacing:0.5px;background:transparent;")
                                 .arg(ui::colors::NEGATIVE()));
-        hhl->addWidget(hlbl);
+        hhl->addWidget(danger_panel_title_);
         pvl->addWidget(hdr);
 
         auto* body = new QWidget(this);
@@ -694,30 +707,30 @@ void StorageSection::build_ui() {
         auto* cd_vl = new QVBoxLayout(cache_desc);
         cd_vl->setContentsMargins(0, 0, 0, 0);
         cd_vl->setSpacing(2);
-        auto* cd1 = new QLabel("Clear All Cache");
-        cd1->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
-        cd_vl->addWidget(cd1);
-        auto* cd2 = new QLabel("Delete all temporary cached data. Will be re-fetched on next access.");
-        cd2->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
-        cd_vl->addWidget(cd2);
+        clear_cache_title_ = new QLabel(tr("Clear All Cache"));
+        clear_cache_title_->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
+        cd_vl->addWidget(clear_cache_title_);
+        clear_cache_desc_ = new QLabel(tr("Delete all temporary cached data. Will be re-fetched on next access."));
+        clear_cache_desc_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        cd_vl->addWidget(clear_cache_desc_);
         cr_hl->addWidget(cache_desc, 1);
-        auto* cache_btn = new QPushButton("CLEAR CACHE");
-        cache_btn->setFixedSize(110, 26);
-        cache_btn->setStyleSheet(
+        clear_cache_btn_ = new QPushButton(tr("CLEAR CACHE"));
+        clear_cache_btn_->setFixedSize(110, 26);
+        clear_cache_btn_->setStyleSheet(
             QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid %3;font-weight:700;}"
                     "QPushButton:hover{background:%1;color:%2;}")
                 .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE_DIM()));
-        connect(cache_btn, &QPushButton::clicked, this, [this]() {
+        connect(clear_cache_btn_, &QPushButton::clicked, this, [this]() {
             auto answer = QMessageBox::warning(
-                this, "Clear All Cache",
-                "Delete all temporary cached data?\nData will be re-fetched on next access.",
+                this, tr("Clear All Cache"),
+                tr("Delete all temporary cached data?\nData will be re-fetched on next access."),
                 QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
             if (answer != QMessageBox::Yes) return;
             CacheManager::instance().clear();
             refresh_storage_stats();
             LOG_INFO("Settings", "All cache cleared");
         });
-        cr_hl->addWidget(cache_btn);
+        cr_hl->addWidget(clear_cache_btn_);
         bvl->addWidget(cache_row);
 
         bvl->addWidget(make_sep());
@@ -732,37 +745,37 @@ void StorageSection::build_ui() {
         auto* nd_vl = new QVBoxLayout(nuke_desc);
         nd_vl->setContentsMargins(0, 0, 0, 0);
         nd_vl->setSpacing(2);
-        auto* nd1 = new QLabel("Clear ALL User Data");
-        nd1->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::NEGATIVE()));
-        nd_vl->addWidget(nd1);
-        auto* nd2 = new QLabel("Permanently delete all databases, files, cache, and UI state. OS keychain is preserved.");
-        nd2->setWordWrap(true);
-        nd2->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
-        nd_vl->addWidget(nd2);
+        nuke_title_ = new QLabel(tr("Clear ALL User Data"));
+        nuke_title_->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::NEGATIVE()));
+        nd_vl->addWidget(nuke_title_);
+        nuke_desc_ = new QLabel(tr("Permanently delete all databases, files, cache, and UI state. OS keychain is preserved."));
+        nuke_desc_->setWordWrap(true);
+        nuke_desc_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        nd_vl->addWidget(nuke_desc_);
         nr_hl->addWidget(nuke_desc, 1);
-        auto* nuke_btn = new QPushButton("DELETE ALL");
-        nuke_btn->setFixedSize(110, 26);
-        nuke_btn->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:2px solid %1;font-weight:700;}"
+        nuke_btn_ = new QPushButton(tr("DELETE ALL"));
+        nuke_btn_->setFixedSize(110, 26);
+        nuke_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:2px solid %1;font-weight:700;}"
                                         "QPushButton:hover{background:%2;color:%3;}")
                                     .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_BASE()));
-        connect(nuke_btn, &QPushButton::clicked, this, [this]() {
-            auto a1 = QMessageBox::critical(this, "Clear ALL User Data",
-                                            "WARNING: This will permanently delete ALL data:\n\n"
-                                            "  Chat history, notes, reports, watchlists\n"
-                                            "  Portfolios, transactions, paper trades\n"
-                                            "  Workflows, dashboard layouts\n"
-                                            "  News articles, RSS feeds, monitors\n"
-                                            "  Data sources, MCP servers\n"
-                                            "  Agent configs, LLM configs & profiles\n"
-                                            "  App settings, credentials, key-value storage\n"
-                                            "  All cache, log files, workspaces, UI state\n\n"
-                                            "OS keychain credentials are NOT affected.\n"
-                                            "This action CANNOT be undone.",
+        connect(nuke_btn_, &QPushButton::clicked, this, [this]() {
+            auto a1 = QMessageBox::critical(this, tr("Clear ALL User Data"),
+                                            tr("WARNING: This will permanently delete ALL data:\n\n"
+                                               "  Chat history, notes, reports, watchlists\n"
+                                               "  Portfolios, transactions, paper trades\n"
+                                               "  Workflows, dashboard layouts\n"
+                                               "  News articles, RSS feeds, monitors\n"
+                                               "  Data sources, MCP servers\n"
+                                               "  Agent configs, LLM configs & profiles\n"
+                                               "  App settings, credentials, key-value storage\n"
+                                               "  All cache, log files, workspaces, UI state\n\n"
+                                               "OS keychain credentials are NOT affected.\n"
+                                               "This action CANNOT be undone."),
                                             QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
             if (a1 != QMessageBox::Yes) return;
 
-            auto a2 = QMessageBox::critical(this, "Final Confirmation",
-                                            "ALL data will be permanently deleted.\nAre you absolutely sure?",
+            auto a2 = QMessageBox::critical(this, tr("Final Confirmation"),
+                                            tr("ALL data will be permanently deleted.\nAre you absolutely sure?"),
                                             QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
             if (a2 != QMessageBox::Yes) return;
 
@@ -774,7 +787,7 @@ void StorageSection::build_ui() {
             refresh_storage_stats();
             LOG_INFO("Settings", "ALL user data cleared");
         });
-        nr_hl->addWidget(nuke_btn);
+        nr_hl->addWidget(nuke_btn_);
         bvl->addWidget(nuke_row);
 
         pvl->addWidget(body);
@@ -812,6 +825,64 @@ void StorageSection::refresh_storage_stats() {
             ++stat_idx;
         }
     }
+}
+
+void StorageSection::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void StorageSection::retranslateUi() {
+    // Page header.
+    if (page_title_) page_title_->setText(tr("STORAGE & DATA MANAGEMENT"));
+    if (page_info_)
+        page_info_->setText(tr("Manage all persistent data, databases, and files. "
+                               "Execute SQL queries directly against terminal databases."));
+
+    // Disk usage panel.
+    if (disk_refresh_btn_) disk_refresh_btn_->setText(tr("Refresh"));
+    if (disk_panel_title_) disk_panel_title_->setText(tr("DISK USAGE"));
+    if (main_db_box_lbl_)  main_db_box_lbl_->setText(tr("MAIN DB"));
+    if (cache_db_box_lbl_) cache_db_box_lbl_->setText(tr("CACHE DB"));
+    if (log_box_lbl_)      log_box_lbl_->setText(tr("LOG FILES"));
+    if (ws_box_lbl_)       ws_box_lbl_->setText(tr("WORKSPACES"));
+    if (total_box_lbl_)    total_box_lbl_->setText(tr("TOTAL"));
+    if (cache_entries_row_lbl_) cache_entries_row_lbl_->setText(tr("Cache Entries"));
+
+    // Data categories panel.
+    if (categories_panel_title_) categories_panel_title_->setText(tr("DATA CATEGORIES"));
+    if (cat_hdr_category_) cat_hdr_category_->setText(tr("CATEGORY"));
+    if (cat_hdr_entries_)  cat_hdr_entries_->setText(tr("ENTRIES"));
+    if (cat_hdr_action_)   cat_hdr_action_->setText(tr("ACTION"));
+
+    // File & state management panel.
+    if (files_panel_title_) files_panel_title_->setText(tr("FILE & STATE MANAGEMENT"));
+    if (file_hdr_store_)    file_hdr_store_->setText(tr("STORE"));
+    if (file_hdr_size_)     file_hdr_size_->setText(tr("SIZE"));
+    if (file_hdr_action_)   file_hdr_action_->setText(tr("ACTION"));
+    if (file_row_logs_lbl_) file_row_logs_lbl_->setText(tr("Log Files"));
+    if (file_row_ws_lbl_)   file_row_ws_lbl_->setText(tr("Workspace Files (.fwsp)"));
+    if (file_row_ui_lbl_)   file_row_ui_lbl_->setText(tr("Window & UI State"));
+    if (cache_subcat_lbl_)  cache_subcat_lbl_->setText(tr("Cache:"));
+
+    // SQL console panel.
+    if (sql_panel_title_) sql_panel_title_->setText(tr("SQL CONSOLE"));
+    if (sql_hint_lbl_)
+        sql_hint_lbl_->setText(tr("Execute SQL queries directly against terminal databases. "
+                                  "Use SELECT to inspect data, or INSERT/UPDATE/DELETE to modify."));
+    if (sql_exec_btn_)  sql_exec_btn_->setText(tr("EXEC"));
+    if (sql_quick_lbl_) sql_quick_lbl_->setText(tr("Quick:"));
+    // sql_status_ reflects live query state — leave it as-is.
+
+    // Danger zone panel.
+    if (danger_panel_title_) danger_panel_title_->setText(tr("DANGER ZONE"));
+    if (clear_cache_title_)  clear_cache_title_->setText(tr("Clear All Cache"));
+    if (clear_cache_desc_)   clear_cache_desc_->setText(tr("Delete all temporary cached data. Will be re-fetched on next access."));
+    if (clear_cache_btn_)    clear_cache_btn_->setText(tr("CLEAR CACHE"));
+    if (nuke_title_)         nuke_title_->setText(tr("Clear ALL User Data"));
+    if (nuke_desc_)          nuke_desc_->setText(tr("Permanently delete all databases, files, cache, and UI state. OS keychain is preserved."));
+    if (nuke_btn_)           nuke_btn_->setText(tr("DELETE ALL"));
 }
 
 } // namespace fincept::screens

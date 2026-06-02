@@ -1,5 +1,7 @@
 #include "storage/repositories/ReportRepository.h"
 
+#include "storage/sync/SyncOutbox.h"
+
 namespace fincept {
 
 ReportRepository& ReportRepository::instance() {
@@ -18,7 +20,10 @@ ReportTemplate ReportRepository::map_template(QSqlQuery& q) {
 }
 
 Result<qint64> ReportRepository::create(const QString& title, const QString& content_json) {
-    return exec_insert("INSERT INTO reports (title, content_json) VALUES (?, ?)", {title, content_json});
+    auto r = exec_insert("INSERT INTO reports (title, content_json) VALUES (?, ?)", {title, content_json});
+    if (r.is_ok())
+        SyncOutbox::record("report", QString::number(r.value()), "create");
+    return r;
 }
 
 Result<Report> ReportRepository::get(int id) {
@@ -32,12 +37,18 @@ Result<QVector<Report>> ReportRepository::list_all() {
 }
 
 Result<void> ReportRepository::update(int id, const QString& title, const QString& content_json) {
-    return exec_write("UPDATE reports SET title = ?, content_json = ?, updated_at = datetime('now') WHERE id = ?",
-                      {title, content_json, id});
+    auto r = exec_write("UPDATE reports SET title = ?, content_json = ?, updated_at = datetime('now') WHERE id = ?",
+                        {title, content_json, id});
+    if (r.is_ok())
+        SyncOutbox::record("report", QString::number(id), "update");
+    return r;
 }
 
 Result<void> ReportRepository::remove(int id) {
-    return exec_write("DELETE FROM reports WHERE id = ?", {id});
+    auto r = exec_write("DELETE FROM reports WHERE id = ?", {id});
+    if (r.is_ok())
+        SyncOutbox::record("report", QString::number(id), "delete");
+    return r;
 }
 
 Result<QVector<ReportTemplate>> ReportRepository::list_templates() {

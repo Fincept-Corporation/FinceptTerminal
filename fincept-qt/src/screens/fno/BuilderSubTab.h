@@ -13,6 +13,7 @@
 #include "services/options/OptionChainTypes.h"
 #include "services/options/StrategyTemplates.h"
 
+#include <QEvent>
 #include <QPointer>
 #include <QString>
 #include <QVariantMap>
@@ -44,6 +45,7 @@ class BuilderSubTab : public QWidget {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_template_chosen(const QString& template_id,
@@ -55,6 +57,7 @@ class BuilderSubTab : public QWidget {
 
   private:
     void setup_ui();
+    void retranslateUi();
 
     void on_chain_published(const QString& topic, const QVariant& v);
     void refresh_analytics();
@@ -73,6 +76,12 @@ class BuilderSubTab : public QWidget {
     QLabel* pcr_label_ = nullptr;
     QLabel* ce_oi_label_ = nullptr;
     QLabel* pe_oi_label_ = nullptr;
+
+    // Footer field labels (cached for retranslateUi)
+    QLabel* target_label_ = nullptr;
+    QLabel* pcr_key_ = nullptr;
+    QLabel* ce_key_ = nullptr;
+    QLabel* pe_key_ = nullptr;
 
     fincept::services::options::OptionChain last_chain_;
     bool chain_subscribed_ = false;

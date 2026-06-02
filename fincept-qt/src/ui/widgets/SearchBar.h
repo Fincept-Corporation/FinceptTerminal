@@ -1,4 +1,5 @@
 #pragma once
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QLineEdit>
 #include <QWidget>
@@ -17,7 +18,13 @@ class SearchBar : public QWidget {
     void search_submitted(const QString& query);
     void text_changed(const QString& text);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    /// Re-apply tr() lookups to the input placeholder after a language switch.
+    void retranslateUi();
+
     QLineEdit* input_ = nullptr;
 };
 

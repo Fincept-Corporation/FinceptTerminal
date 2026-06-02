@@ -4,6 +4,7 @@
 #include "services/news/NewsNlpService.h"
 #include "services/news/NewsService.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QPushButton>
 #include <QStackedWidget>
@@ -33,6 +34,9 @@ class NewsDetailPanel : public QWidget {
     void close_panel();
     bool is_panel_open() const { return panel_open_; }
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   signals:
     void analyze_requested(const QString& article_url);
     void related_article_clicked(const services::NewsArticle& article);
@@ -43,7 +47,20 @@ class NewsDetailPanel : public QWidget {
     QWidget* build_empty_state();
     QWidget* build_content_view();
 
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
+
     bool panel_open_ = false;
+
+    // Static header / empty-state / section titles (cached for retranslateUi).
+    QLabel* header_title_ = nullptr;
+    QLabel* empty_label_ = nullptr;
+    QLabel* ai_title_ = nullptr;
+    QLabel* monitor_title_ = nullptr;
+    QLabel* related_title_ = nullptr;
+    QLabel* entities_section_title_ = nullptr;
+    QLabel* infra_title_ = nullptr;
 
     // Article section
     QLabel* headline_label_ = nullptr;

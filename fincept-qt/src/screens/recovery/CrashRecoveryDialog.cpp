@@ -71,12 +71,12 @@ void CrashRecoveryDialog::build_ui() {
     heading_ = new QLabel(tr("RECOVER PREVIOUS SESSION"), title_bar);
     heading_->setObjectName(QStringLiteral("recoveryHeading"));
 
-    auto* badge = new QLabel(tr("UNCLEAN SHUTDOWN DETECTED"), title_bar);
-    badge->setObjectName(QStringLiteral("recoveryBadge"));
+    badge_ = new QLabel(tr("UNCLEAN SHUTDOWN DETECTED"), title_bar);
+    badge_->setObjectName(QStringLiteral("recoveryBadge"));
 
     tbl->addWidget(heading_);
     tbl->addStretch();
-    tbl->addWidget(badge);
+    tbl->addWidget(badge_);
     root->addWidget(title_bar);
 
     // ── Body panel ───────────────────────────────────────────────────────
@@ -100,13 +100,13 @@ void CrashRecoveryDialog::build_ui() {
     col_header->setFixedHeight(24);
     auto* chl = new QHBoxLayout(col_header);
     chl->setContentsMargins(10, 0, 10, 0);
-    auto* col_name = new QLabel(tr("SESSION"), col_header);
-    auto* col_meta = new QLabel(tr("WHEN"), col_header);
-    col_name->setObjectName(QStringLiteral("recoveryColLabel"));
-    col_meta->setObjectName(QStringLiteral("recoveryColLabel"));
-    chl->addWidget(col_name);
+    col_name_ = new QLabel(tr("SESSION"), col_header);
+    col_meta_ = new QLabel(tr("WHEN"), col_header);
+    col_name_->setObjectName(QStringLiteral("recoveryColLabel"));
+    col_meta_->setObjectName(QStringLiteral("recoveryColLabel"));
+    chl->addWidget(col_name_);
     chl->addStretch();
-    chl->addWidget(col_meta);
+    chl->addWidget(col_meta_);
     bl->addWidget(col_header);
 
     list_ = new QListWidget(body);
@@ -169,6 +169,33 @@ void CrashRecoveryDialog::build_ui() {
     abl->addWidget(restore_button_);
 
     root->addWidget(action_bar);
+}
+
+void CrashRecoveryDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void CrashRecoveryDialog::retranslateUi() {
+    setWindowTitle(tr("Fincept Terminal — Recover Previous Session"));
+    if (heading_)  heading_->setText(tr("RECOVER PREVIOUS SESSION"));
+    if (badge_)    badge_->setText(tr("UNCLEAN SHUTDOWN DETECTED"));
+    if (explainer_)
+        explainer_->setText(tr(
+            "Pick a snapshot to restore your workspace, or skip to start fresh. "
+            "Skipping does not delete the snapshots."));
+    if (col_name_) col_name_->setText(tr("SESSION"));
+    if (col_meta_) col_meta_->setText(tr("WHEN"));
+    if (empty_label_) empty_label_->setText(tr("NO SNAPSHOTS AVAILABLE — START FRESH"));
+    if (rename_button_)  rename_button_->setText(tr("RENAME"));
+    if (delete_button_)  delete_button_->setText(tr("DELETE"));
+    if (skip_button_)    skip_button_->setText(tr("SKIP"));
+    if (restore_button_) restore_button_->setText(tr("RESTORE"));
+    // Snapshot rows carry translatable kind badges + relative timestamps;
+    // rebuild them so they pick up the new language.
+    if (list_ && !entries_.isEmpty())
+        populate_snapshots();
 }
 
 void CrashRecoveryDialog::apply_styles() {

@@ -4,8 +4,11 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QDoubleSpinBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
+
+class QDialogButtonBox;
 
 namespace fincept::screens {
 
@@ -18,6 +21,9 @@ class AlgoDeployDialog : public QDialog {
     fincept::services::algo::AlgoDeployment result() const;
     fincept::services::algo::AlgoDeployment deployment() const { return result_; }
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_mode_changed(int index);
     void on_account_changed(int index);
@@ -27,6 +33,7 @@ class AlgoDeployDialog : public QDialog {
     void build_ui();
     void populate_accounts();
     void populate_broker_fields(const QString& account_id);
+    void retranslateUi();
 
     QString strategy_id_;
     QString strategy_name_;
@@ -42,9 +49,18 @@ class AlgoDeployDialog : public QDialog {
     QDoubleSpinBox* max_order_spin_     = nullptr;
     QDoubleSpinBox* max_loss_spin_      = nullptr;
 
+    QLabel*   title_label_        = nullptr;
+    QLabel*   symbol_label_       = nullptr;
+    QLabel*   mode_label_         = nullptr;
+    QLabel*   side_label_         = nullptr;
     QLabel*   account_label_      = nullptr;
     QLabel*   exchange_label_     = nullptr;
     QLabel*   product_type_label_ = nullptr;
+    QLabel*   timeframe_label_    = nullptr;
+    QLabel*   quantity_label_     = nullptr;
+    QLabel*   max_order_label_    = nullptr;
+    QLabel*   max_loss_label_     = nullptr;
+    QDialogButtonBox* buttons_    = nullptr;
 
     fincept::services::algo::AlgoDeployment result_;
 };

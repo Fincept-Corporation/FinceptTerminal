@@ -1,6 +1,7 @@
 // src/ui/widgets/algo/RiskManagementPanel.h
 #pragma once
 #include <QDoubleSpinBox>
+#include <QEvent>
 #include <QLabel>
 #include <QSlider>
 #include <QWidget>
@@ -24,6 +25,9 @@ public:
 signals:
     void values_changed();
 
+protected:
+    void changeEvent(QEvent* event) override;
+
 private:
     struct SliderRow {
         QLabel* label = nullptr;
@@ -34,11 +38,18 @@ private:
     SliderRow create_row(const QString& label_text, double min_val, double max_val,
                          double default_val, int decimals, QWidget* parent);
 
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
+
+    QLabel* header_ = nullptr;
     SliderRow stop_loss_;
     SliderRow take_profit_;
     SliderRow trailing_stop_;
     SliderRow capital_pct_;
+    QLabel* quantity_label_ = nullptr;
     QDoubleSpinBox* quantity_spin_ = nullptr;
+    QLabel* max_order_label_ = nullptr;
     QDoubleSpinBox* max_order_spin_ = nullptr;
 };
 

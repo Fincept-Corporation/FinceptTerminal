@@ -70,8 +70,8 @@ void ReportBuilderScreen::apply_left_collapsed(bool collapsed, bool animate) {
     }
     if (left_toggle_btn_) {
         left_toggle_btn_->setText(collapsed ? "›" : "‹");
-        left_toggle_btn_->setToolTip(collapsed ? "Expand components panel  (Ctrl+B)"
-                                               : "Collapse components panel  (Ctrl+B)");
+        left_toggle_btn_->setToolTip(collapsed ? tr("Expand components panel  (Ctrl+B)")
+                                               : tr("Collapse components panel  (Ctrl+B)"));
     }
 }
 
@@ -95,8 +95,8 @@ void ReportBuilderScreen::apply_right_collapsed(bool collapsed, bool animate) {
     }
     if (right_toggle_btn_) {
         right_toggle_btn_->setText(collapsed ? "‹" : "›");
-        right_toggle_btn_->setToolTip(collapsed ? "Expand properties panel  (Ctrl+Shift+B)"
-                                                : "Collapse properties panel  (Ctrl+Shift+B)");
+        right_toggle_btn_->setToolTip(collapsed ? tr("Expand properties panel  (Ctrl+Shift+B)")
+                                                : tr("Collapse properties panel  (Ctrl+Shift+B)"));
     }
 }
 

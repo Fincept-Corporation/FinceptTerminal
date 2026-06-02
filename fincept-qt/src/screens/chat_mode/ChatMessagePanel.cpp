@@ -88,7 +88,7 @@ QWidget* ChatMessagePanel::build_header() {
     hl->setContentsMargins(14, 0, 14, 0);
     hl->setSpacing(10);
 
-    hdr_title_lbl_ = new QLabel("New Conversation");
+    hdr_title_lbl_ = new QLabel(tr("New Conversation"));
     hdr_title_lbl_->setStyleSheet(QString("color:%1;font-size:14px;font-weight:600;"
                                           "font-family:%2;background:transparent;")
                                       .arg(ui::colors::TEXT_PRIMARY(), FONT));
@@ -106,9 +106,10 @@ QWidget* ChatMessagePanel::build_header() {
         QString("color:%1;font-size:12px;font-family:%2;background:transparent;").arg(ui::colors::TEXT_TERTIARY(), FONT));
     hl->addWidget(hdr_tools_lbl_);
 
+    // "LITE"/"DEEP" are fixed mode identifiers (also used in logic) — not translated.
     mode_btn_ = new QPushButton("LITE");
     mode_btn_->setFixedHeight(22);
-    mode_btn_->setToolTip("Toggle Lite / Deep mode");
+    mode_btn_->setToolTip(tr("Toggle Lite / Deep mode"));
     mode_btn_->setStyleSheet(
         QString("QPushButton{background:%1;color:%2;border:1px solid %3;"
                 "border-radius:0px;font-size:11px;font-weight:600;padding:0 10px;"
@@ -122,7 +123,7 @@ QWidget* ChatMessagePanel::build_header() {
     });
     hl->addWidget(mode_btn_);
 
-    hdr_tokens_lbl_ = new QLabel("0 tokens");
+    hdr_tokens_lbl_ = new QLabel(tr("%1 tokens").arg(0));
     hdr_tokens_lbl_->setStyleSheet(
         QString("color:%1;font-size:12px;font-family:%2;background:transparent;").arg(ui::colors::TEXT_DIM(), FONT));
     hl->addWidget(hdr_tokens_lbl_);
@@ -168,23 +169,23 @@ QWidget* ChatMessagePanel::build_welcome() {
     vl->setSpacing(14);
     vl->setAlignment(Qt::AlignCenter);
 
-    auto* logo = new QLabel("FINCEPT AGENT");
-    logo->setAlignment(Qt::AlignCenter);
-    logo->setStyleSheet(QString("color:%1;font-size:20px;font-weight:700;letter-spacing:1px;"
+    welcome_logo_lbl_ = new QLabel(tr("FINCEPT AGENT"));
+    welcome_logo_lbl_->setAlignment(Qt::AlignCenter);
+    welcome_logo_lbl_->setStyleSheet(QString("color:%1;font-size:20px;font-weight:700;letter-spacing:1px;"
                                 "font-family:%2;background:transparent;")
                             .arg(ui::colors::AMBER(), FONT));
-    vl->addWidget(logo);
+    vl->addWidget(welcome_logo_lbl_);
 
-    auto* sub = new QLabel("AI-powered financial intelligence.\n"
-                           "Markets, equities, portfolio, macro insights.");
-    sub->setAlignment(Qt::AlignCenter);
-    sub->setWordWrap(true);
-    sub->setStyleSheet(
+    welcome_sub_lbl_ = new QLabel(tr("AI-powered financial intelligence.\n"
+                                     "Markets, equities, portfolio, macro insights."));
+    welcome_sub_lbl_->setAlignment(Qt::AlignCenter);
+    welcome_sub_lbl_->setWordWrap(true);
+    welcome_sub_lbl_->setStyleSheet(
         QString("color:%1;font-size:13px;font-family:%2;background:transparent;").arg(ui::colors::TEXT_TERTIARY(), FONT));
-    vl->addWidget(sub);
+    vl->addWidget(welcome_sub_lbl_);
 
-    const QStringList chips = {"Outlook for AAPL?", "Today's market news", "Portfolio risk analysis",
-                               "Key indicators this week"};
+    const QStringList chips = {tr("Outlook for AAPL?"), tr("Today's market news"), tr("Portfolio risk analysis"),
+                               tr("Key indicators this week")};
     auto* row = new QWidget(this);
     auto* rl = new QHBoxLayout(row);
     rl->setContentsMargins(0, 8, 0, 0);
@@ -192,14 +193,15 @@ QWidget* ChatMessagePanel::build_welcome() {
     rl->setAlignment(Qt::AlignCenter);
     for (const auto& text : chips) {
         auto* btn = new QPushButton(text);
+        welcome_chips_.append(btn);
         btn->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;"
                                    "border-radius:0px;padding:6px 12px;font-size:12px;"
                                    "font-family:%4;}"
                                    "QPushButton:hover{background:%5;color:%6;border-color:%7;}")
                                .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), FONT,
                                     ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER()));
-        connect(btn, &QPushButton::clicked, this, [this, text]() {
-            input_box_->setPlainText(text);
+        connect(btn, &QPushButton::clicked, this, [this, btn]() {
+            input_box_->setPlainText(btn->text());
             on_send_clicked();
         });
         rl->addWidget(btn);
@@ -218,11 +220,11 @@ QWidget* ChatMessagePanel::build_typing_indicator() {
     hl->setContentsMargins(14, 4, 14, 4);
     hl->setSpacing(6);
 
-    auto* lbl = new QLabel("Agent");
-    lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;"
+    typing_label_ = new QLabel(tr("Agent"));
+    typing_label_->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;"
                                "font-family:%2;background:transparent;")
                            .arg(ui::colors::AMBER(), FONT));
-    hl->addWidget(lbl);
+    hl->addWidget(typing_label_);
 
     typing_dots_lbl_ = new QLabel(".");
     typing_dots_lbl_->setStyleSheet(
@@ -250,7 +252,7 @@ QWidget* ChatMessagePanel::build_input_area() {
     vl->setSpacing(6);
 
     input_box_ = new QPlainTextEdit;
-    input_box_->setPlaceholderText("Ask anything... (Enter to send, Shift+Enter for new line)");
+    input_box_->setPlaceholderText(tr("Ask anything... (Enter to send, Shift+Enter for new line)"));
     input_box_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     input_box_->setFixedHeight(36);
     input_box_->setStyleSheet(QString("QPlainTextEdit{background:%1;color:%2;border:1px solid %3;"
@@ -290,9 +292,9 @@ QWidget* ChatMessagePanel::build_input_area() {
         emit draft_changed();
     });
 
-    optimize_btn_ = new QPushButton("Optimize");
+    optimize_btn_ = new QPushButton(tr("Optimize"));
     optimize_btn_->setFixedHeight(26);
-    optimize_btn_->setToolTip("Optimize prompt with AI");
+    optimize_btn_->setToolTip(tr("Optimize prompt with AI"));
     optimize_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;"
                                          "border-radius:0px;font-size:12px;padding:0 10px;font-family:%4;}"
                                          "QPushButton:hover{background:%5;color:%6;border-color:%6;}"
@@ -302,7 +304,7 @@ QWidget* ChatMessagePanel::build_input_area() {
     connect(optimize_btn_, &QPushButton::clicked, this, &ChatMessagePanel::on_optimize_clicked);
     bottom->addWidget(optimize_btn_);
 
-    stop_btn_ = new QPushButton("Stop");
+    stop_btn_ = new QPushButton(tr("Stop"));
     stop_btn_->setFixedHeight(26);
     stop_btn_->setVisible(false);
     stop_btn_->setStyleSheet(QString("QPushButton{background:rgba(50,12,12,0.7);color:%1;"
@@ -313,7 +315,7 @@ QWidget* ChatMessagePanel::build_input_area() {
     connect(stop_btn_, &QPushButton::clicked, this, []() { ChatModeService::instance().abort_stream(); });
     bottom->addWidget(stop_btn_);
 
-    send_btn_ = new QPushButton("Send");
+    send_btn_ = new QPushButton(tr("Send"));
     send_btn_->setFixedHeight(26);
     send_btn_->setStyleSheet(
         QString("QPushButton{background:%1;color:%2;border:none;"
@@ -354,12 +356,12 @@ void ChatMessagePanel::clear_messages() {
     messages_layout_->addStretch(1);
     show_welcome(true);
     total_tokens_ = 0;
-    hdr_tokens_lbl_->setText("0 tokens");
+    hdr_tokens_lbl_->setText(tr("%1 tokens").arg(0));
     thinking_card_ = nullptr;
 }
 
 void ChatMessagePanel::set_session_title(const QString& title) {
-    hdr_title_lbl_->setText(title.isEmpty() ? "New Conversation" : title);
+    hdr_title_lbl_->setText(title.isEmpty() ? tr("New Conversation") : title);
 }
 
 void ChatMessagePanel::set_stream_mode(StreamMode mode) {
@@ -404,7 +406,7 @@ void ChatMessagePanel::add_message_bubble(const QString& role, const QString& co
 
     auto* meta = new QHBoxLayout;
     meta->setSpacing(6);
-    auto* role_lbl = new QLabel(role == "user" ? "You" : "Agent");
+    auto* role_lbl = new QLabel(role == "user" ? tr("You") : tr("Agent"));
     role_lbl->setStyleSheet(
         QString("color:%1;font-size:11px;font-weight:600;font-family:%2;"
                 "background:transparent;letter-spacing:0.5px;")
@@ -443,7 +445,7 @@ QTextEdit* ChatMessagePanel::add_streaming_bubble() {
     auto* row_vl = new QVBoxLayout(row);
     row_vl->setContentsMargins(0, 0, 0, 0);
     row_vl->setSpacing(2);
-    auto* lbl = new QLabel("Agent");
+    auto* lbl = new QLabel(tr("Agent"));
     lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:600;font-family:%2;"
                                "background:transparent;letter-spacing:0.5px;")
                            .arg(ui::colors::AMBER(), FONT));
@@ -471,9 +473,9 @@ void ChatMessagePanel::insert_collapsed_thinking_card(int before_index) {
         QStringList tool_names;
         for (const auto& [name, ms] : pending_tools_)
             tool_names.append(QString("%1 (%2ms)").arg(name).arg(ms));
-        summary = QString("> %1 thinking steps | tools: %2").arg(pending_thinking_.size()).arg(tool_names.join(", "));
+        summary = tr("> %1 thinking steps | tools: %2").arg(pending_thinking_.size()).arg(tool_names.join(", "));
     } else {
-        summary = QString("> %1 thinking steps").arg(pending_thinking_.size());
+        summary = tr("> %1 thinking steps").arg(pending_thinking_.size());
     }
 
     auto* header = new QPushButton(summary);
@@ -539,28 +541,28 @@ void ChatMessagePanel::on_stream_text_delta(const QString& text) {
 
 void ChatMessagePanel::on_stream_tool_end(const QString& tool_name, int duration_ms) {
     pending_tools_.append({tool_name, duration_ms});
-    typing_status_lbl_->setText(QString("used %1").arg(tool_name));
+    typing_status_lbl_->setText(tr("used %1").arg(tool_name));
 }
 
 void ChatMessagePanel::on_stream_step_start(int step_number) {
-    typing_status_lbl_->setText(QString("step %1").arg(step_number));
+    typing_status_lbl_->setText(tr("step %1").arg(step_number));
 }
 
 void ChatMessagePanel::on_stream_step_finish(int tokens_used) {
     total_tokens_ += tokens_used;
-    hdr_tokens_lbl_->setText(QString("%1 tokens").arg(total_tokens_));
+    hdr_tokens_lbl_->setText(tr("%1 tokens").arg(total_tokens_));
 }
 
 void ChatMessagePanel::on_stream_thinking(const QString& content) {
     if (!content.isEmpty()) {
         pending_thinking_.append(content);
-        typing_status_lbl_->setText("thinking...");
+        typing_status_lbl_->setText(tr("thinking..."));
     }
 }
 
 void ChatMessagePanel::on_stream_finish(int total_tokens) {
     total_tokens_ += total_tokens;
-    hdr_tokens_lbl_->setText(QString("%1 tokens").arg(total_tokens_));
+    hdr_tokens_lbl_->setText(tr("%1 tokens").arg(total_tokens_));
 
     render_timer_->stop();
     if (streaming_bubble_ && !streaming_buffer_.isEmpty()) {
@@ -616,18 +618,20 @@ void ChatMessagePanel::on_stream_error(const QString& message) {
 void ChatMessagePanel::on_stream_heartbeat() {}
 
 void ChatMessagePanel::on_insufficient_credits() {
-    on_stream_error("Insufficient credits. Top up to continue.");
+    on_stream_error(tr("Insufficient credits. Top up to continue."));
 }
 
 void ChatMessagePanel::on_tools_registered(int count) {
-    hdr_tools_lbl_->setText(count > 0 ? QString("%1 tools").arg(count) : QString());
+    last_tools_ = count;
+    hdr_tools_lbl_->setText(count > 0 ? tr("%1 tools").arg(count) : QString());
 }
 
 void ChatMessagePanel::set_credits(int credits) {
+    last_credits_ = credits;
     if (credits > 0)
-        hdr_credits_lbl_->setText(QString("%1 credits").arg(QLocale(QLocale::English).toString(credits)));
+        hdr_credits_lbl_->setText(tr("%1 credits").arg(QLocale(QLocale::English).toString(credits)));
     else
-        hdr_credits_lbl_->setText("0 credits");
+        hdr_credits_lbl_->setText(tr("0 credits"));
 }
 
 // ── Send / Optimize ──────────────────────────────────────────────────────────
@@ -671,9 +675,9 @@ void ChatMessagePanel::on_optimize_clicked() {
                                                     if (!self)
                                                         return;
                                                     self->optimize_btn_->setEnabled(true);
-                                                    self->optimize_btn_->setText("Optimize");
+                                                    self->optimize_btn_->setText(tr("Optimize"));
                                                     if (!ok) {
-                                                        self->on_stream_error("Optimize failed: " + err);
+                                                        self->on_stream_error(tr("Optimize failed: %1").arg(err));
                                                         return;
                                                     }
                                                     if (!result.optimized.isEmpty())
@@ -682,6 +686,44 @@ void ChatMessagePanel::on_optimize_clicked() {
 }
 
 // ── Event filter ─────────────────────────────────────────────────────────────
+
+void ChatMessagePanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ChatMessagePanel::retranslateUi() {
+    // Header
+    if (mode_btn_)       mode_btn_->setToolTip(tr("Toggle Lite / Deep mode"));
+    if (hdr_tokens_lbl_) hdr_tokens_lbl_->setText(tr("%1 tokens").arg(total_tokens_));
+    if (hdr_tools_lbl_)  hdr_tools_lbl_->setText(last_tools_ > 0 ? tr("%1 tools").arg(last_tools_) : QString());
+    if (hdr_credits_lbl_)
+        hdr_credits_lbl_->setText(last_credits_ > 0
+                                      ? tr("%1 credits").arg(QLocale(QLocale::English).toString(last_credits_))
+                                      : tr("0 credits"));
+
+    // Welcome panel
+    if (welcome_logo_lbl_) welcome_logo_lbl_->setText(tr("FINCEPT AGENT"));
+    if (welcome_sub_lbl_)
+        welcome_sub_lbl_->setText(tr("AI-powered financial intelligence.\n"
+                                     "Markets, equities, portfolio, macro insights."));
+    const QStringList chips = {tr("Outlook for AAPL?"), tr("Today's market news"), tr("Portfolio risk analysis"),
+                               tr("Key indicators this week")};
+    for (int i = 0; i < welcome_chips_.size() && i < chips.size(); ++i)
+        if (welcome_chips_[i]) welcome_chips_[i]->setText(chips[i]);
+
+    // Typing indicator
+    if (typing_label_) typing_label_->setText(tr("Agent"));
+
+    // Input area
+    if (input_box_)    input_box_->setPlaceholderText(tr("Ask anything... (Enter to send, Shift+Enter for new line)"));
+    if (optimize_btn_) { optimize_btn_->setText(tr("Optimize")); optimize_btn_->setToolTip(tr("Optimize prompt with AI")); }
+    if (stop_btn_)     stop_btn_->setText(tr("Stop"));
+    if (send_btn_)     send_btn_->setText(tr("Send"));
+    // hdr_title_lbl_ holds the live session name; message bubbles and stream
+    // status reflect live data and update on the next message/stream event.
+}
 
 bool ChatMessagePanel::eventFilter(QObject* obj, QEvent* ev) {
     if (obj == input_box_ && ev->type() == QEvent::KeyPress) {

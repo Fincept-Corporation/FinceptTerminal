@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QEvent>
 #include <QString>
 #include <QVariant>
 #include <QWidget>
@@ -33,10 +34,12 @@ class BuybackBurnPanel : public QWidget {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
     void apply_theme();
+    void retranslateUi();
 
     void on_epoch_update(const QVariant& v);
     void on_burn_total_update(const QVariant& v);
@@ -50,6 +53,20 @@ class BuybackBurnPanel : public QWidget {
     // Head
     QLabel* title_ = nullptr;
     QLabel* status_pill_ = nullptr;
+
+    // Section titles + fixed captions (cached for retranslateUi)
+    QLabel* epoch_section_title_ = nullptr;   // "THIS EPOCH"
+    QLabel* alltime_section_title_ = nullptr; // "ALL-TIME"
+    QLabel* revenue_caption_ = nullptr;       // "REVENUE"
+    QLabel* buyback_caption_ = nullptr;       // "BUYBACK (50%)"
+    QLabel* staker_caption_ = nullptr;        // "STAKER YIELD (25%)"
+    QLabel* treasury_caption_ = nullptr;      // "TREASURY TOPUP (25%)"
+    QLabel* bought_caption_ = nullptr;        // "$FNCPT BOUGHT"
+    QLabel* burned_caption_ = nullptr;        // "$FNCPT BURNED"
+    QLabel* burn_tx_caption_ = nullptr;       // "BURN TX"
+    QLabel* total_burned_caption_ = nullptr;  // "BURNED"
+    QLabel* supply_caption_ = nullptr;        // "SUPPLY REMAINING"
+    QLabel* spent_caption_ = nullptr;         // "SPENT ON BUYBACK"
 
     // THIS EPOCH
     QLabel* epoch_window_ = nullptr;

@@ -3,6 +3,7 @@
 #pragma once
 
 #include <QColor>
+#include <QCoreApplication>
 #include <QMap>
 #include <QString>
 #include <QVector>
@@ -29,23 +30,26 @@ enum class NodeCategory {
 };
 
 inline QString category_label(NodeCategory c) {
+    // Free function (header, multi-TU) → translate via QCoreApplication under a
+    // stable context. These are display captions for the legend / detail panel.
+    auto t = [](const char* s) { return QCoreApplication::translate("fincept::relmap", s); };
     switch (c) {
-        case NodeCategory::Company:      return "COMPANY";
-        case NodeCategory::Peer:         return "PEER";
-        case NodeCategory::Institutional:return "INSTITUTIONAL";
-        case NodeCategory::MutualFund:   return "MUTUAL FUND";
-        case NodeCategory::Insider:      return "INSIDER";
-        case NodeCategory::Officer:      return "OFFICER";
-        case NodeCategory::Analyst:      return "ANALYST";
-        case NodeCategory::Governance:   return "GOVERNANCE";
-        case NodeCategory::Technicals:   return "TECHNICALS";
-        case NodeCategory::ShortInterest:return "SHORT INTEREST";
-        case NodeCategory::Earnings:     return "EARNINGS";
-        case NodeCategory::Event:        return "EVENT";
-        case NodeCategory::SupplyChain:  return "SUPPLY CHAIN";
-        case NodeCategory::Metrics:      return "METRICS";
+        case NodeCategory::Company:      return t("COMPANY");
+        case NodeCategory::Peer:         return t("PEER");
+        case NodeCategory::Institutional:return t("INSTITUTIONAL");
+        case NodeCategory::MutualFund:   return t("MUTUAL FUND");
+        case NodeCategory::Insider:      return t("INSIDER");
+        case NodeCategory::Officer:      return t("OFFICER");
+        case NodeCategory::Analyst:      return t("ANALYST");
+        case NodeCategory::Governance:   return t("GOVERNANCE");
+        case NodeCategory::Technicals:   return t("TECHNICALS");
+        case NodeCategory::ShortInterest:return t("SHORT INTEREST");
+        case NodeCategory::Earnings:     return t("EARNINGS");
+        case NodeCategory::Event:        return t("EVENT");
+        case NodeCategory::SupplyChain:  return t("SUPPLY CHAIN");
+        case NodeCategory::Metrics:      return t("METRICS");
     }
-    return "UNKNOWN";
+    return t("UNKNOWN");
 }
 
 inline QColor category_color(NodeCategory c) {
@@ -360,15 +364,16 @@ struct FilterState {
 enum class LayoutMode { Layered, Radial, Force };
 
 inline QString layout_label(LayoutMode m) {
+    auto t = [](const char* s) { return QCoreApplication::translate("fincept::relmap", s); };
     switch (m) {
         case LayoutMode::Layered:
-            return "LAYERED";
+            return t("LAYERED");
         case LayoutMode::Radial:
-            return "RADIAL";
+            return t("RADIAL");
         case LayoutMode::Force:
-            return "FORCE";
+            return t("FORCE");
     }
-    return "LAYERED";
+    return t("LAYERED");
 }
 
 } // namespace fincept::relmap

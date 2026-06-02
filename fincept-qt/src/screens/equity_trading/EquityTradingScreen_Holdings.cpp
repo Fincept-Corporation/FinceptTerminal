@@ -85,7 +85,7 @@ void EquityTradingScreen::on_import_holdings_requested(const QVector<trading::Br
     if (holdings.isEmpty())
         return;
     if (focused_account_id_.isEmpty()) {
-        QMessageBox::warning(this, "Import Holdings", "No account selected.");
+        QMessageBox::warning(this, tr("Import Holdings"), tr("No account selected."));
         return;
     }
     const auto account = trading::AccountManager::instance().get_account(focused_account_id_);
@@ -93,21 +93,21 @@ void EquityTradingScreen::on_import_holdings_requested(const QVector<trading::Br
     auto* broker = trading::BrokerRegistry::instance().get(broker_id);
     const QString default_currency = (broker ? broker->profile().currency : QStringLiteral("USD"));
     const QString suggested_name = account.display_name.isEmpty()
-                                       ? QString("%1 Holdings").arg(broker_id.toUpper())
-                                       : QString("%1 - Holdings").arg(account.display_name);
+                                       ? tr("%1 Holdings").arg(broker_id.toUpper())
+                                       : tr("%1 - Holdings").arg(account.display_name);
 
     QDialog dlg(this);
-    dlg.setWindowTitle("Import holdings into portfolio");
+    dlg.setWindowTitle(tr("Import holdings into portfolio"));
     dlg.setMinimumSize(780, 560);
 
     auto* v = new QVBoxLayout(&dlg);
     v->setContentsMargins(16, 16, 16, 16);
     v->setSpacing(10);
 
-    auto* info = new QLabel(QString("Importing <b>%1</b> holdings from <b>%2</b>. "
-                                    "Tickers are auto-mapped to Yahoo Finance format "
-                                    "(NSE→.NS, BSE→.BO). Edit the <i>Yahoo Ticker</i> column "
-                                    "if any symbol needs a manual override.")
+    auto* info = new QLabel(tr("Importing <b>%1</b> holdings from <b>%2</b>. "
+                               "Tickers are auto-mapped to Yahoo Finance format "
+                               "(NSE→.NS, BSE→.BO). Edit the <i>Yahoo Ticker</i> column "
+                               "if any symbol needs a manual override.")
                                 .arg(holdings.size())
                                 .arg(account.display_name.isEmpty() ? broker_id.toUpper()
                                                                     : account.display_name));
@@ -116,8 +116,8 @@ void EquityTradingScreen::on_import_holdings_requested(const QVector<trading::Br
     v->addWidget(info);
 
     // ── Portfolio target selection ────────────────────────────────────────
-    auto* mode_new = new QRadioButton("Create a new portfolio");
-    auto* mode_existing = new QRadioButton("Add to existing portfolio");
+    auto* mode_new = new QRadioButton(tr("Create a new portfolio"));
+    auto* mode_existing = new QRadioButton(tr("Add to existing portfolio"));
     mode_new->setChecked(true);
 
     auto* mode_row = new QHBoxLayout;
@@ -131,17 +131,17 @@ void EquityTradingScreen::on_import_holdings_requested(const QVector<trading::Br
     new_form->setContentsMargins(18, 0, 0, 0);
     auto* name_input = new QLineEdit(suggested_name);
     auto* currency_input = new QLineEdit(default_currency);
-    new_form->addRow("Name:", name_input);
-    new_form->addRow("Currency:", currency_input);
+    new_form->addRow(tr("Name:"), name_input);
+    new_form->addRow(tr("Currency:"), currency_input);
     v->addWidget(new_row);
 
     auto* existing_combo = new QComboBox;
     existing_combo->setEnabled(false);
-    existing_combo->addItem("Loading portfolios...");
+    existing_combo->addItem(tr("Loading portfolios..."));
     auto* existing_row = new QWidget;
     auto* existing_form = new QFormLayout(existing_row);
     existing_form->setContentsMargins(18, 0, 0, 0);
-    existing_form->addRow("Portfolio:", existing_combo);
+    existing_form->addRow(tr("Portfolio:"), existing_combo);
     existing_row->setVisible(false);
     v->addWidget(existing_row);
 
@@ -149,7 +149,8 @@ void EquityTradingScreen::on_import_holdings_requested(const QVector<trading::Br
     auto* table = new QTableWidget;
     table->setColumnCount(6);
     table->setHorizontalHeaderLabels(
-        {"Import", "Broker Symbol", "Exchange", "Yahoo Ticker (edit)", "Quantity", "Avg Price"});
+        {tr("Import"), tr("Broker Symbol"), tr("Exchange"), tr("Yahoo Ticker (edit)"), tr("Quantity"),
+         tr("Avg Price")});
     table->setRowCount(holdings.size());
     table->verticalHeader()->setVisible(false);
     table->setSelectionMode(QAbstractItemView::NoSelection);
@@ -202,8 +203,8 @@ void EquityTradingScreen::on_import_holdings_requested(const QVector<trading::Br
 
     // Select/Deselect all helpers
     auto* select_row = new QHBoxLayout;
-    auto* select_all_btn = new QPushButton("Select all");
-    auto* deselect_all_btn = new QPushButton("Deselect all");
+    auto* select_all_btn = new QPushButton(tr("Select all"));
+    auto* deselect_all_btn = new QPushButton(tr("Deselect all"));
     select_row->addWidget(select_all_btn);
     select_row->addWidget(deselect_all_btn);
     select_row->addStretch();
@@ -221,7 +222,7 @@ void EquityTradingScreen::on_import_holdings_requested(const QVector<trading::Br
     QObject::connect(deselect_all_btn, &QPushButton::clicked, &dlg, [set_all_checked]() { set_all_checked(false); });
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    buttons->button(QDialogButtonBox::Ok)->setText("IMPORT");
+    buttons->button(QDialogButtonBox::Ok)->setText(tr("IMPORT"));
     v->addWidget(buttons);
 
     auto sync_mode = [&]() {
@@ -243,7 +244,7 @@ void EquityTradingScreen::on_import_holdings_requested(const QVector<trading::Br
             if (!combo_guard) return;
             combo_guard->clear();
             if (list.isEmpty()) {
-                combo_guard->addItem("(no portfolios yet)");
+                combo_guard->addItem(EquityTradingScreen::tr("(no portfolios yet)"));
                 combo_guard->setEnabled(false);
                 if (existing_guard) existing_guard->setEnabled(false);
             } else {
@@ -292,7 +293,7 @@ void EquityTradingScreen::on_import_holdings_requested(const QVector<trading::Br
                         holdings[r].avg_price});
     }
     if (rows.isEmpty()) {
-        QMessageBox::information(this, "Import Holdings", "Nothing selected to import.");
+        QMessageBox::information(this, tr("Import Holdings"), tr("Nothing selected to import."));
         return;
     }
 
@@ -310,7 +311,7 @@ void EquityTradingScreen::on_import_holdings_requested(const QVector<trading::Br
     if (mode_new->isChecked()) {
         const QString name = name_input->text().trimmed();
         if (name.isEmpty()) {
-            QMessageBox::warning(this, "Import Holdings", "Portfolio name is required.");
+            QMessageBox::warning(this, tr("Import Holdings"), tr("Portfolio name is required."));
             return;
         }
         const QString currency = currency_input->text().trimmed().isEmpty()
@@ -325,8 +326,8 @@ void EquityTradingScreen::on_import_holdings_requested(const QVector<trading::Br
                                 return;
                             QObject::disconnect(*once);
                             do_add_assets(p.id);
-                            QMessageBox::information(self, "Import Holdings",
-                                                     QString("Imported %1 holdings into portfolio \"%2\".")
+                            QMessageBox::information(self, self->tr("Import Holdings"),
+                                                     self->tr("Imported %1 holdings into portfolio \"%2\".")
                                                          .arg(count)
                                                          .arg(p.name));
                         });
@@ -338,12 +339,12 @@ void EquityTradingScreen::on_import_holdings_requested(const QVector<trading::Br
     } else {
         const QString pid = existing_combo->currentData().toString();
         if (pid.isEmpty()) {
-            QMessageBox::warning(this, "Import Holdings", "Select a portfolio first.");
+            QMessageBox::warning(this, tr("Import Holdings"), tr("Select a portfolio first."));
             return;
         }
         do_add_assets(pid);
-        QMessageBox::information(this, "Import Holdings",
-                                 QString("Imported %1 holdings.").arg(rows.size()));
+        QMessageBox::information(this, tr("Import Holdings"),
+                                 tr("Imported %1 holdings.").arg(rows.size()));
     }
 }
 

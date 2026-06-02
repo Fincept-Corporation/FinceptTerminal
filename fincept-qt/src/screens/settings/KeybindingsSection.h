@@ -23,14 +23,20 @@ class KeyCaptureDialog : public QDialog {
 
   protected:
     void keyPressEvent(QKeyEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
+    void retranslateUi();
+
+    QLabel*      current_label_  = nullptr;
     QLabel*      hint_label_     = nullptr;
     QLabel*      captured_label_ = nullptr;
     QLabel*      conflict_label_ = nullptr;
     QPushButton* apply_btn_      = nullptr;
+    QPushButton* cancel_btn_     = nullptr;
 
     KeyAction    action_;
+    QKeySequence current_;
     QKeySequence captured_;
 };
 
@@ -42,14 +48,20 @@ class KeybindingsSection : public QWidget {
 
   protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
     void rebuild_rows();
     QWidget* build_group(const QString& group_name, const QList<KeyAction>& actions);
 
-    QVBoxLayout* groups_layout_ = nullptr;
-    QLineEdit*   search_input_  = nullptr;
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
+
+    QVBoxLayout* groups_layout_   = nullptr;
+    QLineEdit*   search_input_    = nullptr;
+    QPushButton* reset_all_btn_   = nullptr;
 };
 
 } // namespace fincept::screens

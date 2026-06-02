@@ -216,7 +216,7 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
                           pres.format_volume(vol));
         if (evt && sub_market_count > 0) {
             painter->drawText(x + 80, y, w - 80, 14, Qt::AlignLeft | Qt::AlignVCenter,
-                              QString("%1 mkts").arg(sub_market_count));
+                              tr("%1 mkts").arg(sub_market_count));
         }
     }
 

@@ -52,17 +52,17 @@ NewsFeedPanel::NewsFeedPanel(QWidget* parent) : QWidget(parent) {
         layout->setContentsMargins(24, 24, 24, 24);
         layout->setSpacing(8);
         layout->addStretch();
-        auto* title = new QLabel(QStringLiteral("No articles available"), empty_state_);
-        title->setObjectName("newsEmptyStateTitle");
-        title->setAlignment(Qt::AlignCenter);
-        auto* hint = new QLabel(
-            QStringLiteral("Check your network connection and click Refresh to retry."),
+        empty_state_title_ = new QLabel(tr("No articles available"), empty_state_);
+        empty_state_title_->setObjectName("newsEmptyStateTitle");
+        empty_state_title_->setAlignment(Qt::AlignCenter);
+        empty_state_hint_ = new QLabel(
+            tr("Check your network connection and click Refresh to retry."),
             empty_state_);
-        hint->setObjectName("newsEmptyStateHint");
-        hint->setAlignment(Qt::AlignCenter);
-        hint->setWordWrap(true);
-        layout->addWidget(title);
-        layout->addWidget(hint);
+        empty_state_hint_->setObjectName("newsEmptyStateHint");
+        empty_state_hint_->setAlignment(Qt::AlignCenter);
+        empty_state_hint_->setWordWrap(true);
+        layout->addWidget(empty_state_title_);
+        layout->addWidget(empty_state_hint_);
         layout->addStretch();
     }
 
@@ -96,7 +96,7 @@ void NewsFeedPanel::build_breaking_banner() {
     layout->setContentsMargins(8, 0, 8, 0);
     layout->setSpacing(8);
 
-    banner_tag_ = new QLabel("FLASH", banner_widget_);
+    banner_tag_ = new QLabel(tr("FLASH"), banner_widget_);
     banner_tag_->setObjectName("newsBreakingTag");
     banner_tag_->setFixedWidth(48);
     banner_tag_->setAlignment(Qt::AlignCenter);
@@ -138,7 +138,7 @@ void NewsFeedPanel::show_breaking(const QVector<services::NewsCluster>& breaking
         return;
 
     // Show banner
-    QString tag = lead.priority == services::Priority::FLASH ? "FLASH" : "BREAKING";
+    QString tag = lead.priority == services::Priority::FLASH ? tr("FLASH") : tr("BREAKING");
     banner_tag_->setText(tag);
     banner_headline_->setText(lead.headline);
     banner_source_->setText(lead.source.toUpper());
@@ -298,6 +298,19 @@ void NewsFeedPanel::check_scroll_position() {
     int remaining = sb->maximum() - sb->value();
     if (remaining < 200 && sb->maximum() > 0)
         emit near_bottom();
+}
+
+void NewsFeedPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void NewsFeedPanel::retranslateUi() {
+    if (empty_state_title_) empty_state_title_->setText(tr("No articles available"));
+    if (empty_state_hint_)  empty_state_hint_->setText(tr("Check your network connection and click Refresh to retry."));
+    // banner_tag_ reflects the live FLASH/BREAKING priority of the current
+    // banner and refreshes on the next show_breaking() — not forced here.
 }
 
 } // namespace fincept::screens

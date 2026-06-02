@@ -8,8 +8,11 @@
 // short-circuits the dialog when only one monitor is connected.
 
 #include <QDialog>
+#include <QEvent>
 
+class QLabel;
 class QScreen;
+class QWidget;
 
 namespace fincept {
 
@@ -26,8 +29,16 @@ class MonitorPickerDialog : public QDialog {
     /// monitor the request came from" (purely a cue — does not pre-select).
     static QScreen* pick(QWidget* parent, QScreen* current);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    void retranslateUi();
+
     QScreen* picked_ = nullptr;
+    QLabel* title_label_ = nullptr;
+    QLabel* hint_label_ = nullptr;
+    QWidget* map_widget_ = nullptr;
 };
 
 } // namespace fincept

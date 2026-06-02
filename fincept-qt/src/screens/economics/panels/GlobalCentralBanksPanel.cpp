@@ -118,14 +118,14 @@ GlobalCentralBanksPanel::GlobalCentralBanksPanel(QWidget* parent)
 }
 
 void GlobalCentralBanksPanel::activate() {
-    show_empty("Select a central bank and series, then click FETCH\n"
-               "Sources: BOE, RBA, Bank of Canada, Riksbank, SNB, Norges Bank\n"
-               "No API key required for any source");
+    show_empty(tr("Select a central bank and series, then click FETCH\n"
+                  "Sources: BOE, RBA, Bank of Canada, Riksbank, SNB, Norges Bank\n"
+                  "No API key required for any source"));
 }
 
 void GlobalCentralBanksPanel::build_controls(QHBoxLayout* thl) {
-    auto* blbl = new QLabel("BANK");
-    blbl->setStyleSheet(ctrl_label_style());
+    bank_lbl_ = new QLabel(tr("BANK"));
+    bank_lbl_->setStyleSheet(ctrl_label_style());
 
     bank_combo_ = new QComboBox;
     for (const auto& b : kBanks)
@@ -133,8 +133,8 @@ void GlobalCentralBanksPanel::build_controls(QHBoxLayout* thl) {
     bank_combo_->setFixedHeight(26);
     bank_combo_->setMinimumWidth(230);
 
-    auto* slbl = new QLabel("SERIES");
-    slbl->setStyleSheet(ctrl_label_style());
+    series_lbl_ = new QLabel(tr("SERIES"));
+    series_lbl_->setStyleSheet(ctrl_label_style());
 
     series_combo_ = new QComboBox;
     series_combo_->setFixedHeight(26);
@@ -146,10 +146,10 @@ void GlobalCentralBanksPanel::build_controls(QHBoxLayout* thl) {
     connect(bank_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &GlobalCentralBanksPanel::update_series_for_bank);
 
-    thl->addWidget(blbl);
+    thl->addWidget(bank_lbl_);
     thl->addWidget(bank_combo_);
     thl->addSpacing(8);
-    thl->addWidget(slbl);
+    thl->addWidget(series_lbl_);
     thl->addWidget(series_combo_);
 }
 
@@ -172,7 +172,7 @@ void GlobalCentralBanksPanel::on_fetch() {
     const auto& bank = kBanks[bi];
     const auto& series = bank.series[si];
 
-    show_loading("Fetching " + bank.label + ": " + series.label + "…");
+    show_loading(tr("Fetching %1: %2…").arg(bank.label, series.label));
     services::EconomicsService::instance().execute(kGlobalCentralBanksSourceId, bank.script, series.command, {},
                                                    bank.req_prefix + "_" + series.command);
 }
@@ -234,7 +234,7 @@ void GlobalCentralBanksPanel::on_result(const QString& request_id, const service
     }
 
     if (rows.isEmpty()) {
-        show_error("No data returned");
+        show_error(tr("No data returned"));
         return;
     }
 
@@ -245,6 +245,22 @@ void GlobalCentralBanksPanel::on_result(const QString& request_id, const service
 
     display(rows, title);
     LOG_INFO("GlobalCentralBanksPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void GlobalCentralBanksPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void GlobalCentralBanksPanel::retranslateUi() {
+    if (bank_lbl_)
+        bank_lbl_->setText(tr("BANK"));
+    if (series_lbl_)
+        series_lbl_->setText(tr("SERIES"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

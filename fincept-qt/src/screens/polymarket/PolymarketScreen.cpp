@@ -706,7 +706,7 @@ void PolymarketScreen::on_markets_ready(const QVector<pred::PredictionMarket>& m
     browse_panel_->set_loading(false);
     browse_panel_->set_markets(markets);
     command_bar_->set_market_count(markets.size());
-    status_bar_->set_count(markets.size(), "markets");
+    status_bar_->set_count(markets.size(), tr("markets"));
 
     // Kalshi-only: fire a single /markets/candlesticks call covering all
     // visible tickers. The server returns ~7 daily points per ticker in
@@ -734,7 +734,7 @@ void PolymarketScreen::on_events_ready(const QVector<pred::PredictionEvent>& eve
     browse_panel_->set_loading(false);
     browse_panel_->set_events(events);
     command_bar_->set_market_count(events.size());
-    status_bar_->set_count(events.size(), "events");
+    status_bar_->set_count(events.size(), tr("events"));
 }
 
 void PolymarketScreen::on_search_results_ready(const QVector<pred::PredictionMarket>& markets,
@@ -744,14 +744,14 @@ void PolymarketScreen::on_search_results_ready(const QVector<pred::PredictionMar
     if (!markets.isEmpty()) {
         browse_panel_->set_markets(markets);
         command_bar_->set_market_count(markets.size());
-        status_bar_->set_count(markets.size(), "markets");
+        status_bar_->set_count(markets.size(), tr("markets"));
     } else if (!events.isEmpty()) {
         browse_panel_->set_events(events);
         command_bar_->set_market_count(events.size());
-        status_bar_->set_count(events.size(), "events");
+        status_bar_->set_count(events.size(), tr("events"));
     } else {
         command_bar_->set_market_count(0);
-        status_bar_->set_count(0, "results");
+        status_bar_->set_count(0, tr("results"));
     }
 }
 
@@ -889,7 +889,7 @@ void PolymarketScreen::on_kalshi_exchange_schedule(const QJsonObject& schedule) 
         const auto first = standard.first().toObject();
         const QString open = first.value("open_time").toString();
         if (!open.isEmpty())
-            next = QStringLiteral("Next open: ") + open;
+            next = tr("Next open: ") + open;
     }
     status_bar_->set_next_session(next);
 }
@@ -1028,11 +1028,11 @@ void PolymarketScreen::on_kalshi_series_detail(const QString& series_ticker,
     QStringList lines;
     if (!title.isEmpty()) lines << QStringLiteral("<b>%1</b>").arg(title.toHtmlEscaped());
     if (!series_ticker.isEmpty())
-        lines << QStringLiteral("Series: %1").arg(series_ticker);
+        lines << tr("Series: %1").arg(series_ticker);
     if (!frequency.isEmpty())
-        lines << QStringLiteral("Frequency: %1").arg(frequency);
+        lines << tr("Frequency: %1").arg(frequency);
     if (!fee_type.isEmpty()) {
-        QString fee_line = QStringLiteral("Fees: %1").arg(fee_type);
+        QString fee_line = tr("Fees: %1").arg(fee_type);
         if (fee_mult > 0.0)
             fee_line += QStringLiteral(" (×%1)").arg(fee_mult);
         lines << fee_line;

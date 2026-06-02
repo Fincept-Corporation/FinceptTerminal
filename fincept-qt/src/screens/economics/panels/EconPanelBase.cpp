@@ -162,12 +162,12 @@ void EconPanelBase::build_base_ui(QWidget* container) {
     build_controls(thl);
     thl->addStretch(1);
 
-    fetch_btn_ = new QPushButton("FETCH");
+    fetch_btn_ = new QPushButton(tr("FETCH"));
     fetch_btn_->setObjectName("econFetchBtn");
     fetch_btn_->setCursor(Qt::PointingHandCursor);
     connect(fetch_btn_, &QPushButton::clicked, this, &EconPanelBase::on_fetch);
 
-    export_btn_ = new QPushButton("CSV");
+    export_btn_ = new QPushButton(tr("CSV"));
     export_btn_->setObjectName("econCsvBtn");
     export_btn_->setCursor(Qt::PointingHandCursor);
     connect(export_btn_, &QPushButton::clicked, this, &EconPanelBase::export_csv);
@@ -183,7 +183,7 @@ void EconPanelBase::build_base_ui(QWidget* container) {
     crhl->setContentsMargins(10, 6, 10, 6);
     crhl->setSpacing(6);
 
-    auto make_card = [&](const QString& label, QLabel*& out) {
+    auto make_card = [&](const QString& label, QLabel*& out, QLabel*& title_out) {
         auto* card = new QWidget(this);
         card->setObjectName("econStatCard");
         card->setMinimumWidth(90);
@@ -192,18 +192,19 @@ void EconPanelBase::build_base_ui(QWidget* container) {
         vl->setSpacing(1);
         auto* lbl = new QLabel(label);
         lbl->setObjectName("econStatLabel");
+        title_out = lbl;
         out = new QLabel("—");
         out->setObjectName("econStatVal");
         vl->addWidget(lbl);
         vl->addWidget(out);
         crhl->addWidget(card);
     };
-    make_card("LATEST", stat_latest_);
-    make_card("CHANGE", stat_change_);
-    make_card("MIN", stat_min_);
-    make_card("MAX", stat_max_);
-    make_card("AVG", stat_avg_);
-    make_card("POINTS", stat_count_);
+    make_card(tr("LATEST"), stat_latest_, stat_latest_lbl_);
+    make_card(tr("CHANGE"), stat_change_, stat_change_lbl_);
+    make_card(tr("MIN"), stat_min_, stat_min_lbl_);
+    make_card(tr("MAX"), stat_max_, stat_max_lbl_);
+    make_card(tr("AVG"), stat_avg_, stat_avg_lbl_);
+    make_card(tr("POINTS"), stat_count_, stat_count_lbl_);
     crhl->addStretch(1);
     root->addWidget(cards_row_);
 
@@ -228,10 +229,12 @@ void EconPanelBase::build_base_ui(QWidget* container) {
     empty_pg->setObjectName("econEmptyPage");
     auto* evl = new QVBoxLayout(empty_pg);
     evl->setAlignment(Qt::AlignCenter);
-    empty_lbl_ = new QLabel("Select parameters and click FETCH");
+    empty_lbl_ = new QLabel(tr("Select parameters and click FETCH"));
     empty_lbl_->setObjectName("econEmptyMsg");
     empty_lbl_->setAlignment(Qt::AlignCenter);
     empty_lbl_->setWordWrap(true);
+    status_kind_ = StatusKind::Empty;
+    status_msg_ = tr("Select parameters and click FETCH");
     evl->addWidget(empty_lbl_);
     stack_->addWidget(empty_pg); // index 0
 
@@ -272,10 +275,12 @@ void EconPanelBase::refresh_panel_theme() {
 void EconPanelBase::show_loading(const QString& msg) {
     if (!empty_lbl_)
         return;
+    status_kind_ = StatusKind::Loading;
+    status_msg_ = msg.isEmpty() ? tr("Fetching data…") : msg;
     empty_lbl_->setObjectName("econLoadingMsg");
     empty_lbl_->style()->unpolish(empty_lbl_);
     empty_lbl_->style()->polish(empty_lbl_);
-    empty_lbl_->setText(msg);
+    empty_lbl_->setText(status_msg_);
     stack_->setCurrentIndex(0);
     if (fetch_btn_)
         fetch_btn_->setEnabled(false);
@@ -284,10 +289,12 @@ void EconPanelBase::show_loading(const QString& msg) {
 void EconPanelBase::show_error(const QString& msg) {
     if (!empty_lbl_)
         return;
+    status_kind_ = StatusKind::Error;
+    status_msg_ = msg;
     empty_lbl_->setObjectName("econErrMsg");
     empty_lbl_->style()->unpolish(empty_lbl_);
     empty_lbl_->style()->polish(empty_lbl_);
-    empty_lbl_->setText("Error: " + msg);
+    empty_lbl_->setText(tr("Error: %1").arg(msg));
     stack_->setCurrentIndex(0);
     if (fetch_btn_)
         fetch_btn_->setEnabled(true);
@@ -296,10 +303,12 @@ void EconPanelBase::show_error(const QString& msg) {
 void EconPanelBase::show_empty(const QString& msg) {
     if (!empty_lbl_)
         return;
+    status_kind_ = StatusKind::Empty;
+    status_msg_ = msg.isEmpty() ? tr("Select parameters and click FETCH") : msg;
     empty_lbl_->setObjectName("econEmptyMsg");
     empty_lbl_->style()->unpolish(empty_lbl_);
     empty_lbl_->style()->polish(empty_lbl_);
-    empty_lbl_->setText(msg);
+    empty_lbl_->setText(status_msg_);
     stack_->setCurrentIndex(0);
     if (fetch_btn_)
         fetch_btn_->setEnabled(true);
@@ -315,7 +324,7 @@ void EconPanelBase::show_table() {
 
 void EconPanelBase::display(const QJsonArray& rows, const QString& title) {
     if (rows.isEmpty()) {
-        show_empty("No data returned for this selection");
+        show_empty(tr("No data returned for this selection"));
         return;
     }
 
@@ -351,7 +360,7 @@ void EconPanelBase::display(const QJsonArray& rows, const QString& title) {
     if (title_lbl_)
         title_lbl_->setText(title);
     if (row_count_)
-        row_count_->setText(QString::number(rows.size()) + " records");
+        row_count_->setText(tr("%1 records").arg(rows.size()));
 
     update_stats(rows);
     show_table();
@@ -461,7 +470,8 @@ void EconPanelBase::export_csv() {
     if (!table_ || table_->rowCount() == 0)
         return;
 
-    QString path = QFileDialog::getSaveFileName(this, "Export CSV", source_id_ + "_data.csv", "CSV Files (*.csv)");
+    QString path =
+        QFileDialog::getSaveFileName(this, tr("Export CSV"), source_id_ + "_data.csv", tr("CSV Files (*.csv)"));
     if (path.isEmpty())
         return;
 
@@ -498,6 +508,57 @@ void EconPanelBase::filter_list(QListWidget* list, const QString& text) {
     for (int i = 0; i < list->count(); ++i) {
         auto* item = list->item(i);
         item->setHidden(!item->text().contains(text, Qt::CaseInsensitive));
+    }
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void EconPanelBase::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void EconPanelBase::retranslateUi() {
+    // Toolbar buttons
+    if (fetch_btn_)
+        fetch_btn_->setText(tr("FETCH"));
+    if (export_btn_)
+        export_btn_->setText(tr("CSV"));
+
+    // Stat-card titles
+    if (stat_latest_lbl_)
+        stat_latest_lbl_->setText(tr("LATEST"));
+    if (stat_change_lbl_)
+        stat_change_lbl_->setText(tr("CHANGE"));
+    if (stat_min_lbl_)
+        stat_min_lbl_->setText(tr("MIN"));
+    if (stat_max_lbl_)
+        stat_max_lbl_->setText(tr("MAX"));
+    if (stat_avg_lbl_)
+        stat_avg_lbl_->setText(tr("AVG"));
+    if (stat_count_lbl_)
+        stat_count_lbl_->setText(tr("POINTS"));
+
+    // Record count (re-apply count with translated suffix)
+    if (row_count_ && !all_rows_.isEmpty())
+        row_count_->setText(tr("%1 records").arg(all_rows_.size()));
+
+    // Current status message. The empty default re-translates; loading/error
+    // messages keep the message that was last shown (data-derived prefixes are
+    // re-translated on the next fetch).
+    if (empty_lbl_ && stack_ && stack_->currentIndex() == 0) {
+        switch (status_kind_) {
+        case StatusKind::Empty:
+            empty_lbl_->setText(status_msg_);
+            break;
+        case StatusKind::Loading:
+            empty_lbl_->setText(status_msg_);
+            break;
+        case StatusKind::Error:
+            empty_lbl_->setText(tr("Error: %1").arg(status_msg_));
+            break;
+        }
     }
 }
 

@@ -25,6 +25,10 @@ QString AppConfig::api_base_url() const {
     return settings_.value("api/base_url", "https://api.fincept.in").toString();
 }
 
+QString AppConfig::cloud_base_url() const {
+    return settings_.value("api/cloud_base_url", "https://api.fincept.in/v1").toString();
+}
+
 bool AppConfig::dark_mode() const {
     return settings_.value("ui/dark_mode", true).toBool();
 }

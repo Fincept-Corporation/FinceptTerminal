@@ -14,6 +14,7 @@
 #include "services/backtesting/BacktestingTypes.h"
 
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDoubleSpinBox>
 #include <QEvent>
 #include <QJsonValue>
@@ -107,7 +108,8 @@ inline QString fmt_metric(const QString& key, const QJsonValue& val) {
     if (val.isString())
         return val.toString();
     if (val.isBool())
-        return val.toBool() ? "YES" : "NO";
+        return val.toBool() ? QCoreApplication::translate("BacktestingScreen", "YES")
+                            : QCoreApplication::translate("BacktestingScreen", "NO");
     if (!val.isDouble())
         return QString::fromUtf8("—");
 

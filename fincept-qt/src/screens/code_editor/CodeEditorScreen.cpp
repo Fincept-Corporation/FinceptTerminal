@@ -120,12 +120,12 @@ QWidget* CodeEditorScreen::build_toolbar() {
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(0);
 
-    auto* title = new QLabel("PYTHON NOTEBOOK", bar);
-    title->setStyleSheet(QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;"
-                                 " letter-spacing:1px; padding-right:16px;")
-                             .arg(colors::AMBER(), fonts::DATA_FAMILY)
-                             .arg(fonts::SMALL));
-    hl->addWidget(title);
+    toolbar_title_ = new QLabel(tr("PYTHON NOTEBOOK"), bar);
+    toolbar_title_->setStyleSheet(QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;"
+                                          " letter-spacing:1px; padding-right:16px;")
+                                      .arg(colors::AMBER(), fonts::DATA_FAMILY)
+                                      .arg(fonts::SMALL));
+    hl->addWidget(toolbar_title_);
 
     auto add_sep = [&]() {
         auto* sep = new QWidget(bar);
@@ -148,60 +148,60 @@ QWidget* CodeEditorScreen::build_toolbar() {
         return btn;
     };
 
-    auto* new_btn = make_btn("NEW");
-    connect(new_btn, &QPushButton::clicked, this, &CodeEditorScreen::on_new_notebook);
-    hl->addWidget(new_btn);
+    btn_new_ = make_btn(tr("NEW"));
+    connect(btn_new_, &QPushButton::clicked, this, &CodeEditorScreen::on_new_notebook);
+    hl->addWidget(btn_new_);
 
-    auto* open_btn = make_btn("OPEN");
-    connect(open_btn, &QPushButton::clicked, this, &CodeEditorScreen::on_open_notebook);
-    hl->addWidget(open_btn);
+    btn_open_ = make_btn(tr("OPEN"));
+    connect(btn_open_, &QPushButton::clicked, this, &CodeEditorScreen::on_open_notebook);
+    hl->addWidget(btn_open_);
 
-    auto* save_btn = make_btn("SAVE");
-    connect(save_btn, &QPushButton::clicked, this, &CodeEditorScreen::on_save_notebook);
-    hl->addWidget(save_btn);
-
-    add_sep();
-
-    auto* add_btn = make_btn("+ CELL", colors::CYAN);
-    connect(add_btn, &QPushButton::clicked, this, &CodeEditorScreen::on_add_cell);
-    hl->addWidget(add_btn);
-
-    auto* clear_btn = make_btn("CLEAR OUT");
-    connect(clear_btn, &QPushButton::clicked, this, &CodeEditorScreen::on_clear_outputs);
-    hl->addWidget(clear_btn);
+    btn_save_ = make_btn(tr("SAVE"));
+    connect(btn_save_, &QPushButton::clicked, this, &CodeEditorScreen::on_save_notebook);
+    hl->addWidget(btn_save_);
 
     add_sep();
 
-    auto* run_all_btn = new QPushButton("RUN ALL", bar);
-    run_all_btn->setCursor(Qt::PointingHandCursor);
-    run_all_btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
-                                       " font-family:%3; font-size:%4px; font-weight:700; padding:4px 14px;"
-                                       " letter-spacing:0.5px; }"
-                                       "QPushButton:hover { background:%5; }")
-                                   .arg(colors::AMBER(), colors::BG_BASE(), fonts::DATA_FAMILY)
-                                   .arg(fonts::TINY)
-                                   .arg(colors::ORANGE()));
-    connect(run_all_btn, &QPushButton::clicked, this, &CodeEditorScreen::on_run_all);
-    hl->addWidget(run_all_btn);
+    btn_add_cell_ = make_btn(tr("+ CELL"), colors::CYAN);
+    connect(btn_add_cell_, &QPushButton::clicked, this, &CodeEditorScreen::on_add_cell);
+    hl->addWidget(btn_add_cell_);
+
+    btn_clear_out_ = make_btn(tr("CLEAR OUT"));
+    connect(btn_clear_out_, &QPushButton::clicked, this, &CodeEditorScreen::on_clear_outputs);
+    hl->addWidget(btn_clear_out_);
+
+    add_sep();
+
+    btn_run_all_ = new QPushButton(tr("RUN ALL"), bar);
+    btn_run_all_->setCursor(Qt::PointingHandCursor);
+    btn_run_all_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
+                                        " font-family:%3; font-size:%4px; font-weight:700; padding:4px 14px;"
+                                        " letter-spacing:0.5px; }"
+                                        "QPushButton:hover { background:%5; }")
+                                    .arg(colors::AMBER(), colors::BG_BASE(), fonts::DATA_FAMILY)
+                                    .arg(fonts::TINY)
+                                    .arg(colors::ORANGE()));
+    connect(btn_run_all_, &QPushButton::clicked, this, &CodeEditorScreen::on_run_all);
+    hl->addWidget(btn_run_all_);
 
     hl->addStretch();
 
-    auto* sidebar_btn = make_btn("SIDEBAR");
-    connect(sidebar_btn, &QPushButton::clicked, this, &CodeEditorScreen::on_toggle_sidebar);
-    hl->addWidget(sidebar_btn);
+    btn_sidebar_ = make_btn(tr("SIDEBAR"));
+    connect(btn_sidebar_, &QPushButton::clicked, this, &CodeEditorScreen::on_toggle_sidebar);
+    hl->addWidget(btn_sidebar_);
 
     add_sep();
 
-    kernel_label_ = new QLabel("KERNEL: IDLE", bar);
+    kernel_label_ = new QLabel(tr("KERNEL: IDLE"), bar);
     kernel_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; font-weight:600;"
                                          " letter-spacing:0.5px; padding:0 8px;")
                                      .arg(colors::POSITIVE(), fonts::DATA_FAMILY));
     hl->addWidget(kernel_label_);
 
-    auto* py_label = new QLabel("Python 3.11", bar);
-    py_label->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; padding-left:8px;")
-                                .arg(colors::TEXT_TERTIARY(), fonts::DATA_FAMILY));
-    hl->addWidget(py_label);
+    py_label_ = new QLabel(tr("Python 3.11"), bar);
+    py_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; padding-left:8px;")
+                                 .arg(colors::TEXT_TERTIARY(), fonts::DATA_FAMILY));
+    hl->addWidget(py_label_);
 
     return bar;
 }
@@ -214,17 +214,18 @@ QWidget* CodeEditorScreen::build_status_bar() {
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(10, 0, 10, 0);
 
-    status_label_ = new QLabel("READY", bar);
+    status_label_ = new QLabel(tr("READY"), bar);
     status_label_->setStyleSheet(
         QString("color:%1; font-family:%2; font-size:10px; font-weight:600; letter-spacing:0.5px;")
             .arg(colors::TEXT_SECONDARY(), fonts::DATA_FAMILY));
     hl->addWidget(status_label_);
     hl->addStretch();
 
-    auto* shortcuts = new QLabel("Ctrl+Enter: RUN  |  Shift+Enter: RUN & NEXT  |  Tab: 4 SPACES  |  Ctrl+S: SAVE", bar);
-    shortcuts->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; letter-spacing:0.3px;")
-                                 .arg(colors::TEXT_DIM(), fonts::DATA_FAMILY));
-    hl->addWidget(shortcuts);
+    shortcuts_label_ =
+        new QLabel(tr("Ctrl+Enter: RUN  |  Shift+Enter: RUN & NEXT  |  Tab: 4 SPACES  |  Ctrl+S: SAVE"), bar);
+    shortcuts_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; letter-spacing:0.3px;")
+                                        .arg(colors::TEXT_DIM(), fonts::DATA_FAMILY));
+    hl->addWidget(shortcuts_label_);
 
     return bar;
 }
@@ -371,12 +372,12 @@ void CodeEditorScreen::on_rename_cell(const QString& cell_id) {
     if (current_name.isEmpty()) {
         current_name = cells_[idx].source.split('\n').first().trimmed();
         if (current_name.isEmpty())
-            current_name = QString("Cell %1").arg(idx + 1);
+            current_name = tr("Cell %1").arg(idx + 1);
     }
 
     bool ok = false;
     const QString name =
-        QInputDialog::getText(this, "Rename Cell", "Cell name:", QLineEdit::Normal, current_name, &ok).trimmed();
+        QInputDialog::getText(this, tr("Rename Cell"), tr("Cell name:"), QLineEdit::Normal, current_name, &ok).trimmed();
     if (!ok)
         return;
 
@@ -439,10 +440,8 @@ void CodeEditorScreen::on_run_cell(const QString& cell_id) {
     ++execution_counter_;
     int exec_num = execution_counter_;
 
-    kernel_label_->setText("KERNEL: BUSY");
-    kernel_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; font-weight:600;"
-                                         " letter-spacing:0.5px; padding:0 8px;")
-                                     .arg(colors::WARNING(), fonts::DATA_FAMILY));
+    kernel_busy_ = true;
+    refresh_kernel_label();
 
     QPointer<CodeEditorScreen> self = this;
     QString cid = cell_id;
@@ -469,7 +468,7 @@ void CodeEditorScreen::on_run_cell(const QString& cell_id) {
             CellOutput out;
             out.type = "error";
             out.error_name = "ExecutionError";
-            out.error_value = result.error.isEmpty() ? QString("Process exited with code %1").arg(result.exit_code)
+            out.error_value = result.error.isEmpty() ? tr("Process exited with code %1").arg(result.exit_code)
                                                      : result.error.split('\n').last();
             out.traceback = result.error.split('\n');
             out.text = result.error;
@@ -494,10 +493,8 @@ void CodeEditorScreen::on_run_cell(const QString& cell_id) {
             widget->set_running(false);
         }
 
-        self->kernel_label_->setText("KERNEL: IDLE");
-        self->kernel_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; font-weight:600;"
-                                                   " letter-spacing:0.5px; padding:0 8px;")
-                                               .arg(colors::POSITIVE(), fonts::DATA_FAMILY));
+        self->kernel_busy_ = false;
+        self->refresh_kernel_label();
 
         self->update_status();
         self->update_navigator();
@@ -522,7 +519,7 @@ void CodeEditorScreen::on_run_all() {
 
 void CodeEditorScreen::on_open_notebook() {
     QString path =
-        QFileDialog::getOpenFileName(this, "Open Notebook", {}, "Jupyter Notebooks (*.ipynb);;All Files (*)");
+        QFileDialog::getOpenFileName(this, tr("Open Notebook"), {}, tr("Jupyter Notebooks (*.ipynb);;All Files (*)"));
     if (path.isEmpty())
         return;
 
@@ -586,7 +583,7 @@ void CodeEditorScreen::on_save_notebook() {
 
     QString path = notebook_path_;
     if (path.isEmpty()) {
-        path = QFileDialog::getSaveFileName(this, "Save Notebook", "notebook.ipynb", "Jupyter Notebooks (*.ipynb)");
+        path = QFileDialog::getSaveFileName(this, tr("Save Notebook"), "notebook.ipynb", tr("Jupyter Notebooks (*.ipynb)"));
         if (path.isEmpty())
             return;
     }
@@ -699,7 +696,7 @@ void CodeEditorScreen::update_status() {
             ++executed;
     }
 
-    QString info = QString("CELLS: %1 CODE  %2 MD  |  EXECUTED: %3").arg(code_count).arg(md_count).arg(executed);
+    QString info = tr("CELLS: %1 CODE  %2 MD  |  EXECUTED: %3").arg(code_count).arg(md_count).arg(executed);
     if (!notebook_path_.isEmpty())
         info += "  |  " + QFileInfo(notebook_path_).fileName();
     status_label_->setText(info);
@@ -708,6 +705,46 @@ void CodeEditorScreen::update_status() {
 void CodeEditorScreen::update_navigator() {
     if (navigator_)
         navigator_->rebuild(cells_, selected_cell_id_);
+}
+
+void CodeEditorScreen::refresh_kernel_label() {
+    if (!kernel_label_)
+        return;
+    kernel_label_->setText(kernel_busy_ ? tr("KERNEL: BUSY") : tr("KERNEL: IDLE"));
+    kernel_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; font-weight:600;"
+                                         " letter-spacing:0.5px; padding:0 8px;")
+                                     .arg(kernel_busy_ ? colors::WARNING() : colors::POSITIVE(), fonts::DATA_FAMILY));
+}
+
+// ── Live language switch ─────────────────────────────────────────────────────
+
+void CodeEditorScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void CodeEditorScreen::retranslateUi() {
+    // Toolbar
+    if (toolbar_title_) toolbar_title_->setText(tr("PYTHON NOTEBOOK"));
+    if (btn_new_) btn_new_->setText(tr("NEW"));
+    if (btn_open_) btn_open_->setText(tr("OPEN"));
+    if (btn_save_) btn_save_->setText(tr("SAVE"));
+    if (btn_add_cell_) btn_add_cell_->setText(tr("+ CELL"));
+    if (btn_clear_out_) btn_clear_out_->setText(tr("CLEAR OUT"));
+    if (btn_run_all_) btn_run_all_->setText(tr("RUN ALL"));
+    if (btn_sidebar_) btn_sidebar_->setText(tr("SIDEBAR"));
+    if (py_label_) py_label_->setText(tr("Python 3.11"));
+    refresh_kernel_label();
+
+    // Status bar
+    if (shortcuts_label_)
+        shortcuts_label_->setText(tr("Ctrl+Enter: RUN  |  Shift+Enter: RUN & NEXT  |  Tab: 4 SPACES  |  Ctrl+S: SAVE"));
+    update_status(); // re-renders the cell-count summary in the new language
+
+    // Cell widgets carry their own translatable chrome — rebuild so they
+    // re-create with the new language (cell source/outputs are data, preserved).
+    rebuild_cells();
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────

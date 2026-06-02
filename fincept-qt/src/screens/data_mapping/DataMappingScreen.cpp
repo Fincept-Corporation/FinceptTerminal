@@ -167,15 +167,138 @@ void DataMappingScreen::setup_ui() {
     on_view_changed(0);
 }
 
+void DataMappingScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void DataMappingScreen::retranslateUi() {
+    // Header
+    if (header_title_) header_title_->setText(tr("DATA MAPPING ENGINE"));
+    if (header_sub_)   header_sub_->setText(tr("API CONFIGURATION & SCHEMA TRANSFORMATION"));
+    if (header_badge_) header_badge_->setText(tr("7 SCHEMAS"));
+
+    // View buttons (order: MAPPINGS, TEMPLATES, CREATE)
+    const QStringList view_names = {tr("MAPPINGS"), tr("TEMPLATES"), tr("CREATE")};
+    for (int i = 0; i < view_btns_.size() && i < view_names.size(); ++i)
+        view_btns_[i]->setText(view_names[i]);
+
+    // Step bar buttons ("1. API CONFIG" ...)
+    const QStringList step_names = {tr("API CONFIG"), tr("SCHEMA"), tr("FIELD MAPPING"), tr("CACHE"), tr("TEST & SAVE")};
+    for (int i = 0; i < step_btns_.size() && i < step_names.size(); ++i)
+        step_btns_[i]->setText(QString("%1. %2").arg(i + 1).arg(step_names[i]));
+
+    // Left wizard panel
+    if (left_panel_title_) left_panel_title_->setText(tr("WIZARD STEPS"));
+    const QStringList left_labels = {tr("API Configuration"), tr("Schema Selection"), tr("Field Mapping"),
+                                     tr("Cache Settings"), tr("Test & Save")};
+    const QStringList left_icons = {"1", "2", "3", "4", "5"};
+    for (int i = 0; i < left_step_btns_.size() && i < left_labels.size(); ++i)
+        left_step_btns_[i]->setText(left_icons[i] + "  " + left_labels[i]);
+    if (quick_stats_title_)  quick_stats_title_->setText(tr("QUICK STATS"));
+    if (schemas_count_lbl_)  schemas_count_lbl_->setText(tr("Schemas: %1").arg(7));
+    if (parsers_count_lbl_)  parsers_count_lbl_->setText(tr("Parsers: %1").arg(6));
+    if (status_mappings_)    status_mappings_->setText(tr("Saved: %1").arg(saved_mappings_.size()));
+
+    // Right system panel
+    if (right_panel_title_)     right_panel_title_->setText(tr("SYSTEM"));
+    if (mapping_engine_title_)  mapping_engine_title_->setText(tr("MAPPING ENGINE"));
+    if (parser_engines_title_)  parser_engines_title_->setText(tr("PARSER ENGINES"));
+    if (security_title_)        security_title_->setText(tr("SECURITY"));
+    if (current_mapping_title_) current_mapping_title_->setText(tr("CURRENT MAPPING"));
+
+    // Helper: re-apply a form-row's label (each row holds exactly one QLabel).
+    auto set_row_label = [](QWidget* row, const QString& text) {
+        if (!row) return;
+        if (auto* lbl = row->findChild<QLabel*>())
+            lbl->setText(text);
+    };
+
+    // Step 0 — API config
+    if (api_panel_title_) api_panel_title_->setText(tr("API CONFIGURATION"));
+    set_row_label(api_name_row_, tr("MAPPING NAME"));
+    set_row_label(api_base_url_row_, tr("BASE URL"));
+    set_row_label(api_endpoint_row_, tr("ENDPOINT"));
+    set_row_label(api_method_row_, tr("HTTP METHOD"));
+    set_row_label(api_auth_type_row_, tr("AUTHENTICATION"));
+    set_row_label(api_auth_value_row_, tr("AUTH VALUE"));
+    set_row_label(api_headers_row_, tr("HEADERS (one per line)"));
+    set_row_label(api_body_row_, tr("REQUEST BODY (JSON)"));
+    set_row_label(api_timeout_row_, tr("TIMEOUT"));
+    if (api_name_)    api_name_->setPlaceholderText(tr("e.g. Upstox OHLCV"));
+    if (api_auth_value_) api_auth_value_->setPlaceholderText(tr("Token / API Key value"));
+    if (api_timeout_) api_timeout_->setSuffix(tr(" sec"));
+    if (api_test_btn_) api_test_btn_->setText(tr("TEST API REQUEST"));
+
+    // Step 1 — schema
+    if (schema_panel_title_) schema_panel_title_->setText(tr("SCHEMA SELECTION"));
+    set_row_label(schema_type_row_, tr("SCHEMA TYPE"));
+    set_row_label(schema_select_row_, tr("SELECT SCHEMA"));
+    if (schema_type_ && schema_type_->count() >= 2) {
+        schema_type_->setItemText(0, tr("Predefined Schema"));
+        schema_type_->setItemText(1, tr("Custom Schema"));
+    }
+    if (schema_fields_table_)
+        schema_fields_table_->setHorizontalHeaderLabels({tr("Field"), tr("Type"), tr("Required"), tr("Description")});
+
+    // Step 2 — field mapping
+    if (field_panel_title_) field_panel_title_->setText(tr("FIELD MAPPING"));
+    if (parser_label_)      parser_label_->setText(tr("Parser:"));
+    if (json_tree_)    json_tree_->setHeaderLabels({tr("Key"), tr("Value"), tr("Type")});
+    if (mapping_table_)
+        mapping_table_->setHorizontalHeaderLabels({tr("Target Field"), tr("Expression"), tr("Transform"), tr("Default")});
+
+    // Step 3 — cache & security
+    if (cache_panel_title_) cache_panel_title_->setText(tr("CACHE & SECURITY SETTINGS"));
+    set_row_label(cache_enabled_row_, tr("RESPONSE CACHING"));
+    set_row_label(cache_ttl_row_, tr("CACHE TTL"));
+    if (cache_enabled_ && cache_enabled_->count() >= 2) {
+        cache_enabled_->setItemText(0, tr("Enabled"));
+        cache_enabled_->setItemText(1, tr("Disabled"));
+    }
+    if (cache_ttl_)         cache_ttl_->setSuffix(tr(" sec"));
+    if (encryption_title_)  encryption_title_->setText(tr("ENCRYPTION"));
+    if (encryption_detail_) encryption_detail_->setText(tr("API credentials are encrypted with AES-256-GCM before storage.\n"
+                                                           "Sensitive data never stored in plaintext."));
+
+    // Step 4 — test & save
+    if (test_save_panel_title_) test_save_panel_title_->setText(tr("TEST & SAVE"));
+    if (test_btn_)    test_btn_->setText(tr("RUN TEST"));
+    if (test_output_) test_output_->setPlaceholderText(tr("Test results will appear here..."));
+    if (save_btn_)    save_btn_->setText(tr("SAVE MAPPING CONFIGURATION"));
+
+    // List view
+    if (list_title_)   list_title_->setText(tr("SAVED MAPPINGS"));
+    if (list_run_btn_) list_run_btn_->setText(tr("▶ RUN"));
+    if (list_del_btn_) list_del_btn_->setText(tr("DELETE"));
+    if (list_new_btn_) list_new_btn_->setText(tr("+ NEW MAPPING"));
+    if (list_empty_)   list_empty_->setText(tr("No mappings saved yet.\nClick CREATE to build your first data mapping."));
+
+    // Template view
+    if (template_use_btn_)        template_use_btn_->setText(tr("USE THIS TEMPLATE"));
+    if (template_toolbar_title_)  template_toolbar_title_->setText(tr("BROKER TEMPLATES"));
+    if (template_count_lbl_)      template_count_lbl_->setText(tr("%1 templates").arg(templates().size()));
+
+    // Footer + status bar (step/view labels re-derived from current state)
+    if (prev_btn_)       prev_btn_->setText(tr("PREVIOUS"));
+    if (next_btn_)       next_btn_->setText(tr("NEXT"));
+    if (status_version_) status_version_->setText(tr("DATA MAPPING v1.0"));
+    if (status_view_ && current_view_ >= 0 && current_view_ < view_names.size())
+        status_view_->setText(tr("VIEW: %1").arg(view_names[current_view_]));
+    if (current_view_ == 2)
+        update_step_indicators(); // refreshes step_label_ + status_step_ in the new language
+}
+
 void DataMappingScreen::update_step_indicators() {
-    const QStringList labels = {"API CONFIG", "SCHEMA", "FIELD MAPPING", "CACHE", "TEST & SAVE"};
+    const QStringList labels = {tr("API CONFIG"), tr("SCHEMA"), tr("FIELD MAPPING"), tr("CACHE"), tr("TEST & SAVE")};
     for (int i = 0; i < step_btns_.size(); ++i) {
         step_btns_[i]->setProperty("active", i == current_step_);
         step_btns_[i]->setProperty("complete", i < current_step_);
         step_btns_[i]->style()->unpolish(step_btns_[i]);
         step_btns_[i]->style()->polish(step_btns_[i]);
     }
-    step_label_->setText(QString("Step %1 of 5 — %2").arg(current_step_ + 1).arg(labels[current_step_]));
+    step_label_->setText(tr("Step %1 of %2 — %3").arg(current_step_ + 1).arg(5).arg(labels[current_step_]));
     prev_btn_->setEnabled(current_step_ > 0);
     next_btn_->setEnabled(current_step_ < 4);
     status_step_->setText(labels[current_step_]);
@@ -244,8 +367,8 @@ void DataMappingScreen::on_view_changed(int view) {
         view_btns_[i]->style()->polish(view_btns_[i]);
     }
 
-    const QStringList names = {"MAPPINGS", "TEMPLATES", "CREATE"};
-    status_view_->setText("VIEW: " + names[view]);
+    const QStringList names = {tr("MAPPINGS"), tr("TEMPLATES"), tr("CREATE")};
+    status_view_->setText(tr("VIEW: %1").arg(names[view]));
 
     // CREATE is index 2 — show step bar + nav footer only there.
     nav_footer_->setVisible(view == 2); // only in create mode

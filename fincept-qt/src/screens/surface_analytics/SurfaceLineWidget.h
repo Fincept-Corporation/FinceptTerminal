@@ -7,6 +7,7 @@
 // Qt6 Charts as a dependency for a chart that is fundamentally a polyline.
 
 #include <QColor>
+#include <QEvent>
 #include <QString>
 #include <QStringList>
 #include <QWidget>
@@ -47,6 +48,8 @@ class SurfaceLineWidget : public QWidget {
 
   protected:
     void paintEvent(QPaintEvent* event) override;
+    // Repaint on language change so the painter-drawn placeholder refreshes.
+    void changeEvent(QEvent* event) override;
 
   private:
     QString title_;

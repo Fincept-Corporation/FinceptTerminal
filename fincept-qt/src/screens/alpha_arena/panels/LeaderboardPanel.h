@@ -12,6 +12,8 @@
 // Reference: fincept-qt/.grill-me/alpha-arena-grill.md §10 (Scoring) and §11
 // (Frontend C++ surface).
 
+#include <QEvent>
+#include <QLabel>
 #include <QString>
 #include <QTableWidget>
 #include <QWidget>
@@ -33,10 +35,15 @@ class LeaderboardPanel : public QWidget {
   signals:
     void agent_double_clicked(QString agent_id);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     QString stable_colour_for(const QString& model_id) const;
+    void retranslateUi();
 
     QString competition_id_;
+    QLabel* title_ = nullptr;
     QTableWidget* table_;
 };
 

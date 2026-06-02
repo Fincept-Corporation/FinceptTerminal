@@ -11,6 +11,7 @@
 #include "screens/node_editor/properties/NodePropertiesPanel.h"
 #include "screens/node_editor/toolbar/DeployDialog.h"
 #include "screens/node_editor/toolbar/NodeEditorToolbar.h"
+#include "services/cloud/CloudSyncEngine.h"
 #include "services/workflow/NodeRegistry.h"
 #include "services/workflow/WorkflowService.h"
 #include "ui/theme/Theme.h"
@@ -53,6 +54,8 @@ void NodeEditorScreen::showEvent(QShowEvent* event) {
     QApplication::style()->polish(this);
 
     auto_save_timer_->start();
+    // Rate-gated pull of cloud workflows on screen entry (no-op when sync is off).
+    fincept::services::cloud::CloudSyncEngine::instance().request_pull(QStringLiteral("workflow"));
     if (minimap_)
         minimap_->start_tracking();
     // Resume edge animations if execution is in progress
@@ -403,7 +406,8 @@ void NodeEditorScreen::on_delete_node(const QString& node_id) {
 }
 
 void NodeEditorScreen::on_clear_workflow() {
-    auto result = QMessageBox::question(this, "Clear Workflow", "Are you sure you want to clear all nodes and edges?",
+    auto result = QMessageBox::question(this, tr("Clear Workflow"),
+                                        tr("Are you sure you want to clear all nodes and edges?"),
                                         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
 
     if (result == QMessageBox::Yes) {
@@ -414,7 +418,8 @@ void NodeEditorScreen::on_clear_workflow() {
 }
 
 void NodeEditorScreen::on_import_workflow() {
-    QString path = QFileDialog::getOpenFileName(this, "Import Workflow", {}, "JSON Files (*.json);;All Files (*)");
+    QString path =
+        QFileDialog::getOpenFileName(this, tr("Import Workflow"), {}, tr("JSON Files (*.json);;All Files (*)"));
     if (path.isEmpty())
         return;
 
@@ -434,7 +439,7 @@ void NodeEditorScreen::on_import_workflow() {
     QJsonObject obj = doc.object();
     WorkflowDef wf;
     wf.id = obj.value("id").toString(QUuid::createUuid().toString(QUuid::WithoutBraces));
-    wf.name = obj.value("name").toString("Imported Workflow");
+    wf.name = obj.value("name").toString(tr("Imported Workflow"));
     wf.description = obj.value("description").toString();
 
     for (const auto& nv : obj.value("nodes").toArray()) {
@@ -469,8 +474,8 @@ void NodeEditorScreen::on_import_workflow() {
 }
 
 void NodeEditorScreen::on_export_workflow() {
-    QString path =
-        QFileDialog::getSaveFileName(this, "Export Workflow", "workflow.json", "JSON Files (*.json);;All Files (*)");
+    QString path = QFileDialog::getSaveFileName(this, tr("Export Workflow"), "workflow.json",
+                                                tr("JSON Files (*.json);;All Files (*)"));
     if (path.isEmpty())
         return;
 
@@ -541,7 +546,7 @@ void NodeEditorScreen::on_load_workflow() {
             delete conn;
 
             if (workflows.isEmpty()) {
-                QMessageBox::information(this, "Load Workflow", "No saved workflows found.");
+                QMessageBox::information(this, tr("Load Workflow"), tr("No saved workflows found."));
                 return;
             }
 
@@ -551,7 +556,8 @@ void NodeEditorScreen::on_load_workflow() {
                 items << QString("%1  (%2)").arg(wf.name, wf.updated_at);
 
             bool ok = false;
-            QString chosen = QInputDialog::getItem(this, "Load Workflow", "Select a workflow:", items, 0, false, &ok);
+            QString chosen =
+                QInputDialog::getItem(this, tr("Load Workflow"), tr("Select a workflow:"), items, 0, false, &ok);
             if (!ok)
                 return;
 
@@ -601,30 +607,31 @@ void NodeEditorScreen::on_execute() {
 void NodeEditorScreen::on_show_templates() {
     QStringList templates = {
         // Beginner
-        "1. Hello World — Trigger → Set Variable → Display",
-        "2. Stock Quote Lookup — Fetch quote for multiple tickers",
+        tr("1. Hello World — Trigger → Set Variable → Display"),
+        tr("2. Stock Quote Lookup — Fetch quote for multiple tickers"),
         // Market Analysis
-        "3. Multi-Indicator Scanner — RSI + MACD + Bollinger on a stock",
-        "4. Sector Correlation — Compare correlations across sector ETFs",
-        "5. Economic Dashboard — Fetch GDP, CPI, unemployment data",
+        tr("3. Multi-Indicator Scanner — RSI + MACD + Bollinger on a stock"),
+        tr("4. Sector Correlation — Compare correlations across sector ETFs"),
+        tr("5. Economic Dashboard — Fetch GDP, CPI, unemployment data"),
         // Trading
-        "6. Price Alert Trading — Auto-trade when price crosses threshold",
-        "7. Mean Reversion Strategy — Buy oversold / sell overbought with risk checks",
-        "8. Portfolio Rebalancer — Check drift → optimize → place orders",
+        tr("6. Price Alert Trading — Auto-trade when price crosses threshold"),
+        tr("7. Mean Reversion Strategy — Buy oversold / sell overbought with risk checks"),
+        tr("8. Portfolio Rebalancer — Check drift → optimize → place orders"),
         // Risk & Safety
-        "9. Daily Risk Monitor — Positions → VaR → loss limit → alert",
-        "10. Pre-Trade Compliance — Full validation before order execution",
+        tr("9. Daily Risk Monitor — Positions → VaR → loss limit → alert"),
+        tr("10. Pre-Trade Compliance — Full validation before order execution"),
         // Data & AI
-        "11. News Sentiment Pipeline — Fetch news → NLP → filter → alert",
-        "12. AI Research Agent — Multi-agent analysis with mediator",
+        tr("11. News Sentiment Pipeline — Fetch news → NLP → filter → alert"),
+        tr("12. AI Research Agent — Multi-agent analysis with mediator"),
         // Operations
-        "13. Scheduled Report — Daily P&L report to email",
-        "14. Data Export Pipeline — Fetch → transform → CSV export",
-        "15. Webhook Automation — External trigger → process → notify",
+        tr("13. Scheduled Report — Daily P&L report to email"),
+        tr("14. Data Export Pipeline — Fetch → transform → CSV export"),
+        tr("15. Webhook Automation — External trigger → process → notify"),
     };
 
     bool ok = false;
-    QString chosen = QInputDialog::getItem(this, "Workflow Templates", "Select a template:", templates, 0, false, &ok);
+    QString chosen =
+        QInputDialog::getItem(this, tr("Workflow Templates"), tr("Select a template:"), templates, 0, false, &ok);
     if (!ok)
         return;
 

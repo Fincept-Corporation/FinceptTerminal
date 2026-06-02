@@ -104,11 +104,11 @@ void BuybackBurnPanel::build_ui() {
     auto* hl = new QHBoxLayout(head);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(8);
-    title_ = new QLabel(QStringLiteral("BUYBACK & BURN"), head);
+    title_ = new QLabel(tr("BUYBACK & BURN"), head);
     title_->setObjectName(QStringLiteral("buybackBurnTitle"));
-    epoch_window_ = new QLabel(QStringLiteral("epoch — · — → —"), head);
+    epoch_window_ = new QLabel(tr("epoch — · — → —"), head);
     epoch_window_->setObjectName(QStringLiteral("buybackBurnHeadCaption"));
-    status_pill_ = new QLabel(QStringLiteral("LIVE"), head);
+    status_pill_ = new QLabel(tr("LIVE"), head);
     status_pill_->setObjectName(QStringLiteral("buybackBurnPill"));
     hl->addWidget(title_);
     hl->addWidget(epoch_window_);
@@ -123,16 +123,16 @@ void BuybackBurnPanel::build_ui() {
     bl->setContentsMargins(14, 14, 14, 14);
     bl->setSpacing(12);
 
-    auto add_kv = [&](QVBoxLayout* parent, const QString& cap, QLabel*& v_out,
-                      const QString& obj_name = {}) {
+    auto add_kv = [&](QVBoxLayout* parent, const QString& cap, QLabel*& cap_out,
+                      QLabel*& v_out, const QString& obj_name = {}) {
         auto* row = new QHBoxLayout;
         row->setSpacing(8);
-        auto* k = new QLabel(cap, body);
-        k->setObjectName(QStringLiteral("buybackBurnCaption"));
+        cap_out = new QLabel(cap, body);
+        cap_out->setObjectName(QStringLiteral("buybackBurnCaption"));
         v_out = new QLabel(QStringLiteral("—"), body);
         v_out->setObjectName(obj_name.isEmpty()
             ? QStringLiteral("buybackBurnValue") : obj_name);
-        row->addWidget(k);
+        row->addWidget(cap_out);
         row->addStretch(1);
         row->addWidget(v_out);
         parent->addLayout(row);
@@ -140,11 +140,11 @@ void BuybackBurnPanel::build_ui() {
 
     // THIS EPOCH section
     {
-        auto* section_title = new QLabel(QStringLiteral("THIS EPOCH"), body);
-        section_title->setObjectName(QStringLiteral("buybackBurnSectionTitle"));
-        bl->addWidget(section_title);
+        epoch_section_title_ = new QLabel(tr("THIS EPOCH"), body);
+        epoch_section_title_->setObjectName(QStringLiteral("buybackBurnSectionTitle"));
+        bl->addWidget(epoch_section_title_);
 
-        add_kv(bl, QStringLiteral("REVENUE"), revenue_total_,
+        add_kv(bl, tr("REVENUE"), revenue_caption_, revenue_total_,
                QStringLiteral("buybackBurnValueAmber"));
         revenue_split_ = new QLabel(QString(), body);
         revenue_split_->setObjectName(QStringLiteral("buybackBurnSubMeta"));
@@ -153,11 +153,11 @@ void BuybackBurnPanel::build_ui() {
         // The 50/25/25 split (plan §5.4) — show all three so the value loop
         // is visible end-to-end. The numbers come from the worker; the
         // panel just renders.
-        add_kv(bl, QStringLiteral("BUYBACK (50%)"), buyback_usd_);
-        add_kv(bl, QStringLiteral("STAKER YIELD (25%)"), staker_yield_usd_);
-        add_kv(bl, QStringLiteral("TREASURY TOPUP (25%)"), treasury_topup_usd_);
-        add_kv(bl, QStringLiteral("$FNCPT BOUGHT"), fncpt_bought_);
-        add_kv(bl, QStringLiteral("$FNCPT BURNED"), fncpt_burned_,
+        add_kv(bl, tr("BUYBACK (50%)"), buyback_caption_, buyback_usd_);
+        add_kv(bl, tr("STAKER YIELD (25%)"), staker_caption_, staker_yield_usd_);
+        add_kv(bl, tr("TREASURY TOPUP (25%)"), treasury_caption_, treasury_topup_usd_);
+        add_kv(bl, tr("$FNCPT BOUGHT"), bought_caption_, fncpt_bought_);
+        add_kv(bl, tr("$FNCPT BURNED"), burned_caption_, fncpt_burned_,
                QStringLiteral("buybackBurnValueAmber"));
 
         // Burn signature row — clickable. Use a flat QPushButton so the
@@ -165,8 +165,8 @@ void BuybackBurnPanel::build_ui() {
         // mouse-only event filter on a QLabel.
         auto* sig_row = new QHBoxLayout;
         sig_row->setSpacing(8);
-        auto* sig_cap = new QLabel(QStringLiteral("BURN TX"), body);
-        sig_cap->setObjectName(QStringLiteral("buybackBurnCaption"));
+        burn_tx_caption_ = new QLabel(tr("BURN TX"), body);
+        burn_tx_caption_->setObjectName(QStringLiteral("buybackBurnCaption"));
         burn_signature_link_ = new QPushButton(QStringLiteral("—"), body);
         burn_signature_link_->setObjectName(QStringLiteral("buybackBurnSig"));
         burn_signature_link_->setCursor(Qt::PointingHandCursor);
@@ -174,7 +174,7 @@ void BuybackBurnPanel::build_ui() {
         burn_signature_link_->setToolTip(tr("Open burn transaction in Solscan"));
         connect(burn_signature_link_, &QPushButton::clicked, this,
                 &BuybackBurnPanel::on_burn_signature_clicked);
-        sig_row->addWidget(sig_cap);
+        sig_row->addWidget(burn_tx_caption_);
         sig_row->addStretch(1);
         sig_row->addWidget(burn_signature_link_);
         bl->addLayout(sig_row);
@@ -189,14 +189,14 @@ void BuybackBurnPanel::build_ui() {
 
     // ALL-TIME section
     {
-        auto* section_title = new QLabel(QStringLiteral("ALL-TIME"), body);
-        section_title->setObjectName(QStringLiteral("buybackBurnSectionTitle"));
-        bl->addWidget(section_title);
+        alltime_section_title_ = new QLabel(tr("ALL-TIME"), body);
+        alltime_section_title_->setObjectName(QStringLiteral("buybackBurnSectionTitle"));
+        bl->addWidget(alltime_section_title_);
 
-        add_kv(bl, QStringLiteral("BURNED"), total_burned_,
+        add_kv(bl, tr("BURNED"), total_burned_caption_, total_burned_,
                QStringLiteral("buybackBurnValueAmber"));
-        add_kv(bl, QStringLiteral("SUPPLY REMAINING"), supply_remaining_);
-        add_kv(bl, QStringLiteral("SPENT ON BUYBACK"), spent_on_buyback_);
+        add_kv(bl, tr("SUPPLY REMAINING"), supply_caption_, supply_remaining_);
+        add_kv(bl, tr("SPENT ON BUYBACK"), spent_caption_, spent_on_buyback_);
     }
 
     // Error strip
@@ -297,6 +297,34 @@ void BuybackBurnPanel::hideEvent(QHideEvent* e) {
     fincept::datahub::DataHub::instance().unsubscribe(this);
 }
 
+void BuybackBurnPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void BuybackBurnPanel::retranslateUi() {
+    if (title_) title_->setText(tr("BUYBACK & BURN"));
+    // epoch_window_ is data-driven once an epoch publishes; the placeholder
+    // is only visible pre-publish, so it is not re-applied here.
+    if (epoch_section_title_)   epoch_section_title_->setText(tr("THIS EPOCH"));
+    if (alltime_section_title_) alltime_section_title_->setText(tr("ALL-TIME"));
+    if (revenue_caption_)       revenue_caption_->setText(tr("REVENUE"));
+    if (buyback_caption_)       buyback_caption_->setText(tr("BUYBACK (50%)"));
+    if (staker_caption_)        staker_caption_->setText(tr("STAKER YIELD (25%)"));
+    if (treasury_caption_)      treasury_caption_->setText(tr("TREASURY TOPUP (25%)"));
+    if (bought_caption_)        bought_caption_->setText(tr("$FNCPT BOUGHT"));
+    if (burned_caption_)        burned_caption_->setText(tr("$FNCPT BURNED"));
+    if (burn_tx_caption_)       burn_tx_caption_->setText(tr("BURN TX"));
+    if (total_burned_caption_)  total_burned_caption_->setText(tr("BURNED"));
+    if (supply_caption_)        supply_caption_->setText(tr("SUPPLY REMAINING"));
+    if (spent_caption_)         spent_caption_->setText(tr("SPENT ON BUYBACK"));
+    if (burn_signature_link_)
+        burn_signature_link_->setToolTip(tr("Open burn transaction in Solscan"));
+    // Re-render the LIVE/DEMO pill in the new locale.
+    update_demo_chip(epoch_is_mock_ || burn_total_is_mock_);
+}
+
 // ── Updates ────────────────────────────────────────────────────────────────
 
 void BuybackBurnPanel::on_epoch_update(const QVariant& v) {
@@ -392,10 +420,10 @@ void BuybackBurnPanel::clear_error_strip() {
 
 void BuybackBurnPanel::update_demo_chip(bool any_mock) {
     if (any_mock) {
-        status_pill_->setText(QStringLiteral("DEMO"));
+        status_pill_->setText(tr("DEMO"));
         status_pill_->setObjectName(QStringLiteral("buybackBurnPillDemo"));
     } else {
-        status_pill_->setText(QStringLiteral("LIVE"));
+        status_pill_->setText(tr("LIVE"));
         status_pill_->setObjectName(QStringLiteral("buybackBurnPill"));
     }
     status_pill_->style()->unpolish(status_pill_);

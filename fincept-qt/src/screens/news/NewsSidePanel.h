@@ -4,6 +4,7 @@
 #include "services/news/NewsNlpService.h"
 #include "services/news/NewsService.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMap>
@@ -40,6 +41,9 @@ class NewsSidePanel : public QWidget {
     void toggle_drawer();
     bool is_drawer_open() const { return drawer_open_; }
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   signals:
     void category_clicked(const QString& category);
     void article_clicked(const services::NewsArticle& article);
@@ -54,7 +58,24 @@ class NewsSidePanel : public QWidget {
     void build_monitors_section(QVBoxLayout* parent);
     void build_deviations_section(QVBoxLayout* parent);
 
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
+
     bool drawer_open_ = false;
+
+    // Header + fixed section titles (cached for retranslateUi).
+    QLabel* drawer_title_ = nullptr;
+    QLabel* top_stories_title_ = nullptr;
+    QLabel* categories_title_ = nullptr;
+    QLabel* monitors_title_ = nullptr;
+    QLabel* deviations_title_ = nullptr;
+    QLabel* entities_title_ = nullptr;
+    QLabel* locations_title_ = nullptr;
+    QLabel* signals_title_ = nullptr;
+    QLabel* cii_title_ = nullptr;
+    QLabel* predictions_title_ = nullptr;
+    QLabel* saved_title_ = nullptr;
 
     // Top stories
     QVBoxLayout* top_stories_layout_ = nullptr;

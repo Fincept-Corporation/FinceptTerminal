@@ -9,6 +9,7 @@
 #include <QTextEdit>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QVector>
 #include <QWidget>
 
 namespace fincept::chat_mode {
@@ -59,8 +60,11 @@ class ChatMessagePanel : public QWidget {
 
   protected:
     bool eventFilter(QObject* obj, QEvent* ev) override;
+    void changeEvent(QEvent* event) override;
 
   private:
+    void retranslateUi();
+
     QLabel* hdr_title_lbl_ = nullptr;
     QLabel* hdr_credits_lbl_ = nullptr;
     QLabel* hdr_tools_lbl_ = nullptr;
@@ -71,8 +75,13 @@ class ChatMessagePanel : public QWidget {
     QWidget* messages_container_ = nullptr;
     QVBoxLayout* messages_layout_ = nullptr;
     QWidget* welcome_panel_ = nullptr;
+    // Welcome-panel text (cached for retranslateUi)
+    QLabel* welcome_logo_lbl_ = nullptr;
+    QLabel* welcome_sub_lbl_ = nullptr;
+    QVector<QPushButton*> welcome_chips_;
 
     QWidget* typing_indicator_ = nullptr;
+    QLabel* typing_label_ = nullptr; // "Agent"
     QLabel* typing_dots_lbl_ = nullptr;
     QLabel* typing_status_lbl_ = nullptr;
     QTimer* typing_timer_ = nullptr;
@@ -83,6 +92,8 @@ class ChatMessagePanel : public QWidget {
     QPushButton* stop_btn_ = nullptr;
     QPushButton* optimize_btn_ = nullptr;
     QLabel* char_lbl_ = nullptr;
+    int last_credits_ = 0;
+    int last_tools_ = 0;
 
     StreamMode current_mode_ = StreamMode::Lite;
     bool streaming_ = false;

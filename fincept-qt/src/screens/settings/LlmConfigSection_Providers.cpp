@@ -70,9 +70,9 @@ QWidget* LlmConfigSection::build_provider_list_panel() {
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
 
-    auto* lbl = new QLabel("Providers");
-    lbl->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";font-weight:700;letter-spacing:1px;");
-    vl->addWidget(lbl);
+    provider_list_title_ = new QLabel(tr("Providers"));
+    provider_list_title_->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";font-weight:700;letter-spacing:1px;");
+    vl->addWidget(provider_list_title_);
 
     provider_list_ = new QListWidget;
     provider_list_->setStyleSheet(
@@ -88,7 +88,7 @@ QWidget* LlmConfigSection::build_provider_list_panel() {
     vl->addWidget(provider_list_, 1);
 
     auto* btn_row = new QHBoxLayout;
-    add_btn_ = new QPushButton("+ Add");
+    add_btn_ = new QPushButton(tr("+ Add"));
     add_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" +
                             QString(ui::colors::AMBER()) + ";border:1px solid " + QString(ui::colors::AMBER()) +
                             ";"
@@ -99,7 +99,7 @@ QWidget* LlmConfigSection::build_provider_list_panel() {
         // Show input dialog to pick provider
         QStringList choices = KNOWN_PROVIDERS;
         bool ok;
-        QString provider = QInputDialog::getItem(this, "Add Provider", "Select provider:", choices, 0, false, &ok);
+        QString provider = QInputDialog::getItem(this, tr("Add Provider"), tr("Select provider:"), choices, 0, false, &ok);
         if (!ok || provider.isEmpty())
             return;
 
@@ -108,7 +108,7 @@ QWidget* LlmConfigSection::build_provider_list_panel() {
         if (existing.is_ok()) {
             for (const auto& p : existing.value()) {
                 if (p.provider.toLower() == provider.toLower()) {
-                    show_status("Provider already configured", true);
+                    show_status(tr("Provider already configured"), true);
                     return;
                 }
             }
@@ -131,7 +131,7 @@ QWidget* LlmConfigSection::build_provider_list_panel() {
         }
     });
 
-    delete_btn_ = new QPushButton("Remove");
+    delete_btn_ = new QPushButton(tr("Remove"));
     delete_btn_->setEnabled(false);
     delete_btn_->setStyleSheet(
         "QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::NEGATIVE()) +
@@ -173,9 +173,9 @@ QWidget* LlmConfigSection::build_form_panel() {
     vl->setSpacing(14);
 
     // Section title
-    auto* form_title = new QLabel("Provider Configuration");
-    form_title->setStyleSheet("color:" + QString(ui::colors::AMBER()) + ";font-weight:700;");
-    vl->addWidget(form_title);
+    form_title_ = new QLabel(tr("Provider Configuration"));
+    form_title_->setStyleSheet("color:" + QString(ui::colors::AMBER()) + ";font-weight:700;");
+    vl->addWidget(form_title_);
 
     auto* sep = new QFrame;
     sep->setFixedHeight(1);
@@ -198,32 +198,32 @@ QWidget* LlmConfigSection::build_form_panel() {
     };
     auto lbl_style = [](QLabel* l) { l->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";"); };
 
-    auto* p_lbl = new QLabel("Provider");
-    lbl_style(p_lbl);
+    provider_field_lbl_ = new QLabel(tr("Provider"));
+    lbl_style(provider_field_lbl_);
     provider_edit_ = new QLineEdit;
-    provider_edit_->setPlaceholderText("e.g. openai");
+    provider_edit_->setPlaceholderText(tr("e.g. openai"));
     provider_edit_->setReadOnly(true); // set by selection
     field_style(provider_edit_);
     provider_edit_->setStyleSheet(provider_edit_->styleSheet() +
                                   "QLineEdit{background:" + QString(ui::colors::BG_SURFACE()) +
                                   ";color:" + QString(ui::colors::TEXT_TERTIARY()) + ";}");
-    form->addRow(p_lbl, provider_edit_);
+    form->addRow(provider_field_lbl_, provider_edit_);
 
-    auto* k_lbl = new QLabel("API Key");
-    lbl_style(k_lbl);
+    api_key_field_lbl_ = new QLabel(tr("API Key"));
+    lbl_style(api_key_field_lbl_);
     api_key_edit_ = new QLineEdit;
     api_key_edit_->setPlaceholderText("sk-...");
     api_key_edit_->setEchoMode(QLineEdit::Password);
     field_style(api_key_edit_);
-    form->addRow(k_lbl, api_key_edit_);
+    form->addRow(api_key_field_lbl_, api_key_edit_);
 
-    auto* m_lbl = new QLabel("Model");
-    lbl_style(m_lbl);
+    model_field_lbl_ = new QLabel(tr("Model"));
+    lbl_style(model_field_lbl_);
     auto* model_row = new QHBoxLayout;
     model_combo_ = new QComboBox;
     model_combo_->setEditable(true);
     model_combo_->setMinimumWidth(260);
-    model_combo_->lineEdit()->setPlaceholderText("Select or type model...");
+    model_combo_->lineEdit()->setPlaceholderText(tr("Select or type model..."));
     model_combo_->setStyleSheet("QComboBox{background:" + QString(ui::colors::BG_RAISED()) +
                                 ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " +
                                 QString(ui::colors::BORDER_MED()) +
@@ -247,7 +247,7 @@ QWidget* LlmConfigSection::build_form_panel() {
                                 QString(ui::colors::BORDER_MED()) + ";}");
     model_row->addWidget(model_combo_, 1);
 
-    fetch_btn_ = new QPushButton("Fetch");
+    fetch_btn_ = new QPushButton(tr("Fetch"));
     fetch_btn_->setFixedHeight(30);
     fetch_btn_->setFixedWidth(60);
     fetch_btn_->setStyleSheet(
@@ -263,17 +263,17 @@ QWidget* LlmConfigSection::build_form_panel() {
     connect(fetch_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_fetch_models);
     model_row->addWidget(fetch_btn_);
 
-    form->addRow(m_lbl, model_row);
+    form->addRow(model_field_lbl_, model_row);
 
-    auto* b_lbl = new QLabel("Base URL");
-    lbl_style(b_lbl);
+    base_url_field_lbl_ = new QLabel(tr("Base URL"));
+    lbl_style(base_url_field_lbl_);
     base_url_edit_ = new QLineEdit;
-    base_url_edit_->setPlaceholderText("Optional — leave empty for default");
+    base_url_edit_->setPlaceholderText(tr("Optional — leave empty for default"));
     field_style(base_url_edit_);
-    form->addRow(b_lbl, base_url_edit_);
+    form->addRow(base_url_field_lbl_, base_url_edit_);
 
     // Tools toggle
-    tools_check_ = new QCheckBox("Enable MCP Tools (navigation, market data, portfolio, etc.)");
+    tools_check_ = new QCheckBox(tr("Enable MCP Tools (navigation, market data, portfolio, etc.)"));
     tools_check_->setChecked(true);
     tools_check_->setStyleSheet("QCheckBox{color:" + QString(ui::colors::TEXT_PRIMARY()) +
                                 ";spacing:8px;}"
@@ -283,15 +283,15 @@ QWidget* LlmConfigSection::build_form_panel() {
                                 ";}"
                                 "QCheckBox::indicator:checked{background:" +
                                 QString(ui::colors::AMBER()) + ";border-color:" + QString(ui::colors::AMBER()) + ";}");
-    tools_check_->setToolTip("When enabled, the AI can interact with the terminal: navigate screens, fetch market "
-                             "data, manage watchlists, etc.");
+    tools_check_->setToolTip(tr("When enabled, the AI can interact with the terminal: navigate screens, fetch market "
+                                "data, manage watchlists, etc."));
     form->addRow(new QLabel(""), tools_check_);
 
     vl->addLayout(form);
 
     // Buttons
     auto* btn_row = new QHBoxLayout;
-    save_btn_ = new QPushButton("Save & Set Active");
+    save_btn_ = new QPushButton(tr("Save & Set Active"));
     save_btn_->setFixedHeight(34);
     save_btn_->setStyleSheet(
         "QPushButton{background:" + QString(ui::colors::AMBER()) + ";color:" + QString(ui::colors::BG_BASE()) +
@@ -304,7 +304,7 @@ QWidget* LlmConfigSection::build_form_panel() {
         QString(ui::colors::BORDER_BRIGHT()) + ";color:" + QString(ui::colors::TEXT_TERTIARY()) + ";}");
     connect(save_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_save_provider);
 
-    test_btn_ = new QPushButton("Test Connection");
+    test_btn_ = new QPushButton(tr("Test Connection"));
     test_btn_->setFixedHeight(34);
     test_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) +
                              ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " +
@@ -338,17 +338,17 @@ QWidget* LlmConfigSection::build_global_panel() {
     vl->setContentsMargins(24, 12, 24, 12);
     vl->setSpacing(10);
 
-    auto* title = new QLabel("GLOBAL SETTINGS");
-    title->setStyleSheet("color:" + QString(ui::colors::AMBER()) + ";font-weight:700;letter-spacing:1px;");
-    vl->addWidget(title);
+    global_title_ = new QLabel(tr("GLOBAL SETTINGS"));
+    global_title_->setStyleSheet("color:" + QString(ui::colors::AMBER()) + ";font-weight:700;letter-spacing:1px;");
+    vl->addWidget(global_title_);
 
     auto* row = new QHBoxLayout;
     row->setSpacing(24);
 
     // Temperature
     auto* temp_grp = new QVBoxLayout;
-    auto* temp_lbl = new QLabel("Temperature");
-    temp_lbl->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";");
+    temp_lbl_ = new QLabel(tr("Temperature"));
+    temp_lbl_->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";");
     temp_spin_ = new QDoubleSpinBox;
     temp_spin_->setRange(0.0, 2.0);
     temp_spin_->setSingleStep(0.05);
@@ -360,14 +360,14 @@ QWidget* LlmConfigSection::build_global_panel() {
                               QString(ui::colors::BORDER_MED()) +
                               ";"
                               "border-radius:3px;padding:4px;}");
-    temp_grp->addWidget(temp_lbl);
+    temp_grp->addWidget(temp_lbl_);
     temp_grp->addWidget(temp_spin_);
     row->addLayout(temp_grp);
 
     // Max tokens
     auto* tok_grp = new QVBoxLayout;
-    auto* tok_lbl = new QLabel("Max Tokens");
-    tok_lbl->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";");
+    tokens_lbl_ = new QLabel(tr("Max Tokens"));
+    tokens_lbl_->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";");
     tokens_spin_ = new QSpinBox;
     tokens_spin_->setRange(100, 32000);
     tokens_spin_->setSingleStep(100);
@@ -378,7 +378,7 @@ QWidget* LlmConfigSection::build_global_panel() {
                                 QString(ui::colors::BORDER_MED()) +
                                 ";"
                                 "border-radius:3px;padding:4px;}");
-    tok_grp->addWidget(tok_lbl);
+    tok_grp->addWidget(tokens_lbl_);
     tok_grp->addWidget(tokens_spin_);
     row->addLayout(tok_grp);
 
@@ -386,10 +386,10 @@ QWidget* LlmConfigSection::build_global_panel() {
     // values let long workflows (multi-section report fills) finish; lower
     // values cap the blast radius of a runaway model.
     auto* rounds_grp = new QVBoxLayout;
-    auto* rounds_lbl = new QLabel("Max Tool Rounds");
-    rounds_lbl->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";");
-    rounds_lbl->setToolTip("Ceiling on tool-call rounds per chat turn. Default 40.\n"
-                           "Range 1-200. Raise for long workflows (e.g. populating multi-section reports).");
+    tool_rounds_lbl_ = new QLabel(tr("Max Tool Rounds"));
+    tool_rounds_lbl_->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";");
+    tool_rounds_lbl_->setToolTip(tr("Ceiling on tool-call rounds per chat turn. Default 40.\n"
+                                    "Range 1-200. Raise for long workflows (e.g. populating multi-section reports)."));
     tool_rounds_spin_ = new QSpinBox;
     tool_rounds_spin_->setRange(1, 200);
     tool_rounds_spin_->setSingleStep(5);
@@ -400,16 +400,16 @@ QWidget* LlmConfigSection::build_global_panel() {
                                      QString(ui::colors::BORDER_MED()) +
                                      ";"
                                      "border-radius:3px;padding:4px;}");
-    rounds_grp->addWidget(rounds_lbl);
+    rounds_grp->addWidget(tool_rounds_lbl_);
     rounds_grp->addWidget(tool_rounds_spin_);
     row->addLayout(rounds_grp);
 
     // System prompt
     auto* sp_grp = new QVBoxLayout;
-    auto* sp_lbl = new QLabel("System Prompt");
-    sp_lbl->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";");
+    system_prompt_lbl_ = new QLabel(tr("System Prompt"));
+    system_prompt_lbl_->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";");
     system_prompt_ = new QPlainTextEdit;
-    system_prompt_->setPlaceholderText("Optional system prompt for the LLM...");
+    system_prompt_->setPlaceholderText(tr("Optional system prompt for the LLM..."));
     system_prompt_->setFixedHeight(60);
     system_prompt_->setStyleSheet("QPlainTextEdit{background:" + QString(ui::colors::BG_RAISED()) +
                                   ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " +
@@ -418,13 +418,13 @@ QWidget* LlmConfigSection::build_global_panel() {
                                   "border-radius:3px;padding:4px;}"
                                   "QPlainTextEdit:focus{border:1px solid " +
                                   QString(ui::colors::AMBER()) + ";}");
-    sp_grp->addWidget(sp_lbl);
+    sp_grp->addWidget(system_prompt_lbl_);
     sp_grp->addWidget(system_prompt_);
     row->addLayout(sp_grp, 1);
 
     vl->addLayout(row);
 
-    save_global_btn_ = new QPushButton("Save Global Settings");
+    save_global_btn_ = new QPushButton(tr("Save Global Settings"));
     save_global_btn_->setFixedHeight(30);
     save_global_btn_->setFixedWidth(180);
     save_global_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" +
@@ -459,7 +459,7 @@ void LlmConfigSection::load_providers() {
     if (result.is_ok()) {
         for (const auto& p : result.value()) {
             bool is_fincept = (p.provider.toLower() == "fincept");
-            QString display = is_fincept ? "Fincept LLM" : p.provider;
+            QString display = is_fincept ? tr("Fincept LLM") : p.provider;
             if (p.is_active) {
                 display += "  ✓";
                 active_provider = p.provider;
@@ -551,9 +551,9 @@ void LlmConfigSection::populate_form(const QString& provider) {
                 auto stored = SettingsRepository::instance().get("fincept_api_key");
                 if (stored.is_ok() && !stored.value().isEmpty()) {
                     QString masked = stored.value().left(8) + "...";
-                    api_key_edit_->setPlaceholderText("Linked to your Fincept account: " + masked);
+                    api_key_edit_->setPlaceholderText(tr("Linked to your Fincept account: %1").arg(masked));
                 } else {
-                    api_key_edit_->setPlaceholderText("Login to your Fincept account to enable");
+                    api_key_edit_->setPlaceholderText(tr("Login to your Fincept account to enable"));
                 }
                 api_key_edit_->setEnabled(false);
                 // Fincept is a managed service — hide model/base_url/fetch
@@ -565,7 +565,7 @@ void LlmConfigSection::populate_form(const QString& provider) {
                 // don't think it's broken or required.
                 api_key_edit_->clear();
                 api_key_edit_->setEnabled(false);
-                api_key_edit_->setPlaceholderText("Not required — local provider");
+                api_key_edit_->setPlaceholderText(tr("Not required — local provider"));
                 model_combo_->setVisible(true);
                 model_combo_->setEnabled(true);
                 fetch_btn_->setVisible(true);
@@ -596,14 +596,14 @@ void LlmConfigSection::populate_form(const QString& provider) {
     if (is_fincept) {
         auto stored = SettingsRepository::instance().get("fincept_api_key");
         if (stored.is_ok() && !stored.value().isEmpty())
-            api_key_edit_->setPlaceholderText("Linked to your Fincept account: " + stored.value().left(8) + "...");
+            api_key_edit_->setPlaceholderText(tr("Linked to your Fincept account: %1").arg(stored.value().left(8) + "..."));
         else
-            api_key_edit_->setPlaceholderText("Login to your Fincept account to enable");
+            api_key_edit_->setPlaceholderText(tr("Login to your Fincept account to enable"));
         model_combo_->setVisible(false);
         fetch_btn_->setVisible(false);
         base_url_edit_->setVisible(false);
     } else if (is_ollama) {
-        api_key_edit_->setPlaceholderText("Not required — local provider");
+        api_key_edit_->setPlaceholderText(tr("Not required — local provider"));
         model_combo_->setVisible(true);
         model_combo_->setEnabled(true);
         fetch_btn_->setVisible(true);
@@ -642,7 +642,7 @@ void LlmConfigSection::on_provider_selected(int row) {
 void LlmConfigSection::on_save_provider() {
     QString provider = provider_edit_->text().trimmed().toLower();
     if (provider.isEmpty()) {
-        show_status("No provider selected", true);
+        show_status(tr("No provider selected"), true);
         return;
     }
 
@@ -665,24 +665,24 @@ void LlmConfigSection::on_save_provider() {
 
     // Basic validation
     if (!is_fincept && provider != "ollama" && cfg.api_key.isEmpty()) {
-        show_status("API key is required for " + provider, true);
+        show_status(tr("API key is required for %1").arg(provider), true);
         return;
     }
     if (!is_fincept && cfg.model.isEmpty()) {
-        show_status("Model name is required", true);
+        show_status(tr("Model name is required"), true);
         return;
     }
 
     // Save first (INSERT OR REPLACE), THEN set active (deactivates others + activates this one)
     auto r2 = LlmConfigRepository::instance().save_provider(cfg);
     if (r2.is_err()) {
-        show_status("Failed to save: " + QString::fromStdString(r2.error()), true);
+        show_status(tr("Failed to save: ") + QString::fromStdString(r2.error()), true);
         LOG_ERROR(TAG_PROVIDERS,"save_provider failed for " + provider + ": " + QString::fromStdString(r2.error()));
         return;
     }
     auto r3 = LlmConfigRepository::instance().set_active(provider);
     if (r3.is_err()) {
-        show_status("Failed to activate: " + QString::fromStdString(r3.error()), true);
+        show_status(tr("Failed to activate: ") + QString::fromStdString(r3.error()), true);
         LOG_ERROR(TAG_PROVIDERS,"set_active failed for " + provider + ": " + QString::fromStdString(r3.error()));
         return;
     }
@@ -694,14 +694,14 @@ void LlmConfigSection::on_save_provider() {
     auto verify = LlmConfigRepository::instance().get_active_provider();
     if (!verify.is_ok() || verify.value().provider.toLower() != provider) {
         QString detail = verify.is_ok()
-                             ? QString("active is '%1' not '%2'").arg(verify.value().provider, provider)
+                             ? tr("active is '%1' not '%2'").arg(verify.value().provider, provider)
                              : QString::fromStdString(verify.error());
-        show_status("Save verification failed: " + detail, true);
+        show_status(tr("Save verification failed: ") + detail, true);
         LOG_ERROR(TAG_PROVIDERS,"Save verification failed — " + detail);
         return;
     }
 
-    show_status("Saved and set as active provider", false);
+    show_status(tr("Saved and set as active provider"), false);
     load_providers();
     ai_chat::LlmService::instance().reload_config();
     emit config_changed();
@@ -717,11 +717,11 @@ void LlmConfigSection::on_delete_provider() {
     QString provider = provider_list_->item(row)->data(Qt::UserRole).toString();
 
     if (provider.toLower() == "fincept") {
-        show_status("Cannot remove built-in Fincept provider", true);
+        show_status(tr("Cannot remove built-in Fincept provider"), true);
         return;
     }
 
-    auto reply = QMessageBox::question(this, "Delete Provider", "Remove '" + provider + "' configuration?",
+    auto reply = QMessageBox::question(this, tr("Delete Provider"), tr("Remove '%1' configuration?").arg(provider),
                                        QMessageBox::Yes | QMessageBox::No);
 
     if (reply != QMessageBox::Yes)
@@ -742,18 +742,18 @@ void LlmConfigSection::on_save_global() {
 
     auto r = LlmConfigRepository::instance().save_global_settings(gs);
     if (r.is_err()) {
-        show_status("Failed to save global settings", true);
+        show_status(tr("Failed to save global settings"), true);
         return;
     }
 
-    show_status("Global settings saved", false);
+    show_status(tr("Global settings saved"), false);
     emit config_changed();
 }
 
 void LlmConfigSection::on_test_connection() {
     QString provider = provider_edit_->text().trimmed().toLower();
     if (provider.isEmpty()) {
-        show_status("Select a provider first", true);
+        show_status(tr("Select a provider first"), true);
         return;
     }
 
@@ -761,20 +761,20 @@ void LlmConfigSection::on_test_connection() {
         // Fincept is a managed service — verify API key exists
         auto stored = SettingsRepository::instance().get("fincept_api_key");
         if (stored.is_ok() && !stored.value().isEmpty())
-            show_status("Fincept connected — API key active", false);
+            show_status(tr("Fincept connected — API key active"), false);
         else
-            show_status("Not connected — login to your Fincept account first", true);
+            show_status(tr("Not connected — login to your Fincept account first"), true);
         return;
     }
 
     if (provider != "ollama") {
         if (api_key_edit_->text().trimmed().isEmpty()) {
-            show_status("API key required for test", true);
+            show_status(tr("API key required for test"), true);
             return;
         }
     }
 
-    show_status("Testing connection...", false);
+    show_status(tr("Testing connection..."), false);
     test_btn_->setEnabled(false);
 
     // Real test: fetch models list — if it succeeds, the connection works.
@@ -787,9 +787,9 @@ void LlmConfigSection::on_test_connection() {
                             return;
                         test_btn_->setEnabled(true);
                         if (err.isEmpty())
-                            show_status("Connected — " + QString::number(models.size()) + " models available", false);
+                            show_status(tr("Connected — %1 models available").arg(models.size()), false);
                         else
-                            show_status("Connection failed: " + err, true);
+                            show_status(tr("Connection failed: ") + err, true);
                         disconnect(*conn);
                     });
 
@@ -800,23 +800,23 @@ void LlmConfigSection::on_test_connection() {
 void LlmConfigSection::on_fetch_models() {
     QString provider = provider_edit_->text().trimmed().toLower();
     if (provider.isEmpty()) {
-        show_status("Select a provider first", true);
+        show_status(tr("Select a provider first"), true);
         return;
     }
 
     if (provider == "fincept") {
-        show_status("Fincept manages models automatically", false);
+        show_status(tr("Fincept manages models automatically"), false);
         return;
     }
 
     if (provider != "ollama") {
         if (api_key_edit_->text().trimmed().isEmpty()) {
-            show_status("Enter API key first, then fetch models", true);
+            show_status(tr("Enter API key first, then fetch models"), true);
             return;
         }
     }
 
-    show_status("Fetching models...", false);
+    show_status(tr("Fetching models..."), false);
     fetch_btn_->setEnabled(false);
 
     ai_chat::LlmService::instance().fetch_models(provider, api_key_edit_->text().trimmed(),
@@ -835,9 +835,9 @@ void LlmConfigSection::on_models_fetched(const QString& provider, const QStringL
         // not found, etc.) instead of guessing. For ollama add a hint about
         // the local server in case that's the cause.
         if (provider.toLower() == "ollama")
-            show_status("Ollama fetch failed: " + error + " — check `ollama serve` and base URL", true);
+            show_status(tr("Ollama fetch failed: %1 — check `ollama serve` and base URL").arg(error), true);
         else
-            show_status("Fetch failed: " + error, true);
+            show_status(tr("Fetch failed: ") + error, true);
         return;
     }
 
@@ -858,7 +858,7 @@ void LlmConfigSection::on_models_fetched(const QString& provider, const QStringL
     else if (model_combo_->count() > 0)
         model_combo_->setCurrentIndex(0);
 
-    show_status(QString::number(models.size()) + " models loaded for " + provider, false);
+    show_status(tr("%1 models loaded for %2").arg(models.size()).arg(provider), false);
     LOG_INFO(TAG_PROVIDERS,QString("Fetched %1 models for %2").arg(models.size()).arg(provider));
 }
 

@@ -31,7 +31,7 @@ QString fmt_currency(double v) {
     return QLocale(QLocale::English).toString(v, 'f', 0);
 }
 
-void add_kv(QHBoxLayout* row, QLabel*& value_out, const QString& key, QWidget* parent) {
+void add_kv(QHBoxLayout* row, QLabel*& value_out, QLabel*& key_out, const QString& key, QWidget* parent) {
     auto* k = new QLabel(key.toUpper(), parent);
     k->setObjectName("fnoRbnKey");
     auto* v = new QLabel(QString::fromUtf8("—"), parent);
@@ -41,6 +41,7 @@ void add_kv(QHBoxLayout* row, QLabel*& value_out, const QString& key, QWidget* p
     row->addWidget(v);
     row->addSpacing(12);
     value_out = v;
+    key_out = k;
 }
 
 void set_pnl_color(QLabel* lbl, const QString& pnl_class) {
@@ -78,10 +79,10 @@ void BuilderAnalyticsRibbon::setup_ui() {
     row1->setContentsMargins(6, 2, 6, 2);
     row1->setSpacing(0);
 
-    add_kv(row1, lbl_premium_, "Premium", row1_w);
-    add_kv(row1, lbl_max_profit_, "Max Profit", row1_w);
-    add_kv(row1, lbl_max_loss_, "Max Loss", row1_w);
-    add_kv(row1, lbl_breakevens_, "Breakevens", row1_w);
+    add_kv(row1, lbl_premium_, key_premium_, tr("Premium"), row1_w);
+    add_kv(row1, lbl_max_profit_, key_max_profit_, tr("Max Profit"), row1_w);
+    add_kv(row1, lbl_max_loss_, key_max_loss_, tr("Max Loss"), row1_w);
+    add_kv(row1, lbl_breakevens_, key_breakevens_, tr("Breakevens"), row1_w);
     row1->addStretch(1);
     root->addWidget(row1_w);
 
@@ -92,12 +93,12 @@ void BuilderAnalyticsRibbon::setup_ui() {
     row2->setContentsMargins(6, 2, 6, 2);
     row2->setSpacing(0);
 
-    add_kv(row2, lbl_pop_, "POP", row2_w);
-    add_kv(row2, lbl_delta_, "Delta", row2_w);
-    add_kv(row2, lbl_gamma_, "Gamma", row2_w);
-    add_kv(row2, lbl_theta_, "Theta", row2_w);
-    add_kv(row2, lbl_vega_, "Vega", row2_w);
-    add_kv(row2, lbl_margin_, "Margin", row2_w);
+    add_kv(row2, lbl_pop_, key_pop_, tr("POP"), row2_w);
+    add_kv(row2, lbl_delta_, key_delta_, tr("Delta"), row2_w);
+    add_kv(row2, lbl_gamma_, key_gamma_, tr("Gamma"), row2_w);
+    add_kv(row2, lbl_theta_, key_theta_, tr("Theta"), row2_w);
+    add_kv(row2, lbl_vega_, key_vega_, tr("Vega"), row2_w);
+    add_kv(row2, lbl_margin_, key_margin_, tr("Margin"), row2_w);
     row2->addStretch(1);
     root->addWidget(row2_w);
 }
@@ -169,6 +170,26 @@ void BuilderAnalyticsRibbon::set_margin(double value, bool estimated) {
 void BuilderAnalyticsRibbon::clear_margin() {
     lbl_margin_->setText(QString::fromUtf8("—"));
     set_pnl_color(lbl_margin_, "neutral");
+}
+
+void BuilderAnalyticsRibbon::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void BuilderAnalyticsRibbon::retranslateUi() {
+    // Keys mirror add_kv's .toUpper() rendering. Value cells carry data only.
+    if (key_premium_)     key_premium_->setText(tr("Premium").toUpper());
+    if (key_max_profit_)  key_max_profit_->setText(tr("Max Profit").toUpper());
+    if (key_max_loss_)    key_max_loss_->setText(tr("Max Loss").toUpper());
+    if (key_breakevens_)  key_breakevens_->setText(tr("Breakevens").toUpper());
+    if (key_pop_)         key_pop_->setText(tr("POP").toUpper());
+    if (key_delta_)       key_delta_->setText(tr("Delta").toUpper());
+    if (key_gamma_)       key_gamma_->setText(tr("Gamma").toUpper());
+    if (key_theta_)       key_theta_->setText(tr("Theta").toUpper());
+    if (key_vega_)        key_vega_->setText(tr("Vega").toUpper());
+    if (key_margin_)      key_margin_->setText(tr("Margin").toUpper());
 }
 
 } // namespace fincept::screens::fno

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QDialog>
+#include <QEvent>
+#include <QVector>
 
 class QLabel;
 class QPushButton;
@@ -43,18 +45,30 @@ class OnboardingTour : public QDialog {
 
   protected:
     void closeEvent(QCloseEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     explicit OnboardingTour(QWidget* parent);
 
     void build_ui();
     QWidget* build_step(const QString& title, const QString& body, const QString& tip);
+    void retranslateUi();
     void on_next();
     void on_back();
     void on_skip();
     void on_finish();
     void update_buttons();
 
+    // Per-step text labels (cached for retranslateUi). Index aligns with the
+    // step order added to steps_.
+    struct StepLabels {
+        QLabel* title = nullptr;
+        QLabel* body = nullptr;
+        QLabel* tip = nullptr;
+    };
+    QVector<StepLabels> step_labels_;
+
+    QLabel* heading_ = nullptr; // "A 30-second tour" title
     QStackedWidget* steps_ = nullptr;
     QPushButton* btn_back_ = nullptr;
     QPushButton* btn_next_ = nullptr;

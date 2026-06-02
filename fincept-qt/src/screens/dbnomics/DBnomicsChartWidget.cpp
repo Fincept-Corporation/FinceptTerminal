@@ -100,7 +100,7 @@ void DBnomicsChartWidget::build_ui() {
 
     auto* chart = new QChart();
     style_chart(chart, false);
-    chart->setTitle("NO DATA — SELECT A SERIES FROM THE LEFT PANEL");
+    chart->setTitle(tr("NO DATA — SELECT A SERIES FROM THE LEFT PANEL"));
     chart_view_->setChart(chart);
     chart_view_->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
     stack_->addWidget(chart_view_); // index 1
@@ -113,9 +113,24 @@ void DBnomicsChartWidget::build_ui() {
     spin_timer_->setInterval(120);
     connect(spin_timer_, &QTimer::timeout, this, [this]() {
         static const QString frames[] = {"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"};
-        spin_label_->setText(QString("%1  FETCHING DATA...").arg(frames[frame_ % 8]));
+        spin_label_->setText(tr("%1  FETCHING DATA...").arg(frames[frame_ % 8]));
         ++frame_;
     });
+}
+
+// ── Live language switch ─────────────────────────────────────────────────────
+
+void DBnomicsChartWidget::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void DBnomicsChartWidget::retranslateUi() {
+    // Only the empty-state title is translatable chrome; rendered series titles
+    // carry data names and are rebuilt by set_data().
+    if (showing_placeholder_ && chart_view_ && chart_view_->chart())
+        chart_view_->chart()->setTitle(tr("NO DATA — SELECT A SERIES FROM THE LEFT PANEL"));
 }
 
 void DBnomicsChartWidget::set_compact(bool compact) {
@@ -128,7 +143,7 @@ void DBnomicsChartWidget::set_compact(bool compact) {
 void DBnomicsChartWidget::set_loading(bool on) {
     if (on) {
         frame_ = 0;
-        spin_label_->setText("⣾  FETCHING DATA...");
+        spin_label_->setText(tr("%1  FETCHING DATA...").arg(QStringLiteral("⣾")));
         stack_->setCurrentIndex(0);
         spin_timer_->start();
     } else {
@@ -143,12 +158,16 @@ void DBnomicsChartWidget::clear() {
     const auto axes = chart->axes();
     for (auto* axis : axes)
         chart->removeAxis(axis);
-    chart->setTitle("NO DATA — SELECT A SERIES FROM THE LEFT PANEL");
+    chart->setTitle(tr("NO DATA — SELECT A SERIES FROM THE LEFT PANEL"));
+    showing_placeholder_ = true;
 }
 
 void DBnomicsChartWidget::set_data(const QVector<services::DbnDataPoint>& series, services::DbnChartType chart_type) {
     clear();
     chart_view_->chart()->setTitle({});
+    // Past this point the chart shows either real data or a blank title — never
+    // the translatable placeholder — so retranslateUi must not re-apply it.
+    showing_placeholder_ = false;
     if (series.isEmpty())
         return;
 

@@ -71,8 +71,8 @@ EconDbPanel::EconDbPanel(QWidget* parent) : EconPanelBase(kEconDbSourceId, kEcon
 }
 
 void EconDbPanel::activate() {
-    show_empty("Select an indicator and country, then click FETCH\n"
-               "Source: EconDB — macroeconomic data, no API key required");
+    show_empty(tr("Select an indicator and country, then click FETCH\n"
+                  "Source: EconDB — macroeconomic data, no API key required"));
 }
 
 void EconDbPanel::build_controls(QHBoxLayout* thl) {
@@ -94,9 +94,9 @@ void EconDbPanel::build_controls(QHBoxLayout* thl) {
     country_combo_->setFixedHeight(26);
     country_combo_->setMinimumWidth(130);
 
-    thl->addWidget(lbl("INDICATOR"));
+    thl->addWidget(indicator_lbl_ = lbl(tr("INDICATOR")));
     thl->addWidget(indicator_combo_);
-    thl->addWidget(lbl("COUNTRY"));
+    thl->addWidget(country_lbl_ = lbl(tr("COUNTRY")));
     thl->addWidget(country_combo_);
 }
 
@@ -104,7 +104,7 @@ void EconDbPanel::on_fetch() {
     const QString indicator = indicator_combo_->currentData().toString();
     const QString country = country_combo_->currentData().toString();
 
-    show_loading("Fetching EconDB: " + indicator_combo_->currentText() + " — " + country_combo_->currentText() + "…");
+    show_loading(tr("Fetching EconDB: %1 — %2…").arg(indicator_combo_->currentText(), country_combo_->currentText()));
 
     services::EconomicsService::instance().execute(kEconDbSourceId, kEconDbScript, "indicator", {indicator, country},
                                                    "econdb_" + indicator + "_" + country);
@@ -128,7 +128,7 @@ void EconDbPanel::on_result(const QString& request_id, const services::Economics
         obs = result.data["data"].toArray();
 
     if (obs.isEmpty()) {
-        show_error("No observations returned");
+        show_error(tr("No observations returned"));
         return;
     }
 
@@ -142,6 +142,22 @@ void EconDbPanel::on_result(const QString& request_id, const services::Economics
 
     display(obs, title);
     LOG_INFO("EconDbPanel", QString("Displayed %1 observations: %2").arg(obs.size()).arg(title));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void EconDbPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void EconDbPanel::retranslateUi() {
+    if (indicator_lbl_)
+        indicator_lbl_->setText(tr("INDICATOR"));
+    if (country_lbl_)
+        country_lbl_->setText(tr("COUNTRY"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

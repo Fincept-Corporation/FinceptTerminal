@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QEvent>
 #include <QTimer>
 #include <QWidget>
 
@@ -18,9 +19,11 @@ class DataHubInspector : public QWidget {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void refresh();
+    void retranslateUi();
 
     QTableWidget* table_ = nullptr;
     QTimer refresh_timer_;

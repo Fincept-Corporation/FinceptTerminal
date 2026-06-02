@@ -49,15 +49,15 @@ EquityOrderBook::EquityOrderBook(QWidget* parent) : QWidget(parent) {
     auto* h_layout = new QHBoxLayout(header);
     h_layout->setContentsMargins(8, 0, 8, 0);
 
-    auto* title = new QLabel("MARKET DEPTH");
-    title->setObjectName("eqObTitle");
-    h_layout->addWidget(title);
+    title_label_ = new QLabel(tr("MARKET DEPTH"));
+    title_label_->setObjectName("eqObTitle");
+    h_layout->addWidget(title_label_);
     h_layout->addStretch();
 
     layout->addWidget(header);
 
     // Spread label
-    spread_label_ = new QLabel("Spread: --");
+    spread_label_ = new QLabel(tr("Spread: --"));
     spread_label_->setObjectName("eqObSpread");
     spread_label_->setFixedHeight(SPREAD_H);
     spread_label_->setAlignment(Qt::AlignCenter);
@@ -94,10 +94,29 @@ void EquityOrderBook::set_data(const QVector<QPair<double, double>>& bids, const
     spread_pct_ = spread_pct;
     cache_dirty_ = true;
 
-    spread_label_->setText(QString("Spread: %1 (%2%)").arg(spread, 0, 'f', 2).arg(spread_pct, 0, 'f', 3));
+    spread_label_->setText(tr("Spread: %1 (%2%)").arg(spread, 0, 'f', 2).arg(spread_pct, 0, 'f', 3));
+    has_spread_data_ = true;
 
     if (!repaint_timer_->isActive())
         repaint_timer_->start();
+}
+
+void EquityOrderBook::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+        // Column headers / "No depth data" are painted (not widgets) — force a
+        // cache rebuild so they re-render in the new language.
+        cache_dirty_ = true;
+        update();
+    }
+    QWidget::changeEvent(event);
+}
+
+void EquityOrderBook::retranslateUi() {
+    if (title_label_) title_label_->setText(tr("MARKET DEPTH"));
+    // Spread label only resets to the idle placeholder when no live spread yet.
+    if (spread_label_ && !has_spread_data_)
+        spread_label_->setText(tr("Spread: --"));
 }
 
 void EquityOrderBook::resizeEvent(QResizeEvent* event) {
@@ -148,7 +167,7 @@ void EquityOrderBook::rebuild_cache() {
 
     if (bids_.isEmpty() && asks_.isEmpty()) {
         p.setPen(text_secondary());
-        p.drawText(QRect(0, 0, w, h), Qt::AlignCenter, "No depth data");
+        p.drawText(QRect(0, 0, w, h), Qt::AlignCenter, tr("No depth data"));
         cache_dirty_ = false;
         return;
     }
@@ -170,10 +189,10 @@ void EquityOrderBook::rebuild_cache() {
     QFont hdr_font("Consolas", 9);
     hdr_font.setBold(true);
     p.setFont(hdr_font);
-    p.drawText(col_price, 0, col_qty - col_price - 4, ROW_H, Qt::AlignLeft | Qt::AlignVCenter, "PRICE");
-    p.drawText(col_qty, 0, qty_w, ROW_H, Qt::AlignRight | Qt::AlignVCenter, "QTY");
+    p.drawText(col_price, 0, col_qty - col_price - 4, ROW_H, Qt::AlignLeft | Qt::AlignVCenter, tr("PRICE"));
+    p.drawText(col_qty, 0, qty_w, ROW_H, Qt::AlignRight | Qt::AlignVCenter, tr("QTY"));
     if (has_orders)
-        p.drawText(col_ord, 0, ord_w, ROW_H, Qt::AlignRight | Qt::AlignVCenter, "ORDERS");
+        p.drawText(col_ord, 0, ord_w, ROW_H, Qt::AlignRight | Qt::AlignVCenter, tr("ORDERS"));
     p.setFont(QFont("Consolas", 10));
 
     const int data_top = ROW_H;

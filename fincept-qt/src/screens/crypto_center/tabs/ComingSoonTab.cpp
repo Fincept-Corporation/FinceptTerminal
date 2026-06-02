@@ -54,10 +54,10 @@ ComingSoonTab::ComingSoonTab(const QString& tab_name,
     description_label_->setWordWrap(true);
     cl->addWidget(description_label_);
 
-    auto* status = new QLabel(QStringLiteral("STATUS  ·  COMING SOON"), card);
-    status->setObjectName(QStringLiteral("comingSoonStatus"));
+    status_label_ = new QLabel(tr("STATUS  ·  COMING SOON"), card);
+    status_label_->setObjectName(QStringLiteral("comingSoonStatus"));
     cl->addSpacing(6);
-    cl->addWidget(status);
+    cl->addWidget(status_label_);
 
     center_row->addWidget(card);
     center_row->addStretch(1);
@@ -68,6 +68,18 @@ ComingSoonTab::ComingSoonTab(const QString& tab_name,
 }
 
 ComingSoonTab::~ComingSoonTab() = default;
+
+void ComingSoonTab::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ComingSoonTab::retranslateUi() {
+    // tab_name / phase_label / description are caller-supplied data, not
+    // translatable UI literals — only the fixed status line is retranslated.
+    if (status_label_) status_label_->setText(tr("STATUS  ·  COMING SOON"));
+}
 
 void ComingSoonTab::apply_theme() {
     using namespace ui::colors;

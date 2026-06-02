@@ -21,6 +21,7 @@
 
 #include "services/options/OptionChainTypes.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QString>
 #include <QStringList>
@@ -57,6 +58,7 @@ class ChainSubTab : public QWidget {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_broker_changed(const QString& broker_id);
@@ -65,6 +67,7 @@ class ChainSubTab : public QWidget {
     void on_refresh_clicked();
 
   private:
+    void retranslateUi();
     void rebuild_picker_for_broker(const QString& broker_id, bool keep_selection);
     void rebuild_expiries_for_underlying(const QString& broker_id, const QString& underlying,
                                          bool keep_selection);

@@ -17,6 +17,7 @@
 #include <QHeaderView>
 #include <QScrollArea>
 #include <QSplitter>
+#include <QTreeWidgetItemIterator>
 
 
 namespace fincept::screens {
@@ -118,7 +119,7 @@ QWidget* DocsScreen::make_skill_panel(const QString& beginner, const QString& in
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    auto* hdr = new QLabel("SKILL LEVELS");
+    auto* hdr = new QLabel(tr("SKILL LEVELS"));
     hdr->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 0.5px;"
                                " background: %2; padding: 8px 12px; border-bottom: 1px solid %3;"
                                " font-family: 'Consolas','Courier New',monospace;")
@@ -126,15 +127,15 @@ QWidget* DocsScreen::make_skill_panel(const QString& beginner, const QString& in
     vl->addWidget(hdr);
 
     struct Level {
-        const char* tag;
+        QString tag;
         const char* color;
         const QString& text;
     };
     Level levels[] = {
-        {"BEGINNER", ui::colors::POSITIVE(), beginner},
-        {"INTERMEDIATE", ui::colors::INFO(), intermediate},
-        {"ADVANCED", ui::colors::AMBER(), advanced},
-        {"PRO", ui::colors::NEGATIVE(), pro},
+        {tr("BEGINNER"), ui::colors::POSITIVE(), beginner},
+        {tr("INTERMEDIATE"), ui::colors::INFO(), intermediate},
+        {tr("ADVANCED"), ui::colors::AMBER(), advanced},
+        {tr("PRO"), ui::colors::NEGATIVE(), pro},
     };
 
     for (const auto& lvl : levels) {
@@ -233,69 +234,69 @@ void DocsScreen::build_sidebar() {
     };
 
     // ── Getting Started ──────────────────────────────────────────────────────
-    auto* start = add_category("GETTING STARTED");
-    add_item(start, "Welcome", "welcome");
-    add_item(start, "First Steps", "getting_started");
-    add_item(start, "Keyboard Shortcuts", "shortcuts");
+    auto* start = add_category(tr("GETTING STARTED"));
+    add_item(start, tr("Welcome"), "welcome");
+    add_item(start, tr("First Steps"), "getting_started");
+    add_item(start, tr("Keyboard Shortcuts"), "shortcuts");
 
     // ── Core Screens ─────────────────────────────────────────────────────────
-    auto* core = add_category("CORE SCREENS");
-    add_item(core, "Dashboard", "dashboard");
-    add_item(core, "Markets", "markets");
-    add_item(core, "News", "news");
-    add_item(core, "Watchlist", "watchlist");
+    auto* core = add_category(tr("CORE SCREENS"));
+    add_item(core, tr("Dashboard"), "dashboard");
+    add_item(core, tr("Markets"), "markets");
+    add_item(core, tr("News"), "news");
+    add_item(core, tr("Watchlist"), "watchlist");
 
     // ── Trading ──────────────────────────────────────────────────────────────
-    auto* trading = add_category("TRADING");
-    add_item(trading, "Crypto Trading", "crypto_trading");
-    add_item(trading, "Paper Trading", "paper_trading");
-    add_item(trading, "Algo Trading", "algo_trading");
-    add_item(trading, "Backtesting", "backtesting");
+    auto* trading = add_category(tr("TRADING"));
+    add_item(trading, tr("Crypto Trading"), "crypto_trading");
+    add_item(trading, tr("Paper Trading"), "paper_trading");
+    add_item(trading, tr("Algo Trading"), "algo_trading");
+    add_item(trading, tr("Backtesting"), "backtesting");
 
     // ── Research & Analytics ─────────────────────────────────────────────────
-    auto* research = add_category("RESEARCH & ANALYTICS");
-    add_item(research, "Equity Research", "equity_research");
-    add_item(research, "Surface Analytics", "surface_analytics");
-    add_item(research, "Derivatives", "derivatives");
-    add_item(research, "Portfolio", "portfolio");
-    add_item(research, "M&A Analytics", "ma_analytics");
+    auto* research = add_category(tr("RESEARCH & ANALYTICS"));
+    add_item(research, tr("Equity Research"), "equity_research");
+    add_item(research, tr("Surface Analytics"), "surface_analytics");
+    add_item(research, tr("Derivatives"), "derivatives");
+    add_item(research, tr("Portfolio"), "portfolio");
+    add_item(research, tr("M&A Analytics"), "ma_analytics");
 
     // ── AI & Quantitative ────────────────────────────────────────────────────
-    auto* ai = add_category("AI & QUANTITATIVE");
-    add_item(ai, "AI Quant Lab", "ai_quant_lab");
-    add_item(ai, "QuantLib Suite", "quantlib");
-    add_item(ai, "AI Chat", "ai_chat");
-    add_item(ai, "Agent Studio", "agent_config");
-    add_item(ai, "Alpha Arena", "alpha_arena");
+    auto* ai = add_category(tr("AI & QUANTITATIVE"));
+    add_item(ai, tr("AI Quant Lab"), "ai_quant_lab");
+    add_item(ai, tr("QuantLib Suite"), "quantlib");
+    add_item(ai, tr("AI Chat"), "ai_chat");
+    add_item(ai, tr("Agent Studio"), "agent_config");
+    add_item(ai, tr("Alpha Arena"), "alpha_arena");
 
     // ── Data Sources ─────────────────────────────────────────────────────────
-    auto* data_cat = add_category("DATA SOURCES");
-    add_item(data_cat, "DBnomics", "dbnomics");
-    add_item(data_cat, "Economics", "economics");
-    add_item(data_cat, "AkShare Data", "akshare");
-    add_item(data_cat, "Government Data", "gov_data");
+    auto* data_cat = add_category(tr("DATA SOURCES"));
+    add_item(data_cat, tr("DBnomics"), "dbnomics");
+    add_item(data_cat, tr("Economics"), "economics");
+    add_item(data_cat, tr("AkShare Data"), "akshare");
+    add_item(data_cat, tr("Government Data"), "gov_data");
 
     // ── Geopolitics & Alt ────────────────────────────────────────────────────
-    auto* geo = add_category("GEOPOLITICS & ALT");
-    add_item(geo, "Geopolitics", "geopolitics");
-    add_item(geo, "Maritime", "maritime");
-    add_item(geo, "Prediction Markets", "polymarket");
-    add_item(geo, "Alt Investments", "alt_investments");
+    auto* geo = add_category(tr("GEOPOLITICS & ALT"));
+    add_item(geo, tr("Geopolitics"), "geopolitics");
+    add_item(geo, tr("Maritime"), "maritime");
+    add_item(geo, tr("Prediction Markets"), "polymarket");
+    add_item(geo, tr("Alt Investments"), "alt_investments");
 
     // ── Tools ────────────────────────────────────────────────────────────────
-    auto* tools = add_category("TOOLS");
-    add_item(tools, "Report Builder", "report_builder");
-    add_item(tools, "Node Editor", "node_editor");
-    add_item(tools, "Code Editor", "code_editor");
-    add_item(tools, "Excel", "excel");
-    add_item(tools, "Notes", "notes");
-    add_item(tools, "MCP Servers", "mcp_servers");
-    add_item(tools, "Data Mapping", "data_mapping");
+    auto* tools = add_category(tr("TOOLS"));
+    add_item(tools, tr("Report Builder"), "report_builder");
+    add_item(tools, tr("Node Editor"), "node_editor");
+    add_item(tools, tr("Code Editor"), "code_editor");
+    add_item(tools, tr("Excel"), "excel");
+    add_item(tools, tr("Notes"), "notes");
+    add_item(tools, tr("MCP Servers"), "mcp_servers");
+    add_item(tools, tr("Data Mapping"), "data_mapping");
 
     // ── Account ──────────────────────────────────────────────────────────────
-    auto* account = add_category("ACCOUNT");
-    add_item(account, "Settings", "settings");
-    add_item(account, "Profile", "profile");
+    auto* account = add_category(tr("ACCOUNT"));
+    add_item(account, tr("Settings"), "settings");
+    add_item(account, tr("Profile"), "profile");
 
     // Navigation
     connect(sidebar_, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem* current, QTreeWidgetItem*) {
@@ -406,17 +407,18 @@ DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
     cmd_hl->setContentsMargins(10, 0, 10, 0);
     cmd_hl->setSpacing(10);
 
-    auto* title = new QLabel("DOCUMENTATION");
-    title->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold; letter-spacing: 1px;"
-                                 " background: transparent; font-family: 'Consolas','Courier New',monospace;")
-                             .arg(ui::colors::AMBER()));
-    cmd_hl->addWidget(title);
+    cmd_title_ = new QLabel(tr("DOCUMENTATION"));
+    cmd_title_->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold; letter-spacing: 1px;"
+                                      " background: transparent; font-family: 'Consolas','Courier New',monospace;")
+                                  .arg(ui::colors::AMBER()));
+    cmd_hl->addWidget(cmd_title_);
 
     auto* sep = new QLabel("|");
     sep->setStyleSheet(QString("color: %1; background: transparent; font-family: 'Consolas',monospace;")
                            .arg(ui::colors::BORDER_BRIGHT()));
     cmd_hl->addWidget(sep);
 
+    // Brand + version string — shown verbatim, not translated.
     breadcrumb_ = new QLabel("FINCEPT TERMINAL v4.0.0");
     breadcrumb_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold;"
                                        " background: transparent; letter-spacing: 0.5px;"
@@ -426,11 +428,11 @@ DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
 
     cmd_hl->addStretch();
 
-    auto* count = new QLabel("35 TOPICS  |  9 CATEGORIES");
-    count->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;"
-                                 " font-family: 'Consolas','Courier New',monospace;")
-                             .arg(ui::colors::TEXT_TERTIARY()));
-    cmd_hl->addWidget(count);
+    cmd_count_ = new QLabel(tr("%1 TOPICS  |  %2 CATEGORIES").arg(35).arg(9));
+    cmd_count_->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;"
+                                      " font-family: 'Consolas','Courier New',monospace;")
+                                  .arg(ui::colors::TEXT_TERTIARY()));
+    cmd_hl->addWidget(cmd_count_);
 
     root->addWidget(cmd);
 
@@ -438,20 +440,86 @@ DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
     build_sidebar();
     build_content_pages();
 
-    auto* splitter = new QSplitter(Qt::Horizontal);
-    splitter->setStyleSheet(QString("QSplitter { background: %1; }"
-                                    "QSplitter::handle { background: %2; width: 1px; }")
-                                .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
-    splitter->addWidget(sidebar_);
-    splitter->addWidget(pages_);
-    splitter->setStretchFactor(0, 0);
-    splitter->setStretchFactor(1, 1);
-    splitter->setSizes({220, 800});
+    splitter_ = new QSplitter(Qt::Horizontal);
+    splitter_->setStyleSheet(QString("QSplitter { background: %1; }"
+                                     "QSplitter::handle { background: %2; width: 1px; }")
+                                 .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
+    splitter_->addWidget(sidebar_);
+    splitter_->addWidget(pages_);
+    splitter_->setStretchFactor(0, 0);
+    splitter_->setStretchFactor(1, 1);
+    splitter_->setSizes({220, 800});
 
-    root->addWidget(splitter, 1);
+    root->addWidget(splitter_, 1);
 
     // Default to welcome page
     navigate_to("welcome");
+}
+
+// ============================================================================
+// Re-translation
+// ============================================================================
+// The sidebar tree and every documentation page are static content composed of
+// hundreds of labels. Rather than caching each one, we rebuild both on a
+// language change and restore the section the user was reading.
+
+void DocsScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void DocsScreen::retranslateUi() {
+    // Command bar
+    if (cmd_title_) cmd_title_->setText(tr("DOCUMENTATION"));
+    if (cmd_count_) cmd_count_->setText(tr("%1 TOPICS  |  %2 CATEGORIES").arg(35).arg(9));
+
+    // Rebuild sidebar + content pages so their tr() strings pick up the new
+    // language. Preserve the currently displayed section across the rebuild.
+    if (!splitter_ || !sidebar_ || !pages_)
+        return;
+
+    QString current_id;
+    if (auto* cur = sidebar_->currentItem())
+        current_id = cur->data(0, Qt::UserRole).toString();
+    if (current_id.isEmpty()) {
+        // Fall back to whatever page is on top of the stack.
+        const int idx = pages_->currentIndex();
+        for (auto it = page_index_.cbegin(); it != page_index_.cend(); ++it)
+            if (it.value() == idx) { current_id = it.key(); break; }
+    }
+
+    QTreeWidget* old_sidebar = sidebar_;
+    QStackedWidget* old_pages = pages_;
+    const QList<int> sizes = splitter_->sizes();
+
+    page_index_.clear();
+    build_sidebar();        // assigns a fresh sidebar_
+    build_content_pages();  // assigns a fresh pages_
+
+    splitter_->insertWidget(0, sidebar_);
+    splitter_->insertWidget(1, pages_);
+    splitter_->setStretchFactor(0, 0);
+    splitter_->setStretchFactor(1, 1);
+    if (sizes.size() == 2)
+        splitter_->setSizes(sizes);
+
+    old_sidebar->deleteLater();
+    old_pages->deleteLater();
+
+    // Restore the section the user was on (also re-selects the sidebar row via
+    // the currentItemChanged → navigate_to wiring).
+    if (!current_id.isEmpty()) {
+        navigate_to(current_id);
+        for (QTreeWidgetItemIterator it(sidebar_); *it; ++it) {
+            if ((*it)->data(0, Qt::UserRole).toString() == current_id) {
+                sidebar_->setCurrentItem(*it);
+                break;
+            }
+        }
+    } else {
+        navigate_to("welcome");
+    }
 }
 
 } // namespace fincept::screens

@@ -294,7 +294,7 @@ PhoneCodeComboBox::PhoneCodeComboBox(QWidget* parent) : QComboBox(parent) {
     if (auto* le = lineEdit()) {
         le->setStyleSheet("QLineEdit { background:transparent; color:#e5e5e5; border:none;"
                           "  font-size:14px; font-family:'Consolas','Courier New',monospace; padding:0; }");
-        le->setPlaceholderText("Search country…");
+        le->setPlaceholderText(tr("Search country…"));
 
         // When user manually edits the field, try to match and update dial code
         connect(le, &QLineEdit::textEdited, this, [this](const QString& text) {
@@ -348,6 +348,19 @@ void PhoneCodeComboBox::resizeEvent(QResizeEvent* e) {
     QComboBox::resizeEvent(e);
     if (arrow_lbl_)
         arrow_lbl_->setGeometry(width() - 28, 0, 28, height());
+}
+
+void PhoneCodeComboBox::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QComboBox::changeEvent(event);
+}
+
+void PhoneCodeComboBox::retranslateUi() {
+    // Country names + dial codes are locale-neutral data, not UI labels — only
+    // the search placeholder translates.
+    if (auto* le = lineEdit())
+        le->setPlaceholderText(tr("Search country…"));
 }
 
 void PhoneCodeComboBox::set_dial_code(const QString& code) {

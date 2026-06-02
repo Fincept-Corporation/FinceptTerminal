@@ -31,7 +31,7 @@ PolymarketBrowsePanel::PolymarketBrowsePanel(QWidget* parent) : QWidget(parent) 
     hbl->setContentsMargins(12, 0, 8, 0);
     hbl->setSpacing(6);
 
-    header_ = new QLabel("MARKETS");
+    header_ = new QLabel(tr("MARKETS"));
     header_->setStyleSheet(
         QString("color: %1; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; "
                 "background: transparent;")
@@ -124,7 +124,7 @@ void PolymarketBrowsePanel::set_markets(const QVector<PredictionMarket>& markets
     events_mode_ = false;
     current_page_ = 0;
     model_->set_markets(markets);
-    header_->setText(QString("MARKETS  %1").arg(markets.size()));
+    header_->setText(tr("MARKETS  %1").arg(markets.size()));
     update_page();
 }
 
@@ -132,23 +132,24 @@ void PolymarketBrowsePanel::set_events(const QVector<PredictionEvent>& events) {
     events_mode_ = true;
     current_page_ = 0;
     model_->set_events(events);
-    header_->setText(QString("EVENTS  %1").arg(events.size()));
+    header_->setText(tr("EVENTS  %1").arg(events.size()));
     update_page();
 }
 
 void PolymarketBrowsePanel::set_loading(bool loading) {
     if (loading) {
-        header_->setText("LOADING...");
+        header_->setText(tr("LOADING..."));
     } else {
         const int total = model_->rowCount();
-        header_->setText(QString("%1  %2").arg(events_mode_ ? "EVENTS" : "MARKETS").arg(total));
+        header_->setText(events_mode_ ? tr("EVENTS  %1").arg(total)
+                                      : tr("MARKETS  %1").arg(total));
     }
 }
 
 void PolymarketBrowsePanel::clear() {
     events_mode_ = false;
     model_->set_markets({});
-    header_->setText("MARKETS");
+    header_->setText(tr("MARKETS"));
     current_page_ = 0;
     update_page();
 }
@@ -200,6 +201,20 @@ void PolymarketBrowsePanel::update_page() {
     page_label_->setText(QString("%1 / %2").arg(current_page_ + 1).arg(pages));
     prev_btn_->setEnabled(current_page_ > 0);
     next_btn_->setEnabled(current_page_ + 1 < pages);
+}
+
+void PolymarketBrowsePanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PolymarketBrowsePanel::retranslateUi() {
+    // Re-derive the header caption (mode word + live count) in the new
+    // language. set_loading(false) reuses the current mode + model count.
+    if (header_)
+        set_loading(false);
+    // Pagination arrows + "n / m" page label are symbols/numbers; nav nothing.
 }
 
 } // namespace fincept::screens::polymarket

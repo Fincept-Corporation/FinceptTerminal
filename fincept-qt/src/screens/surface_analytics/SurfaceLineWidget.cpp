@@ -27,6 +27,12 @@ void SurfaceLineWidget::clear() {
     update();
 }
 
+void SurfaceLineWidget::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        update(); // placeholder text is painter-drawn; repaint picks up new tr()
+    QWidget::changeEvent(event);
+}
+
 void SurfaceLineWidget::set_curve(const QString& title,
                                   const std::vector<float>& x_values,
                                   const std::vector<float>& y_values,
@@ -103,7 +109,7 @@ void SurfaceLineWidget::paintEvent(QPaintEvent* /*event*/) {
 
     if (series_.empty()) {
         p.setPen(QColor(colors::TEXT_DIM()));
-        p.drawText(rect(), Qt::AlignCenter, "No data");
+        p.drawText(rect(), Qt::AlignCenter, tr("No data"));
         return;
     }
 

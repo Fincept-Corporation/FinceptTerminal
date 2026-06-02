@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 #include "trading/instruments/InstrumentService.h"
 
 #include <QCryptographicHash>
@@ -213,6 +214,9 @@ TokenExchangeResponse IciciDirectBroker::exchange_token(const QString& api_key, 
     result.success = true;
     result.access_token = session_b64;
     result.user_id = user_id.isEmpty() ? success.value("idirect_userid").toString() : user_id;
+    // ICICI sessions expire at the daily reset; re-auth needs a fresh web
+    // SessionToken, so detect-only. Startup hint.
+    result.additional_data = with_token_expiry(result.additional_data, next_ist_flush_epoch(6, 0));
     LOG_INFO("IciciDirect", QString("exchange_token ok: user_id=%1").arg(result.user_id));
     return result;
 }

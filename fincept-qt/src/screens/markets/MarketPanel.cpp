@@ -62,9 +62,9 @@ void MarketPanel::build_ui() {
         return b;
     };
 
-    cols_btn_   = make_hdr_btn("[COLS]");
-    edit_btn_   = make_hdr_btn("[EDIT]");
-    delete_btn_ = make_hdr_btn("[DEL]");
+    cols_btn_   = make_hdr_btn(tr("[COLS]"));
+    edit_btn_   = make_hdr_btn(tr("[EDIT]"));
+    delete_btn_ = make_hdr_btn(tr("[DEL]"));
 
     hhl->addWidget(cols_btn_);
     hhl->addWidget(edit_btn_);
@@ -114,7 +114,7 @@ void MarketPanel::build_ui() {
     el->setAlignment(Qt::AlignCenter);
     error_label_ = new QLabel;
     error_label_->setAlignment(Qt::AlignCenter);
-    retry_btn_ = new QPushButton("[RETRY]");
+    retry_btn_ = new QPushButton(tr("[RETRY]"));
     retry_btn_->setCursor(Qt::PointingHandCursor);
     retry_btn_->setFlat(true);
     connect(retry_btn_, &QPushButton::clicked, this, &MarketPanel::refresh);
@@ -127,7 +127,7 @@ void MarketPanel::build_ui() {
     loading_widget_ = new QWidget(body_);
     auto* ll = new QVBoxLayout(loading_widget_);
     ll->setAlignment(Qt::AlignCenter);
-    loading_label_ = new QLabel("  ⠋  LOADING");
+    loading_label_ = new QLabel(tr("  %1  LOADING").arg(QString::fromUtf8("\xe2\xa0\x8b")));
     loading_label_->setAlignment(Qt::AlignCenter);
     ll->addWidget(loading_label_);
     bl->addWidget(loading_widget_);
@@ -139,6 +139,26 @@ void MarketPanel::build_ui() {
     vl->addWidget(body_, 1);
 }
 
+QString MarketPanel::column_label(const QString& code) const {
+    // Maps an internal column code (a data key used in config_.column_order
+    // and in the populate() switch) to its user-facing, translatable header
+    // label. SYMBOL is the locked first column and renders the human-readable
+    // name, so it is labelled "NAME".
+    if (code == "SYMBOL") return tr("NAME");
+    if (code == "LAST")   return tr("LAST");
+    if (code == "CHG")    return tr("CHG");
+    if (code == "CHG%")   return tr("CHG%");
+    if (code == "HIGH")   return tr("HIGH");
+    if (code == "LOW")    return tr("LOW");
+    if (code == "VOL")    return tr("VOL");
+    if (code == "BID")    return tr("BID");
+    if (code == "ASK")    return tr("ASK");
+    if (code == "OPEN")   return tr("OPEN");
+    if (code == "TICKER") return tr("TICKER");
+    if (code == "NAME")   return tr("NAME");
+    return code;  // unknown code — show raw (data fallback)
+}
+
 void MarketPanel::setup_table_columns() {
     const QStringList& cols = config_.column_order;
     table_->setColumnCount(cols.size());
@@ -148,7 +168,7 @@ void MarketPanel::setup_table_columns() {
     // so it's labelled NAME; the raw ticker is available via the TICKER column.
     for (int i = 0; i < cols.size(); ++i) {
         const QString& c = cols[i];
-        const QString label = (c == "SYMBOL") ? QStringLiteral("NAME") : c;
+        const QString label = column_label(c);
         auto* hdr = new QTableWidgetItem(label);
         bool is_text = (c == "SYMBOL" || c == "NAME" || c == "TICKER");
         hdr->setTextAlignment(is_text ? (Qt::AlignLeft | Qt::AlignVCenter)
@@ -189,7 +209,7 @@ void MarketPanel::open_cols_dropdown() {
     const QStringList optional = {"CHG", "CHG%", "HIGH", "LOW", "VOL", "BID", "ASK", "OPEN", "TICKER"};
 
     for (const QString& col : optional) {
-        auto* act = menu->addAction(col);
+        auto* act = menu->addAction(column_label(col));
         act->setCheckable(true);
         act->setChecked(config_.column_order.contains(col));
         // Enforce max 7 columns (SYMBOL + LAST are locked = 2, so max 5 optional)
@@ -354,7 +374,7 @@ void MarketPanel::tick_loading_anim() {
     };
     constexpr int kCount = 10;
     loading_frame_ = (loading_frame_ + 1) % kCount;
-    loading_label_->setText(QString("  %1  LOADING").arg(kFrames[loading_frame_]));
+    loading_label_->setText(tr("  %1  LOADING").arg(QString::fromUtf8(kFrames[loading_frame_])));
 }
 
 void MarketPanel::show_data() {
@@ -551,13 +571,13 @@ void MarketPanel::show_row_context_menu(const QPoint& pos) {
     };
 
     QMenu menu(this);
-    QAction* copy_act = menu.addAction("Copy Symbol");
+    QAction* copy_act = menu.addAction(tr("Copy Symbol"));
     connect(copy_act, &QAction::triggered, this, [it, ticker_at]() {
         const QString t = ticker_at(it->row());
         if (!t.isEmpty())
             QApplication::clipboard()->setText(t);
     });
-    QAction* backtest_act = menu.addAction("Backtest This Symbol");
+    QAction* backtest_act = menu.addAction(tr("Backtest This Symbol"));
     connect(backtest_act, &QAction::triggered, this, [it, ticker_at]() {
         const QString t = ticker_at(it->row());
         if (t.isEmpty()) return;
@@ -569,6 +589,35 @@ void MarketPanel::show_row_context_menu(const QPoint& pos) {
         fincept::EventBus::instance().publish("nav.switch_screen", {{"screen_id", QString("backtesting")}});
     });
     menu.exec(table_->viewport()->mapToGlobal(pos));
+}
+
+// ---------------------------------------------------------------------------
+// i18n — live language switch
+// ---------------------------------------------------------------------------
+
+void MarketPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void MarketPanel::retranslateUi() {
+    if (cols_btn_)   cols_btn_->setText(tr("[COLS]"));
+    if (edit_btn_)   edit_btn_->setText(tr("[EDIT]"));
+    if (delete_btn_) delete_btn_->setText(tr("[DEL]"));
+    if (retry_btn_)  retry_btn_->setText(tr("[RETRY]"));
+
+    // Loading spinner — keep the current animation frame, refresh the word.
+    static const char* const kFrames[] = {
+        "\xe2\xa0\x8b", "\xe2\xa0\x99", "\xe2\xa0\xb9", "\xe2\xa0\xb8", "\xe2\xa0\xbc",
+        "\xe2\xa0\xb4", "\xe2\xa0\xa6", "\xe2\xa0\xa7", "\xe2\xa0\x87", "\xe2\xa0\x8f"
+    };
+    if (loading_label_)
+        loading_label_->setText(tr("  %1  LOADING").arg(QString::fromUtf8(kFrames[loading_frame_ % 10])));
+
+    // Table column headers — re-derived from the translated column labels.
+    setup_table_columns();
+    if (has_data_) populate(cached_quotes_);
 }
 
 } // namespace fincept::screens

@@ -2,6 +2,7 @@
 
 #include "services/wallet/WalletTypes.h"
 
+#include <QEvent>
 #include <QHash>
 #include <QString>
 #include <QVariant>
@@ -34,12 +35,14 @@ class HoldingsBar : public QWidget {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     enum class FeedStatus { Idle, Connecting, Live, Stale, Error };
 
     void build_ui();
     void apply_theme();
+    void retranslateUi();
 
     void on_wallet_connected(const QString& pubkey, const QString& label);
     void on_wallet_disconnected();
@@ -64,6 +67,13 @@ class HoldingsBar : public QWidget {
     QLabel* feed_status_ = nullptr;
     QLabel* rpc_indicator_ = nullptr;
     QLabel* discount_chip_ = nullptr;  // hidden until Stage 2C wires it
+
+    // Metric caption labels (fixed UI text — cached for retranslateUi)
+    QLabel* sol_caption_ = nullptr;
+    QLabel* fncpt_caption_ = nullptr;
+    QLabel* total_caption_ = nullptr;
+    QLabel* fncpt_price_caption_ = nullptr;
+    QLabel* updated_caption_ = nullptr;
 
     QTimer* staleness_timer_ = nullptr;
 

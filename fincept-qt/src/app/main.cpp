@@ -64,6 +64,7 @@
 #include "services/wallet/TokenMetadataService.h"
 #include "services/wallet/TreasuryService.h"
 #include "services/wallet/WalletService.h"
+#include "trading/AccountManager.h"
 #include "trading/DataStreamManager.h"
 #include "trading/ExchangeService.h"
 #include "trading/ExchangeSessionManager.h"
@@ -72,6 +73,18 @@
 #include "storage/sqlite/CacheDatabase.h"
 #include "storage/sqlite/Database.h"
 #include "storage/sqlite/migrations/MigrationRunner.h"
+#include "services/cloud/AgentConfigCloudAdapter.h"
+#include "services/cloud/CloudSyncEngine.h"
+#include "services/cloud/DashboardCloudAdapter.h"
+#include "services/cloud/NewsFeedCloudAdapter.h"
+#include "services/cloud/NewsMonitorCloudAdapter.h"
+#include "services/cloud/NotebookCloudAdapter.h"
+#include "services/cloud/NotesCloudAdapter.h"
+#include "services/cloud/PortfolioCloudAdapter.h"
+#include "services/cloud/ReportCloudAdapter.h"
+#include "services/cloud/SettingsCloudAdapter.h"
+#include "services/cloud/WatchlistCloudAdapter.h"
+#include "services/cloud/WorkflowCloudAdapter.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -423,6 +436,33 @@ int main(int argc, char* argv[]) {
         // Algo Engine — `algo:metrics:*`, `algo:trade:*`, `algo:state:*`.
         fincept::algo::AlgoEngineProducer::instance().ensure_registered_with_hub();
 
+        // Fincept Cloud sync — drains the durable outbox (push) + pulls cloud→local.
+        // NOT a DataHub producer; reads stay on the local repo cache. Adapters are
+        // registered before initialize(). See fincept-qt/CLOUD_SYNC_PLAN.md.
+        fincept::services::cloud::CloudSyncEngine::instance().register_adapter(
+            &fincept::services::cloud::WatchlistCloudAdapter::instance());
+        fincept::services::cloud::CloudSyncEngine::instance().register_adapter(
+            &fincept::services::cloud::NotesCloudAdapter::instance());
+        fincept::services::cloud::CloudSyncEngine::instance().register_adapter(
+            &fincept::services::cloud::PortfolioCloudAdapter::instance());
+        fincept::services::cloud::CloudSyncEngine::instance().register_adapter(
+            &fincept::services::cloud::AgentConfigCloudAdapter::instance());
+        fincept::services::cloud::CloudSyncEngine::instance().register_adapter(
+            &fincept::services::cloud::ReportCloudAdapter::instance());
+        fincept::services::cloud::CloudSyncEngine::instance().register_adapter(
+            &fincept::services::cloud::WorkflowCloudAdapter::instance());
+        fincept::services::cloud::CloudSyncEngine::instance().register_adapter(
+            &fincept::services::cloud::DashboardCloudAdapter::instance());
+        fincept::services::cloud::CloudSyncEngine::instance().register_adapter(
+            &fincept::services::cloud::SettingsCloudAdapter::instance());
+        fincept::services::cloud::CloudSyncEngine::instance().register_adapter(
+            &fincept::services::cloud::NewsMonitorCloudAdapter::instance());
+        fincept::services::cloud::CloudSyncEngine::instance().register_adapter(
+            &fincept::services::cloud::NewsFeedCloudAdapter::instance());
+        fincept::services::cloud::CloudSyncEngine::instance().register_adapter(
+            &fincept::services::cloud::NotebookCloudAdapter::instance());
+        fincept::services::cloud::CloudSyncEngine::instance().initialize();
+
         // Fee-discount eligibility producer (paid screens only).
         {
             static fincept::billing::FeeDiscountService discount_service;
@@ -498,6 +538,12 @@ int main(int argc, char* argv[]) {
             tier_p.min_interval_ms = 15 * 1000;
             hub.set_policy_pattern(QStringLiteral("billing:tier:*"), tier_p);
         }
+
+        // Broker session monitor — re-validates each connected broker account's
+        // access token on a 5-min cadence and silently refreshes where supported
+        // (Zerodha/Angel One TOTP re-login, Fyers refresh token). Keeps the
+        // connection indicator honest instead of showing a stale "green".
+        fincept::trading::AccountManager::instance().start_session_monitor();
 
         LOG_INFO("App", "Deferred service init complete");
     });
@@ -640,6 +686,8 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v034();
     fincept::register_migration_v035();
     fincept::register_migration_v036();
+    fincept::register_migration_v037();
+    fincept::register_migration_v038();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";

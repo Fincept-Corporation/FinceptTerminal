@@ -68,9 +68,9 @@ EiaPanel::EiaPanel(QWidget* parent) : EconPanelBase(kEiaSourceId, kEiaColor, par
 }
 
 void EiaPanel::activate() {
-    show_empty("Select a data source and category, then click FETCH\n"
-               "Weekly Petroleum Status Report requires no API key\n"
-               "Short-Term Energy Outlook requires EIA_API_KEY env var");
+    show_empty(tr("Select a data source and category, then click FETCH\n"
+                  "Weekly Petroleum Status Report requires no API key\n"
+                  "Short-Term Energy Outlook requires EIA_API_KEY env var"));
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -83,8 +83,8 @@ void EiaPanel::build_controls(QHBoxLayout* thl) {
     };
 
     source_combo_ = new QComboBox;
-    source_combo_->addItem("Weekly Petroleum (WPSR)", "wpsr");
-    source_combo_->addItem("Short-Term Outlook (STEO)", "steo");
+    source_combo_->addItem(tr("Weekly Petroleum (WPSR)"), "wpsr");
+    source_combo_->addItem(tr("Short-Term Outlook (STEO)"), "steo");
     source_combo_->setFixedHeight(26);
     source_combo_->setMinimumWidth(200);
     connect(source_combo_, &QComboBox::currentIndexChanged, this, &EiaPanel::on_source_changed);
@@ -97,13 +97,13 @@ void EiaPanel::build_controls(QHBoxLayout* thl) {
     for (const auto& c : kWpsrCategories)
         category_combo_->addItem(c.first, c.second);
 
-    apikey_notice_ = new QLabel("No API key needed");
+    apikey_notice_ = new QLabel(tr("No API key needed"));
     apikey_notice_->setStyleSheet(
         QString("color:%1; font-size:9px; background:transparent;").arg(ui::colors::POSITIVE()));
 
-    thl->addWidget(make_lbl("SOURCE"));
+    thl->addWidget(source_lbl_ = make_lbl(tr("SOURCE")));
     thl->addWidget(source_combo_);
-    thl->addWidget(make_lbl("CATEGORY"));
+    thl->addWidget(category_lbl_ = make_lbl(tr("CATEGORY")));
     thl->addWidget(category_combo_);
     thl->addWidget(apikey_notice_);
 }
@@ -114,14 +114,14 @@ void EiaPanel::on_source_changed(int index) {
         // WPSR
         for (const auto& c : kWpsrCategories)
             category_combo_->addItem(c.first, c.second);
-        apikey_notice_->setText("No API key needed");
+        apikey_notice_->setText(tr("No API key needed"));
         apikey_notice_->setStyleSheet(
             QString("color:%1; font-size:9px; background:transparent;").arg(ui::colors::POSITIVE()));
     } else {
         // STEO
         for (const auto& t : kSteoTables)
             category_combo_->addItem(t.first, t.second);
-        apikey_notice_->setText("Requires EIA_API_KEY");
+        apikey_notice_->setText(tr("Requires EIA_API_KEY"));
         apikey_notice_->setStyleSheet(notice_style());
     }
 }
@@ -133,18 +133,18 @@ void EiaPanel::on_fetch() {
     const QString category = category_combo_->currentData().toString();
 
     if (category.isEmpty()) {
-        show_empty("Select a category");
+        show_empty(tr("Select a category"));
         return;
     }
 
     if (source == "wpsr") {
-        show_loading("Fetching EIA Petroleum Report: " + category_combo_->currentText() +
-                     "…\n"
-                     "(Downloads public XLS file — may take a few seconds)");
+        show_loading(tr("Fetching EIA Petroleum Report: %1…\n"
+                        "(Downloads public XLS file — may take a few seconds)")
+                         .arg(category_combo_->currentText()));
         services::EconomicsService::instance().execute(kEiaSourceId, kEiaScript, "get_petroleum", {category},
                                                        "eia_wpsr_" + category);
     } else {
-        show_loading("Fetching EIA STEO Table " + category_combo_->currentText() + "…");
+        show_loading(tr("Fetching EIA STEO Table %1…").arg(category_combo_->currentText()));
         services::EconomicsService::instance().execute(kEiaSourceId, kEiaScript, "get_steo", {category},
                                                        "eia_steo_" + category);
     }
@@ -159,9 +159,9 @@ void EiaPanel::on_result(const QString& request_id, const services::EconomicsRes
     if (!result.success) {
         // Detect API key error for STEO
         if (result.error.contains("API key") || result.error.contains("api_key")) {
-            show_error("EIA API key not configured.\n"
-                       "Set EIA_API_KEY environment variable.\n"
-                       "Free key at: www.eia.gov/opendata/register.php");
+            show_error(tr("EIA API key not configured.\n"
+                          "Set EIA_API_KEY environment variable.\n"
+                          "Free key at: www.eia.gov/opendata/register.php"));
         } else {
             show_error(result.error);
         }
@@ -172,7 +172,7 @@ void EiaPanel::on_result(const QString& request_id, const services::EconomicsRes
     QJsonArray rows = result.data["data"].toArray();
 
     if (rows.isEmpty()) {
-        show_empty("No data returned for this selection");
+        show_empty(tr("No data returned for this selection"));
         return;
     }
 
@@ -186,6 +186,30 @@ void EiaPanel::on_result(const QString& request_id, const services::EconomicsRes
     display(rows, title);
 
     LOG_INFO("EiaPanel", QString("Displayed %1 rows — %2").arg(rows.size()).arg(request_id));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void EiaPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void EiaPanel::retranslateUi() {
+    if (source_lbl_)
+        source_lbl_->setText(tr("SOURCE"));
+    if (category_lbl_)
+        category_lbl_->setText(tr("CATEGORY"));
+    if (source_combo_ && source_combo_->count() >= 2) {
+        source_combo_->setItemText(0, tr("Weekly Petroleum (WPSR)"));
+        source_combo_->setItemText(1, tr("Short-Term Outlook (STEO)"));
+    }
+    // API-key notice depends on the active source.
+    if (apikey_notice_ && source_combo_)
+        apikey_notice_->setText(source_combo_->currentIndex() == 0 ? tr("No API key needed")
+                                                                   : tr("Requires EIA_API_KEY"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

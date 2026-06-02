@@ -265,7 +265,7 @@ void NewsFeedDelegate::paint_cluster_card(QPainter* painter, const QRect& rect, 
         painter->drawRect(badge_rect);
         painter->setFont(tiny_font_);
         painter->setPen(QColor(ui::colors::TEXT_PRIMARY()));
-        painter->drawText(badge_rect, Qt::AlignCenter, "BREAKING");
+        painter->drawText(badge_rect, Qt::AlignCenter, tr("BREAKING"));
         x += 66;
     }
 
@@ -316,7 +316,7 @@ void NewsFeedDelegate::paint_cluster_card(QPainter* painter, const QRect& rect, 
     // Source count
     if (cluster.source_count > 1) {
         painter->setPen(QColor(ui::colors::WARNING()));
-        QString src_text = QString("%1 sources").arg(cluster.source_count);
+        QString src_text = tr("%1 sources").arg(cluster.source_count);
         painter->drawText(QPoint(x, y + 12), src_text);
         x += data_fm_.horizontalAdvance(src_text) + 10;
     }
@@ -324,10 +324,10 @@ void NewsFeedDelegate::paint_cluster_card(QPainter* painter, const QRect& rect, 
     // Sentiment
     if (cluster.sentiment == services::Sentiment::BULLISH) {
         painter->setPen(QColor(ui::colors::POSITIVE()));
-        painter->drawText(QPoint(x, y + 12), QString::fromUtf8("\xe2\x96\xb2 BULL"));
+        painter->drawText(QPoint(x, y + 12), tr("\xe2\x96\xb2 BULL"));
     } else if (cluster.sentiment == services::Sentiment::BEARISH) {
         painter->setPen(QColor(ui::colors::NEGATIVE()));
-        painter->drawText(QPoint(x, y + 12), QString::fromUtf8("\xe2\x96\xbc BEAR"));
+        painter->drawText(QPoint(x, y + 12), tr("\xe2\x96\xbc BEAR"));
     }
 
     // Row 3: "Also: Source1, Source2, Source3"
@@ -347,7 +347,7 @@ void NewsFeedDelegate::paint_cluster_card(QPainter* painter, const QRect& rect, 
             }
         }
         if (!also_sources.isEmpty()) {
-            QString also_text = "Also: " + also_sources.join(", ");
+            QString also_text = tr("Also: ") + also_sources.join(", ");
             int also_w = rect.right() - x - 8;
             also_text = tiny_fm_.elidedText(also_text, Qt::ElideRight, also_w);
             painter->drawText(QPoint(x, y + 10), also_text);

@@ -25,30 +25,44 @@ FinceptMacroPanel::FinceptMacroPanel(QWidget* parent)
 }
 
 void FinceptMacroPanel::activate() {
-    show_empty("Fincept Macro — Coming Soon\n\n"
-               "Planned data:\n"
-               "  · Central bank rates (40+ countries)\n"
-               "  · Sovereign debt metrics\n"
-               "  · Fincept proprietary macro indices\n"
-               "  · Global inflation dashboard\n"
-               "  · Emerging market indicators\n\n"
-               "Requires Fincept subscription + API key\n"
-               "Check back in a future release");
+    show_empty(tr("Fincept Macro — Coming Soon\n\n"
+                  "Planned data:\n"
+                  "  · Central bank rates (40+ countries)\n"
+                  "  · Sovereign debt metrics\n"
+                  "  · Fincept proprietary macro indices\n"
+                  "  · Global inflation dashboard\n"
+                  "  · Emerging market indicators\n\n"
+                  "Requires Fincept subscription + API key\n"
+                  "Check back in a future release"));
 }
 
 void FinceptMacroPanel::build_controls(QHBoxLayout* thl) {
-    auto* lbl = new QLabel("FINCEPT MACRO — COMING SOON");
-    lbl->setStyleSheet(ctrl_label_style() + "letter-spacing:1px;");
-    thl->addWidget(lbl);
+    coming_soon_lbl_ = new QLabel(tr("FINCEPT MACRO — COMING SOON"));
+    coming_soon_lbl_->setStyleSheet(ctrl_label_style() + "letter-spacing:1px;");
+    thl->addWidget(coming_soon_lbl_);
 }
 
 void FinceptMacroPanel::on_fetch() {
-    show_empty("Fincept Macro data script is not yet available.\n"
-               "This panel will be enabled in a future release.");
+    show_empty(tr("Fincept Macro data script is not yet available.\n"
+                  "This panel will be enabled in a future release."));
 }
 
 void FinceptMacroPanel::on_result(const QString& /*request_id*/, const services::EconomicsResult& /*result*/) {
     // No-op until fincept_macro.py is implemented
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void FinceptMacroPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void FinceptMacroPanel::retranslateUi() {
+    if (coming_soon_lbl_)
+        coming_soon_lbl_->setText(tr("FINCEPT MACRO — COMING SOON"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

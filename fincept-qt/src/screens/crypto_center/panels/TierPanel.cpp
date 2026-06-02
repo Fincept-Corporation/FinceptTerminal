@@ -74,11 +74,11 @@ void TierPanel::build_ui() {
     auto* hl = new QHBoxLayout(head);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(8);
-    auto* title = new QLabel(QStringLiteral("TIER"), head);
-    title->setObjectName(QStringLiteral("tierTitle"));
-    current_label_ = new QLabel(QStringLiteral("current FREE"), head);
+    title_ = new QLabel(tr("TIER"), head);
+    title_->setObjectName(QStringLiteral("tierTitle"));
+    current_label_ = new QLabel(tr("current FREE"), head);
     current_label_->setObjectName(QStringLiteral("tierHeadCaption"));
-    hl->addWidget(title);
+    hl->addWidget(title_);
     hl->addStretch();
     hl->addWidget(current_label_);
     root->addWidget(head);
@@ -105,7 +105,7 @@ void TierPanel::build_ui() {
         row.threshold->setMinimumWidth(140);
         row.unlocks = new QLabel(unlocks, row.host);
         row.unlocks->setObjectName(QStringLiteral("tierRowUnlocks"));
-        row.chip = new QLabel(QStringLiteral("[locked]"), row.host);
+        row.chip = new QLabel(TierPanel::tr("[locked]"), row.host);
         row.chip->setObjectName(QStringLiteral("tierRowChipLocked"));
         row_l->addWidget(row.label);
         row_l->addWidget(row.threshold);
@@ -114,14 +114,14 @@ void TierPanel::build_ui() {
         bl->addWidget(row.host);
     };
 
-    build_row(bronze_row_, QStringLiteral("BRONZE"),
-              QStringLiteral("100+ veFNCPT"),
+    build_row(bronze_row_, tr("BRONZE"),
+              tr("100+ veFNCPT"),
               tr("basic API quota"));
-    build_row(silver_row_, QStringLiteral("SILVER"),
-              QStringLiteral("1,000+ veFNCPT"),
+    build_row(silver_row_, tr("SILVER"),
+              tr("1,000+ veFNCPT"),
               tr("premium screens"));
-    build_row(gold_row_, QStringLiteral("GOLD"),
-              QStringLiteral("10,000+ veFNCPT"),
+    build_row(gold_row_, tr("GOLD"),
+              tr("10,000+ veFNCPT"),
               tr("all agents + arena"));
 
     footer_ = new QLabel(tr("Connect a wallet to see your tier."), body);
@@ -217,6 +217,45 @@ void TierPanel::hideEvent(QHideEvent* e) {
     current_topic_.clear();
 }
 
+void TierPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void TierPanel::retranslateUi() {
+    if (title_) title_->setText(tr("TIER"));
+
+    // Static row descriptors (tier name · threshold · unlocks).
+    if (bronze_row_.label)     bronze_row_.label->setText(tr("BRONZE"));
+    if (bronze_row_.threshold) bronze_row_.threshold->setText(tr("100+ veFNCPT"));
+    if (bronze_row_.unlocks)   bronze_row_.unlocks->setText(tr("basic API quota"));
+    if (silver_row_.label)     silver_row_.label->setText(tr("SILVER"));
+    if (silver_row_.threshold) silver_row_.threshold->setText(tr("1,000+ veFNCPT"));
+    if (silver_row_.unlocks)   silver_row_.unlocks->setText(tr("premium screens"));
+    if (gold_row_.label)       gold_row_.label->setText(tr("GOLD"));
+    if (gold_row_.threshold)   gold_row_.threshold->setText(tr("10,000+ veFNCPT"));
+    if (gold_row_.unlocks)     gold_row_.unlocks->setText(tr("all agents + arena"));
+
+    // Chips: re-apply text using the objectName as the achieved/locked flag
+    // (set by render_state) so the live state survives the locale switch.
+    auto retr_chip = [](QLabel* chip) {
+        if (!chip) return;
+        const bool achieved =
+            chip->objectName() == QLatin1String("tierRowChipAchieved");
+        chip->setText(achieved ? TierPanel::tr("[achieved]")
+                               : TierPanel::tr("[locked]"));
+    };
+    retr_chip(bronze_row_.chip);
+    retr_chip(silver_row_.chip);
+    retr_chip(gold_row_.chip);
+
+    // Footer: the connect-prompt is the only state we can rebuild without the
+    // last TierStatus; other footer messages refresh on the next tier update.
+    if (footer_ && current_pubkey_.isEmpty())
+        footer_->setText(tr("Connect a wallet to see your tier."));
+}
+
 void TierPanel::on_tier_update(const QVariant& v) {
     if (!v.canConvert<fincept::wallet::TierStatus>()) return;
     const auto s = v.value<fincept::wallet::TierStatus>();
@@ -237,8 +276,8 @@ void TierPanel::render_state(fincept::wallet::TierStatus::Tier current,
     using Tier = fincept::wallet::TierStatus::Tier;
 
     auto set_row = [](TierRow& row, bool achieved, bool is_current) {
-        row.chip->setText(achieved ? QStringLiteral("[achieved]")
-                                   : QStringLiteral("[locked]"));
+        row.chip->setText(achieved ? TierPanel::tr("[achieved]")
+                                   : TierPanel::tr("[locked]"));
         row.chip->setObjectName(achieved ? QStringLiteral("tierRowChipAchieved")
                                          : QStringLiteral("tierRowChipLocked"));
         row.host->setObjectName(is_current ? QStringLiteral("tierRowCurrent")

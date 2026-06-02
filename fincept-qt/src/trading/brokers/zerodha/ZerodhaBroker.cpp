@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 #include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 #include "trading/brokers/zerodha/ZerodhaAutoLogin.h"
 #include "trading/instruments/InstrumentService.h"
 
@@ -28,7 +29,25 @@ TokenExchangeResponse ZerodhaBroker::login_with_totp(const QString& user_id, con
                                                     std::function<void(const QString&)> progress) {
     auto result = zerodha::run_auto_login(user_id, password, api_key, api_secret, totp_secret,
                                           std::move(progress));
+    // Kite access tokens are flushed each morning (~06:00 IST). Record the
+    // expiry hint; the live sweep re-validates and silent-relogins on expiry.
+    if (result.token.success)
+        result.token.additional_data =
+            with_token_expiry(result.token.additional_data, next_ist_flush_epoch(6, 0));
     return result.token;
+}
+
+// Silent refresh = replay the stored TOTP auto-login (Kite has no usable refresh
+// token for retail). Requires user_id + password + totp_secret in storage.
+TokenExchangeResponse ZerodhaBroker::refresh_session(const BrokerCredentials& creds) {
+    const auto extra = QJsonDocument::fromJson(creds.additional_data.toUtf8()).object();
+    const QString password = extra.value("password").toString();
+    const QString totp_secret = extra.value("totp_secret").toString();
+    if (creds.user_id.isEmpty() || password.isEmpty() || totp_secret.isEmpty()) {
+        return {false, "", "", "", "",
+                "Zerodha silent refresh requires stored user id, password and TOTP secret"};
+    }
+    return login_with_totp(creds.user_id, password, creds.api_key, creds.api_secret, totp_secret, {});
 }
 
 static int64_t now_ts() {
@@ -145,6 +164,7 @@ TokenExchangeResponse ZerodhaBroker::exchange_token(const QString& api_key, cons
         result.access_token = data.value("access_token").toString();
         result.refresh_token = data.value("refresh_token").toString();
         result.user_id = data.value("user_id").toString();
+        result.additional_data = with_token_expiry(result.additional_data, next_ist_flush_epoch(6, 0));
         LOG_INFO("Zerodha", QString("exchange_token ok: user_id=%1").arg(result.user_id));
     } else {
         result.error = resp.json.value("message").toString("Token exchange failed");

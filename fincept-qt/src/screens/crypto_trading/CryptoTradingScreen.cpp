@@ -151,12 +151,11 @@ void CryptoTradingScreen::setup_ui() {
     exchange_btn_->setFixedHeight(22);
     exchange_btn_->setCursor(Qt::PointingHandCursor);
     exchange_menu_ = new QMenu(exchange_btn_);
-    // Only exchanges registered as DataHub producers (see
-    // ExchangeSessionManager::topic_patterns) can be consumed by this screen
-    // post-Phase 6. Adding a new exchange here is a two-step job: add the
-    // topic patterns on the manager AND register the C++ metatypes with the
-    // hub, then add it to this list.
-    for (const auto& ex : {"kraken", "hyperliquid"}) {
+    // Exchanges come from the single canonical list on ExchangeSessionManager,
+    // which also drives the hub allow-list, topic patterns, and per-exchange
+    // policies — so the dropdown can never drift out of sync with what the hub
+    // actually publishes. Add a new exchange there (one line) and it appears here.
+    for (const QString& ex : ExchangeSessionManager::supported_exchange_ids()) {
         exchange_menu_->addAction(ex, this, [this, ex]() { on_exchange_changed(ex); });
     }
     exchange_btn_->setMenu(exchange_menu_);
@@ -192,19 +191,19 @@ void CryptoTradingScreen::setup_ui() {
     // WS status pill — three states (live / connecting / offline) driven by
     // a Qt property so the global stylesheet handles colors. Tooltip explains
     // what's happening so the user can self-diagnose without reading the log.
-    ws_status_ = new QLabel("CONNECTING");
+    ws_status_ = new QLabel(tr("CONNECTING"));
     ws_status_->setObjectName("cryptoWsStatus");
     ws_status_->setProperty("ws", "connecting");
-    ws_status_->setToolTip("WebSocket feed status — green=live, amber=connecting, red=offline (REST polling)");
+    ws_status_->setToolTip(tr("WebSocket feed status — green=live, amber=connecting, red=offline (REST polling)"));
     cmd_layout->addWidget(ws_status_);
 
     // Transport hint — small text right of the pill. Kraken uses the native
     // QWebSocket client; everyone else still goes through ws_stream.py.
-    ws_transport_ = new QLabel(exchange_id_ == "kraken" ? "NATIVE" : "DAEMON");
+    ws_transport_ = new QLabel(exchange_id_ == "kraken" ? tr("NATIVE") : tr("DAEMON"));
     ws_transport_->setObjectName("cryptoWsTransport");
     ws_transport_->setToolTip(exchange_id_ == "kraken"
-                                  ? "Native C++ WebSocket — direct connection, no Python subprocess"
-                                  : "ws_stream.py via ccxt.pro — Python subprocess");
+                                  ? tr("Native C++ WebSocket — direct connection, no Python subprocess")
+                                  : tr("ws_stream.py via ccxt.pro — Python subprocess"));
     cmd_layout->addWidget(ws_transport_);
 
     // Clock
@@ -213,14 +212,14 @@ void CryptoTradingScreen::setup_ui() {
     cmd_layout->addWidget(clock_label_);
 
     // API button
-    api_btn_ = new QPushButton("API");
+    api_btn_ = new QPushButton(tr("API"));
     api_btn_->setObjectName("cryptoApiBtn");
     api_btn_->setFixedHeight(22);
     api_btn_->setCursor(Qt::PointingHandCursor);
     cmd_layout->addWidget(api_btn_);
 
     // Mode button
-    mode_btn_ = new QPushButton("PAPER");
+    mode_btn_ = new QPushButton(tr("PAPER"));
     mode_btn_->setObjectName("cryptoModeBtn");
     mode_btn_->setProperty("mode", "paper");
     mode_btn_->setCheckable(true);
@@ -291,6 +290,11 @@ void CryptoTradingScreen::setup_ui() {
     connect(order_entry_, &CryptoOrderEntry::margin_mode_changed, this, &CryptoTradingScreen::async_set_margin_mode);
     connect(orderbook_, &CryptoOrderBook::price_clicked, this, &CryptoTradingScreen::on_ob_price_clicked);
     connect(bottom_panel_, &CryptoBottomPanel::cancel_order_requested, this, &CryptoTradingScreen::on_cancel_order);
+    connect(bottom_panel_, &CryptoBottomPanel::close_position_requested, this, &CryptoTradingScreen::on_close_position);
+    connect(bottom_panel_, &CryptoBottomPanel::cancel_all_orders_requested, this,
+            [this](const QString&) { on_cancel_all_orders(); });
+    connect(bottom_panel_, &CryptoBottomPanel::close_all_positions_requested, this,
+            [this](const QString&) { on_close_all_positions(); });
     connect(chart_, &CryptoChart::timeframe_changed, this,
             [this](const QString& tf) { async_fetch_candles(selected_symbol_, tf); });
 }
@@ -389,10 +393,45 @@ void CryptoTradingScreen::update_clock() {
         return;
     last_ws_status_label_state_ = connected;
 
-    ws_status_->setText(connected ? "LIVE" : "OFFLINE");
+    ws_status_->setText(connected ? tr("LIVE") : tr("OFFLINE"));
     ws_status_->setProperty("ws", connected ? "live" : "offline");
     ws_status_->style()->unpolish(ws_status_);
     ws_status_->style()->polish(ws_status_);
+}
+
+void CryptoTradingScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void CryptoTradingScreen::retranslateUi() {
+    if (api_btn_) api_btn_->setText(tr("API"));
+
+    // Mode button reflects the live trading mode.
+    if (mode_btn_)
+        mode_btn_->setText(trading_mode_ == crypto::TradingMode::Live ? tr("LIVE") : tr("PAPER"));
+
+    // WS status pill — re-apply the word matching the current state. -1 (unknown)
+    // maps to the connecting placeholder.
+    if (ws_status_) {
+        if (last_ws_status_label_state_ == 1)      ws_status_->setText(tr("LIVE"));
+        else if (last_ws_status_label_state_ == 0) ws_status_->setText(tr("OFFLINE"));
+        else                                       ws_status_->setText(tr("CONNECTING"));
+        ws_status_->setToolTip(
+            tr("WebSocket feed status — green=live, amber=connecting, red=offline (REST polling)"));
+    }
+
+    // Transport hint + its tooltip depend on the active exchange.
+    if (ws_transport_) {
+        const bool native = (exchange_id_ == "kraken");
+        ws_transport_->setText(native ? tr("NATIVE") : tr("DAEMON"));
+        ws_transport_->setToolTip(native
+                                      ? tr("Native C++ WebSocket — direct connection, no Python subprocess")
+                                      : tr("ws_stream.py via ccxt.pro — Python subprocess"));
+    }
+    // exchange_btn_ shows the exchange name (data); symbol_input_ holds the
+    // selected pair (data); clock_label_ is a live timestamp — none translated.
 }
 
 // ============================================================================
@@ -507,7 +546,7 @@ void CryptoTradingScreen::init_exchange() {
             // still displays data via scripts.
             LOG_ERROR(TAG, "WS stream failed to start — remaining on REST polling for " + exchange_id_);
             if (ws_status_) {
-                ws_status_->setText("OFFLINE");
+                ws_status_->setText(tr("OFFLINE"));
                 ws_status_->setProperty("ws", "offline");
                 ws_status_->style()->unpolish(ws_status_);
                 ws_status_->style()->polish(ws_status_);
@@ -522,6 +561,7 @@ void CryptoTradingScreen::init_exchange() {
     // must have a matching producer registered on ExchangeSessionManager.
     hub_subscribe_topics();
     initialized_ = true;
+    update_futures_visibility(); // reflect perp-ness of the initial market
     LOG_INFO(TAG, QString("Exchange initialised via hub: %1 / %2").arg(exchange_id_, selected_symbol_));
 }
 

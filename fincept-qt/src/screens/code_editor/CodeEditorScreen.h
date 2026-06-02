@@ -5,6 +5,7 @@
 
 #include "screens/common/IStatefulScreen.h"
 
+#include <QEvent>
 #include <QHideEvent>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -86,12 +87,14 @@ class CellWidget : public QWidget {
     void enterEvent(QEnterEvent* event) override;
     void leaveEvent(QEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
     void update_gutter();
     void adjust_editor_height();
     void render_markdown();
+    void retranslateUi();
 
     QString cell_id_;
     QString cell_type_;
@@ -116,6 +119,11 @@ class CellWidget : public QWidget {
 
     // Hover toolbar
     QWidget* toolbar_ = nullptr;
+    QPushButton* run_btn_ = nullptr;
+    QPushButton* type_btn_ = nullptr;
+    QPushButton* up_btn_ = nullptr;
+    QPushButton* dn_btn_ = nullptr;
+    QPushButton* del_btn_ = nullptr;
 
     // Output area
     QWidget* output_area_ = nullptr;
@@ -140,8 +148,17 @@ class CellNavigator : public QWidget {
     void cell_selected(const QString& cell_id);
     void rename_requested(const QString& cell_id);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    void retranslateUi();
+
     QListWidget* list_ = nullptr;
+    QLabel* header_title_ = nullptr;
+    // Cached so rebuild() can re-render after a language change.
+    QVector<NotebookCell> last_cells_;
+    QString last_selected_id_;
 };
 
 // -- Main screen --------------------------------------------------------------
@@ -159,6 +176,7 @@ class CodeEditorScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_add_cell();
@@ -182,6 +200,7 @@ class CodeEditorScreen : public QWidget, public IStatefulScreen {
     void build_ui();
     QWidget* build_toolbar();
     QWidget* build_status_bar();
+    void retranslateUi();
     void rebuild_cells();
     void add_cell_after(const QString& after_id, const QString& type);
     int find_cell_index(const QString& cell_id) const;
@@ -206,6 +225,22 @@ class CodeEditorScreen : public QWidget, public IStatefulScreen {
     QLabel* kernel_label_ = nullptr;
     QString selected_cell_id_;
     bool sidebar_visible_ = true;
+
+    // Toolbar / status-bar text widgets (cached for retranslateUi)
+    QLabel* toolbar_title_ = nullptr;
+    QPushButton* btn_new_ = nullptr;
+    QPushButton* btn_open_ = nullptr;
+    QPushButton* btn_save_ = nullptr;
+    QPushButton* btn_add_cell_ = nullptr;
+    QPushButton* btn_clear_out_ = nullptr;
+    QPushButton* btn_run_all_ = nullptr;
+    QPushButton* btn_sidebar_ = nullptr;
+    QLabel* py_label_ = nullptr;
+    QLabel* shortcuts_label_ = nullptr;
+
+    // Tracks whether the kernel is busy so retranslateUi can re-render the badge.
+    bool kernel_busy_ = false;
+    void refresh_kernel_label();
 };
 
 } // namespace fincept::screens

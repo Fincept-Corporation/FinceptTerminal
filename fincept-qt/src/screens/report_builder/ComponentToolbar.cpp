@@ -9,6 +9,42 @@
 
 namespace fincept::screens {
 
+// Translatable display label for a component type id. The id is the stable
+// data key emitted via add_component(); only the label is localized.
+static QString component_type_label(const QString& type) {
+    if (type == "heading")
+        return ComponentToolbar::tr("Heading");
+    if (type == "text")
+        return ComponentToolbar::tr("Text Block");
+    if (type == "table")
+        return ComponentToolbar::tr("Table");
+    if (type == "image")
+        return ComponentToolbar::tr("Image");
+    if (type == "chart")
+        return ComponentToolbar::tr("Chart");
+    if (type == "sparkline")
+        return ComponentToolbar::tr("Sparkline");
+    if (type == "stats_block")
+        return ComponentToolbar::tr("Stats Block");
+    if (type == "callout")
+        return ComponentToolbar::tr("Callout Box");
+    if (type == "code")
+        return ComponentToolbar::tr("Code Block");
+    if (type == "divider")
+        return ComponentToolbar::tr("Divider");
+    if (type == "quote")
+        return ComponentToolbar::tr("Block Quote");
+    if (type == "list")
+        return ComponentToolbar::tr("List");
+    if (type == "market_data")
+        return ComponentToolbar::tr("Market Data");
+    if (type == "page_break")
+        return ComponentToolbar::tr("Page Break");
+    if (type == "toc")
+        return ComponentToolbar::tr("Table of Contents");
+    return type;
+}
+
 ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     // Use min/max width pair (not setFixedWidth) so the parent splitter can
     // drive resize and the collapse animation can drive maximumWidth → 0.
@@ -29,15 +65,16 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(4);
 
-    auto make_section = [&](const char* text) {
+    auto make_section = [&](const QString& text) -> QLabel* {
         auto* lbl = new QLabel(text);
         lbl->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent; "
                                    "padding-top: 6px;")
                                .arg(ui::colors::MUTED()));
         vl->addWidget(lbl);
+        return lbl;
     };
 
-    auto make_action_btn = [&](const char* text) -> QPushButton* {
+    auto make_action_btn = [&](const QString& text) -> QPushButton* {
         auto* b = new QPushButton(text);
         b->setFixedHeight(26);
         b->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
@@ -50,24 +87,24 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     };
 
     // ── File actions ──────────────────────────────────────────────────────────
-    make_section("FILE");
-    auto* new_btn = make_action_btn("New Report");
-    auto* open_btn = make_action_btn("Open...");
-    auto* recent_btn = make_action_btn("Recent Reports...");
+    sec_file_ = make_section(tr("FILE"));
+    new_btn_ = make_action_btn(tr("New Report"));
+    open_btn_ = make_action_btn(tr("Open..."));
+    recent_btn_ = make_action_btn(tr("Recent Reports..."));
 
-    connect(new_btn, &QPushButton::clicked, this, &ComponentToolbar::new_report_requested);
-    connect(open_btn, &QPushButton::clicked, this, &ComponentToolbar::open_report_requested);
-    connect(recent_btn, &QPushButton::clicked, this, &ComponentToolbar::recent_reports_requested);
+    connect(new_btn_, &QPushButton::clicked, this, &ComponentToolbar::new_report_requested);
+    connect(open_btn_, &QPushButton::clicked, this, &ComponentToolbar::open_report_requested);
+    connect(recent_btn_, &QPushButton::clicked, this, &ComponentToolbar::recent_reports_requested);
 
     // ── Document settings ─────────────────────────────────────────────────────
-    make_section("DOCUMENT");
-    auto* meta_btn = make_action_btn("Metadata...");
-    auto* template_btn = make_action_btn("Templates...");
-    auto* theme_btn = make_action_btn("Theme...");
+    sec_document_ = make_section(tr("DOCUMENT"));
+    meta_btn_ = make_action_btn(tr("Metadata..."));
+    template_btn_ = make_action_btn(tr("Templates..."));
+    theme_btn_ = make_action_btn(tr("Theme..."));
 
-    connect(meta_btn, &QPushButton::clicked, this, &ComponentToolbar::metadata_requested);
-    connect(template_btn, &QPushButton::clicked, this, &ComponentToolbar::templates_requested);
-    connect(theme_btn, &QPushButton::clicked, this, &ComponentToolbar::theme_requested);
+    connect(meta_btn_, &QPushButton::clicked, this, &ComponentToolbar::metadata_requested);
+    connect(template_btn_, &QPushButton::clicked, this, &ComponentToolbar::templates_requested);
+    connect(theme_btn_, &QPushButton::clicked, this, &ComponentToolbar::theme_requested);
 
     // Separator
     auto* sep0 = new QFrame;
@@ -76,28 +113,16 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     vl->addWidget(sep0);
 
     // ── Add Component ─────────────────────────────────────────────────────────
-    make_section("ADD COMPONENT");
+    sec_add_ = make_section(tr("ADD COMPONENT"));
 
-    const char* types[][2] = {
-        {"Heading", "heading"},
-        {"Text Block", "text"},
-        {"Table", "table"},
-        {"Image", "image"},
-        {"Chart", "chart"},
-        {"Sparkline", "sparkline"},
-        {"Stats Block", "stats_block"},
-        {"Callout Box", "callout"},
-        {"Code Block", "code"},
-        {"Divider", "divider"},
-        {"Block Quote", "quote"},
-        {"List", "list"},
-        {"Market Data", "market_data"},
-        {"Page Break", "page_break"},
-        {"Table of Contents", "toc"},
-    };
+    // Type ids are stable data keys; the visible label comes from
+    // component_type_label() so it can be localized + retranslated.
+    const char* type_ids[] = {"heading",  "text",        "table",   "image",  "chart",
+                              "sparkline", "stats_block", "callout", "code",   "divider",
+                              "quote",     "list",        "market_data", "page_break", "toc"};
 
-    for (auto& t : types) {
-        add_type_button(vl, t[0], t[1]);
+    for (const char* type : type_ids) {
+        add_type_button(vl, QString::fromLatin1(type));
     }
 
     // Separator
@@ -107,7 +132,7 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     vl->addWidget(sep1);
 
     // ── Font Settings ─────────────────────────────────────────────────────────
-    make_section("FONT");
+    sec_font_ = make_section(tr("FONT"));
 
     font_combo_ = new QFontComboBox;
     font_combo_->setCurrentFont(QFont("Segoe UI"));
@@ -154,7 +179,7 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     vl->addWidget(sep2);
 
     // ── Document Structure ────────────────────────────────────────────────────
-    make_section("STRUCTURE");
+    sec_structure_ = make_section(tr("STRUCTURE"));
 
     structure_list_ = new QListWidget;
     structure_list_->setMinimumHeight(120);
@@ -173,34 +198,34 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     arl->setContentsMargins(0, 0, 0, 0);
     arl->setSpacing(2);
 
-    auto make_small = [&](const char* text) {
+    auto make_small = [&](const QString& text) {
         auto* b = new QPushButton(text);
         b->setFixedHeight(24);
         arl->addWidget(b);
         return b;
     };
 
-    auto* up_btn = make_small("Up");
-    auto* dn_btn = make_small("Dn");
-    auto* dup_btn = make_small("Dup");
-    auto* del_btn = make_small("Del");
+    up_btn_ = make_small(tr("Up"));
+    dn_btn_ = make_small(tr("Dn"));
+    dup_btn_ = make_small(tr("Dup"));
+    del_btn_ = make_small(tr("Del"));
 
-    connect(up_btn, &QPushButton::clicked, this, [this]() {
+    connect(up_btn_, &QPushButton::clicked, this, [this]() {
         int r = structure_list_->currentRow();
         if (r > 0)
             emit move_up(r);
     });
-    connect(dn_btn, &QPushButton::clicked, this, [this]() {
+    connect(dn_btn_, &QPushButton::clicked, this, [this]() {
         int r = structure_list_->currentRow();
         if (r >= 0)
             emit move_down(r);
     });
-    connect(dup_btn, &QPushButton::clicked, this, [this]() {
+    connect(dup_btn_, &QPushButton::clicked, this, [this]() {
         int r = structure_list_->currentRow();
         if (r >= 0)
             emit duplicate(r);
     });
-    connect(del_btn, &QPushButton::clicked, this, [this]() {
+    connect(del_btn_, &QPushButton::clicked, this, [this]() {
         int r = structure_list_->currentRow();
         if (r >= 0)
             emit delete_item(r);
@@ -216,8 +241,8 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     outer->addWidget(scroll);
 }
 
-void ComponentToolbar::add_type_button(QVBoxLayout* layout, const QString& label, const QString& type) {
-    auto* btn = new QPushButton(label);
+void ComponentToolbar::add_type_button(QVBoxLayout* layout, const QString& type) {
+    auto* btn = new QPushButton(component_type_label(type));
     btn->setFixedHeight(26);
     btn->setStyleSheet(
         QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
@@ -225,7 +250,40 @@ void ComponentToolbar::add_type_button(QVBoxLayout* layout, const QString& label
                 "QPushButton:hover { background: %4; color: %5; }")
             .arg(ui::colors::DARK(), ui::colors::GRAY(), ui::colors::BORDER(), ui::colors::BG_RAISED(), ui::colors::WHITE()));
     connect(btn, &QPushButton::clicked, this, [this, type]() { emit add_component(type); });
+    type_buttons_.insert(type, btn);
     layout->addWidget(btn);
+}
+
+void ComponentToolbar::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ComponentToolbar::retranslateUi() {
+    if (sec_file_) sec_file_->setText(tr("FILE"));
+    if (sec_document_) sec_document_->setText(tr("DOCUMENT"));
+    if (sec_add_) sec_add_->setText(tr("ADD COMPONENT"));
+    if (sec_font_) sec_font_->setText(tr("FONT"));
+    if (sec_structure_) sec_structure_->setText(tr("STRUCTURE"));
+
+    if (new_btn_) new_btn_->setText(tr("New Report"));
+    if (open_btn_) open_btn_->setText(tr("Open..."));
+    if (recent_btn_) recent_btn_->setText(tr("Recent Reports..."));
+    if (meta_btn_) meta_btn_->setText(tr("Metadata..."));
+    if (template_btn_) template_btn_->setText(tr("Templates..."));
+    if (theme_btn_) theme_btn_->setText(tr("Theme..."));
+
+    if (up_btn_) up_btn_->setText(tr("Up"));
+    if (dn_btn_) dn_btn_->setText(tr("Dn"));
+    if (dup_btn_) dup_btn_->setText(tr("Dup"));
+    if (del_btn_) del_btn_->setText(tr("Del"));
+
+    // Component "add" buttons — re-label by stable type id.
+    for (auto it = type_buttons_.constBegin(); it != type_buttons_.constEnd(); ++it) {
+        if (it.value())
+            it.value()->setText(component_type_label(it.key()));
+    }
 }
 
 void ComponentToolbar::update_structure(const QStringList& items, int selected_index) {

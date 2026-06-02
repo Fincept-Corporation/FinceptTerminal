@@ -5,6 +5,7 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -29,12 +30,12 @@ static QString rel_time(const QString& iso) {
     if (sec < 0)
         sec = 0;
     if (sec < 60)
-        return QString("%1s ago").arg(sec);
+        return QCoreApplication::translate("ForumThreadPanel", "%1s ago").arg(sec);
     if (sec < 3600)
-        return QString("%1m ago").arg(sec / 60);
+        return QCoreApplication::translate("ForumThreadPanel", "%1m ago").arg(sec / 60);
     if (sec < 86400)
-        return QString("%1h ago").arg(sec / 3600);
-    return QString("%1d ago").arg(sec / 86400);
+        return QCoreApplication::translate("ForumThreadPanel", "%1h ago").arg(sec / 3600);
+    return QCoreApplication::translate("ForumThreadPanel", "%1d ago").arg(sec / 86400);
 }
 
 static QString det_color(const QString& s) {
@@ -71,14 +72,14 @@ void ForumThreadPanel::build_ui() {
         spin_lbl_->setStyleSheet(
             QString("color:%1;font-size:28px;background:transparent;%2").arg(ui::colors::AMBER(), M(28)));
 
-        auto* loading_text = new QLabel("Loading thread...");
-        loading_text->setAlignment(Qt::AlignCenter);
-        loading_text->setStyleSheet(
+        loading_text_ = new QLabel(tr("Loading thread..."));
+        loading_text_->setAlignment(Qt::AlignCenter);
+        loading_text_->setStyleSheet(
             QString("color:%1;font-size:11px;background:transparent;%2").arg(ui::colors::TEXT_TERTIARY(), M(11)));
 
         vl->addStretch();
         vl->addWidget(spin_lbl_);
-        vl->addWidget(loading_text);
+        vl->addWidget(loading_text_);
         vl->addStretch();
     }
     stack_->addWidget(load_page); // 0
@@ -106,10 +107,10 @@ void ForumThreadPanel::build_ui() {
     bb_hl->setContentsMargins(16, 0, 16, 0);
     bb_hl->setSpacing(10);
 
-    auto* back_btn = new QPushButton("←  Back to Feed");
-    back_btn->setCursor(Qt::PointingHandCursor);
-    back_btn->setFixedHeight(28);
-    back_btn->setStyleSheet(QString("QPushButton{background:rgba(255,255,255,0.03);"
+    back_btn_ = new QPushButton(tr("←  Back to Feed"));
+    back_btn_->setCursor(Qt::PointingHandCursor);
+    back_btn_->setFixedHeight(28);
+    back_btn_->setStyleSheet(QString("QPushButton{background:rgba(255,255,255,0.03);"
                                     "color:%1;border:1px solid %2;"
                                     "font-size:11px;font-weight:600;padding:0 14px;"
                                     "border-radius:4px;%3}"
@@ -117,9 +118,9 @@ void ForumThreadPanel::build_ui() {
                                     "background:rgba(255,255,255,0.06);}")
                                 .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), M(11),
                                      ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED()));
-    connect(back_btn, &QPushButton::clicked, this, [this]() { emit back_requested(); });
+    connect(back_btn_, &QPushButton::clicked, this, [this]() { emit back_requested(); });
 
-    bb_hl->addWidget(back_btn);
+    bb_hl->addWidget(back_btn_);
     bb_hl->addStretch();
     tp->addWidget(back_bar);
 
@@ -249,10 +250,10 @@ void ForumThreadPanel::build_ui() {
     eng_hl->setContentsMargins(32, 0, 32, 0);
     eng_hl->setSpacing(12);
 
-    auto* up_btn = new QPushButton("▲  Upvote");
-    up_btn->setFixedHeight(30);
-    up_btn->setCursor(Qt::PointingHandCursor);
-    up_btn->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.06);"
+    up_btn_ = new QPushButton(tr("▲  Upvote"));
+    up_btn_->setFixedHeight(30);
+    up_btn_->setCursor(Qt::PointingHandCursor);
+    up_btn_->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.06);"
                                   "color:%1;border:1px solid rgba(217,119,6,0.2);"
                                   "font-size:11px;font-weight:700;padding:0 16px;"
                                   "border-radius:15px;%2}"
@@ -263,7 +264,7 @@ void ForumThreadPanel::build_ui() {
                                   "border-color:%3;"
                                   "background:rgba(217,119,6,0.25);}")
                               .arg(ui::colors::TEXT_SECONDARY(), M(11), ui::colors::AMBER()));
-    connect(up_btn, &QPushButton::clicked, this, [this]() {
+    connect(up_btn_, &QPushButton::clicked, this, [this]() {
         LOG_INFO("ForumThread", "Upvote clicked, uuid=" + current_.post.post_uuid);
         if (!current_.post.post_uuid.isEmpty())
             emit vote_post(current_.post.post_uuid, "up");
@@ -274,16 +275,16 @@ void ForumThreadPanel::build_ui() {
                                         "background:transparent;padding:0 8px;%2")
                                     .arg(ui::colors::TEXT_TERTIARY(), M(12)));
 
-    t_replies_lbl_ = new QLabel("◆ 0 replies");
+    t_replies_lbl_ = new QLabel(tr("◆ %1 replies").arg(0));
     t_replies_lbl_->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;"
                                           "padding:0 8px;%2")
                                       .arg(ui::colors::TEXT_TERTIARY(), M(12)));
 
-    t_views_lbl_ = new QLabel("◉ 0 views");
+    t_views_lbl_ = new QLabel(tr("◉ %1 views").arg(0));
     t_views_lbl_->setStyleSheet(
         QString("color:%1;font-size:12px;background:transparent;%2").arg(ui::colors::TEXT_DIM(), M(12)));
 
-    eng_hl->addWidget(up_btn);
+    eng_hl->addWidget(up_btn_);
     eng_hl->addWidget(t_likes_lbl_);
     eng_hl->addWidget(t_replies_lbl_);
     eng_hl->addStretch();
@@ -311,12 +312,12 @@ void ForumThreadPanel::build_ui() {
 
     auto* com_dot = new QLabel("◆");
     com_dot->setStyleSheet(QString("color:%1;font-size:8px;background:transparent;").arg(ui::colors::CYAN()));
-    auto* ch_lbl = new QLabel("REPLIES");
-    ch_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1.5px;"
+    replies_hdr_ = new QLabel(tr("REPLIES"));
+    replies_hdr_->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1.5px;"
                                   "background:transparent;%2")
                               .arg(ui::colors::TEXT_TERTIARY(), M(10)));
     chi->addWidget(com_dot);
-    chi->addWidget(ch_lbl);
+    chi->addWidget(replies_hdr_);
     chi->addStretch();
 
     com_hdr_hl->addStretch();
@@ -374,7 +375,7 @@ void ForumThreadPanel::build_ui() {
     comp_hl->setSpacing(10);
 
     t_reply_input_ = new QLineEdit;
-    t_reply_input_->setPlaceholderText("Write a reply...");
+    t_reply_input_->setPlaceholderText(tr("Write a reply..."));
     t_reply_input_->setFixedHeight(34);
     t_reply_input_->setStyleSheet(QString("QLineEdit{background:rgba(255,255,255,0.03);color:%1;"
                                           "border:1px solid %2;padding:6px 14px;font-size:12px;"
@@ -386,10 +387,10 @@ void ForumThreadPanel::build_ui() {
                                            ui::colors::BORDER_BRIGHT(), ui::colors::TEXT_PRIMARY(),
                                            ui::colors::TEXT_DIM()));
 
-    auto* send_btn = new QPushButton("Reply");
-    send_btn->setFixedSize(80, 34);
-    send_btn->setCursor(Qt::PointingHandCursor);
-    send_btn->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;"
+    send_btn_ = new QPushButton(tr("Reply"));
+    send_btn_->setFixedSize(80, 34);
+    send_btn_->setCursor(Qt::PointingHandCursor);
+    send_btn_->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;"
                                     "border:1px solid rgba(217,119,6,0.25);font-size:12px;"
                                     "font-weight:700;border-radius:4px;%2}"
                                     "QPushButton:hover{background:rgba(217,119,6,0.2);color:%3;"
@@ -403,11 +404,11 @@ void ForumThreadPanel::build_ui() {
         emit comment_submitted(current_.post.post_uuid, txt);
         t_reply_input_->clear();
     };
-    connect(send_btn, &QPushButton::clicked, this, submit);
+    connect(send_btn_, &QPushButton::clicked, this, submit);
     connect(t_reply_input_, &QLineEdit::returnPressed, this, submit);
 
     comp_hl->addWidget(t_reply_input_, 1);
-    comp_hl->addWidget(send_btn);
+    comp_hl->addWidget(send_btn_);
 
     comp_outer_hl->addStretch();
     comp_outer_hl->addWidget(comp_inner, 1);
@@ -473,9 +474,9 @@ void ForumThreadPanel::show_post(const services::ForumPostDetail& detail) {
                                         "background:transparent;padding:0 8px;%2")
                                     .arg(lc, M(12)));
 
-    t_replies_lbl_->setText(
-        QString("◆ %1 %2").arg(detail.total_comments).arg(detail.total_comments == 1 ? "reply" : "replies"));
-    t_views_lbl_->setText(QString("◉ %1 views").arg(detail.post.views));
+    t_replies_lbl_->setText(detail.total_comments == 1 ? tr("◆ %1 reply").arg(detail.total_comments)
+                                                       : tr("◆ %1 replies").arg(detail.total_comments));
+    t_views_lbl_->setText(tr("◉ %1 views").arg(detail.post.views));
 
     rebuild_comments();
     stack_->setCurrentIndex(1);
@@ -501,13 +502,13 @@ void ForumThreadPanel::rebuild_comments() {
         icon->setAlignment(Qt::AlignCenter);
         icon->setStyleSheet(QString("color:%1;font-size:24px;background:transparent;").arg(ui::colors::BORDER_DIM()));
 
-        auto* nl = new QLabel("NO REPLIES YET");
+        auto* nl = new QLabel(tr("NO REPLIES YET"));
         nl->setAlignment(Qt::AlignCenter);
         nl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1.5px;"
                                   "background:transparent;%2")
                               .arg(ui::colors::TEXT_TERTIARY(), M(11)));
 
-        auto* sub = new QLabel("Be the first to share your thoughts");
+        auto* sub = new QLabel(tr("Be the first to share your thoughts"));
         sub->setAlignment(Qt::AlignCenter);
         sub->setStyleSheet(
             QString("color:%1;font-size:10px;background:transparent;%2").arg(ui::colors::TEXT_DIM(), M(10)));
@@ -612,8 +613,8 @@ void ForumThreadPanel::rebuild_comments() {
             connect(b, &QPushButton::clicked, this, [this, uuid, vt]() { emit vote_comment(uuid, vt); });
             return b;
         };
-        arh->addWidget(mk_act("▲ upvote", ui::colors::AMBER(), "up"));
-        arh->addWidget(mk_act("▼ downvote", ui::colors::TEXT_TERTIARY(), "down"));
+        arh->addWidget(mk_act(tr("▲ upvote"), ui::colors::AMBER(), "up"));
+        arh->addWidget(mk_act(tr("▼ downvote"), ui::colors::TEXT_TERTIARY(), "down"));
         arh->addStretch();
         cvl->addWidget(ar);
 
@@ -627,6 +628,25 @@ QString ForumThreadPanel::reply_draft() const {
 
 void ForumThreadPanel::set_reply_draft(const QString& text) {
     if (t_reply_input_) t_reply_input_->setText(text);
+}
+
+void ForumThreadPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ForumThreadPanel::retranslateUi() {
+    if (loading_text_)   loading_text_->setText(tr("Loading thread..."));
+    if (back_btn_)       back_btn_->setText(tr("←  Back to Feed"));
+    if (up_btn_)         up_btn_->setText(tr("▲  Upvote"));
+    if (replies_hdr_)    replies_hdr_->setText(tr("REPLIES"));
+    if (t_reply_input_)  t_reply_input_->setPlaceholderText(tr("Write a reply..."));
+    if (send_btn_)       send_btn_->setText(tr("Reply"));
+    // The post header/body, engagement counters and comment cards reflect live
+    // data; re-show the current post so they re-render in the new language.
+    if (!current_.post.post_uuid.isEmpty() && stack_ && stack_->currentIndex() == 1)
+        show_post(current_);
 }
 
 } // namespace fincept::screens

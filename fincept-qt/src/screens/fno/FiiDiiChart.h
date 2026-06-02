@@ -9,6 +9,7 @@
 #include "services/options/FiiDiiTypes.h"
 
 #include <QChartView>
+#include <QEvent>
 
 class QBarCategoryAxis;
 class QBarSeries;
@@ -25,7 +26,12 @@ class FiiDiiChart : public QChartView {
     /// Replace the bars. `days` is expected ascending by date_iso.
     void set_data(const QVector<fincept::services::options::FiiDiiDay>& days);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    void retranslateUi();
+
     QChart* chart_ = nullptr;
     QBarSeries* series_ = nullptr;
     QBarSet* fii_set_ = nullptr;

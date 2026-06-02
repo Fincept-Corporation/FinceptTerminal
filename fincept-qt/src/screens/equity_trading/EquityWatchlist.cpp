@@ -61,9 +61,9 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     auto* h_layout = new QHBoxLayout(header);
     h_layout->setContentsMargins(8, 0, 8, 0);
 
-    auto* title = new QLabel("WATCHLIST");
-    title->setObjectName("eqWatchlistTitle");
-    h_layout->addWidget(title);
+    title_label_ = new QLabel(tr("WATCHLIST"));
+    title_label_->setObjectName("eqWatchlistTitle");
+    h_layout->addWidget(title_label_);
     h_layout->addStretch();
 
     count_label_ = new QLabel("0");
@@ -75,7 +75,7 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     // Search / filter
     filter_edit_ = new QLineEdit;
     filter_edit_->setObjectName("eqWatchlistSearch");
-    filter_edit_->setPlaceholderText("Filter...");
+    filter_edit_->setPlaceholderText(tr("Filter..."));
     filter_edit_->setFixedHeight(26);
     connect(filter_edit_, &QLineEdit::textChanged, this, &EquityWatchlist::on_filter_changed);
     layout->addWidget(filter_edit_);
@@ -89,7 +89,7 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
 
     add_edit_ = new QLineEdit;
     add_edit_->setObjectName("eqWatchlistAddEdit");
-    add_edit_->setPlaceholderText("Add symbol...");
+    add_edit_->setPlaceholderText(tr("Add symbol..."));
     add_edit_->setFixedHeight(22);
     connect(add_edit_, &QLineEdit::textChanged, this, &EquityWatchlist::on_add_text_changed);
     connect(add_edit_, &QLineEdit::returnPressed, this, &EquityWatchlist::on_add_symbol_entered);
@@ -116,7 +116,7 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     table_ = new QTableWidget;
     table_->setObjectName("eqWatchlistTable");
     table_->setColumnCount(3);
-    table_->setHorizontalHeaderLabels({"SYMBOL", "LTP", "CHG%"});
+    table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("LTP"), tr("CHG%")});
     table_->verticalHeader()->setVisible(false);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -133,6 +133,19 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
 
     connect(table_, &QTableWidget::cellClicked, this, &EquityWatchlist::on_cell_clicked);
     layout->addWidget(table_, 1);
+}
+
+void EquityWatchlist::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void EquityWatchlist::retranslateUi() {
+    if (title_label_)  title_label_->setText(tr("WATCHLIST"));
+    if (filter_edit_)  filter_edit_->setPlaceholderText(tr("Filter..."));
+    if (add_edit_)     add_edit_->setPlaceholderText(tr("Add symbol..."));
+    if (table_)        table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("LTP"), tr("CHG%")});
 }
 
 void EquityWatchlist::set_symbols(const QStringList& symbols) {

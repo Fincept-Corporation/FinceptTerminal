@@ -8,6 +8,7 @@
 #include <QComboBox>
 #include <QDateEdit>
 #include <QDoubleSpinBox>
+#include <QEvent>
 #include <QHideEvent>
 #include <QJsonObject>
 #include <QLabel>
@@ -49,6 +50,7 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_provider_changed(int index);
@@ -81,6 +83,43 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
     void clear_results();
     QJsonObject gather_args();
     QJsonObject gather_strategy_params();
+    /// Re-apply tr() strings to cached structural widgets on QEvent::LanguageChange.
+    void retranslateUi();
+
+    // ── Cached static labels for retranslateUi ──────────────────────────────
+    // Top bar
+    QLabel* brand_label_ = nullptr;
+    // Left panel section/field titles
+    QLabel* commands_title_ = nullptr;
+    QLabel* strategy_title_ = nullptr;
+    QLabel* strategy_cat_label_ = nullptr;
+    QLabel* strategy_pick_label_ = nullptr;
+    QLabel* params_title_ = nullptr;
+    // Center panel
+    QLabel* results_title_ = nullptr;
+    QPushButton* export_json_btn_ = nullptr;
+    QLabel* summary_hint_ = nullptr;
+    QLabel* equity_hint_ = nullptr;
+    // Right panel section/field titles
+    QLabel* market_data_title_ = nullptr;
+    QLabel* symbols_label_ = nullptr;
+    QLabel* start_label_ = nullptr;
+    QLabel* end_label_ = nullptr;
+    QLabel* interval_label_ = nullptr;
+    QLabel* execution_title_ = nullptr;
+    QLabel* commission_label_ = nullptr;
+    QLabel* slippage_label_ = nullptr;
+    QLabel* risk_free_label_ = nullptr;
+    QLabel* advanced_title_ = nullptr;
+    QLabel* leverage_label_ = nullptr;
+    QLabel* stop_loss_label_ = nullptr;
+    QLabel* take_profit_label_ = nullptr;
+    QLabel* pos_sizing_label_ = nullptr;
+    QLabel* benchmark_title_ = nullptr;
+    QLabel* benchmark_label_ = nullptr;
+    // Status bar
+    QLabel* providers_caption_ = nullptr;
+    QLabel* strategies_caption_ = nullptr;
 
     // Provider state (cached to avoid repeated heap allocation)
     QVector<services::backtest::Provider> providers_;

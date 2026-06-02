@@ -110,13 +110,13 @@ void ActiveLocksPanel::build_ui() {
     auto* hl = new QHBoxLayout(head);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(8);
-    auto* title = new QLabel(QStringLiteral("ACTIVE LOCKS"), head);
-    title->setObjectName(QStringLiteral("activeLocksTitle"));
-    summary_label_ = new QLabel(QStringLiteral("0 positions · 0 veFNCPT"), head);
+    title_ = new QLabel(tr("ACTIVE LOCKS"), head);
+    title_->setObjectName(QStringLiteral("activeLocksTitle"));
+    summary_label_ = new QLabel(tr("0 positions · 0 veFNCPT"), head);
     summary_label_->setObjectName(QStringLiteral("activeLocksHeadCaption"));
-    status_pill_ = new QLabel(QStringLiteral("LIVE"), head);
+    status_pill_ = new QLabel(tr("LIVE"), head);
     status_pill_->setObjectName(QStringLiteral("activeLocksPill"));
-    hl->addWidget(title);
+    hl->addWidget(title_);
     hl->addWidget(summary_label_);
     hl->addStretch();
     hl->addWidget(status_pill_);
@@ -133,11 +133,11 @@ void ActiveLocksPanel::build_ui() {
     table_->setObjectName(QStringLiteral("activeLocksTable"));
     table_->setColumnCount(5);
     table_->setHorizontalHeaderLabels({
-        QStringLiteral("LOCKED"),
-        QStringLiteral("DURATION"),
-        QStringLiteral("UNLOCKS"),
-        QStringLiteral("WEIGHT"),
-        QStringLiteral("YIELD (LIFETIME)"),
+        tr("LOCKED"),
+        tr("DURATION"),
+        tr("UNLOCKS"),
+        tr("WEIGHT"),
+        tr("YIELD (LIFETIME)"),
     });
     table_->verticalHeader()->setVisible(false);
     table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -265,6 +265,30 @@ void ActiveLocksPanel::hideEvent(QHideEvent* e) {
     current_topic_.clear();
 }
 
+void ActiveLocksPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ActiveLocksPanel::retranslateUi() {
+    if (title_) title_->setText(tr("ACTIVE LOCKS"));
+    if (table_) {
+        table_->setHorizontalHeaderLabels({
+            tr("LOCKED"),
+            tr("DURATION"),
+            tr("UNLOCKS"),
+            tr("WEIGHT"),
+            tr("YIELD (LIFETIME)"),
+        });
+    }
+    if (empty_state_)
+        empty_state_->setText(
+            tr("No active locks. Lock $FNCPT above to start earning yield."));
+    // Re-render summary + TOTAL row + LIVE/DEMO pill in the new locale.
+    rebuild_table();
+}
+
 // ── Updates ────────────────────────────────────────────────────────────────
 
 void ActiveLocksPanel::on_locks_update(const QVariant& v) {
@@ -315,7 +339,7 @@ void ActiveLocksPanel::rebuild_table() {
 
     // TOTAL row — visually distinct via item-level styling.
     const int total_row = latest_.size();
-    auto* tot_label = new QTableWidgetItem(QStringLiteral("TOTAL"));
+    auto* tot_label = new QTableWidgetItem(tr("TOTAL"));
     tot_label->setData(Qt::UserRole, QString()); // no position id
     table_->setItem(total_row, 0, tot_label);
     table_->setItem(total_row, 1, new QTableWidgetItem(QStringLiteral("—")));
@@ -380,10 +404,10 @@ void ActiveLocksPanel::clear_error_strip() {
 
 void ActiveLocksPanel::update_demo_chip(bool is_mock) {
     if (is_mock) {
-        status_pill_->setText(QStringLiteral("DEMO"));
+        status_pill_->setText(tr("DEMO"));
         status_pill_->setObjectName(QStringLiteral("activeLocksPillDemo"));
     } else {
-        status_pill_->setText(QStringLiteral("LIVE"));
+        status_pill_->setText(tr("LIVE"));
         status_pill_->setObjectName(QStringLiteral("activeLocksPill"));
     }
     status_pill_->style()->unpolish(status_pill_);

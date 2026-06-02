@@ -54,7 +54,7 @@ void AlphaArenaScreen::build_ui() {
 
     root->addWidget(build_header());
 
-    disclaimer_ = new QLabel(QStringLiteral(
+    disclaimer_ = new QLabel(tr(
         "⚠ LIVE MODE — orders are sent to Hyperliquid with real funds. "
         "Past performance ≠ future results. Not financial advice."));
     disclaimer_->setObjectName("aaDisclaimer");
@@ -74,19 +74,19 @@ QWidget* AlphaArenaScreen::build_header() {
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(10);
 
-    auto* title = new QLabel(QStringLiteral("ALPHA ARENA"));
-    title->setStyleSheet("color:#FF8800;font-weight:700;font-size:13px;");
-    hl->addWidget(title);
+    title_label_ = new QLabel(tr("ALPHA ARENA"));
+    title_label_->setStyleSheet("color:#FF8800;font-weight:700;font-size:13px;");
+    hl->addWidget(title_label_);
 
-    venue_badge_ = new QLabel(QStringLiteral("PAPER"));
+    venue_badge_ = new QLabel(tr("PAPER"));
     venue_badge_->setStyleSheet("background:#222;color:#0F0;padding:2px 8px;font-weight:700;");
     hl->addWidget(venue_badge_);
 
-    status_badge_ = new QLabel(QStringLiteral("IDLE"));
+    status_badge_ = new QLabel(tr("IDLE"));
     status_badge_->setStyleSheet("background:#222;color:#888;padding:2px 8px;font-weight:700;");
     hl->addWidget(status_badge_);
 
-    tick_label_ = new QLabel(QStringLiteral("TICK 0"));
+    tick_label_ = new QLabel(tr("TICK %1").arg(tick_seq_));
     tick_label_->setStyleSheet("color:#bbb;");
     hl->addWidget(tick_label_);
 
@@ -96,62 +96,65 @@ QWidget* AlphaArenaScreen::build_header() {
 
     hl->addStretch(1);
 
-    force_tick_btn_ = new QPushButton(QStringLiteral("FORCE TICK"));
+    force_tick_btn_ = new QPushButton(tr("FORCE TICK"));
     connect(force_tick_btn_, &QPushButton::clicked, this, &AlphaArenaScreen::on_force_tick_clicked);
     hl->addWidget(force_tick_btn_);
 
-    live_mode_btn_ = new QPushButton(QStringLiteral("LIVE MODE…"));
+    live_mode_btn_ = new QPushButton(tr("LIVE MODE…"));
     connect(live_mode_btn_, &QPushButton::clicked, this, &AlphaArenaScreen::on_live_mode_toggle_clicked);
     hl->addWidget(live_mode_btn_);
 
-    kill_all_btn_ = new QPushButton(QStringLiteral("KILL ALL"));
+    kill_all_btn_ = new QPushButton(tr("KILL ALL"));
     kill_all_btn_->setStyleSheet("background:#C72020;color:#fff;font-weight:700;");
     connect(kill_all_btn_, &QPushButton::clicked, this, &AlphaArenaScreen::on_kill_all_clicked);
     hl->addWidget(kill_all_btn_);
 
-    auto* cadence_label = new QLabel(QStringLiteral("CADENCE"));
-    cadence_label->setStyleSheet("color:#888;");
-    hl->addWidget(cadence_label);
+    cadence_label_ = new QLabel(tr("CADENCE"));
+    cadence_label_->setStyleSheet("color:#888;");
+    hl->addWidget(cadence_label_);
     hot_cadence_spin_ = new QSpinBox;
     hot_cadence_spin_->setRange(10, 3600);
     hot_cadence_spin_->setValue(180);
     hot_cadence_spin_->setSuffix(QStringLiteral("s"));
     hl->addWidget(hot_cadence_spin_);
-    auto* apply_btn = new QPushButton(QStringLiteral("APPLY"));
-    connect(apply_btn, &QPushButton::clicked, this, [this]() {
+    apply_cadence_btn_ = new QPushButton(tr("APPLY"));
+    connect(apply_cadence_btn_, &QPushButton::clicked, this, [this]() {
         auto r = AlphaArenaEngine::instance().set_cadence(hot_cadence_spin_->value());
         if (r.is_err()) {
             QMessageBox::warning(this, tr("Alpha Arena"), QString::fromStdString(r.error()));
         }
     });
-    hl->addWidget(apply_btn);
+    hl->addWidget(apply_cadence_btn_);
 
     return hdr;
 }
 
 QWidget* AlphaArenaScreen::build_create_panel() {
-    create_panel_ = new QGroupBox(QStringLiteral("New competition"));
+    create_panel_ = new QGroupBox(tr("New competition"));
     auto* grid = new QGridLayout(create_panel_);
     int row = 0;
 
-    grid->addWidget(new QLabel(QStringLiteral("Name")), row, 0);
+    comp_name_lbl_ = new QLabel(tr("Name"));
+    grid->addWidget(comp_name_lbl_, row, 0);
     comp_name_ = new QLineEdit(QStringLiteral("AlphaArena-1"));
     grid->addWidget(comp_name_, row++, 1);
 
-    grid->addWidget(new QLabel(QStringLiteral("Mode")), row, 0);
+    comp_mode_lbl_ = new QLabel(tr("Mode"));
+    grid->addWidget(comp_mode_lbl_, row, 0);
     comp_mode_ = new QComboBox;
-    comp_mode_->addItem(QStringLiteral("Baseline"), QVariant::fromValue(int(CompetitionMode::Baseline)));
-    comp_mode_->addItem(QStringLiteral("Monk"), QVariant::fromValue(int(CompetitionMode::Monk)));
-    comp_mode_->addItem(QStringLiteral("Situational"), QVariant::fromValue(int(CompetitionMode::Situational)));
+    comp_mode_->addItem(tr("Baseline"), QVariant::fromValue(int(CompetitionMode::Baseline)));
+    comp_mode_->addItem(tr("Monk"), QVariant::fromValue(int(CompetitionMode::Monk)));
+    comp_mode_->addItem(tr("Situational"), QVariant::fromValue(int(CompetitionMode::Situational)));
     grid->addWidget(comp_mode_, row++, 1);
 
-    grid->addWidget(new QLabel(QStringLiteral("Venue")), row, 0);
+    comp_venue_lbl_ = new QLabel(tr("Venue"));
+    grid->addWidget(comp_venue_lbl_, row, 0);
     auto* venue_box = new QWidget;
     auto* vh = new QHBoxLayout(venue_box);
     vh->setContentsMargins(0, 0, 0, 0);
-    venue_paper_ = new QRadioButton(QStringLiteral("Paper"));
-    venue_hl_ = new QRadioButton(QStringLiteral("Hyperliquid (live)"));
-    venue_us_eq_ = new QRadioButton(QStringLiteral("US Equities (Season 2 — Coming)"));
+    venue_paper_ = new QRadioButton(tr("Paper"));
+    venue_hl_ = new QRadioButton(tr("Hyperliquid (live)"));
+    venue_us_eq_ = new QRadioButton(tr("US Equities (Season 2 — Coming)"));
     venue_us_eq_->setEnabled(false);
     venue_paper_->setChecked(true);
     auto* grp = new QButtonGroup(venue_box);
@@ -164,19 +167,22 @@ QWidget* AlphaArenaScreen::build_create_panel() {
     vh->addStretch(1);
     grid->addWidget(venue_box, row++, 1);
 
-    grid->addWidget(new QLabel(QStringLiteral("Initial capital / agent")), row, 0);
+    comp_capital_lbl_ = new QLabel(tr("Initial capital / agent"));
+    grid->addWidget(comp_capital_lbl_, row, 0);
     comp_capital_ = new QDoubleSpinBox;
     comp_capital_->setRange(100, 1'000'000);
     comp_capital_->setValue(10000);
     grid->addWidget(comp_capital_, row++, 1);
 
-    grid->addWidget(new QLabel(QStringLiteral("Cadence (s)")), row, 0);
+    comp_cadence_lbl_ = new QLabel(tr("Cadence (s)"));
+    grid->addWidget(comp_cadence_lbl_, row, 0);
     comp_cadence_ = new QSpinBox;
     comp_cadence_->setRange(60, 600);
     comp_cadence_->setValue(180);
     grid->addWidget(comp_cadence_, row++, 1);
 
-    grid->addWidget(new QLabel(QStringLiteral("Instruments")), row, 0);
+    comp_instruments_lbl_ = new QLabel(tr("Instruments"));
+    grid->addWidget(comp_instruments_lbl_, row, 0);
     comp_instruments_ = new QListWidget;
     comp_instruments_->setSelectionMode(QAbstractItemView::MultiSelection);
     comp_instruments_->setMaximumHeight(80);
@@ -186,7 +192,8 @@ QWidget* AlphaArenaScreen::build_create_panel() {
     }
     grid->addWidget(comp_instruments_, row++, 1);
 
-    grid->addWidget(new QLabel(QStringLiteral("Models")), row, 0);
+    comp_models_lbl_ = new QLabel(tr("Models"));
+    grid->addWidget(comp_models_lbl_, row, 0);
     model_list_ = new QListWidget;
     model_list_->setSelectionMode(QAbstractItemView::MultiSelection);
     model_list_->setMaximumHeight(120);
@@ -195,8 +202,8 @@ QWidget* AlphaArenaScreen::build_create_panel() {
     auto* btn_row = new QWidget;
     auto* bh = new QHBoxLayout(btn_row);
     bh->setContentsMargins(0, 0, 0, 0);
-    create_btn_ = new QPushButton(QStringLiteral("CREATE"));
-    start_btn_ = new QPushButton(QStringLiteral("START"));
+    create_btn_ = new QPushButton(tr("CREATE"));
+    start_btn_ = new QPushButton(tr("START"));
     start_btn_->setEnabled(false);
     bh->addStretch(1);
     bh->addWidget(create_btn_);
@@ -218,8 +225,8 @@ QWidget* AlphaArenaScreen::build_right_stack() {
     auto* tabs = new QWidget;
     auto* tabs_h = new QHBoxLayout(tabs);
     tabs_h->setContentsMargins(0, 0, 0, 0);
-    const QStringList labels = {QStringLiteral("MODEL CHAT"), QStringLiteral("POSITIONS"),
-                                QStringLiteral("HITL"), QStringLiteral("RISK"), QStringLiteral("AUDIT")};
+    const QStringList labels = {tr("MODEL CHAT"), tr("POSITIONS"),
+                                tr("HITL"), tr("RISK"), tr("AUDIT")};
     for (int i = 0; i < labels.size(); ++i) {
         auto* b = new QPushButton(labels[i]);
         b->setProperty("active", i == 0);
@@ -448,7 +455,8 @@ void AlphaArenaScreen::on_right_tab_changed(int idx) {
 // ── Engine signal handlers ─────────────────────────────────────────────────
 
 void AlphaArenaScreen::on_engine_tick(int seq) {
-    tick_label_->setText(QStringLiteral("TICK %1").arg(seq));
+    tick_seq_ = seq;
+    tick_label_->setText(tr("TICK %1").arg(seq));
     refresh_all_panels();
 }
 
@@ -553,10 +561,10 @@ void AlphaArenaScreen::update_venue_badge() {
     auto& engine = AlphaArenaEngine::instance();
     const QString k = engine.venue_kind();
     if (k == QLatin1String("hyperliquid")) {
-        venue_badge_->setText(QStringLiteral("HYPERLIQUID • LIVE"));
+        venue_badge_->setText(tr("HYPERLIQUID • LIVE"));
         venue_badge_->setStyleSheet("background:#5C1F1F;color:#FFD;padding:2px 8px;font-weight:700;");
     } else {
-        venue_badge_->setText(QStringLiteral("PAPER"));
+        venue_badge_->setText(tr("PAPER"));
         venue_badge_->setStyleSheet("background:#222;color:#0F0;padding:2px 8px;font-weight:700;");
     }
 }
@@ -572,6 +580,75 @@ void AlphaArenaScreen::refresh_all_panels() {
     if (hitl_) hitl_->refresh();
     if (risk_) risk_->refresh();
     if (audit_) audit_->refresh();
+}
+
+// ── Re-translation ──────────────────────────────────────────────────────────
+// Header chrome + create-panel labels. Status/venue badges and the tick line
+// are re-derived from current state; competition names, instrument symbols,
+// model display names and all table/list rows are model data, kept verbatim.
+
+void AlphaArenaScreen::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(e);
+}
+
+void AlphaArenaScreen::retranslateUi() {
+    // Header.
+    if (title_label_)       title_label_->setText(tr("ALPHA ARENA"));
+    if (tick_label_)        tick_label_->setText(tr("TICK %1").arg(tick_seq_));
+    if (force_tick_btn_)    force_tick_btn_->setText(tr("FORCE TICK"));
+    if (live_mode_btn_)     live_mode_btn_->setText(tr("LIVE MODE…"));
+    if (kill_all_btn_)      kill_all_btn_->setText(tr("KILL ALL"));
+    if (cadence_label_)     cadence_label_->setText(tr("CADENCE"));
+    if (apply_cadence_btn_) apply_cadence_btn_->setText(tr("APPLY"));
+    if (disclaimer_)
+        disclaimer_->setText(tr(
+            "⚠ LIVE MODE — orders are sent to Hyperliquid with real funds. "
+            "Past performance ≠ future results. Not financial advice."));
+
+    // Status + venue badges — re-derive from current state. The status code is
+    // model data (uppercased verbatim); only the idle placeholder is translated.
+    if (status_badge_) {
+        if (competition_status_.isEmpty())
+            status_badge_->setText(tr("IDLE"));
+        else
+            update_status_badge(competition_status_);
+    }
+    if (venue_badge_) update_venue_badge();
+
+    // Create panel.
+    if (create_panel_)          create_panel_->setTitle(tr("New competition"));
+    if (comp_name_lbl_)         comp_name_lbl_->setText(tr("Name"));
+    if (comp_mode_lbl_)         comp_mode_lbl_->setText(tr("Mode"));
+    if (comp_venue_lbl_)        comp_venue_lbl_->setText(tr("Venue"));
+    if (comp_capital_lbl_)      comp_capital_lbl_->setText(tr("Initial capital / agent"));
+    if (comp_cadence_lbl_)      comp_cadence_lbl_->setText(tr("Cadence (s)"));
+    if (comp_instruments_lbl_)  comp_instruments_lbl_->setText(tr("Instruments"));
+    if (comp_models_lbl_)       comp_models_lbl_->setText(tr("Models"));
+    if (create_btn_)            create_btn_->setText(tr("CREATE"));
+    if (start_btn_)             start_btn_->setText(tr("START"));
+
+    // Mode combo — fixed UI labels; preserve current selection + enum data.
+    if (comp_mode_ && comp_mode_->count() >= 3) {
+        const int sel = comp_mode_->currentIndex();
+        comp_mode_->setItemText(0, tr("Baseline"));
+        comp_mode_->setItemText(1, tr("Monk"));
+        comp_mode_->setItemText(2, tr("Situational"));
+        comp_mode_->setCurrentIndex(sel);
+    }
+
+    // Venue radios.
+    if (venue_paper_) venue_paper_->setText(tr("Paper"));
+    if (venue_hl_)    venue_hl_->setText(tr("Hyperliquid (live)"));
+    if (venue_us_eq_) venue_us_eq_->setText(tr("US Equities (Season 2 — Coming)"));
+
+    // Right-stack tab buttons.
+    static const char* const kTabKeys[] = {
+        QT_TR_NOOP("MODEL CHAT"), QT_TR_NOOP("POSITIONS"),
+        QT_TR_NOOP("HITL"), QT_TR_NOOP("RISK"), QT_TR_NOOP("AUDIT")};
+    for (int i = 0; i < right_tab_btns_.size() && i < 5; ++i)
+        if (right_tab_btns_[i]) right_tab_btns_[i]->setText(tr(kTabKeys[i]));
 }
 
 // ── State persistence ──────────────────────────────────────────────────────

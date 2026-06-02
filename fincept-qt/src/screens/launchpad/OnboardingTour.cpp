@@ -60,6 +60,7 @@ OnboardingTour::OnboardingTour(QWidget* parent) : QDialog(parent) {
     setSizeGripEnabled(false);
     resize(560, 360);
     build_ui();
+    retranslateUi();
     update_buttons();
 }
 
@@ -68,45 +69,21 @@ void OnboardingTour::build_ui() {
     root->setContentsMargins(24, 24, 24, 16);
     root->setSpacing(16);
 
-    auto* title = new QLabel(tr("A 30-second tour"), this);
-    QFont tf = title->font();
+    heading_ = new QLabel(this);
+    QFont tf = heading_->font();
     tf.setPointSizeF(tf.pointSizeF() * 1.4);
     tf.setBold(true);
-    title->setFont(tf);
-    root->addWidget(title);
+    heading_->setFont(tf);
+    root->addWidget(heading_);
 
+    // Build the four steps with empty labels — retranslateUi() fills in the
+    // text so language switches re-apply it. build_step() caches the labels
+    // into step_labels_ in declared order.
     steps_ = new QStackedWidget(this);
-    steps_->addWidget(build_step(
-        tr("Command bar (Ctrl+\\)"),
-        tr("Type a function code or verb to do anything in the terminal — "
-           "e.g. \"AAPL\", \"layout switch \\\"Morning\\\"\", or "
-           "\"link panel red\". Press Ctrl+K for a fuzzy palette of every "
-           "action."),
-        tr("Tip: type \"?\" to list available actions for whatever you "
-           "type next.")));
-    steps_->addWidget(build_step(
-        tr("Link panels with a colour"),
-        tr("Click the coloured dot in any panel header to add it to a link "
-           "group. Panels in the same group share their selected symbol "
-           "across windows — pick AAPL in a watchlist and your charts, "
-           "research, and trading panels all switch."),
-        tr("Tip: groups are shared across windows, not just the active "
-           "one.")));
-    steps_->addWidget(build_step(
-        tr("Tear off panels into new windows"),
-        tr("Right-click a panel tab → \"Tear off into new window\" to spawn "
-           "a fresh frame on the next monitor. Or drag a panel to another "
-           "frame's tab bar to move it. Each frame keeps its own dock "
-           "layout — save the whole arrangement as a named layout when "
-           "you've got it the way you like."),
-        tr("Tip: Ctrl+Shift+N opens a fresh window on your next "
-           "monitor.")));
-    steps_->addWidget(build_step(
-        tr("Settings & shortcuts"),
-        tr("Open Settings (gear icon) to tune theme, hotkeys, telemetry "
-           "opt-in, and broker credentials. Hotkeys are rebindable — "
-           "every action in the registry can be assigned a key."),
-        tr("Tip: F11 toggles fullscreen on the focused window.")));
+    steps_->addWidget(build_step({}, {}, {}));
+    steps_->addWidget(build_step({}, {}, {}));
+    steps_->addWidget(build_step({}, {}, {}));
+    steps_->addWidget(build_step({}, {}, {}));
     step_count_ = steps_->count();
     root->addWidget(steps_, /*stretch=*/1);
 
@@ -156,7 +133,72 @@ QWidget* OnboardingTour::build_step(const QString& title, const QString& body,
     l->addWidget(t);
 
     l->addStretch();
+
+    // Cache the three labels so retranslateUi() can re-apply per-step text.
+    step_labels_.append({h, b, t});
     return w;
+}
+
+void OnboardingTour::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void OnboardingTour::retranslateUi() {
+    setWindowTitle(tr("Welcome to Fincept Terminal"));
+    if (heading_)
+        heading_->setText(tr("A 30-second tour"));
+
+    // Step text, indexed by step order. Guarded so partial construction is safe.
+    if (step_labels_.size() > 0 && step_labels_[0].title) {
+        step_labels_[0].title->setText(tr("Command bar (Ctrl+\\)"));
+        step_labels_[0].body->setText(
+            tr("Type a function code or verb to do anything in the terminal — "
+               "e.g. \"AAPL\", \"layout switch \\\"Morning\\\"\", or "
+               "\"link panel red\". Press Ctrl+K for a fuzzy palette of every "
+               "action."));
+        step_labels_[0].tip->setText(
+            tr("Tip: type \"?\" to list available actions for whatever you "
+               "type next."));
+    }
+    if (step_labels_.size() > 1 && step_labels_[1].title) {
+        step_labels_[1].title->setText(tr("Link panels with a colour"));
+        step_labels_[1].body->setText(
+            tr("Click the coloured dot in any panel header to add it to a link "
+               "group. Panels in the same group share their selected symbol "
+               "across windows — pick AAPL in a watchlist and your charts, "
+               "research, and trading panels all switch."));
+        step_labels_[1].tip->setText(
+            tr("Tip: groups are shared across windows, not just the active "
+               "one."));
+    }
+    if (step_labels_.size() > 2 && step_labels_[2].title) {
+        step_labels_[2].title->setText(tr("Tear off panels into new windows"));
+        step_labels_[2].body->setText(
+            tr("Right-click a panel tab → \"Tear off into new window\" to spawn "
+               "a fresh frame on the next monitor. Or drag a panel to another "
+               "frame's tab bar to move it. Each frame keeps its own dock "
+               "layout — save the whole arrangement as a named layout when "
+               "you've got it the way you like."));
+        step_labels_[2].tip->setText(
+            tr("Tip: Ctrl+Shift+N opens a fresh window on your next "
+               "monitor."));
+    }
+    if (step_labels_.size() > 3 && step_labels_[3].title) {
+        step_labels_[3].title->setText(tr("Settings & shortcuts"));
+        step_labels_[3].body->setText(
+            tr("Open Settings (gear icon) to tune theme, hotkeys, telemetry "
+               "opt-in, and broker credentials. Hotkeys are rebindable — "
+               "every action in the registry can be assigned a key."));
+        step_labels_[3].tip->setText(
+            tr("Tip: F11 toggles fullscreen on the focused window."));
+    }
+
+    if (btn_skip_) btn_skip_->setText(tr("Skip"));
+    if (btn_back_) btn_back_->setText(tr("Back"));
+    // btn_next_ text is managed by update_buttons() (depends on current step).
+    update_buttons();
 }
 
 void OnboardingTour::on_next() {

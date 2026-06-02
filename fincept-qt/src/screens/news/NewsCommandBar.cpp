@@ -23,6 +23,45 @@ NewsCommandBar::NewsCommandBar(QWidget* parent) : QWidget(parent) {
     summary_label_->hide();
 }
 
+void NewsCommandBar::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void NewsCommandBar::retranslateUi() {
+    // Command row — fixed-label buttons / inputs.
+    if (drawer_btn_)    drawer_btn_->setText(tr("INTEL"));
+    if (drawer_btn_)    drawer_btn_->setToolTip(tr("Toggle intelligence drawer"));
+    if (search_input_)  search_input_->setPlaceholderText(tr("Search..."));
+    if (sources_btn_)   sources_btn_->setToolTip(tr("Manage RSS feed sources"));
+    if (summarize_btn_) summarize_btn_->setToolTip(tr("AI Brief — summarize headlines"));
+    // Pills (category/time/sort/view) and combo entries carry logical code
+    // values used in filter logic — intentionally not retranslated.
+
+    // RTL toggle reflects its current checked state.
+    if (rtl_btn_)
+        rtl_btn_->setText(rtl_btn_->isChecked() ? tr("LTR") : tr("RTL"));
+
+    // Refresh-cadence combo entries (display strings; data is the int).
+    if (refresh_combo_) {
+        refresh_combo_->setToolTip(tr("Auto-refresh interval"));
+        const QStringList labels = {tr("MANUAL"), tr("1 MIN"), tr("5 MIN"), tr("10 MIN"), tr("30 MIN")};
+        for (int i = 0; i < refresh_combo_->count() && i < labels.size(); ++i)
+            refresh_combo_->setItemText(i, labels[i]);
+    }
+
+    // Intel strip — fixed captions.
+    if (intel_feeds_lbl_)    intel_feeds_lbl_->setText(tr("FEEDS"));
+    if (intel_articles_lbl_) intel_articles_lbl_->setText(tr("ARTS"));
+    if (intel_clusters_lbl_) intel_clusters_lbl_->setText(tr("CLST"));
+    if (intel_sources_lbl_)  intel_sources_lbl_->setText(tr("SRCS"));
+    if (sentiment_caption_)  sentiment_caption_->setText(tr("SENT"));
+
+    // Dynamic count labels (alerts / unseen / monitors / live badge) reflect
+    // runtime counts and refresh on the next data update — not re-applied here.
+}
+
 void NewsCommandBar::build_command_row(QVBoxLayout* root) {
     // Wrap the command row in a scroll area to prevent overflow
     auto* scroll = new QScrollArea(this);
@@ -42,12 +81,12 @@ void NewsCommandBar::build_command_row(QVBoxLayout* root) {
     hl->setSpacing(2);
 
     // Drawer toggle button
-    drawer_btn_ = new QPushButton("INTEL", row);
+    drawer_btn_ = new QPushButton(tr("INTEL"), row);
     drawer_btn_->setObjectName("newsDrawerBtn");
     drawer_btn_->setFixedHeight(20);
     drawer_btn_->setCursor(Qt::PointingHandCursor);
     drawer_btn_->setCheckable(true);
-    drawer_btn_->setToolTip("Toggle intelligence drawer");
+    drawer_btn_->setToolTip(tr("Toggle intelligence drawer"));
     hl->addWidget(drawer_btn_);
     connect(drawer_btn_, &QPushButton::clicked, this, &NewsCommandBar::drawer_toggle_requested);
 
@@ -56,7 +95,7 @@ void NewsCommandBar::build_command_row(QVBoxLayout* root) {
     // Search input — compact
     search_input_ = new QLineEdit(row);
     search_input_->setObjectName("newsCommandBarSearch");
-    search_input_->setPlaceholderText("Search...");
+    search_input_->setPlaceholderText(tr("Search..."));
     search_input_->setFixedWidth(120);
     search_input_->setFixedHeight(20);
     hl->addWidget(search_input_);
@@ -178,22 +217,22 @@ void NewsCommandBar::build_command_row(QVBoxLayout* root) {
     connect(variant_combo_, &QComboBox::currentTextChanged, this, &NewsCommandBar::variant_changed);
 
     // RTL toggle
-    auto* rtl_btn = new QPushButton("RTL", row);
-    rtl_btn->setObjectName("newsCommandBarPill");
-    rtl_btn->setFixedHeight(18);
-    rtl_btn->setCursor(Qt::PointingHandCursor);
-    rtl_btn->setCheckable(true);
-    hl->addWidget(rtl_btn);
-    connect(rtl_btn, &QPushButton::toggled, this, [this, rtl_btn](bool checked) {
-        rtl_btn->setText(checked ? "LTR" : "RTL");
+    rtl_btn_ = new QPushButton(tr("RTL"), row);
+    rtl_btn_->setObjectName("newsCommandBarPill");
+    rtl_btn_->setFixedHeight(18);
+    rtl_btn_->setCursor(Qt::PointingHandCursor);
+    rtl_btn_->setCheckable(true);
+    hl->addWidget(rtl_btn_);
+    connect(rtl_btn_, &QPushButton::toggled, this, [this](bool checked) {
+        rtl_btn_->setText(checked ? tr("LTR") : tr("RTL"));
         emit rtl_toggled();
     });
 
     // Summarize button
-    summarize_btn_ = new QPushButton("AI", row);
+    summarize_btn_ = new QPushButton(tr("AI"), row);
     summarize_btn_->setObjectName("newsDetailAnalyzeBtn");
     summarize_btn_->setFixedHeight(20);
-    summarize_btn_->setToolTip("AI Brief — summarize headlines");
+    summarize_btn_->setToolTip(tr("AI Brief — summarize headlines"));
     hl->addWidget(summarize_btn_);
     connect(summarize_btn_, &QPushButton::clicked, this, &NewsCommandBar::summarize_clicked);
 
@@ -215,7 +254,7 @@ void NewsCommandBar::build_command_row(QVBoxLayout* root) {
             [this](int idx) { emit refresh_interval_changed(refresh_combo_->itemData(idx).toInt()); });
 
     // Sources button — opens the RSS feed manager dialog
-    sources_btn_ = new QPushButton("SRC", row);
+    sources_btn_ = new QPushButton(tr("SRC"), row);
     sources_btn_->setObjectName("newsCommandBarSources");
     sources_btn_->setFixedHeight(20);
     sources_btn_->setCursor(Qt::PointingHandCursor);
@@ -224,7 +263,7 @@ void NewsCommandBar::build_command_row(QVBoxLayout* root) {
     connect(sources_btn_, &QPushButton::clicked, this, &NewsCommandBar::manage_sources_clicked);
 
     // Refresh button
-    refresh_btn_ = new QPushButton("REFRESH", row);
+    refresh_btn_ = new QPushButton(tr("REFRESH"), row);
     refresh_btn_->setObjectName("newsCommandBarRefresh");
     refresh_btn_->setFixedHeight(20);
     hl->addWidget(refresh_btn_);
@@ -244,7 +283,7 @@ void NewsCommandBar::build_intel_row(QVBoxLayout* root) {
     hl->setSpacing(8);
 
     // Stats: FEEDS | ARTICLES | CLUSTERS | SOURCES
-    auto make_intel_stat = [&](const QString& label_text) -> QLabel* {
+    auto make_intel_stat = [&](const QString& label_text, QLabel** caption_out) -> QLabel* {
         auto* container = new QWidget(row);
         auto* cl = new QHBoxLayout(container);
         cl->setContentsMargins(0, 0, 0, 0);
@@ -256,13 +295,15 @@ void NewsCommandBar::build_intel_row(QVBoxLayout* root) {
         cl->addWidget(lbl);
         cl->addWidget(val);
         hl->addWidget(container);
+        if (caption_out)
+            *caption_out = lbl;
         return val;
     };
 
-    intel_feeds_ = make_intel_stat("FEEDS");
-    intel_articles_ = make_intel_stat("ARTS");
-    intel_clusters_ = make_intel_stat("CLST");
-    intel_sources_ = make_intel_stat("SRCS");
+    intel_feeds_ = make_intel_stat(tr("FEEDS"), &intel_feeds_lbl_);
+    intel_articles_ = make_intel_stat(tr("ARTS"), &intel_articles_lbl_);
+    intel_clusters_ = make_intel_stat(tr("CLST"), &intel_clusters_lbl_);
+    intel_sources_ = make_intel_stat(tr("SRCS"), &intel_sources_lbl_);
 
     // Separator
     auto* sep1 = new QLabel("|", row);
@@ -275,9 +316,9 @@ void NewsCommandBar::build_intel_row(QVBoxLayout* root) {
     sent_layout->setContentsMargins(0, 0, 0, 0);
     sent_layout->setSpacing(4);
 
-    auto* sent_label = new QLabel("SENT", sent_container);
-    sent_label->setObjectName("newsIntelLabel");
-    sent_layout->addWidget(sent_label);
+    sentiment_caption_ = new QLabel(tr("SENT"), sent_container);
+    sentiment_caption_->setObjectName("newsIntelLabel");
+    sent_layout->addWidget(sentiment_caption_);
 
     auto* bar_frame = new QWidget(sent_container);
     bar_frame->setFixedSize(50, 6);
@@ -310,7 +351,7 @@ void NewsCommandBar::build_intel_row(QVBoxLayout* root) {
     hl->addWidget(sep2);
 
     // Monitor alerts summary
-    intel_monitors_ = new QLabel("0 WATCHES", row);
+    intel_monitors_ = new QLabel(tr("0 WATCHES"), row);
     intel_monitors_->setObjectName("newsIntelMonitors");
     hl->addWidget(intel_monitors_);
 
@@ -324,7 +365,7 @@ void NewsCommandBar::build_intel_row(QVBoxLayout* root) {
 
     // Live-feed badge (right side of intel strip). Reflects the
     // NewsService WebSocket state and toggles connect/disconnect on click.
-    live_badge_ = new QPushButton("OFFLINE", row);
+    live_badge_ = new QPushButton(tr("OFFLINE"), row);
     live_badge_->setObjectName("newsLiveBadge");
     live_badge_->setFixedHeight(20);
     live_badge_->setCursor(Qt::PointingHandCursor);
@@ -385,7 +426,7 @@ void NewsCommandBar::set_active_time_range(const QString& range) {
 
 void NewsCommandBar::set_loading(bool loading) {
     refresh_btn_->setEnabled(!loading);
-    refresh_btn_->setText(loading ? "..." : "REFRESH");
+    refresh_btn_->setText(loading ? tr("...") : tr("REFRESH"));
 }
 
 void NewsCommandBar::set_loading_progress(int done, int total) {
@@ -403,7 +444,7 @@ void NewsCommandBar::set_article_count(int count) {
 
 void NewsCommandBar::set_alert_count(int count) {
     if (count > 0) {
-        alert_label_->setText(QString("%1 ALERTS").arg(count));
+        alert_label_->setText(tr("%1 ALERTS").arg(count));
         alert_label_->show();
     } else {
         alert_label_->hide();
@@ -412,7 +453,7 @@ void NewsCommandBar::set_alert_count(int count) {
 
 void NewsCommandBar::set_unseen_count(int count) {
     if (count > 0) {
-        unseen_label_->setText(QString("%1 NEW").arg(count));
+        unseen_label_->setText(tr("%1 NEW").arg(count));
         unseen_label_->show();
     } else {
         unseen_label_->hide();
@@ -422,7 +463,7 @@ void NewsCommandBar::set_unseen_count(int count) {
 void NewsCommandBar::show_summary(const QString& summary) {
     summary_label_->setText(summary);
     summary_label_->show();
-    summarize_btn_->setText("AI");
+    summarize_btn_->setText(tr("AI"));
     summarize_btn_->setEnabled(true);
 }
 
@@ -431,7 +472,7 @@ void NewsCommandBar::hide_summary() {
 }
 
 void NewsCommandBar::set_summarizing(bool busy) {
-    summarize_btn_->setText(busy ? "..." : "AI");
+    summarize_btn_->setText(busy ? tr("...") : tr("AI"));
     summarize_btn_->setEnabled(!busy);
 }
 
@@ -492,12 +533,12 @@ void NewsCommandBar::set_live_state(bool connected) {
     if (!live_badge_)
         return;
     if (connected) {
-        live_badge_->setText("● LIVE");
+        live_badge_->setText(tr("● LIVE"));
         live_badge_->setStyleSheet(
             "color:#16a34a; background:transparent; border:1px solid #16a34a;"
             " padding:0 6px; font-weight:700; font-size:10px;");
     } else {
-        live_badge_->setText("OFFLINE");
+        live_badge_->setText(tr("OFFLINE"));
         live_badge_->setStyleSheet(
             "color:#94a3b8; background:transparent; border:1px solid #94a3b8;"
             " padding:0 6px; font-weight:700; font-size:10px;");
@@ -506,9 +547,9 @@ void NewsCommandBar::set_live_state(bool connected) {
 
 void NewsCommandBar::update_monitor_summary(int total_monitors, int active_alerts) {
     if (active_alerts > 0)
-        intel_monitors_->setText(QString("%1 WATCHES  %2 HIT").arg(total_monitors).arg(active_alerts));
+        intel_monitors_->setText(tr("%1 WATCHES  %2 HIT").arg(total_monitors).arg(active_alerts));
     else
-        intel_monitors_->setText(QString("%1 WATCHES").arg(total_monitors));
+        intel_monitors_->setText(tr("%1 WATCHES").arg(total_monitors));
 }
 
 } // namespace fincept::screens

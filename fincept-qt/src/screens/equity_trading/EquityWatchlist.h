@@ -4,6 +4,7 @@
 #include "trading/TradingTypes.h"
 
 #include <QCompleter>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMutex>
@@ -38,6 +39,9 @@ class EquityWatchlist : public QWidget {
     void symbol_selected(const QString& symbol);
     void symbol_added(const QString& symbol); // emitted when user adds a new symbol
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_cell_clicked(int row, int col);
     void on_filter_changed(const QString& text);
@@ -46,12 +50,14 @@ class EquityWatchlist : public QWidget {
 
   private:
     void rebuild_table();
+    void retranslateUi();
 
     QLineEdit* filter_edit_ = nullptr;
     QLineEdit* add_edit_ = nullptr; // symbol add input
     QPushButton* add_btn_ = nullptr;
     QStringListModel* completer_model_ = nullptr;
     QCompleter* completer_ = nullptr;
+    QLabel* title_label_ = nullptr;
     QLabel* count_label_ = nullptr;
     QTableWidget* table_ = nullptr;
 

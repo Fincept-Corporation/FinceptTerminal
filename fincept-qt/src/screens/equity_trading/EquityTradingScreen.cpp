@@ -189,7 +189,7 @@ void EquityTradingScreen::setup_ui() {
     cmd_layout->setSpacing(6);
 
     // Account button + menu (replaces broker_btn_)
-    account_btn_ = new QPushButton("NO ACCOUNT");
+    account_btn_ = new QPushButton(tr("NO ACCOUNT"));
     account_btn_->setObjectName("eqBrokerBtn");
     account_btn_->setFixedHeight(22);
     account_btn_->setCursor(Qt::PointingHandCursor);
@@ -240,20 +240,20 @@ void EquityTradingScreen::setup_ui() {
     cmd_layout->addWidget(clock_label_);
 
     // Connection status indicator (aggregate)
-    conn_label_ = new QLabel("○ NO ACCOUNTS");
+    conn_label_ = new QLabel(tr("○ NO ACCOUNTS"));
     conn_label_->setObjectName("eqConnLabel");
     conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY()));
     cmd_layout->addWidget(conn_label_);
 
     // Accounts management button (replaces api_btn_)
-    accounts_btn_ = new QPushButton("ACCOUNTS");
+    accounts_btn_ = new QPushButton(tr("ACCOUNTS"));
     accounts_btn_->setObjectName("eqApiBtn");
     accounts_btn_->setFixedHeight(22);
     accounts_btn_->setCursor(Qt::PointingHandCursor);
     cmd_layout->addWidget(accounts_btn_);
 
     // Mode button (per-account mode toggle)
-    mode_btn_ = new QPushButton("PAPER");
+    mode_btn_ = new QPushButton(tr("PAPER"));
     mode_btn_->setObjectName("eqModeBtn");
     mode_btn_->setProperty("mode", "paper");
     mode_btn_->setCheckable(true);
@@ -326,6 +326,7 @@ void EquityTradingScreen::setup_ui() {
             stream->subscribe_symbols(watchlist_symbols_);
     });
     connect(order_entry_, &EquityOrderEntry::order_submitted, this, &EquityTradingScreen::on_order_submitted);
+    connect(order_entry_, &EquityOrderEntry::strategy_order_submitted, this, &EquityTradingScreen::on_strategy_submitted);
     connect(order_entry_, &EquityOrderEntry::broadcast_requested, this, [this](const trading::UnifiedOrder& order) {
         auto* dlg = new BroadcastOrderDialog(order, this);
         dlg->exec();
@@ -334,6 +335,10 @@ void EquityTradingScreen::setup_ui() {
     connect(orderbook_, &EquityOrderBook::price_clicked, this, &EquityTradingScreen::on_ob_price_clicked);
     connect(bottom_panel_, &EquityBottomPanel::cancel_order_requested, this, &EquityTradingScreen::on_cancel_order);
     connect(bottom_panel_, &EquityBottomPanel::modify_order_requested, this, &EquityTradingScreen::async_modify_order);
+    connect(bottom_panel_, &EquityBottomPanel::cancel_all_orders_requested, this,
+            [this](const QString&) { on_cancel_all_orders(); });
+    connect(bottom_panel_, &EquityBottomPanel::close_all_positions_requested, this,
+            [this](const QString&) { on_close_all_positions(); });
     connect(bottom_panel_, &EquityBottomPanel::import_holdings_requested, this, &EquityTradingScreen::on_import_holdings_requested);
     connect(chart_, &EquityChart::timeframe_changed, this, [this](const QString& tf) {
         auto* stream = DataStreamManager::instance().stream_for(focused_account_id_);
@@ -374,6 +379,28 @@ void EquityTradingScreen::setup_timers() {
 
 void EquityTradingScreen::update_clock() {
     clock_label_->setText(QDateTime::currentDateTime().toString("HH:mm:ss"));
+}
+
+void EquityTradingScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void EquityTradingScreen::retranslateUi() {
+    if (accounts_btn_) accounts_btn_->setText(tr("ACCOUNTS"));
+
+    // Mode button reflects the focused account's live/paper state.
+    if (mode_btn_)
+        mode_btn_->setText(mode_btn_->isChecked() ? tr("LIVE") : tr("PAPER"));
+
+    // Account button + aggregate connection status are data-driven; re-running
+    // their builders re-applies the translated chrome (and the "NO ACCOUNT" /
+    // "NO ACCOUNTS" placeholders) while preserving the live state.
+    update_account_menu();
+    update_connection_status();
+    // exchange_label_ holds a market code (NSE/BSE/…), symbol_input_ the ticker,
+    // clock_label_ a timestamp — all data, not translated.
 }
 
 // ============================================================================
@@ -567,7 +594,7 @@ void EquityTradingScreen::update_account_menu() {
     const auto accounts = AccountManager::instance().active_accounts();
 
     if (accounts.isEmpty()) {
-        account_btn_->setText("NO ACCOUNT");
+        account_btn_->setText(tr("NO ACCOUNT"));
         return;
     }
 
@@ -599,19 +626,19 @@ void EquityTradingScreen::update_connection_status() {
             ++expired;
     }
     if (accounts.isEmpty()) {
-        conn_label_->setText("○ NO ACCOUNTS");
+        conn_label_->setText(tr("○ NO ACCOUNTS"));
         conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY()));
     } else if (expired > 0 && connected == 0) {
-        conn_label_->setText(QString::fromUtf8("\xe2\x9a\xa0 TOKEN EXPIRED \xe2\x80\x94 click ACCOUNTS"));
+        conn_label_->setText(tr("\xe2\x9a\xa0 TOKEN EXPIRED \xe2\x80\x94 click ACCOUNTS"));
         conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::NEGATIVE()));
     } else if (connected == accounts.size()) {
-        conn_label_->setText(QString("● %1/%2 CONNECTED").arg(connected).arg(accounts.size()));
+        conn_label_->setText(tr("● %1/%2 CONNECTED").arg(connected).arg(accounts.size()));
         conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::POSITIVE()));
     } else if (connected > 0) {
-        conn_label_->setText(QString("◐ %1/%2 CONNECTED").arg(connected).arg(accounts.size()));
+        conn_label_->setText(tr("◐ %1/%2 CONNECTED").arg(connected).arg(accounts.size()));
         conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::WARNING()));
     } else {
-        conn_label_->setText(QString("○ 0/%1 CONNECTED").arg(accounts.size()));
+        conn_label_->setText(tr("○ 0/%1 CONNECTED").arg(accounts.size()));
         conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY()));
     }
 }

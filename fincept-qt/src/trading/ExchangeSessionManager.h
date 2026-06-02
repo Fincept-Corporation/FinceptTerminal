@@ -39,6 +39,14 @@ class ExchangeSessionManager : public QObject, public fincept::datahub::Producer
     /// Snapshot of currently-live exchange ids.
     QStringList active_exchange_ids() const;
 
+    /// Canonical list of crypto exchanges wired into the terminal — the single
+    /// source of truth for the Crypto Trading dropdown, the hub allow-list,
+    /// `topic_patterns()`, and the per-exchange hub policies. Display order ==
+    /// list order (native Kraken + Hyperliquid DEX first, then majors).
+    /// Adding an exchange is a one-line edit here; the daemon (ccxt.pro
+    /// `ws_stream.py` + `exchange_daemon.py`) already handles any ccxt id.
+    static const QStringList& supported_exchange_ids();
+
     // ── Producer ───────────────────────────────────────────────────────────
     QStringList topic_patterns() const override;
     void refresh(const QStringList& topics) override; // no-op: push_only

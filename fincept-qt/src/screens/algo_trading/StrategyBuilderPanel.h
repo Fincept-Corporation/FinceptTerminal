@@ -9,6 +9,7 @@
 #include <QComboBox>
 #include <QDateEdit>
 #include <QDoubleSpinBox>
+#include <QEvent>
 #include <QJsonArray>
 #include <QLabel>
 #include <QLineEdit>
@@ -32,6 +33,9 @@ public:
     void load_and_backtest(const services::algo::AlgoStrategy& strategy, const QString& symbol,
                            const QString& start_date, const QString& end_date);
 
+protected:
+    void changeEvent(QEvent* event) override;
+
 private slots:
     void on_save();
     void on_backtest();
@@ -41,6 +45,7 @@ private slots:
 
 private:
     void build_ui();
+    void retranslateUi();
     void connect_service();
     QWidget* build_top_toolbar();
     QWidget* build_left_panel();
@@ -71,6 +76,10 @@ private:
     ui::algo::RiskManagementPanel* risk_panel_ = nullptr;
 
     // Right panel — backtest
+    QLabel* bt_header_ = nullptr;
+    QLabel* bt_capital_label_ = nullptr;
+    QLabel* bt_start_label_ = nullptr;
+    QLabel* bt_end_label_ = nullptr;
     QDoubleSpinBox* bt_capital_ = nullptr;
     QDateEdit* bt_start_date_ = nullptr;
     QDateEdit* bt_end_date_ = nullptr;

@@ -1,6 +1,7 @@
 #include "trading/brokers/tradejini/TradejiniBroker.h"
 
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -126,7 +127,10 @@ TokenExchangeResponse TradejiniBroker::exchange_token(const QString& api_key, co
     if (token.isEmpty())
         return {false, "", "", "", obj.value("message").toString("Login failed: no access token"), ""};
 
-    return {true, token, "", "", "", ""};
+    // Tradejini tokens expire at the daily reset; the TOTP is a one-time code we
+    // can't replay, so detect-only. Startup hint.
+    const QString extra = with_token_expiry({}, next_ist_flush_epoch(6, 0));
+    return {true, token, "", "", extra, ""};
 }
 
 // ---------- place_order ----------

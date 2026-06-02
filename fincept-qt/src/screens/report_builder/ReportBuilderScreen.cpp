@@ -15,6 +15,7 @@
 #include "core/session/ScreenStateManager.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "services/cloud/CloudSyncEngine.h"
 #include "services/file_manager/FileManagerService.h"
 #include "services/markets/MarketDataService.h"
 #include "services/report_builder/ReportBuilderService.h"
@@ -392,7 +393,7 @@ QWidget* ReportBuilderScreen::build_toolbar() {
     hl->setContentsMargins(8, 0, 8, 0);
     hl->setSpacing(6);
 
-    auto make_panel_toggle = [&](const char* glyph, const char* tooltip, const char* shortcut) {
+    auto make_panel_toggle = [&](const char* glyph, const QString& tooltip, const char* shortcut) {
         auto* b = new QPushButton(glyph);
         b->setFixedSize(26, 26);
         b->setCursor(Qt::PointingHandCursor);
@@ -408,17 +409,17 @@ QWidget* ReportBuilderScreen::build_toolbar() {
         return b;
     };
 
-    left_toggle_btn_ = make_panel_toggle("‹", "Collapse components panel  (Ctrl+B)", "Ctrl+B");
+    left_toggle_btn_ = make_panel_toggle("‹", tr("Collapse components panel  (Ctrl+B)"), "Ctrl+B");
     connect(left_toggle_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::on_toggle_left);
 
-    auto* title = new QLabel("REPORT BUILDER");
-    title->setStyleSheet(
+    toolbar_title_ = new QLabel(tr("REPORT BUILDER"));
+    toolbar_title_->setStyleSheet(
         QString("color: %1; font-size: 14px; font-weight: bold; background: transparent;").arg(ui::colors::AMBER()));
-    hl->addWidget(title);
+    hl->addWidget(toolbar_title_);
 
     hl->addStretch();
 
-    auto make_btn = [&](const char* text) {
+    auto make_btn = [&](const QString& text) {
         auto* b = new QPushButton(text);
         b->setFixedHeight(26);
         hl->addWidget(b);
@@ -427,32 +428,32 @@ QWidget* ReportBuilderScreen::build_toolbar() {
 
     auto* undo_stack = Service::instance().undo_stack();
 
-    auto* undo_btn = make_btn("Undo");
-    undo_btn->setEnabled(undo_stack->canUndo());
-    connect(undo_stack, &QUndoStack::canUndoChanged, undo_btn, &QPushButton::setEnabled);
-    connect(undo_btn, &QPushButton::clicked, undo_stack, &QUndoStack::undo);
+    undo_btn_ = make_btn(tr("Undo"));
+    undo_btn_->setEnabled(undo_stack->canUndo());
+    connect(undo_stack, &QUndoStack::canUndoChanged, undo_btn_, &QPushButton::setEnabled);
+    connect(undo_btn_, &QPushButton::clicked, undo_stack, &QUndoStack::undo);
 
-    auto* redo_btn = make_btn("Redo");
-    redo_btn->setEnabled(undo_stack->canRedo());
-    connect(undo_stack, &QUndoStack::canRedoChanged, redo_btn, &QPushButton::setEnabled);
-    connect(redo_btn, &QPushButton::clicked, undo_stack, &QUndoStack::redo);
+    redo_btn_ = make_btn(tr("Redo"));
+    redo_btn_->setEnabled(undo_stack->canRedo());
+    connect(undo_stack, &QUndoStack::canRedoChanged, redo_btn_, &QPushButton::setEnabled);
+    connect(redo_btn_, &QPushButton::clicked, undo_stack, &QUndoStack::redo);
 
     make_btn("|")->setEnabled(false);
 
-    auto* open_btn = make_btn("Open");
-    connect(open_btn, &QPushButton::clicked, this, &ReportBuilderScreen::on_open);
+    open_btn_ = make_btn(tr("Open"));
+    connect(open_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::on_open);
 
-    auto* save_btn = make_btn("Save");
-    connect(save_btn, &QPushButton::clicked, this, &ReportBuilderScreen::on_save);
+    save_btn_ = make_btn(tr("Save"));
+    connect(save_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::on_save);
 
-    auto* pdf_btn = make_btn("Export PDF");
-    pdf_btn->setStyleSheet(QString("QPushButton { color: %1; font-weight: bold; }").arg(ui::colors::AMBER()));
-    connect(pdf_btn, &QPushButton::clicked, this, &ReportBuilderScreen::on_export_pdf);
+    pdf_btn_ = make_btn(tr("Export PDF"));
+    pdf_btn_->setStyleSheet(QString("QPushButton { color: %1; font-weight: bold; }").arg(ui::colors::AMBER()));
+    connect(pdf_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::on_export_pdf);
 
-    auto* preview_btn = make_btn("Preview");
-    connect(preview_btn, &QPushButton::clicked, this, &ReportBuilderScreen::on_preview);
+    preview_btn_ = make_btn(tr("Preview"));
+    connect(preview_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::on_preview);
 
-    right_toggle_btn_ = make_panel_toggle("›", "Collapse properties panel  (Ctrl+Shift+B)", "Ctrl+Shift+B");
+    right_toggle_btn_ = make_panel_toggle("›", tr("Collapse properties panel  (Ctrl+Shift+B)"), "Ctrl+Shift+B");
     connect(right_toggle_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::on_toggle_right);
 
     return bar;
@@ -466,9 +467,36 @@ void ReportBuilderScreen::showEvent(QShowEvent* e) {
     // The service runs autosave continuously. We just rebind from current
     // service state in case mutations happened while the screen was hidden.
     rebind_from_service();
+    // Rate-gated pull of cloud reports on screen entry (no-op when sync is off).
+    fincept::services::cloud::CloudSyncEngine::instance().request_pull(QStringLiteral("report"));
 }
 
 void ReportBuilderScreen::hideEvent(QHideEvent* e) { QWidget::hideEvent(e); }
+
+// ── Live language switch ─────────────────────────────────────────────────────
+
+void ReportBuilderScreen::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(e);
+}
+
+void ReportBuilderScreen::retranslateUi() {
+    if (toolbar_title_) toolbar_title_->setText(tr("REPORT BUILDER"));
+    if (undo_btn_) undo_btn_->setText(tr("Undo"));
+    if (redo_btn_) redo_btn_->setText(tr("Redo"));
+    if (open_btn_) open_btn_->setText(tr("Open"));
+    if (save_btn_) save_btn_->setText(tr("Save"));
+    if (pdf_btn_) pdf_btn_->setText(tr("Export PDF"));
+    if (preview_btn_) preview_btn_->setText(tr("Preview"));
+    // Re-apply the panel-toggle tooltips for the current collapse state.
+    if (left_toggle_btn_)
+        left_toggle_btn_->setToolTip(left_collapsed_ ? tr("Expand components panel  (Ctrl+B)")
+                                                     : tr("Collapse components panel  (Ctrl+B)"));
+    if (right_toggle_btn_)
+        right_toggle_btn_->setToolTip(right_collapsed_ ? tr("Expand properties panel  (Ctrl+Shift+B)")
+                                                       : tr("Collapse properties panel  (Ctrl+Shift+B)"));
+}
 
 // ── IStatefulScreen ──────────────────────────────────────────────────────────
 

@@ -63,8 +63,8 @@ AdbPanel::AdbPanel(QWidget* parent) : EconPanelBase(kAdbSourceId, kAdbColor, par
 }
 
 void AdbPanel::activate() {
-    show_empty("Select an economy and data category, then click FETCH\n"
-               "ADB data is free — no API key required");
+    show_empty(tr("Select an economy and data category, then click FETCH\n"
+                  "ADB data is free — no API key required"));
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -96,24 +96,24 @@ void AdbPanel::build_controls(QHBoxLayout* thl) {
     indicator_input_->setFixedWidth(130);
 
     start_input_ = new QLineEdit;
-    start_input_->setPlaceholderText("Start year");
+    start_input_->setPlaceholderText(tr("Start year"));
     start_input_->setFixedHeight(26);
     start_input_->setFixedWidth(70);
 
     end_input_ = new QLineEdit;
-    end_input_->setPlaceholderText("End year");
+    end_input_->setPlaceholderText(tr("End year"));
     end_input_->setFixedHeight(26);
     end_input_->setFixedWidth(70);
 
-    thl->addWidget(make_lbl("ECONOMY"));
+    thl->addWidget(economy_lbl_ = make_lbl(tr("ECONOMY")));
     thl->addWidget(economy_combo_);
-    thl->addWidget(make_lbl("CATEGORY"));
+    thl->addWidget(category_lbl_ = make_lbl(tr("CATEGORY")));
     thl->addWidget(category_combo_);
-    thl->addWidget(make_lbl("INDICATOR"));
+    thl->addWidget(indicator_lbl_ = make_lbl(tr("INDICATOR")));
     thl->addWidget(indicator_input_);
-    thl->addWidget(make_lbl("FROM"));
+    thl->addWidget(from_lbl_ = make_lbl(tr("FROM")));
     thl->addWidget(start_input_);
-    thl->addWidget(make_lbl("TO"));
+    thl->addWidget(to_lbl_ = make_lbl(tr("TO")));
     thl->addWidget(end_input_);
 }
 
@@ -140,11 +140,11 @@ void AdbPanel::on_fetch() {
     const QString end = end_input_->text().trimmed();
 
     if (economy.isEmpty()) {
-        show_empty("Select an economy");
+        show_empty(tr("Select an economy"));
         return;
     }
     if (cat.uses_indicator && indicator.isEmpty()) {
-        show_empty("Enter an indicator code (e.g. " + cat.default_indicator + ")");
+        show_empty(tr("Enter an indicator code (e.g. %1)").arg(cat.default_indicator));
         return;
     }
 
@@ -157,7 +157,7 @@ void AdbPanel::on_fetch() {
     if (!start.isEmpty() && !end.isEmpty())
         args << end;
 
-    show_loading("Fetching ADB " + cat.label + " for " + economy + "…");
+    show_loading(tr("Fetching ADB %1 for %2…").arg(cat.label, economy));
     services::EconomicsService::instance().execute(kAdbSourceId, kAdbScript, cat.command, args,
                                                    "adb_" + cat.command + "_" + economy + "_" + indicator);
 }
@@ -171,7 +171,7 @@ void AdbPanel::on_result(const QString& request_id, const services::EconomicsRes
     if (!result.success) {
         // ADB uses "error" key at top level
         const QString err = result.error.isEmpty() ? result.data["error"].toString() : result.error;
-        show_error(err.isEmpty() ? "Unknown error from ADB API" : err);
+        show_error(err.isEmpty() ? tr("Unknown error from ADB API") : err);
         return;
     }
 
@@ -186,7 +186,7 @@ void AdbPanel::on_result(const QString& request_id, const services::EconomicsRes
             show_error(emb_err);
             return;
         }
-        show_empty("No data returned — try a different economy, indicator or date range");
+        show_empty(tr("No data returned — try a different economy, indicator or date range"));
         return;
     }
 
@@ -196,6 +196,33 @@ void AdbPanel::on_result(const QString& request_id, const services::EconomicsRes
 
     display(rows, title);
     LOG_INFO("AdbPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(request_id));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void AdbPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void AdbPanel::retranslateUi() {
+    if (economy_lbl_)
+        economy_lbl_->setText(tr("ECONOMY"));
+    if (category_lbl_)
+        category_lbl_->setText(tr("CATEGORY"));
+    if (indicator_lbl_)
+        indicator_lbl_->setText(tr("INDICATOR"));
+    if (from_lbl_)
+        from_lbl_->setText(tr("FROM"));
+    if (to_lbl_)
+        to_lbl_->setText(tr("TO"));
+    // indicator_input_ placeholder is a per-category hint (data), not re-applied.
+    if (start_input_)
+        start_input_->setPlaceholderText(tr("Start year"));
+    if (end_input_)
+        end_input_->setPlaceholderText(tr("End year"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

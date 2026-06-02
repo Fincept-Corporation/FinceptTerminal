@@ -63,11 +63,11 @@ void ChatAgentPanel::build_ui() {
 
     tab_bar_ = new QTabBar;
     tab_bar_->setExpanding(true);
-    tab_bar_->addTab("Mem");
-    tab_bar_->addTab("Sched");
-    tab_bar_->addTab("Tasks");
-    tab_bar_->addTab("MCP");
-    tab_bar_->addTab("Monitor");
+    tab_bar_->addTab(tr("Mem"));
+    tab_bar_->addTab(tr("Sched"));
+    tab_bar_->addTab(tr("Tasks"));
+    tab_bar_->addTab(tr("MCP"));
+    tab_bar_->addTab(tr("Monitor"));
     tab_bar_->setStyleSheet(QString("QTabBar{background:%1;border-bottom:1px solid %2;}"
                                     "QTabBar::tab{background:%1;color:%3;padding:6px 0;"
                                     "font-size:11px;font-family:'Consolas','Courier New',monospace;"
@@ -109,9 +109,9 @@ QWidget* ChatAgentPanel::build_memory_tab() {
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
 
-    auto* title = new QLabel("AGENT MEMORY");
-    title->setStyleSheet(section_title_ss());
-    vl->addWidget(title);
+    mem_title_ = new QLabel(tr("AGENT MEMORY"));
+    mem_title_->setStyleSheet(section_title_ss());
+    vl->addWidget(mem_title_);
 
     memory_list_ = new QListWidget;
     memory_list_->setStyleSheet(list_ss());
@@ -119,9 +119,9 @@ QWidget* ChatAgentPanel::build_memory_tab() {
 
     auto* btn_row = new QHBoxLayout;
     btn_row->setSpacing(4);
-    mem_add_btn_ = make_btn("+ Add", "Add memory entry");
-    mem_del_btn_ = make_btn("Delete", "Delete selected");
-    mem_clear_btn_ = make_btn("Clear", "Clear all memory");
+    mem_add_btn_ = make_btn(tr("+ Add"), tr("Add memory entry"));
+    mem_del_btn_ = make_btn(tr("Delete"), tr("Delete selected"));
+    mem_clear_btn_ = make_btn(tr("Clear"), tr("Clear all memory"));
     mem_del_btn_->setEnabled(false);
     btn_row->addWidget(mem_add_btn_);
     btn_row->addWidget(mem_del_btn_);
@@ -143,14 +143,14 @@ QWidget* ChatAgentPanel::build_schedules_tab() {
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
 
-    auto* title = new QLabel("SCHEDULED QUERIES");
-    title->setStyleSheet(section_title_ss());
-    vl->addWidget(title);
+    sched_title_ = new QLabel(tr("SCHEDULED QUERIES"));
+    sched_title_->setStyleSheet(section_title_ss());
+    vl->addWidget(sched_title_);
 
-    auto* hint = new QLabel("Cron-based agent queries (e.g. daily 9 AM).");
-    hint->setWordWrap(true);
-    hint->setStyleSheet(hint_ss());
-    vl->addWidget(hint);
+    sched_hint_ = new QLabel(tr("Cron-based agent queries (e.g. daily 9 AM)."));
+    sched_hint_->setWordWrap(true);
+    sched_hint_->setStyleSheet(hint_ss());
+    vl->addWidget(sched_hint_);
 
     sched_list_ = new QListWidget;
     sched_list_->setStyleSheet(list_ss());
@@ -158,9 +158,9 @@ QWidget* ChatAgentPanel::build_schedules_tab() {
 
     auto* btn_row = new QHBoxLayout;
     btn_row->setSpacing(4);
-    sched_add_btn_ = make_btn("+ Add", "Create schedule");
-    sched_del_btn_ = make_btn("Delete", "Delete selected");
-    sched_toggle_btn_ = make_btn("Pause", "Pause/resume");
+    sched_add_btn_ = make_btn(tr("+ Add"), tr("Create schedule"));
+    sched_del_btn_ = make_btn(tr("Delete"), tr("Delete selected"));
+    sched_toggle_btn_ = make_btn(tr("Pause"), tr("Pause/resume"));
     sched_del_btn_->setEnabled(false);
     sched_toggle_btn_->setEnabled(false);
     btn_row->addWidget(sched_add_btn_);
@@ -186,11 +186,11 @@ QWidget* ChatAgentPanel::build_tasks_tab() {
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
 
-    auto* title = new QLabel("BACKGROUND TASKS");
-    title->setStyleSheet(section_title_ss());
-    vl->addWidget(title);
+    tasks_title_ = new QLabel(tr("BACKGROUND TASKS"));
+    tasks_title_->setStyleSheet(section_title_ss());
+    vl->addWidget(tasks_title_);
 
-    task_status_lbl_ = new QLabel("Long-running agent queries.");
+    task_status_lbl_ = new QLabel(tr("Long-running agent queries."));
     task_status_lbl_->setWordWrap(true);
     task_status_lbl_->setStyleSheet(hint_ss());
     vl->addWidget(task_status_lbl_);
@@ -201,8 +201,8 @@ QWidget* ChatAgentPanel::build_tasks_tab() {
 
     auto* row1 = new QHBoxLayout;
     row1->setSpacing(4);
-    task_refresh_btn_ = make_btn("Refresh", "Refresh task list");
-    task_detail_btn_ = make_btn("Detail", "View task result");
+    task_refresh_btn_ = make_btn(tr("Refresh"), tr("Refresh task list"));
+    task_detail_btn_ = make_btn(tr("Detail"), tr("View task result"));
     task_detail_btn_->setEnabled(false);
     row1->addWidget(task_refresh_btn_);
     row1->addWidget(task_detail_btn_);
@@ -210,8 +210,8 @@ QWidget* ChatAgentPanel::build_tasks_tab() {
 
     auto* row2 = new QHBoxLayout;
     row2->setSpacing(4);
-    task_feedback_btn_ = make_btn("Feedback", "Send feedback");
-    task_cancel_btn_ = make_btn("Cancel", "Cancel task");
+    task_feedback_btn_ = make_btn(tr("Feedback"), tr("Send feedback"));
+    task_cancel_btn_ = make_btn(tr("Cancel"), tr("Cancel task"));
     task_feedback_btn_->setEnabled(false);
     task_cancel_btn_->setEnabled(false);
     row2->addWidget(task_feedback_btn_);
@@ -239,11 +239,11 @@ QWidget* ChatAgentPanel::build_mcp_tab() {
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
 
-    auto* title = new QLabel("MCP SERVERS");
-    title->setStyleSheet(section_title_ss());
-    vl->addWidget(title);
+    mcp_title_ = new QLabel(tr("MCP SERVERS"));
+    mcp_title_->setStyleSheet(section_title_ss());
+    vl->addWidget(mcp_title_);
 
-    mcp_tools_lbl_ = new QLabel("Model Context Protocol tool servers.");
+    mcp_tools_lbl_ = new QLabel(tr("Model Context Protocol tool servers."));
     mcp_tools_lbl_->setWordWrap(true);
     mcp_tools_lbl_->setStyleSheet(hint_ss());
     vl->addWidget(mcp_tools_lbl_);
@@ -254,9 +254,9 @@ QWidget* ChatAgentPanel::build_mcp_tab() {
 
     auto* btn_row = new QHBoxLayout;
     btn_row->setSpacing(4);
-    mcp_add_btn_ = make_btn("+ Add", "Add MCP server");
-    mcp_del_btn_ = make_btn("Delete", "Remove selected");
-    mcp_refresh_btn_ = make_btn("Refresh", "Refresh all");
+    mcp_add_btn_ = make_btn(tr("+ Add"), tr("Add MCP server"));
+    mcp_del_btn_ = make_btn(tr("Delete"), tr("Remove selected"));
+    mcp_refresh_btn_ = make_btn(tr("Refresh"), tr("Refresh all"));
     mcp_del_btn_->setEnabled(false);
     btn_row->addWidget(mcp_add_btn_);
     btn_row->addWidget(mcp_refresh_btn_);
@@ -278,14 +278,14 @@ QWidget* ChatAgentPanel::build_monitors_tab() {
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
 
-    auto* title = new QLabel("DATA MONITORS");
-    title->setStyleSheet(section_title_ss());
-    vl->addWidget(title);
+    mon_title_ = new QLabel(tr("DATA MONITORS"));
+    mon_title_->setStyleSheet(section_title_ss());
+    vl->addWidget(mon_title_);
 
-    auto* hint = new QLabel("Watch sources, trigger agent analysis.");
-    hint->setWordWrap(true);
-    hint->setStyleSheet(hint_ss());
-    vl->addWidget(hint);
+    mon_hint_ = new QLabel(tr("Watch sources, trigger agent analysis."));
+    mon_hint_->setWordWrap(true);
+    mon_hint_->setStyleSheet(hint_ss());
+    vl->addWidget(mon_hint_);
 
     monitor_list_ = new QListWidget;
     monitor_list_->setStyleSheet(list_ss());
@@ -293,9 +293,9 @@ QWidget* ChatAgentPanel::build_monitors_tab() {
 
     auto* btn_row = new QHBoxLayout;
     btn_row->setSpacing(4);
-    mon_add_btn_ = make_btn("+ Add", "Create monitor");
-    mon_del_btn_ = make_btn("Delete", "Delete selected");
-    mon_toggle_btn_ = make_btn("Pause", "Pause/resume");
+    mon_add_btn_ = make_btn(tr("+ Add"), tr("Create monitor"));
+    mon_del_btn_ = make_btn(tr("Delete"), tr("Delete selected"));
+    mon_toggle_btn_ = make_btn(tr("Pause"), tr("Pause/resume"));
     mon_del_btn_->setEnabled(false);
     mon_toggle_btn_->setEnabled(false);
     btn_row->addWidget(mon_add_btn_);
@@ -327,7 +327,7 @@ void ChatAgentPanel::refresh_memory() {
     ChatModeService::instance().list_memory([this](bool ok, QVector<AgentMemory> memories, QString err) {
         memory_list_->clear();
         if (!ok) {
-            auto* item = new QListWidgetItem("Not available.");
+            auto* item = new QListWidgetItem(tr("Not available."));
             item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
             memory_list_->addItem(item);
             LOG_WARN("ChatAgentPanel", "Memory load failed: " + err);
@@ -335,7 +335,7 @@ void ChatAgentPanel::refresh_memory() {
         }
         memories_ = std::move(memories);
         if (memories_.isEmpty()) {
-            auto* item = new QListWidgetItem("No entries yet.");
+            auto* item = new QListWidgetItem(tr("No entries yet."));
             item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
             memory_list_->addItem(item);
             return;
@@ -352,7 +352,7 @@ void ChatAgentPanel::refresh_schedules() {
     ChatModeService::instance().list_schedules([this](bool ok, QVector<AgentSchedule> schedules, QString err) {
         sched_list_->clear();
         if (!ok) {
-            auto* item = new QListWidgetItem("Not available.");
+            auto* item = new QListWidgetItem(tr("Not available."));
             item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
             sched_list_->addItem(item);
             LOG_WARN("ChatAgentPanel", "Schedules load failed: " + err);
@@ -360,7 +360,7 @@ void ChatAgentPanel::refresh_schedules() {
         }
         schedules_ = std::move(schedules);
         if (schedules_.isEmpty()) {
-            auto* item = new QListWidgetItem("No schedules yet.");
+            auto* item = new QListWidgetItem(tr("No schedules yet."));
             item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
             sched_list_->addItem(item);
             return;
@@ -379,16 +379,16 @@ void ChatAgentPanel::refresh_tasks() {
     ChatModeService::instance().list_tasks([this](bool ok, QVector<AgentTask> tasks, QString err) {
         task_list_->clear();
         if (!ok) {
-            auto* item = new QListWidgetItem("Not available.");
+            auto* item = new QListWidgetItem(tr("Not available."));
             item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
             task_list_->addItem(item);
             LOG_WARN("ChatAgentPanel", "Tasks load failed: " + err);
             return;
         }
         tasks_ = std::move(tasks);
-        task_status_lbl_->setText(QString("%1 task(s)").arg(tasks_.size()));
+        task_status_lbl_->setText(tr("%1 task(s)").arg(tasks_.size()));
         if (tasks_.isEmpty()) {
-            auto* item = new QListWidgetItem("No tasks yet.");
+            auto* item = new QListWidgetItem(tr("No tasks yet."));
             item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
             task_list_->addItem(item);
             return;
@@ -418,25 +418,25 @@ void ChatAgentPanel::refresh_mcp_servers() {
         [this](bool ok, QVector<McpServer> servers, int total_tools, QString err) {
             mcp_list_->clear();
             if (!ok) {
-                auto* item = new QListWidgetItem("Not available.");
+                auto* item = new QListWidgetItem(tr("Not available."));
                 item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
                 mcp_list_->addItem(item);
-                mcp_tools_lbl_->setText("MCP not available.");
+                mcp_tools_lbl_->setText(tr("MCP not available."));
                 LOG_WARN("ChatAgentPanel", "MCP load failed: " + err);
                 return;
             }
             mcp_servers_ = std::move(servers);
-            mcp_tools_lbl_->setText(QString("%1 server(s) | %2 tools").arg(mcp_servers_.size()).arg(total_tools));
+            mcp_tools_lbl_->setText(tr("%1 server(s) | %2 tools").arg(mcp_servers_.size()).arg(total_tools));
 
             if (mcp_servers_.isEmpty()) {
-                auto* item = new QListWidgetItem("No servers connected.");
+                auto* item = new QListWidgetItem(tr("No servers connected."));
                 item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
                 mcp_list_->addItem(item);
                 return;
             }
             for (const auto& s : mcp_servers_) {
                 auto* item = new QListWidgetItem(mcp_list_);
-                item->setText(QString("%1\n  %2 | %3 tools").arg(s.name, s.status).arg(s.tools_count));
+                item->setText(tr("%1\n  %2 | %3 tools").arg(s.name, s.status).arg(s.tools_count));
                 item->setData(Qt::UserRole, s.name);
                 if (s.status == "connected")
                     item->setForeground(QColor(ui::colors::POSITIVE()));
@@ -452,7 +452,7 @@ void ChatAgentPanel::refresh_monitors() {
     ChatModeService::instance().list_monitors([this](bool ok, QVector<AgentMonitor> monitors, QString err) {
         monitor_list_->clear();
         if (!ok) {
-            auto* item = new QListWidgetItem("Not available.");
+            auto* item = new QListWidgetItem(tr("Not available."));
             item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
             monitor_list_->addItem(item);
             LOG_WARN("ChatAgentPanel", "Monitors load failed: " + err);
@@ -460,7 +460,7 @@ void ChatAgentPanel::refresh_monitors() {
         }
         monitors_ = std::move(monitors);
         if (monitors_.isEmpty()) {
-            auto* item = new QListWidgetItem("No monitors configured.");
+            auto* item = new QListWidgetItem(tr("No monitors configured."));
             item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
             monitor_list_->addItem(item);
             return;
@@ -481,17 +481,18 @@ void ChatAgentPanel::refresh_monitors() {
 
 void ChatAgentPanel::on_add_memory() {
     bool ok = false;
-    const QString key = QInputDialog::getText(this, "Add Memory", "Key:", QLineEdit::Normal, {}, &ok);
+    const QString key = QInputDialog::getText(this, tr("Add Memory"), tr("Key:"), QLineEdit::Normal, {}, &ok);
     if (!ok || key.trimmed().isEmpty())
         return;
 
     const QString value =
-        QInputDialog::getText(this, "Add Memory", QString("Value for \"%1\":").arg(key), QLineEdit::Normal, {}, &ok);
+        QInputDialog::getText(this, tr("Add Memory"), tr("Value for \"%1\":").arg(key), QLineEdit::Normal, {}, &ok);
     if (!ok || value.trimmed().isEmpty())
         return;
 
+    // Memory-type values are stored keys passed to the service — not translated.
     const QStringList types = {"fact", "preference", "entity"};
-    const QString type = QInputDialog::getItem(this, "Type", "Memory type:", types, 0, false, &ok);
+    const QString type = QInputDialog::getItem(this, tr("Type"), tr("Memory type:"), types, 0, false, &ok);
     if (!ok)
         return;
 
@@ -507,7 +508,7 @@ void ChatAgentPanel::on_delete_memory() {
     if (!item)
         return;
     const QString key = item->data(Qt::UserRole).toString();
-    if (QMessageBox::question(this, "Delete Memory", QString("Delete \"%1\"?").arg(key),
+    if (QMessageBox::question(this, tr("Delete Memory"), tr("Delete \"%1\"?").arg(key),
                               QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
         return;
     ChatModeService::instance().delete_memory(key, [this](bool ok, QString err) {
@@ -518,7 +519,7 @@ void ChatAgentPanel::on_delete_memory() {
 }
 
 void ChatAgentPanel::on_clear_all_memory() {
-    if (QMessageBox::question(this, "Clear Memory", "Delete ALL memory entries?", QMessageBox::Yes | QMessageBox::No) !=
+    if (QMessageBox::question(this, tr("Clear Memory"), tr("Delete ALL memory entries?"), QMessageBox::Yes | QMessageBox::No) !=
         QMessageBox::Yes)
         return;
     ChatModeService::instance().clear_all_memory([this](bool ok, QString err) {
@@ -532,12 +533,12 @@ void ChatAgentPanel::on_clear_all_memory() {
 
 void ChatAgentPanel::on_add_schedule() {
     bool ok = false;
-    const QString query = QInputDialog::getText(this, "New Schedule", "Query:", QLineEdit::Normal, {}, &ok);
+    const QString query = QInputDialog::getText(this, tr("New Schedule"), tr("Query:"), QLineEdit::Normal, {}, &ok);
     if (!ok || query.trimmed().isEmpty())
         return;
 
     const QString cron =
-        QInputDialog::getText(this, "New Schedule", "Cron (e.g. 0 9 * * 1-5):", QLineEdit::Normal, "0 9 * * 1-5", &ok);
+        QInputDialog::getText(this, tr("New Schedule"), tr("Cron (e.g. 0 9 * * 1-5):"), QLineEdit::Normal, "0 9 * * 1-5", &ok);
     if (!ok || cron.trimmed().isEmpty())
         return;
 
@@ -601,15 +602,15 @@ void ChatAgentPanel::on_view_task_detail() {
     ChatModeService::instance().get_task(
         item->data(Qt::UserRole).toString(), [this](bool ok, AgentTask task, QString err) {
             if (!ok) {
-                QMessageBox::warning(this, "Task", "Failed: " + err);
+                QMessageBox::warning(this, tr("Task"), tr("Failed: %1").arg(err));
                 return;
             }
-            QString info = QString("ID: %1\nQuery: %2\nStatus: %3\n"
-                                   "Created: %4\nStarted: %5\nCompleted: %6\n\n"
-                                   "Result:\n%7")
+            QString info = tr("ID: %1\nQuery: %2\nStatus: %3\n"
+                              "Created: %4\nStarted: %5\nCompleted: %6\n\n"
+                              "Result:\n%7")
                                .arg(task.task_id, task.query, task.status, task.created_at, task.started_at,
-                                    task.completed_at, task.result.isEmpty() ? "(none)" : task.result.left(2000));
-            QMessageBox::information(this, "Task Detail", info);
+                                    task.completed_at, task.result.isEmpty() ? tr("(none)") : task.result.left(2000));
+            QMessageBox::information(this, tr("Task Detail"), info);
         });
 }
 
@@ -618,7 +619,7 @@ void ChatAgentPanel::on_send_feedback() {
     if (!item)
         return;
     bool ok = false;
-    const QString feedback = QInputDialog::getText(this, "Task Feedback", "Feedback:", QLineEdit::Normal, {}, &ok);
+    const QString feedback = QInputDialog::getText(this, tr("Task Feedback"), tr("Feedback:"), QLineEdit::Normal, {}, &ok);
     if (!ok || feedback.trimmed().isEmpty())
         return;
 
@@ -627,7 +628,7 @@ void ChatAgentPanel::on_send_feedback() {
                                                        if (!sent_ok)
                                                            LOG_WARN("ChatAgentPanel", "Feedback failed: " + err);
                                                        else
-                                                           QMessageBox::information(this, "Feedback", "Sent.");
+                                                           QMessageBox::information(this, tr("Feedback"), tr("Sent."));
                                                    });
 }
 
@@ -635,12 +636,13 @@ void ChatAgentPanel::on_send_feedback() {
 
 void ChatAgentPanel::on_add_mcp_server() {
     bool ok = false;
-    const QString name = QInputDialog::getText(this, "Add MCP Server", "Name:", QLineEdit::Normal, {}, &ok);
+    const QString name = QInputDialog::getText(this, tr("Add MCP Server"), tr("Name:"), QLineEdit::Normal, {}, &ok);
     if (!ok || name.trimmed().isEmpty())
         return;
 
+    // Transport values are protocol identifiers passed to the service — not translated.
     const QStringList transports = {"stdio", "sse"};
-    const QString transport = QInputDialog::getItem(this, "Transport", "Type:", transports, 0, false, &ok);
+    const QString transport = QInputDialog::getItem(this, tr("Transport"), tr("Type:"), transports, 0, false, &ok);
     if (!ok)
         return;
 
@@ -649,12 +651,12 @@ void ChatAgentPanel::on_add_mcp_server() {
 
     if (transport == "stdio") {
         const QString command =
-            QInputDialog::getText(this, "Command", "Command (e.g. uvx, npx):", QLineEdit::Normal, "uvx", &ok);
+            QInputDialog::getText(this, tr("Command"), tr("Command (e.g. uvx, npx):"), QLineEdit::Normal, "uvx", &ok);
         if (!ok || command.trimmed().isEmpty())
             return;
 
         const QString args_str =
-            QInputDialog::getText(this, "Arguments", "Args (space-separated):", QLineEdit::Normal, {}, &ok);
+            QInputDialog::getText(this, tr("Arguments"), tr("Args (space-separated):"), QLineEdit::Normal, {}, &ok);
         if (!ok)
             return;
 
@@ -664,7 +666,7 @@ void ChatAgentPanel::on_add_mcp_server() {
             args.append(a.trimmed());
         config["args"] = args;
     } else {
-        const QString url = QInputDialog::getText(this, "SSE URL", "URL:", QLineEdit::Normal, {}, &ok);
+        const QString url = QInputDialog::getText(this, tr("SSE URL"), tr("URL:"), QLineEdit::Normal, {}, &ok);
         if (!ok || url.trimmed().isEmpty())
             return;
         config["url"] = url.trimmed();
@@ -673,11 +675,11 @@ void ChatAgentPanel::on_add_mcp_server() {
     ChatModeService::instance().add_mcp_server(
         name.trimmed(), config, [this](bool added_ok, McpServer srv, QString err) {
             if (!added_ok) {
-                QMessageBox::warning(this, "MCP Server", "Failed: " + err);
+                QMessageBox::warning(this, tr("MCP Server"), tr("Failed: %1").arg(err));
                 return;
             }
             if (srv.status == "error")
-                QMessageBox::warning(this, "MCP Server", QString("'%1' added with errors.").arg(srv.name));
+                QMessageBox::warning(this, tr("MCP Server"), tr("'%1' added with errors.").arg(srv.name));
             refresh_mcp_servers();
         });
 }
@@ -687,7 +689,7 @@ void ChatAgentPanel::on_delete_mcp_server() {
     if (!item)
         return;
     const QString name = item->data(Qt::UserRole).toString();
-    if (QMessageBox::question(this, "Remove Server", QString("Remove \"%1\"?").arg(name),
+    if (QMessageBox::question(this, tr("Remove Server"), tr("Remove \"%1\"?").arg(name),
                               QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
         return;
     ChatModeService::instance().delete_mcp_server(name, [this](bool ok, QString err) {
@@ -706,16 +708,16 @@ void ChatAgentPanel::on_refresh_mcp_servers() {
             }
             mcp_servers_ = std::move(servers);
             mcp_list_->clear();
-            mcp_tools_lbl_->setText(QString("%1 server(s) | %2 tools").arg(mcp_servers_.size()).arg(total_tools));
+            mcp_tools_lbl_->setText(tr("%1 server(s) | %2 tools").arg(mcp_servers_.size()).arg(total_tools));
             if (mcp_servers_.isEmpty()) {
-                auto* item = new QListWidgetItem("No servers connected.");
+                auto* item = new QListWidgetItem(tr("No servers connected."));
                 item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
                 mcp_list_->addItem(item);
                 return;
             }
             for (const auto& s : mcp_servers_) {
                 auto* item = new QListWidgetItem(mcp_list_);
-                item->setText(QString("%1\n  %2 | %3 tools").arg(s.name, s.status).arg(s.tools_count));
+                item->setText(tr("%1\n  %2 | %3 tools").arg(s.name, s.status).arg(s.tools_count));
                 item->setData(Qt::UserRole, s.name);
                 if (s.status == "connected")
                     item->setForeground(QColor(ui::colors::POSITIVE()));
@@ -731,44 +733,46 @@ void ChatAgentPanel::on_refresh_mcp_servers() {
 
 void ChatAgentPanel::on_add_monitor() {
     bool ok = false;
-    const QString name = QInputDialog::getText(this, "New Monitor", "Name:", QLineEdit::Normal, {}, &ok);
+    const QString name = QInputDialog::getText(this, tr("New Monitor"), tr("Name:"), QLineEdit::Normal, {}, &ok);
     if (!ok || name.trimmed().isEmpty())
         return;
 
+    // Source-type values are data-source identifiers passed to the service — not translated.
     const QStringList types = {"equity", "macro", "news"};
-    const QString source_type = QInputDialog::getItem(this, "Source", "Data source:", types, 0, false, &ok);
+    const QString source_type = QInputDialog::getItem(this, tr("Source"), tr("Data source:"), types, 0, false, &ok);
     if (!ok)
         return;
 
     const QString analysis =
-        QInputDialog::getText(this, "Analysis", "What should the agent analyze?:", QLineEdit::Normal, {}, &ok);
+        QInputDialog::getText(this, tr("Analysis"), tr("What should the agent analyze?:"), QLineEdit::Normal, {}, &ok);
     if (!ok || analysis.trimmed().isEmpty())
         return;
 
-    const int interval = QInputDialog::getInt(this, "Interval", "Check interval (seconds):", 300, 60, 86400, 60, &ok);
+    const int interval = QInputDialog::getInt(this, tr("Interval"), tr("Check interval (seconds):"), 300, 60, 86400, 60, &ok);
     if (!ok)
         return;
 
     QJsonObject source_config;
     if (source_type == "equity") {
-        const QString sym = QInputDialog::getText(this, "Symbol", "Symbol:", QLineEdit::Normal, {}, &ok);
+        const QString sym = QInputDialog::getText(this, tr("Symbol"), tr("Symbol:"), QLineEdit::Normal, {}, &ok);
         if (!ok || sym.trimmed().isEmpty())
             return;
         source_config["symbol"] = sym.trimmed();
     } else if (source_type == "macro") {
-        const QString ind = QInputDialog::getText(this, "Indicator", "Indicator:", QLineEdit::Normal, {}, &ok);
+        const QString ind = QInputDialog::getText(this, tr("Indicator"), tr("Indicator:"), QLineEdit::Normal, {}, &ok);
         if (!ok || ind.trimmed().isEmpty())
             return;
         source_config["indicator"] = ind.trimmed();
     } else {
-        const QString q = QInputDialog::getText(this, "Query", "News query:", QLineEdit::Normal, {}, &ok);
+        const QString q = QInputDialog::getText(this, tr("Query"), tr("News query:"), QLineEdit::Normal, {}, &ok);
         if (!ok || q.trimmed().isEmpty())
             return;
         source_config["query"] = q.trimmed();
     }
 
     QJsonObject trigger_config;
-    const QString cond = QInputDialog::getText(this, "Trigger", "Condition:", QLineEdit::Normal, "any", &ok);
+    // "any" is the stable default condition value sent to the service — not translated.
+    const QString cond = QInputDialog::getText(this, tr("Trigger"), tr("Condition:"), QLineEdit::Normal, "any", &ok);
     if (!ok)
         return;
     trigger_config["condition"] = cond;
@@ -777,7 +781,7 @@ void ChatAgentPanel::on_add_monitor() {
                                                analysis.trimmed(), interval, {},
                                                [this](bool created_ok, AgentMonitor, QString err) {
                                                    if (!created_ok)
-                                                       QMessageBox::warning(this, "Monitor", "Failed: " + err);
+                                                       QMessageBox::warning(this, tr("Monitor"), tr("Failed: %1").arg(err));
                                                    refresh_monitors();
                                                });
 }
@@ -786,7 +790,7 @@ void ChatAgentPanel::on_delete_monitor() {
     auto* item = monitor_list_->currentItem();
     if (!item)
         return;
-    if (QMessageBox::question(this, "Delete Monitor", "Delete?", QMessageBox::Yes | QMessageBox::No) !=
+    if (QMessageBox::question(this, tr("Delete Monitor"), tr("Delete?"), QMessageBox::Yes | QMessageBox::No) !=
         QMessageBox::Yes)
         return;
     ChatModeService::instance().delete_monitor(item->data(Qt::UserRole).toString(), [this](bool ok, QString err) {
@@ -811,6 +815,59 @@ void ChatAgentPanel::on_toggle_monitor() {
         ChatModeService::instance().pause_monitor(id, cb);
     else
         ChatModeService::instance().resume_monitor(id, cb);
+}
+
+// ── Re-translation ──────────────────────────────────────────────────────────
+
+void ChatAgentPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ChatAgentPanel::retranslateUi() {
+    // Tab bar
+    if (tab_bar_ && tab_bar_->count() >= 5) {
+        tab_bar_->setTabText(0, tr("Mem"));
+        tab_bar_->setTabText(1, tr("Sched"));
+        tab_bar_->setTabText(2, tr("Tasks"));
+        tab_bar_->setTabText(3, tr("MCP"));
+        tab_bar_->setTabText(4, tr("Monitor"));
+    }
+
+    // Section titles + hints
+    if (mem_title_)   mem_title_->setText(tr("AGENT MEMORY"));
+    if (sched_title_) sched_title_->setText(tr("SCHEDULED QUERIES"));
+    if (sched_hint_)  sched_hint_->setText(tr("Cron-based agent queries (e.g. daily 9 AM)."));
+    if (tasks_title_) tasks_title_->setText(tr("BACKGROUND TASKS"));
+    if (mcp_title_)   mcp_title_->setText(tr("MCP SERVERS"));
+    if (mon_title_)   mon_title_->setText(tr("DATA MONITORS"));
+    if (mon_hint_)    mon_hint_->setText(tr("Watch sources, trigger agent analysis."));
+
+    // Buttons (text + tooltip)
+    if (mem_add_btn_)     { mem_add_btn_->setText(tr("+ Add"));    mem_add_btn_->setToolTip(tr("Add memory entry")); }
+    if (mem_del_btn_)     { mem_del_btn_->setText(tr("Delete"));   mem_del_btn_->setToolTip(tr("Delete selected")); }
+    if (mem_clear_btn_)   { mem_clear_btn_->setText(tr("Clear"));  mem_clear_btn_->setToolTip(tr("Clear all memory")); }
+    if (sched_add_btn_)   { sched_add_btn_->setText(tr("+ Add"));  sched_add_btn_->setToolTip(tr("Create schedule")); }
+    if (sched_del_btn_)   { sched_del_btn_->setText(tr("Delete")); sched_del_btn_->setToolTip(tr("Delete selected")); }
+    if (sched_toggle_btn_){ sched_toggle_btn_->setText(tr("Pause")); sched_toggle_btn_->setToolTip(tr("Pause/resume")); }
+    if (task_refresh_btn_){ task_refresh_btn_->setText(tr("Refresh")); task_refresh_btn_->setToolTip(tr("Refresh task list")); }
+    if (task_detail_btn_) { task_detail_btn_->setText(tr("Detail")); task_detail_btn_->setToolTip(tr("View task result")); }
+    if (task_feedback_btn_){ task_feedback_btn_->setText(tr("Feedback")); task_feedback_btn_->setToolTip(tr("Send feedback")); }
+    if (task_cancel_btn_) { task_cancel_btn_->setText(tr("Cancel")); task_cancel_btn_->setToolTip(tr("Cancel task")); }
+    if (mcp_add_btn_)     { mcp_add_btn_->setText(tr("+ Add"));    mcp_add_btn_->setToolTip(tr("Add MCP server")); }
+    if (mcp_del_btn_)     { mcp_del_btn_->setText(tr("Delete"));   mcp_del_btn_->setToolTip(tr("Remove selected")); }
+    if (mcp_refresh_btn_) { mcp_refresh_btn_->setText(tr("Refresh")); mcp_refresh_btn_->setToolTip(tr("Refresh all")); }
+    if (mon_add_btn_)     { mon_add_btn_->setText(tr("+ Add"));    mon_add_btn_->setToolTip(tr("Create monitor")); }
+    if (mon_del_btn_)     { mon_del_btn_->setText(tr("Delete"));   mon_del_btn_->setToolTip(tr("Delete selected")); }
+    if (mon_toggle_btn_)  { mon_toggle_btn_->setText(tr("Pause")); mon_toggle_btn_->setToolTip(tr("Pause/resume")); }
+
+    // Re-render lists so placeholders / count labels pick up the new language.
+    refresh_memory();
+    refresh_schedules();
+    refresh_tasks();
+    refresh_mcp_servers();
+    refresh_monitors();
 }
 
 } // namespace fincept::chat_mode

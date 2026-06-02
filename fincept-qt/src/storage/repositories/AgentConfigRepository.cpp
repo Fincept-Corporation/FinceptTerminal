@@ -1,5 +1,7 @@
 #include "storage/repositories/AgentConfigRepository.h"
 
+#include "storage/sync/SyncOutbox.h"
+
 namespace fincept {
 
 AgentConfigRepository& AgentConfigRepository::instance() {
@@ -34,20 +36,29 @@ Result<AgentConfig> AgentConfigRepository::get_active() {
 }
 
 Result<void> AgentConfigRepository::save(const AgentConfig& c) {
-    return exec_write(
+    auto r = exec_write(
         "INSERT OR REPLACE INTO agent_configs "
         "(id, name, description, config_json, category, is_default, is_active, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
         {c.id, c.name, c.description, c.config_json, c.category, c.is_default ? 1 : 0, c.is_active ? 1 : 0});
+    if (r.is_ok())
+        SyncOutbox::record_unique("agent_config", c.id, "upsert");
+    return r;
 }
 
 Result<void> AgentConfigRepository::remove(const QString& id) {
-    return exec_write("DELETE FROM agent_configs WHERE id = ?", {id});
+    auto r = exec_write("DELETE FROM agent_configs WHERE id = ?", {id});
+    if (r.is_ok())
+        SyncOutbox::record("agent_config", id, "delete");
+    return r;
 }
 
 Result<void> AgentConfigRepository::set_active(const QString& id) {
     exec_write("UPDATE agent_configs SET is_active = 0", {});
-    return exec_write("UPDATE agent_configs SET is_active = 1, updated_at = datetime('now') WHERE id = ?", {id});
+    auto r = exec_write("UPDATE agent_configs SET is_active = 1, updated_at = datetime('now') WHERE id = ?", {id});
+    if (r.is_ok())
+        SyncOutbox::record_unique("agent_config", id, "activate");
+    return r;
 }
 
 } // namespace fincept

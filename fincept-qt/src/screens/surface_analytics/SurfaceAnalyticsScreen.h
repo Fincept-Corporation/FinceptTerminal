@@ -9,6 +9,7 @@
 #include "screens/common/IStatefulScreen.h"
 #include "services/databento/DatabentoService.h"
 
+#include <QEvent>
 #include <QHash>
 #include <QLabel>
 #include <QPushButton>
@@ -72,11 +73,14 @@ class SurfaceAnalyticsScreen : public QWidget,
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* e) override;
 
   private:
     enum class ViewMode { Surface3D = 0, Table = 1, Line = 2 };
 
     void setup_ui();
+    /// Re-apply tr() lookups to the fixed-label toolbar buttons.
+    void retranslateUi();
     QWidget* build_category_bar();
     QWidget* build_surface_bar();
     void refresh_surface_bar();
@@ -100,6 +104,8 @@ class SurfaceAnalyticsScreen : public QWidget,
     QPushButton* btn_3d_ = nullptr;
     QPushButton* btn_table_ = nullptr;
     QPushButton* btn_line_ = nullptr;
+    QPushButton* import_btn_ = nullptr;   // fixed-label, cached for retranslateUi
+    QPushButton* refresh_btn_ = nullptr;  // fixed-label, cached for retranslateUi
 
     // Main panels
     SurfaceControlPanel* control_panel_ = nullptr;

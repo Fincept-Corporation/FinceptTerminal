@@ -1,4 +1,5 @@
 #pragma once
+#include <QEvent>
 #include <QLabel>
 #include <QWidget>
 
@@ -9,6 +10,15 @@ class ComingSoonScreen : public QWidget {
     Q_OBJECT
   public:
     explicit ComingSoonScreen(const QString& tab_name, QWidget* parent = nullptr);
+
+  protected:
+    void changeEvent(QEvent* event) override;
+
+  private:
+    void retranslateUi();
+
+    QLabel* sub_label_ = nullptr;
+    QLabel* desc_label_ = nullptr;
 };
 
 } // namespace fincept::screens

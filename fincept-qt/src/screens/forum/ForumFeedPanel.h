@@ -2,8 +2,10 @@
 #pragma once
 #include "services/forum/ForumModels.h"
 
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -35,6 +37,9 @@ class ForumFeedPanel : public QWidget {
     void new_post_clicked();
     void vote_post_requested(const QString& post_uuid, const QString& vote_type);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
     void build_toolbar();
@@ -42,11 +47,13 @@ class ForumFeedPanel : public QWidget {
     void rebuild_category_chips();
     void show_skeleton();
     void pulse_skeleton();
+    void retranslateUi();
 
     // Toolbar
     QWidget* toolbar_ = nullptr;
     QLabel* header_lbl_ = nullptr;
     QLabel* header_count_lbl_ = nullptr;
+    QPushButton* new_post_btn_ = nullptr;
     QWidget* chips_container_ = nullptr;
     QHBoxLayout* chips_layout_ = nullptr;
 

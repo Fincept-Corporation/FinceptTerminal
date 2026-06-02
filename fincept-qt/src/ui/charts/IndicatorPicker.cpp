@@ -5,6 +5,7 @@
 #include "ui/charts/layers/EmaLayer.h"
 #include "ui/charts/layers/VwapLayer.h"
 
+#include <QCoreApplication>
 #include <QHBoxLayout>
 #include <QMenu>
 #include <QPushButton>
@@ -20,7 +21,7 @@ IndicatorPicker::IndicatorPicker(ChartOverlayManager* mgr, QWidget* parent)
     layout->setContentsMargins(8, 0, 8, 0);
     layout->setSpacing(4);
 
-    add_btn_ = new QPushButton("+ Indicator");
+    add_btn_ = new QPushButton(tr("+ Indicator"));
     add_btn_->setObjectName("indicatorAddBtn");
     add_btn_->setFixedHeight(22);
     add_btn_->setCursor(Qt::PointingHandCursor);
@@ -38,6 +39,21 @@ IndicatorPicker::IndicatorPicker(ChartOverlayManager* mgr, QWidget* parent)
 
     connect(mgr_, &ChartOverlayManager::layer_added, this, &IndicatorPicker::refresh_chips);
     connect(mgr_, &ChartOverlayManager::layer_removed, this, &IndicatorPicker::refresh_chips);
+
+    retranslateUi();
+}
+
+void IndicatorPicker::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void IndicatorPicker::retranslateUi() {
+    if (add_btn_) add_btn_->setText(tr("+ Indicator"));
+    // The dropdown menu (category sections + indicator names) and the chips
+    // (driven by each layer's display_name()) are rebuilt on demand, so they
+    // pick up the active translator the next time they are shown.
 }
 
 void IndicatorPicker::build_menu() {
@@ -100,15 +116,19 @@ void IndicatorPicker::refresh_chips() {
 }
 
 QVector<IndicatorDef> IndicatorPicker::available_indicators() {
+    // The id is a stable data key (never translated). name + category are
+    // user-facing labels. This is a static helper, so it uses
+    // QCoreApplication::translate with an explicit context rather than tr().
+    auto t = [](const char* s) { return QCoreApplication::translate("IndicatorPicker", s); };
     return {
-        {"ema_9",     "EMA (9)",         "Trend"},
-        {"ema_21",    "EMA (21)",        "Trend"},
-        {"ema_50",    "EMA (50)",        "Trend"},
-        {"ema_200",   "EMA (200)",       "Trend"},
-        {"vwap",      "VWAP",            "Volume"},
-        {"bb_20_2.0", "Bollinger (20,2)","Volatility"},
-        {"sr_auto",   "Auto S/R",        "Levels"},
-        {"pivot_std", "Pivot Points",    "Levels"},
+        {"ema_9",     t("EMA (9)"),          t("Trend")},
+        {"ema_21",    t("EMA (21)"),         t("Trend")},
+        {"ema_50",    t("EMA (50)"),         t("Trend")},
+        {"ema_200",   t("EMA (200)"),        t("Trend")},
+        {"vwap",      t("VWAP"),             t("Volume")},
+        {"bb_20_2.0", t("Bollinger (20,2)"), t("Volatility")},
+        {"sr_auto",   t("Auto S/R"),         t("Levels")},
+        {"pivot_std", t("Pivot Points"),     t("Levels")},
     };
 }
 

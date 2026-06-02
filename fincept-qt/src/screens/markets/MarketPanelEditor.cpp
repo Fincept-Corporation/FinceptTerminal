@@ -50,7 +50,8 @@ MarketPanelEditor::MarketPanelEditor(const MarketPanelConfig& config, QWidget* p
 }
 
 void MarketPanelEditor::build_ui() {
-    setWindowTitle(config_.id.isEmpty() ? "New Panel" : "Edit Panel — " + config_.title);
+    setWindowTitle(config_.id.isEmpty() ? tr("New Panel")
+                                        : tr("Edit Panel — %1").arg(config_.title));
     setModal(true);
     setMinimumSize(440, 520);
     setStyleSheet(QString("QDialog{background:%1;color:%2;}")
@@ -61,12 +62,12 @@ void MarketPanelEditor::build_ui() {
     root->setSpacing(10);
 
     // Title
-    auto* title_lbl = new QLabel("PANEL TITLE");
-    title_lbl->setStyleSheet(section_lbl_ss());
-    root->addWidget(title_lbl);
+    title_lbl_ = new QLabel(tr("PANEL TITLE"));
+    title_lbl_->setStyleSheet(section_lbl_ss());
+    root->addWidget(title_lbl_);
 
     title_edit_ = new QLineEdit(config_.title);
-    title_edit_->setPlaceholderText("e.g. My Tech Stocks");
+    title_edit_->setPlaceholderText(tr("e.g. My Tech Stocks"));
     title_edit_->setStyleSheet(input_ss());
     root->addWidget(title_edit_);
 
@@ -81,20 +82,20 @@ void MarketPanelEditor::build_ui() {
     auto* tickers_hdr = new QWidget;
     auto* tickers_hl  = new QHBoxLayout(tickers_hdr);
     tickers_hl->setContentsMargins(0, 0, 0, 0);
-    auto* tickers_lbl = new QLabel("TICKERS");
-    tickers_lbl->setStyleSheet(section_lbl_ss());
-    tickers_hl->addWidget(tickers_lbl);
+    tickers_lbl_ = new QLabel(tr("TICKERS"));
+    tickers_lbl_->setStyleSheet(section_lbl_ss());
+    tickers_hl->addWidget(tickers_lbl_);
     tickers_hl->addStretch();
-    auto* remove_btn = new QPushButton("✕ REMOVE");
-    remove_btn->setFixedHeight(20);
-    remove_btn->setCursor(Qt::PointingHandCursor);
-    remove_btn->setStyleSheet(
+    remove_btn_ = new QPushButton(tr("✕ REMOVE"));
+    remove_btn_->setFixedHeight(20);
+    remove_btn_->setCursor(Qt::PointingHandCursor);
+    remove_btn_->setStyleSheet(
         QString("QPushButton{background:transparent;color:%1;border:1px solid %1;"
                 "padding:0 8px;font-size:11px;font-weight:bold;}"
                 "QPushButton:hover{color:%2;border-color:%2;}")
             .arg(ui::colors::BORDER_MED(), ui::colors::NEGATIVE()));
-    connect(remove_btn, &QPushButton::clicked, this, &MarketPanelEditor::on_remove_selected);
-    tickers_hl->addWidget(remove_btn);
+    connect(remove_btn_, &QPushButton::clicked, this, &MarketPanelEditor::on_remove_selected);
+    tickers_hl->addWidget(remove_btn_);
     root->addWidget(tickers_hdr);
 
     ticker_list_ = new QListWidget;
@@ -108,12 +109,12 @@ void MarketPanelEditor::build_ui() {
     root->addWidget(make_sep());
 
     // Search / add
-    auto* search_lbl = new QLabel("ADD TICKER  ·  type to search, click or Enter to add");
-    search_lbl->setStyleSheet(section_lbl_ss());
-    root->addWidget(search_lbl);
+    search_lbl_ = new QLabel(tr("ADD TICKER  ·  type to search, click or Enter to add"));
+    search_lbl_->setStyleSheet(section_lbl_ss());
+    root->addWidget(search_lbl_);
 
     search_edit_ = new QLineEdit;
-    search_edit_->setPlaceholderText("Search symbol or name: AAPL, Reliance, Bitcoin ...");
+    search_edit_->setPlaceholderText(tr("Search symbol or name: AAPL, Reliance, Bitcoin ..."));
     search_edit_->setStyleSheet(input_ss());
     search_edit_->installEventFilter(this);
     root->addWidget(search_edit_);
@@ -292,6 +293,27 @@ void MarketPanelEditor::on_remove_selected() {
 
 MarketPanelConfig MarketPanelEditor::result_config() const {
     return config_;
+}
+
+// ---------------------------------------------------------------------------
+// i18n — live language switch
+// ---------------------------------------------------------------------------
+
+void MarketPanelEditor::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void MarketPanelEditor::retranslateUi() {
+    setWindowTitle(config_.id.isEmpty() ? tr("New Panel")
+                                        : tr("Edit Panel — %1").arg(config_.title));
+    if (title_lbl_)   title_lbl_->setText(tr("PANEL TITLE"));
+    if (title_edit_)  title_edit_->setPlaceholderText(tr("e.g. My Tech Stocks"));
+    if (tickers_lbl_) tickers_lbl_->setText(tr("TICKERS"));
+    if (remove_btn_)  remove_btn_->setText(tr("✕ REMOVE"));
+    if (search_lbl_)  search_lbl_->setText(tr("ADD TICKER  ·  type to search, click or Enter to add"));
+    if (search_edit_) search_edit_->setPlaceholderText(tr("Search symbol or name: AAPL, Reliance, Bitcoin ..."));
 }
 
 } // namespace fincept::screens

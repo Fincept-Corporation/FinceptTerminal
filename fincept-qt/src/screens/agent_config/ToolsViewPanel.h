@@ -3,6 +3,7 @@
 #include "services/agents/AgentTypes.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -31,6 +32,7 @@ class ToolsViewPanel : public QWidget {
 
   protected:
     void showEvent(QShowEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     // ── Build ────────────────────────────────────────────────────────────────
@@ -39,6 +41,10 @@ class ToolsViewPanel : public QWidget {
     QWidget* build_center_panel();
     QWidget* build_right_panel();
     void setup_connections();
+
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
 
     // ── Data ─────────────────────────────────────────────────────────────────
     void populate_tools(const services::AgentToolsInfo& info);
@@ -60,10 +66,12 @@ class ToolsViewPanel : public QWidget {
     void copy_tool_name(const QString& name);
 
     // ── LEFT panel widgets ───────────────────────────────────────────────────
+    QLabel* assign_to_hdr_ = nullptr;
     QRadioButton* radio_agent_ = nullptr;
     QRadioButton* radio_team_ = nullptr;
     QComboBox* target_combo_ = nullptr;
     QLabel* target_status_ = nullptr;
+    QLabel* selected_tools_hdr_ = nullptr;
     QListWidget* selected_list_ = nullptr;
     QLabel* selected_count_ = nullptr;
     QPushButton* remove_btn_ = nullptr;
@@ -71,6 +79,8 @@ class ToolsViewPanel : public QWidget {
     QPushButton* assign_btn_ = nullptr;
 
     // ── CENTER panel widgets ─────────────────────────────────────────────────
+    QLabel* available_hdr_ = nullptr;
+    QLabel* assigned_hint_ = nullptr;
     QLineEdit* search_edit_ = nullptr;
     QTreeWidget* tool_tree_ = nullptr;
     QLabel* total_count_ = nullptr;
@@ -78,6 +88,10 @@ class ToolsViewPanel : public QWidget {
     QPushButton* copy_btn_ = nullptr;
 
     // ── RIGHT panel widgets ──────────────────────────────────────────────────
+    QLabel* detail_hdr_ = nullptr;
+    QLabel* description_hdr_ = nullptr;
+    QLabel* parameters_hdr_ = nullptr;
+    QLabel* used_by_hdr_ = nullptr;
     QLabel* detail_name_ = nullptr;
     QLabel* detail_category_ = nullptr;
     QTextEdit* detail_desc_ = nullptr;

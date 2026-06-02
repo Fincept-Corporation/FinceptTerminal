@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QEvent>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QShowEvent>
@@ -35,14 +37,24 @@ class NodeEditorToolbar : public QWidget {
 
   protected:
     void showEvent(QShowEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
     void apply_background();
+    void retranslateUi();
 
     QLineEdit* name_edit_ = nullptr;
+    QLabel* status_badge_ = nullptr;
     QPushButton* undo_btn_ = nullptr;
     QPushButton* redo_btn_ = nullptr;
+    QPushButton* save_btn_ = nullptr;
+    QPushButton* load_btn_ = nullptr;
+    QPushButton* clear_btn_ = nullptr;
+    QPushButton* import_btn_ = nullptr;
+    QPushButton* export_btn_ = nullptr;
+    QPushButton* templates_btn_ = nullptr;
+    QPushButton* deploy_btn_ = nullptr;
     QPushButton* execute_btn_ = nullptr;
 };
 

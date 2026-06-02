@@ -3,9 +3,11 @@
 #include "services/prediction/PredictionCredentialStore.h"
 
 #include <QDialog>
+#include <QEvent>
 
 class QCheckBox;
 class QComboBox;
+class QFormLayout;
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -45,15 +47,22 @@ class PredictionAccountDialog : public QDialog {
     void on_clear_kalshi();
     void on_load_kalshi_pem();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
     void build_polymarket_tab();
     void build_kalshi_tab();
     void load_existing();
+    void retranslateUi();
 
     QTabWidget* tabs_ = nullptr;
+    QPushButton* close_btn_ = nullptr;
 
     // Polymarket tab
+    QLabel* pm_intro_ = nullptr;
+    QFormLayout* pm_form_ = nullptr;
     QLineEdit* pm_private_key_ = nullptr;
     QLineEdit* pm_funder_ = nullptr;
     QComboBox* pm_signature_type_ = nullptr;
@@ -64,6 +73,8 @@ class PredictionAccountDialog : public QDialog {
     QPushButton* pm_clear_btn_ = nullptr;
 
     // Kalshi tab
+    QLabel* ks_intro_ = nullptr;
+    QFormLayout* ks_form_ = nullptr;
     QLineEdit* ks_api_key_id_ = nullptr;
     QTextEdit* ks_private_key_pem_ = nullptr;
     QPushButton* ks_load_pem_btn_ = nullptr;

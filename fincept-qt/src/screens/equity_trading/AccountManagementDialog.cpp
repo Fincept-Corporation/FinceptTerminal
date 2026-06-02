@@ -53,7 +53,7 @@ static QLabel* make_field_label(const QString& text) {
 
 AccountManagementDialog::AccountManagementDialog(QWidget* parent)
     : QDialog(parent) {
-    setWindowTitle("Manage Broker Accounts");
+    setWindowTitle(tr("Manage Broker Accounts"));
     setMinimumSize(700, 480);
     setStyleSheet(QString("QDialog { background: %1; color: %2; }"
                           "QLabel#fieldLabel { color: %3; font-size: 11px; font-weight: 700; }"
@@ -75,6 +75,38 @@ AccountManagementDialog::AccountManagementDialog(QWidget* parent)
                            colors::AMBER(), colors::BG_BASE(), colors::BORDER_MED(), colors::BG_RAISED()));
     setup_ui();
     refresh_account_list();
+
+    // Live-update the account list when a background validation sweep changes a
+    // connection state (e.g. Connecting → Connected/TokenExpired) so an expired
+    // token never lingers as green while the dialog is open.
+    //
+    // CRITICAL: update ONLY the affected row's dot + colour IN PLACE. Do NOT
+    // clear()/rebuild the list and do NOT touch selection — a background sweep
+    // (or the Dhan feed reconnecting) can fire this signal repeatedly, and a
+    // full rebuild + force-reselect would fight the user's clicks and make it
+    // impossible to switch to another broker's card.
+    connect(&AccountManager::instance(), &AccountManager::connection_state_changed, this,
+            [this](const QString& account_id, ConnectionState state) {
+                for (int i = 0; i < account_list_->count(); ++i) {
+                    auto* item = account_list_->item(i);
+                    if (item->data(Qt::UserRole).toString() != account_id)
+                        continue;
+                    const auto account = AccountManager::instance().get_account(account_id);
+                    auto* broker = BrokerRegistry::instance().get(account.broker_id);
+                    const QString broker_name = broker ? broker->profile().display_name : account.broker_id;
+                    const QString icon = (state == ConnectionState::Connected || state == ConnectionState::Error)
+                                             ? QString::fromUtf8("\xe2\x97\x8f")  // ●
+                                             : QString::fromUtf8("\xe2\x97\x8b"); // ○
+                    item->setText(QString("%1 %2 [%3]").arg(icon, account.display_name, broker_name));
+                    if (state == ConnectionState::Connected)
+                        item->setForeground(QColor(colors::POSITIVE()));
+                    else if (state == ConnectionState::Error || state == ConnectionState::TokenExpired)
+                        item->setForeground(QColor(colors::NEGATIVE()));
+                    else
+                        item->setForeground(QColor(colors::TEXT_PRIMARY()));
+                    break;
+                }
+            });
 }
 
 // ── UI setup ────────────────────────────────────────────────────────────────
@@ -88,9 +120,9 @@ void AccountManagementDialog::setup_ui() {
     auto* left = new QVBoxLayout;
     left->setSpacing(6);
 
-    auto* list_label = new QLabel("ACCOUNTS");
-    list_label->setObjectName("fieldLabel");
-    left->addWidget(list_label);
+    list_label_ = new QLabel(tr("ACCOUNTS"));
+    list_label_->setObjectName("fieldLabel");
+    left->addWidget(list_label_);
 
     account_list_ = new QListWidget;
     connect(account_list_, &QListWidget::currentRowChanged, this, &AccountManagementDialog::on_account_selected);
@@ -108,18 +140,18 @@ void AccountManagementDialog::setup_ui() {
     add_row->addWidget(broker_picker_, 1);
 
     display_name_input_ = new QLineEdit;
-    display_name_input_->setPlaceholderText("Account name...");
+    display_name_input_->setPlaceholderText(tr("Account name..."));
     add_row->addWidget(display_name_input_, 1);
     left->addLayout(add_row);
 
     auto* btn_row = new QHBoxLayout;
-    add_btn_ = new QPushButton("+ ADD");
+    add_btn_ = new QPushButton(tr("+ ADD"));
     add_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
                                 .arg(colors::AMBER(), colors::BG_BASE()));
     connect(add_btn_, &QPushButton::clicked, this, &AccountManagementDialog::on_add_account);
     btn_row->addWidget(add_btn_);
 
-    remove_btn_ = new QPushButton("REMOVE");
+    remove_btn_ = new QPushButton(tr("REMOVE"));
     remove_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
                                    .arg(colors::NEGATIVE(), colors::TEXT_PRIMARY()));
     remove_btn_->setEnabled(false);
@@ -135,10 +167,10 @@ void AccountManagementDialog::setup_ui() {
     // Empty page (no selection)
     empty_page_ = new QWidget(this);
     auto* empty_layout = new QVBoxLayout(empty_page_);
-    auto* empty_label = new QLabel("Select an account to configure credentials");
-    empty_label->setAlignment(Qt::AlignCenter);
-    empty_label->setStyleSheet(QString("color: %1; font-size: 12px;").arg(colors::TEXT_TERTIARY()));
-    empty_layout->addWidget(empty_label);
+    empty_label_ = new QLabel(tr("Select an account to configure credentials"));
+    empty_label_->setAlignment(Qt::AlignCenter);
+    empty_label_->setStyleSheet(QString("color: %1; font-size: 12px;").arg(colors::TEXT_TERTIARY()));
+    empty_layout->addWidget(empty_label_);
     right_stack_->addWidget(empty_page_);
 
     // Form page
@@ -166,13 +198,13 @@ void AccountManagementDialog::setup_ui() {
 
     // Action buttons
     auto* action_row = new QHBoxLayout;
-    rename_btn_ = new QPushButton("RENAME");
+    rename_btn_ = new QPushButton(tr("RENAME"));
     rename_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
                                    .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY()));
     connect(rename_btn_, &QPushButton::clicked, this, &AccountManagementDialog::on_rename_account);
     action_row->addWidget(rename_btn_);
 
-    connect_btn_ = new QPushButton("CONNECT");
+    connect_btn_ = new QPushButton(tr("CONNECT"));
     connect_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
                                     .arg(colors::AMBER(), colors::BG_BASE()));
     connect(connect_btn_, &QPushButton::clicked, this, &AccountManagementDialog::on_connect_account);
@@ -196,6 +228,37 @@ void AccountManagementDialog::setup_ui() {
     right_stack_->setCurrentWidget(empty_page_);
 
     root->addWidget(right_stack_, 2);
+}
+
+void AccountManagementDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void AccountManagementDialog::retranslateUi() {
+    setWindowTitle(tr("Manage Broker Accounts"));
+
+    // Left panel chrome
+    if (list_label_)          list_label_->setText(tr("ACCOUNTS"));
+    if (display_name_input_)  display_name_input_->setPlaceholderText(tr("Account name..."));
+    if (add_btn_)             add_btn_->setText(tr("+ ADD"));
+    if (remove_btn_)          remove_btn_->setText(tr("REMOVE"));
+
+    // Right panel — generic form chrome
+    if (empty_label_)         empty_label_->setText(tr("Select an account to configure credentials"));
+    if (rename_btn_)          rename_btn_->setText(tr("RENAME"));
+    if (connect_btn_)         connect_btn_->setText(tr("CONNECT"));
+
+    // Per-broker form bottom buttons (built lazily — guarded). Their dynamic
+    // status text and the account-driven titles are reapplied by
+    // on_account_selected when the user re-selects an account, so we only
+    // re-translate the persistent action buttons here.
+    if (z_rename_btn_)        z_rename_btn_->setText(tr("RENAME"));
+    if (z_connect_btn_)       z_connect_btn_->setText(tr("CONNECT"));
+    if (f_rename_btn_)        f_rename_btn_->setText(tr("RENAME"));
+    if (mt4_rename_btn_)      mt4_rename_btn_->setText(tr("RENAME"));
+    if (mt4_connect_btn_)     mt4_connect_btn_->setText(tr("CONNECT MT4 ACCOUNT"));
 }
 
 // ── Account list ────────────────────────────────────────────────────────────
@@ -249,7 +312,7 @@ void AccountManagementDialog::on_account_selected(int row) {
         if (z_title_)
             z_title_->setText(QString("%1 — %2 | %3").arg(account.display_name, prof.region, prof.currency));
         if (z_status_) {
-            z_status_->setText(QString("Status: %1").arg(state_str));
+            z_status_->setText(tr("Status: %1").arg(state_str));
             if (account.state == ConnectionState::Connected)
                 z_status_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE()));
             else if (account.state == ConnectionState::Error || account.state == ConnectionState::TokenExpired)
@@ -268,7 +331,7 @@ void AccountManagementDialog::on_account_selected(int row) {
         if (f_title_)
             f_title_->setText(QString("%1 — %2 | %3").arg(account.display_name, prof.region, prof.currency));
         if (f_status_) {
-            f_status_->setText(QString("Status: %1").arg(state_str));
+            f_status_->setText(tr("Status: %1").arg(state_str));
             if (account.state == ConnectionState::Connected)
                 f_status_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE()));
             else if (account.state == ConnectionState::Error || account.state == ConnectionState::TokenExpired)
@@ -287,7 +350,7 @@ void AccountManagementDialog::on_account_selected(int row) {
         if (mt4_title_)
             mt4_title_->setText(QString("%1 — %2 | %3").arg(account.display_name, prof.region, prof.currency));
         if (mt4_status_) {
-            mt4_status_->setText(QString("Status: %1").arg(state_str));
+            mt4_status_->setText(tr("Status: %1").arg(state_str));
             if (account.state == ConnectionState::Connected)
                 mt4_status_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE()));
             else if (account.state == ConnectionState::Error || account.state == ConnectionState::TokenExpired)
@@ -304,7 +367,7 @@ void AccountManagementDialog::on_account_selected(int row) {
 
     // Update status
     const QString state_str = connection_state_str(account.state);
-    form_status_->setText(QString("Status: %1").arg(state_str));
+    form_status_->setText(tr("Status: %1").arg(state_str));
     if (account.state == ConnectionState::Connected)
         form_status_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE()));
     else if (account.state == ConnectionState::Error || account.state == ConnectionState::TokenExpired)
@@ -437,9 +500,9 @@ void AccountManagementDialog::on_add_account() {
         // AccountManager returns an empty account on persistence failure (e.g. FK
         // violation, paper-portfolio creation failed). Surface this instead of
         // silently pretending the account was added.
-        QMessageBox::critical(this, "Add Account",
-                              "Could not save the account to the database. "
-                              "Check the application log for details.");
+        QMessageBox::critical(this, tr("Add Account"),
+                              tr("Could not save the account to the database. "
+                                 "Check the application log for details."));
         return;
     }
     display_name_input_->clear();
@@ -461,10 +524,10 @@ void AccountManagementDialog::on_remove_account() {
         return;
 
     auto account = AccountManager::instance().get_account(selected_account_id_);
-    auto reply = QMessageBox::warning(this, "Remove Account",
-                                      QString("Are you sure you want to remove \"%1\"?\n\n"
-                                              "This will delete all saved credentials and the linked paper portfolio.\n"
-                                              "This action cannot be undone.")
+    auto reply = QMessageBox::warning(this, tr("Remove Account"),
+                                      tr("Are you sure you want to remove \"%1\"?\n\n"
+                                         "This will delete all saved credentials and the linked paper portfolio.\n"
+                                         "This action cannot be undone.")
                                           .arg(account.display_name),
                                       QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (reply != QMessageBox::Yes)
@@ -523,7 +586,7 @@ void AccountManagementDialog::on_connect_account() {
     // HTTP call (BrokerHttp::execute uses QEventLoop), so running it on the UI
     // thread freezes the entire terminal until the request completes. Offload
     // to a worker thread and post results back via QMetaObject::invokeMethod.
-    form_status_->setText("Connecting...");
+    form_status_->setText(tr("Connecting..."));
     form_status_->setStyleSheet(QString("color: %1;").arg(colors::AMBER()));
     connect_btn_->setEnabled(false);
 
@@ -544,7 +607,7 @@ void AccountManagementDialog::on_connect_account() {
                 if (!result.success) {
                     AccountManager::instance().set_connection_state(account_id, ConnectionState::Error, result.error);
                     if (self) {
-                        self->form_status_->setText(QString("Error: %1").arg(result.error));
+                        self->form_status_->setText(self->tr("Error: %1").arg(result.error));
                         self->form_status_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
                         self->connect_btn_->setEnabled(true);
                         if (self->selected_account_id_ == account_id)
@@ -559,6 +622,8 @@ void AccountManagementDialog::on_connect_account() {
                 creds.api_key = api_key_val;
                 creds.api_secret = api_secret_val;
                 creds.access_token = result.access_token;
+                if (!result.refresh_token.isEmpty())
+                    creds.refresh_token = result.refresh_token;
                 if (!result.user_id.isEmpty())
                     creds.user_id = result.user_id;
 
@@ -577,7 +642,7 @@ void AccountManagementDialog::on_connect_account() {
                 // dialog has been closed in the meantime.
                 if (self) {
                     emit self->credentials_saved(account_id);
-                    self->form_status_->setText(QString("Connected as %1")
+                    self->form_status_->setText(self->tr("Connected as %1")
                                                      .arg(creds.user_id.isEmpty() ? creds.api_key.left(8) + "..."
                                                                                   : creds.user_id));
                     self->form_status_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE()));
@@ -630,7 +695,7 @@ void AccountManagementDialog::build_zerodha_form() {
     v->setSpacing(10);
 
     // Title + status
-    z_title_ = new QLabel("Zerodha");
+    z_title_ = new QLabel(QStringLiteral("Zerodha"));
     z_title_->setObjectName("titleLabel");
     v->addWidget(z_title_);
     z_status_ = new QLabel(" ");
@@ -638,7 +703,7 @@ void AccountManagementDialog::build_zerodha_form() {
     v->addWidget(z_status_);
 
     // Collapsible "First-time setup" panel
-    z_setup_toggle_ = new QPushButton(QString::fromUtf8("\xe2\x96\xb8") + QStringLiteral(" First-time setup (4 steps)"));
+    z_setup_toggle_ = new QPushButton(QString::fromUtf8("\xe2\x96\xb8") + tr(" First-time setup (4 steps)"));
     z_setup_toggle_->setStyleSheet(QString("text-align:left;background:transparent;color:%1;"
                                            "border:none;padding:4px 0;font-weight:700;")
                                        .arg(colors::AMBER()));
@@ -656,10 +721,10 @@ void AccountManagementDialog::build_zerodha_form() {
         l->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::TEXT_SECONDARY()));
         setup->addWidget(l);
     };
-    add_step("1. Create a Kite Connect app at <a href='https://developers.kite.trade/apps'>developers.kite.trade/apps</a>.");
-    add_step("2. Register redirect URL <b>http://127.0.0.1:5010/</b> on that app.");
-    add_step("3. Enable TOTP 2FA on your Zerodha account (<a href='https://support.zerodha.com/category/your-zerodha-account/login-credentials/articles/time-based-otp'>support.zerodha.com</a>).");
-    add_step("4. For auto-login, copy the Base32 TOTP secret during 2FA setup (\"Can't scan?\" link).");
+    add_step(tr("1. Create a Kite Connect app at <a href='https://developers.kite.trade/apps'>developers.kite.trade/apps</a>."));
+    add_step(tr("2. Register redirect URL <b>http://127.0.0.1:5010/</b> on that app."));
+    add_step(tr("3. Enable TOTP 2FA on your Zerodha account (<a href='https://support.zerodha.com/category/your-zerodha-account/login-credentials/articles/time-based-otp'>support.zerodha.com</a>)."));
+    add_step(tr("4. For auto-login, copy the Base32 TOTP secret during 2FA setup (\"Can't scan?\" link)."));
     z_setup_panel_->setVisible(false);
     v->addWidget(z_setup_panel_);
 
@@ -669,14 +734,14 @@ void AccountManagementDialog::build_zerodha_form() {
         const bool vis = !self->z_setup_panel_->isVisible();
         self->z_setup_panel_->setVisible(vis);
         self->z_setup_toggle_->setText((vis ? QString::fromUtf8("\xe2\x96\xbe") : QString::fromUtf8("\xe2\x96\xb8"))
-                                       + QStringLiteral(" First-time setup (4 steps)"));
+                                       + self->tr(" First-time setup (4 steps)"));
     });
 
     // Mode radio
     auto* mode_row = new QHBoxLayout;
     mode_row->setSpacing(16);
-    z_mode_totp_ = new QRadioButton("Auto-login (TOTP)");
-    z_mode_browser_ = new QRadioButton("Browser login");
+    z_mode_totp_ = new QRadioButton(tr("Auto-login (TOTP)"));
+    z_mode_browser_ = new QRadioButton(tr("Browser login"));
     z_mode_totp_->setChecked(true);
     mode_row->addWidget(z_mode_totp_);
     mode_row->addWidget(z_mode_browser_);
@@ -698,20 +763,20 @@ void AccountManagementDialog::build_zerodha_form() {
     };
 
     // Always-visible
-    add_labeled_field(v, "API KEY", z_api_key_, "Enter API Key...",
-                      "from developers.kite.trade -> My Apps", false);
-    add_labeled_field(v, "API SECRET", z_api_secret_, "Enter API Secret...",
-                      "same console, shown once - regenerate if lost", true);
+    add_labeled_field(v, tr("API KEY"), z_api_key_, tr("Enter API Key..."),
+                      tr("from developers.kite.trade -> My Apps"), false);
+    add_labeled_field(v, tr("API SECRET"), z_api_secret_, tr("Enter API Secret..."),
+                      tr("same console, shown once - regenerate if lost"), true);
 
     // TOTP group
     z_totp_group_ = new QWidget;
     auto* tv = new QVBoxLayout(z_totp_group_);
     tv->setContentsMargins(0, 0, 0, 0);
     tv->setSpacing(6);
-    add_labeled_field(tv, "KITE USER ID", z_user_id_, "e.g. AB1234", "", false);
-    add_labeled_field(tv, "PASSWORD", z_password_, "Zerodha login password", "", true);
-    add_labeled_field(tv, "TOTP SECRET", z_totp_secret_, "Base32 string",
-                      "Base32 secret from Zerodha 2FA setup", true);
+    add_labeled_field(tv, tr("KITE USER ID"), z_user_id_, tr("e.g. AB1234"), QString(), false);
+    add_labeled_field(tv, tr("PASSWORD"), z_password_, tr("Zerodha login password"), QString(), true);
+    add_labeled_field(tv, tr("TOTP SECRET"), z_totp_secret_, tr("Base32 string"),
+                      tr("Base32 secret from Zerodha 2FA setup"), true);
     v->addWidget(z_totp_group_);
 
     // Browser group
@@ -719,11 +784,11 @@ void AccountManagementDialog::build_zerodha_form() {
     auto* bv = new QVBoxLayout(z_browser_group_);
     bv->setContentsMargins(0, 0, 0, 0);
     bv->setSpacing(6);
-    z_browser_btn_ = new QPushButton("Open Kite login in browser");
+    z_browser_btn_ = new QPushButton(tr("Open Kite login in browser"));
     z_browser_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; padding: 10px; font-weight: 700; }")
                                        .arg(colors::AMBER(), colors::BG_BASE()));
     bv->addWidget(z_browser_btn_);
-    z_manual_toggle_ = new QPushButton("Redirect didn't work? Paste request_token manually");
+    z_manual_toggle_ = new QPushButton(tr("Redirect didn't work? Paste request_token manually"));
     z_manual_toggle_->setStyleSheet(QString("text-align:left;background:transparent;color:%1;"
                                             "border:none;padding:4px 0;font-size:11px;")
                                         .arg(colors::TEXT_SECONDARY()));
@@ -732,9 +797,9 @@ void AccountManagementDialog::build_zerodha_form() {
     auto* mv = new QVBoxLayout(z_manual_panel_);
     mv->setContentsMargins(0, 0, 0, 0);
     mv->setSpacing(4);
-    z_manual_token_ = make_field("Paste request_token here", false);
+    z_manual_token_ = make_field(tr("Paste request_token here"), false);
     mv->addWidget(z_manual_token_);
-    z_manual_connect_btn_ = new QPushButton("Connect with pasted token");
+    z_manual_connect_btn_ = new QPushButton(tr("Connect with pasted token"));
     z_manual_connect_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
                                               .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY()));
     mv->addWidget(z_manual_connect_btn_);
@@ -752,11 +817,11 @@ void AccountManagementDialog::build_zerodha_form() {
 
     // Bottom action row
     auto* btn_row = new QHBoxLayout;
-    z_rename_btn_ = new QPushButton("RENAME");
+    z_rename_btn_ = new QPushButton(tr("RENAME"));
     z_rename_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
                                       .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY()));
     btn_row->addWidget(z_rename_btn_);
-    z_connect_btn_ = new QPushButton("CONNECT");
+    z_connect_btn_ = new QPushButton(tr("CONNECT"));
     z_connect_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; padding: 8px 24px; }")
                                        .arg(colors::AMBER(), colors::BG_BASE()));
     btn_row->addWidget(z_connect_btn_);
@@ -811,16 +876,16 @@ void AccountManagementDialog::on_connect_zerodha_totp() {
         z_status_->setText(msg);
         z_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
     };
-    if (api_key.isEmpty())    { show_err("Missing field: API Key"); return; }
-    if (api_secret.isEmpty()) { show_err("Missing field: API Secret"); return; }
-    if (user_id.isEmpty())    { show_err("Missing field: Kite User ID"); return; }
-    if (password.isEmpty())   { show_err("Missing field: Password"); return; }
-    if (totp_secret.isEmpty()){ show_err("Missing field: TOTP Secret"); return; }
+    if (api_key.isEmpty())    { show_err(tr("Missing field: API Key")); return; }
+    if (api_secret.isEmpty()) { show_err(tr("Missing field: API Secret")); return; }
+    if (user_id.isEmpty())    { show_err(tr("Missing field: Kite User ID")); return; }
+    if (password.isEmpty())   { show_err(tr("Missing field: Password")); return; }
+    if (totp_secret.isEmpty()){ show_err(tr("Missing field: TOTP Secret")); return; }
 
     // BUG 1 FIX: persist immediately so failure doesn't wipe the form.
     persist_zerodha_creds_before_auth();
 
-    z_status_->setText("Logging in...");
+    z_status_->setText(tr("Logging in..."));
     z_status_->setStyleSheet(QString("color:%1;").arg(colors::AMBER()));
     z_connect_btn_->setEnabled(false);
 
@@ -857,7 +922,7 @@ void AccountManagementDialog::on_connect_zerodha_totp() {
                     QString::fromUtf8(QJsonDocument(saved_obj).toJson(QJsonDocument::Compact));
                 am.save_credentials(acct, creds);
                 am.set_connection_state(acct, ConnectionState::Connected, {});
-                self->z_status_->setText(QString("Connected as %1").arg(result.user_id));
+                self->z_status_->setText(self->tr("Connected as %1").arg(result.user_id));
                 self->z_status_->setStyleSheet(QString("color:%1;").arg(colors::POSITIVE()));
                 emit self->credentials_saved(acct);
             } else {
@@ -878,7 +943,7 @@ void AccountManagementDialog::on_connect_zerodha_browser() {
     const QString api_key = z_api_key_->text().trimmed();
     const QString api_secret = z_api_secret_->text();
     if (api_key.isEmpty() || api_secret.isEmpty()) {
-        z_status_->setText("Enter API Key and API Secret first");
+        z_status_->setText(tr("Enter API Key and API Secret first"));
         z_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
         return;
     }
@@ -894,7 +959,7 @@ void AccountManagementDialog::on_connect_zerodha_browser() {
     z_redirect_server_ = new trading::auth::RedirectServer(this);
 
     if (!z_redirect_server_->start(5010, 120)) {
-        z_status_->setText("Port 5010 busy - use manual paste fallback");
+        z_status_->setText(tr("Port 5010 busy - use manual paste fallback"));
         z_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
         z_redirect_server_->deleteLater();
         z_redirect_server_ = nullptr;
@@ -906,7 +971,7 @@ void AccountManagementDialog::on_connect_zerodha_browser() {
     connect(z_redirect_server_, &trading::auth::RedirectServer::request_token_received, this,
             [self, api_key, api_secret](const QString& token) {
                 if (!self) return;
-                self->z_status_->setText("Exchanging token...");
+                self->z_status_->setText(self->tr("Exchanging token..."));
                 self->exchange_and_store_token_async(api_key, api_secret, token);
                 if (self->z_redirect_server_) {
                     self->z_redirect_server_->deleteLater();
@@ -915,7 +980,7 @@ void AccountManagementDialog::on_connect_zerodha_browser() {
             });
     connect(z_redirect_server_, &trading::auth::RedirectServer::timeout, this, [self]() {
         if (!self) return;
-        self->z_status_->setText("Browser login timed out - try again or paste manually");
+        self->z_status_->setText(self->tr("Browser login timed out - try again or paste manually"));
         self->z_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
         if (self->z_redirect_server_) {
             self->z_redirect_server_->deleteLater();
@@ -923,7 +988,7 @@ void AccountManagementDialog::on_connect_zerodha_browser() {
         }
     });
 
-    z_status_->setText(QString("Waiting for browser login on port %1 (120s)...")
+    z_status_->setText(tr("Waiting for browser login on port %1 (120s)...")
                            .arg(z_redirect_server_->port()));
     z_status_->setStyleSheet(QString("color:%1;").arg(colors::AMBER()));
     QDesktopServices::openUrl(QUrl(trading::ZerodhaBroker::kite_login_url(api_key)));
@@ -936,7 +1001,7 @@ void AccountManagementDialog::on_connect_zerodha_manual_paste() {
     const QString api_secret = z_api_secret_->text();
     QString token = z_manual_token_->text().trimmed();
     if (api_key.isEmpty() || api_secret.isEmpty() || token.isEmpty()) {
-        z_status_->setText("Enter API Key, API Secret, and paste request_token");
+        z_status_->setText(tr("Enter API Key, API Secret, and paste request_token"));
         z_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
         return;
     }
@@ -952,12 +1017,12 @@ void AccountManagementDialog::on_connect_zerodha_manual_paste() {
     }
     LOG_INFO("Zerodha", QString("manual paste extracted token: %1").arg(token));
     if (token.contains(QLatin1Char('/')) || token.contains(QLatin1Char('?')) || token.contains(QLatin1Char('='))) {
-        z_status_->setText("Could not find request_token in pasted text");
+        z_status_->setText(tr("Could not find request_token in pasted text"));
         z_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
         return;
     }
     persist_zerodha_creds_before_auth();
-    z_status_->setText("Exchanging token...");
+    z_status_->setText(tr("Exchanging token..."));
     z_status_->setStyleSheet(QString("color:%1;").arg(colors::AMBER()));
     exchange_and_store_token_async(api_key, api_secret, token);
 }
@@ -987,7 +1052,7 @@ void AccountManagementDialog::exchange_and_store_token_async(const QString& api_
                     creds.user_id = result.user_id;
                 am.save_credentials(acct, creds);
                 am.set_connection_state(acct, ConnectionState::Connected, {});
-                self->z_status_->setText(QString("Connected as %1").arg(result.user_id));
+                self->z_status_->setText(self->tr("Connected as %1").arg(result.user_id));
                 self->z_status_->setStyleSheet(QString("color:%1;").arg(colors::POSITIVE()));
                 emit self->credentials_saved(acct);
             } else {
@@ -1023,7 +1088,7 @@ void AccountManagementDialog::build_fyers_form() {
     v->setContentsMargins(8, 8, 8, 8);
     v->setSpacing(10);
 
-    f_title_ = new QLabel("Fyers");
+    f_title_ = new QLabel(QStringLiteral("Fyers"));
     f_title_->setObjectName("titleLabel");
     v->addWidget(f_title_);
     f_status_ = new QLabel(" ");
@@ -1031,7 +1096,7 @@ void AccountManagementDialog::build_fyers_form() {
     v->addWidget(f_status_);
 
     // Collapsible "First-time setup" panel
-    f_setup_toggle_ = new QPushButton(QString::fromUtf8("\xe2\x96\xb8") + QStringLiteral(" First-time setup (3 steps)"));
+    f_setup_toggle_ = new QPushButton(QString::fromUtf8("\xe2\x96\xb8") + tr(" First-time setup (3 steps)"));
     f_setup_toggle_->setStyleSheet(QString("text-align:left;background:transparent;color:%1;"
                                            "border:none;padding:4px 0;font-weight:700;")
                                        .arg(colors::AMBER()));
@@ -1049,9 +1114,9 @@ void AccountManagementDialog::build_fyers_form() {
         l->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::TEXT_SECONDARY()));
         setup->addWidget(l);
     };
-    add_step("1. Create an API app at <a href='https://myapi.fyers.in/dashboard/'>myapi.fyers.in/dashboard</a>.");
-    add_step("2. Set <b>Redirect URL</b> to <b>http://127.0.0.1:5011/</b> in app settings.");
-    add_step("3. Note your <b>Client ID</b> (e.g. ABCXYZ-100) and <b>Secret Key</b>.");
+    add_step(tr("1. Create an API app at <a href='https://myapi.fyers.in/dashboard/'>myapi.fyers.in/dashboard</a>."));
+    add_step(tr("2. Set <b>Redirect URL</b> to <b>http://127.0.0.1:5011/</b> in app settings."));
+    add_step(tr("3. Note your <b>Client ID</b> (e.g. ABCXYZ-100) and <b>Secret Key</b>."));
     f_setup_panel_->setVisible(false);
     v->addWidget(f_setup_panel_);
 
@@ -1061,7 +1126,7 @@ void AccountManagementDialog::build_fyers_form() {
         const bool vis = !self->f_setup_panel_->isVisible();
         self->f_setup_panel_->setVisible(vis);
         self->f_setup_toggle_->setText((vis ? QString::fromUtf8("\xe2\x96\xbe") : QString::fromUtf8("\xe2\x96\xb8"))
-                                       + QStringLiteral(" First-time setup (3 steps)"));
+                                       + self->tr(" First-time setup (3 steps)"));
     });
 
     auto add_labeled_field = [&](QBoxLayout* lay, const QString& label, QLineEdit*& out,
@@ -1078,19 +1143,19 @@ void AccountManagementDialog::build_fyers_form() {
         }
     };
 
-    add_labeled_field(v, "CLIENT ID", f_client_id_, "e.g. ABCXYZ-100",
-                      "from myapi.fyers.in -> My Apps", false);
-    add_labeled_field(v, "SECRET KEY", f_api_secret_, "Enter Secret Key...",
-                      "shown once during app creation - regenerate if lost", true);
+    add_labeled_field(v, tr("CLIENT ID"), f_client_id_, tr("e.g. ABCXYZ-100"),
+                      tr("from myapi.fyers.in -> My Apps"), false);
+    add_labeled_field(v, tr("SECRET KEY"), f_api_secret_, tr("Enter Secret Key..."),
+                      tr("shown once during app creation - regenerate if lost"), true);
 
     // Browser login
-    f_browser_btn_ = new QPushButton("Open Fyers login in browser");
+    f_browser_btn_ = new QPushButton(tr("Open Fyers login in browser"));
     f_browser_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; padding: 10px; font-weight: 700; }")
                                        .arg(colors::AMBER(), colors::BG_BASE()));
     v->addWidget(f_browser_btn_);
 
     // Manual paste fallback
-    f_manual_toggle_ = new QPushButton("Redirect didn't work? Paste auth_code manually");
+    f_manual_toggle_ = new QPushButton(tr("Redirect didn't work? Paste auth_code manually"));
     f_manual_toggle_->setStyleSheet(QString("text-align:left;background:transparent;color:%1;"
                                             "border:none;padding:4px 0;font-size:11px;")
                                         .arg(colors::TEXT_SECONDARY()));
@@ -1100,9 +1165,9 @@ void AccountManagementDialog::build_fyers_form() {
     auto* mv = new QVBoxLayout(f_manual_panel_);
     mv->setContentsMargins(0, 0, 0, 0);
     mv->setSpacing(4);
-    f_manual_token_ = make_field("Paste auth_code or full redirect URL here", false);
+    f_manual_token_ = make_field(tr("Paste auth_code or full redirect URL here"), false);
     mv->addWidget(f_manual_token_);
-    f_manual_connect_btn_ = new QPushButton("Connect with pasted auth code");
+    f_manual_connect_btn_ = new QPushButton(tr("Connect with pasted auth code"));
     f_manual_connect_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
                                               .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY()));
     mv->addWidget(f_manual_connect_btn_);
@@ -1118,7 +1183,7 @@ void AccountManagementDialog::build_fyers_form() {
 
     // Bottom action row
     auto* btn_row = new QHBoxLayout;
-    f_rename_btn_ = new QPushButton("RENAME");
+    f_rename_btn_ = new QPushButton(tr("RENAME"));
     f_rename_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
                                       .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY()));
     btn_row->addWidget(f_rename_btn_);
@@ -1138,7 +1203,7 @@ void AccountManagementDialog::on_connect_fyers_browser() {
     const QString client_id = f_client_id_->text().trimmed();
     const QString api_secret = f_api_secret_->text();
     if (client_id.isEmpty() || api_secret.isEmpty()) {
-        f_status_->setText("Enter Client ID and Secret Key first");
+        f_status_->setText(tr("Enter Client ID and Secret Key first"));
         f_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
         return;
     }
@@ -1159,7 +1224,7 @@ void AccountManagementDialog::on_connect_fyers_browser() {
 
     constexpr quint16 kFyersPort = 5011;
     if (!f_redirect_server_->start(kFyersPort, 120) || f_redirect_server_->port() != kFyersPort) {
-        f_status_->setText("Port 5011 busy — use manual paste fallback below");
+        f_status_->setText(tr("Port 5011 busy — use manual paste fallback below"));
         f_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
         f_redirect_server_->stop();
         f_redirect_server_->deleteLater();
@@ -1172,7 +1237,7 @@ void AccountManagementDialog::on_connect_fyers_browser() {
     connect(f_redirect_server_, &trading::auth::RedirectServer::request_token_received, this,
             [self, client_id, api_secret](const QString& auth_code) {
                 if (!self) return;
-                self->f_status_->setText("Exchanging auth code...");
+                self->f_status_->setText(self->tr("Exchanging auth code..."));
                 self->fyers_exchange_and_store_token_async(client_id, api_secret, auth_code);
                 if (self->f_redirect_server_) {
                     self->f_redirect_server_->deleteLater();
@@ -1181,7 +1246,7 @@ void AccountManagementDialog::on_connect_fyers_browser() {
             });
     connect(f_redirect_server_, &trading::auth::RedirectServer::timeout, this, [self]() {
         if (!self) return;
-        self->f_status_->setText("Browser login timed out — try again or paste manually");
+        self->f_status_->setText(self->tr("Browser login timed out — try again or paste manually"));
         self->f_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
         if (self->f_redirect_server_) {
             self->f_redirect_server_->deleteLater();
@@ -1190,7 +1255,7 @@ void AccountManagementDialog::on_connect_fyers_browser() {
     });
 
     const QString redirect_uri = QStringLiteral("http://127.0.0.1:%1/").arg(kFyersPort);
-    f_status_->setText(QString("Waiting for browser login on port %1 (120s)...").arg(kFyersPort));
+    f_status_->setText(tr("Waiting for browser login on port %1 (120s)...").arg(kFyersPort));
     f_status_->setStyleSheet(QString("color:%1;").arg(colors::AMBER()));
     QDesktopServices::openUrl(QUrl(trading::FyersBroker::fyers_login_url(client_id, redirect_uri)));
 }
@@ -1202,7 +1267,7 @@ void AccountManagementDialog::on_connect_fyers_manual_paste() {
     const QString api_secret = f_api_secret_->text();
     QString token = f_manual_token_->text().trimmed();
     if (client_id.isEmpty() || api_secret.isEmpty() || token.isEmpty()) {
-        f_status_->setText("Enter Client ID, Secret Key, and paste auth code");
+        f_status_->setText(tr("Enter Client ID, Secret Key, and paste auth code"));
         f_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
         return;
     }
@@ -1223,7 +1288,7 @@ void AccountManagementDialog::on_connect_fyers_manual_paste() {
     creds.api_secret = api_secret;
     AccountManager::instance().save_credentials(selected_account_id_, creds);
 
-    f_status_->setText("Exchanging auth code...");
+    f_status_->setText(tr("Exchanging auth code..."));
     f_status_->setStyleSheet(QString("color:%1;").arg(colors::AMBER()));
     fyers_exchange_and_store_token_async(client_id, api_secret, token);
 }
@@ -1257,7 +1322,7 @@ void AccountManagementDialog::fyers_exchange_and_store_token_async(const QString
                 creds.additional_data = QString::fromUtf8(QJsonDocument(extra).toJson(QJsonDocument::Compact));
                 am.save_credentials(acct, creds);
                 am.set_connection_state(acct, ConnectionState::Connected, {});
-                self->f_status_->setText(QString("Connected as %1").arg(
+                self->f_status_->setText(self->tr("Connected as %1").arg(
                     result.user_id.isEmpty() ? client_id.left(8) + "..." : result.user_id));
                 self->f_status_->setStyleSheet(QString("color:%1;").arg(colors::POSITIVE()));
                 emit self->credentials_saved(acct);
@@ -1293,7 +1358,7 @@ void AccountManagementDialog::build_mt4_form() {
     v->setContentsMargins(8, 8, 8, 8);
     v->setSpacing(10);
 
-    mt4_title_ = new QLabel("MetaTrader 4");
+    mt4_title_ = new QLabel(QStringLiteral("MetaTrader 4"));
     mt4_title_->setObjectName("titleLabel");
     v->addWidget(mt4_title_);
     mt4_status_ = new QLabel(" ");
@@ -1302,7 +1367,7 @@ void AccountManagementDialog::build_mt4_form() {
 
     // Collapsible setup instructions
     mt4_setup_toggle_ = new QPushButton(
-        QString::fromUtf8("\xe2\x96\xb8") + QStringLiteral(" First-time setup (3 steps)"));
+        QString::fromUtf8("\xe2\x96\xb8") + tr(" First-time setup (3 steps)"));
     mt4_setup_toggle_->setStyleSheet(QString("text-align:left;background:transparent;color:%1;"
                                              "border:none;padding:4px 0;font-weight:700;")
                                          .arg(colors::AMBER()));
@@ -1320,9 +1385,9 @@ void AccountManagementDialog::build_mt4_form() {
         l->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::TEXT_SECONDARY()));
         setup->addWidget(l);
     };
-    add_step("1. Create a free account at <a href='https://app.metaapi.cloud'>app.metaapi.cloud</a>.");
-    add_step("2. Generate an auth token from the API Access section.");
-    add_step("3. Enter your MT4 broker account credentials (login, password, server name).");
+    add_step(tr("1. Create a free account at <a href='https://app.metaapi.cloud'>app.metaapi.cloud</a>."));
+    add_step(tr("2. Generate an auth token from the API Access section."));
+    add_step(tr("3. Enter your MT4 broker account credentials (login, password, server name)."));
     mt4_setup_panel_->setVisible(false);
     v->addWidget(mt4_setup_panel_);
 
@@ -1333,7 +1398,7 @@ void AccountManagementDialog::build_mt4_form() {
         self->mt4_setup_panel_->setVisible(vis);
         self->mt4_setup_toggle_->setText(
             (vis ? QString::fromUtf8("\xe2\x96\xbe") : QString::fromUtf8("\xe2\x96\xb8")) +
-            QStringLiteral(" First-time setup (3 steps)"));
+            self->tr(" First-time setup (3 steps)"));
     });
 
     auto add_labeled_field = [&](QBoxLayout* lay, const QString& label, QLineEdit*& out,
@@ -1351,40 +1416,40 @@ void AccountManagementDialog::build_mt4_form() {
     };
 
     // MetaAPI Token + "Get Token" link
-    add_labeled_field(v, "METAAPI TOKEN", mt4_meta_token_, "Enter MetaAPI auth token...", "", true);
+    add_labeled_field(v, tr("METAAPI TOKEN"), mt4_meta_token_, tr("Enter MetaAPI auth token..."), QString(), true);
     auto* token_link = new QLabel(
-        QStringLiteral("<a href='https://app.metaapi.cloud/api-access/generate-token' "
-                       "style='color:%1;font-size:10px;'>Get Token \xe2\x86\x92</a>")
+        tr("<a href='https://app.metaapi.cloud/api-access/generate-token' "
+           "style='color:%1;font-size:10px;'>Get Token \xe2\x86\x92</a>")
             .arg(colors::AMBER()));
     token_link->setTextFormat(Qt::RichText);
     token_link->setOpenExternalLinks(true);
     v->addWidget(token_link);
 
     // MT4 credentials
-    add_labeled_field(v, "MT4 LOGIN", mt4_login_, "Account number e.g. 12345678",
-                      "your MT4 broker account number", false);
-    add_labeled_field(v, "MT4 PASSWORD", mt4_password_, "Trading password",
-                      "trading password (not investor password)", true);
-    add_labeled_field(v, "SERVER NAME", mt4_server_, "e.g. ICMarkets-Demo03",
-                      "exact server name from your MT4 broker", false);
+    add_labeled_field(v, tr("MT4 LOGIN"), mt4_login_, tr("Account number e.g. 12345678"),
+                      tr("your MT4 broker account number"), false);
+    add_labeled_field(v, tr("MT4 PASSWORD"), mt4_password_, tr("Trading password"),
+                      tr("trading password (not investor password)"), true);
+    add_labeled_field(v, tr("SERVER NAME"), mt4_server_, tr("e.g. ICMarkets-Demo03"),
+                      tr("exact server name from your MT4 broker"), false);
 
     // Region combo
-    v->addWidget(make_field_label("REGION"));
+    v->addWidget(make_field_label(tr("REGION")));
     mt4_region_ = new QComboBox;
-    mt4_region_->addItem("New York", "new-york-server");
-    mt4_region_->addItem("London", "london-server");
-    mt4_region_->addItem("Singapore", "singapore-server");
+    mt4_region_->addItem(tr("New York"), "new-york-server");
+    mt4_region_->addItem(tr("London"), "london-server");
+    mt4_region_->addItem(tr("Singapore"), "singapore-server");
     v->addWidget(mt4_region_);
 
     // Account type combo
-    v->addWidget(make_field_label("ACCOUNT TYPE"));
+    v->addWidget(make_field_label(tr("ACCOUNT TYPE")));
     mt4_account_type_ = new QComboBox;
-    mt4_account_type_->addItem("Demo", "demo");
-    mt4_account_type_->addItem("Live", "live");
+    mt4_account_type_->addItem(tr("Demo"), "demo");
+    mt4_account_type_->addItem(tr("Live"), "live");
     v->addWidget(mt4_account_type_);
 
     // Connect button
-    mt4_connect_btn_ = new QPushButton("CONNECT MT4 ACCOUNT");
+    mt4_connect_btn_ = new QPushButton(tr("CONNECT MT4 ACCOUNT"));
     mt4_connect_btn_->setStyleSheet(
         QString("QPushButton { background: %1; color: %2; padding: 10px; font-weight: 700; }")
             .arg(colors::AMBER(), colors::BG_BASE()));
@@ -1394,7 +1459,7 @@ void AccountManagementDialog::build_mt4_form() {
 
     // Bottom action row
     auto* btn_row = new QHBoxLayout;
-    mt4_rename_btn_ = new QPushButton("RENAME");
+    mt4_rename_btn_ = new QPushButton(tr("RENAME"));
     mt4_rename_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
                                        .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY()));
     btn_row->addWidget(mt4_rename_btn_);
@@ -1418,7 +1483,7 @@ void AccountManagementDialog::on_connect_mt4() {
     const QString account_type = mt4_account_type_->currentData().toString();
 
     if (meta_token.isEmpty() || mt4_login.isEmpty() || mt4_password.isEmpty() || mt4_server.isEmpty()) {
-        mt4_status_->setText("All fields are required.");
+        mt4_status_->setText(tr("All fields are required."));
         mt4_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
         return;
     }
@@ -1443,7 +1508,7 @@ void AccountManagementDialog::mt4_provision_async(const QString& meta_token, con
                                                    const QString& mt4_password, const QString& mt4_server,
                                                    const QString& region) {
     mt4_connect_btn_->setEnabled(false);
-    mt4_status_->setText("Creating MT4 bridge...");
+    mt4_status_->setText(tr("Creating MT4 bridge..."));
     mt4_status_->setStyleSheet(QString("color:%1;").arg(colors::AMBER()));
 
     const QString acct = selected_account_id_;
@@ -1472,7 +1537,7 @@ void AccountManagementDialog::mt4_provision_async(const QString& meta_token, con
                     creds.additional_data = result.additional_data;
                 am.save_credentials(acct, creds);
                 am.set_connection_state(acct, ConnectionState::Connected);
-                self->mt4_status_->setText("Connected");
+                self->mt4_status_->setText(self->tr("Connected"));
                 self->mt4_status_->setStyleSheet(QString("color:%1;").arg(colors::POSITIVE()));
                 emit self->credentials_saved(acct);
             } else {

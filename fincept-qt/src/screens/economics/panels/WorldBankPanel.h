@@ -21,17 +21,24 @@ class WorldBankPanel : public EconPanelBase {
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
     void on_result(const QString& request_id, const services::EconomicsResult& result) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void load_countries();
     void on_country_filter(const QString& text);
     void on_indicator_filter(const QString& text);
+    void retranslateUi() override;
 
     QLineEdit* country_search_ = nullptr;
     QListWidget* country_list_ = nullptr;
     QLineEdit* indicator_search_ = nullptr;
     QListWidget* indicator_list_ = nullptr;
     QComboBox* date_preset_ = nullptr;
+
+    // Cached for retranslateUi
+    QLabel* country_hdr_ = nullptr;
+    QLabel* indicator_hdr_ = nullptr;
+    QLabel* years_lbl_ = nullptr;
 
     QString selected_country_ = "US";
     QString selected_indicator_;

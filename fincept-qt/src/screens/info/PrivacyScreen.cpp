@@ -2,7 +2,9 @@
 
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QGridLayout>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
@@ -67,10 +69,27 @@ PrivacyScreen::PrivacyScreen(QWidget* parent) : QWidget(parent) {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
 
-    auto* scroll = new QScrollArea;
-    scroll->setWidgetResizable(true);
-    scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }");
+    scroll_ = new QScrollArea;
+    scroll_->setWidgetResizable(true);
+    scroll_->setStyleSheet("QScrollArea { border: none; background: transparent; }");
+    scroll_->setWidget(build_page());
+    root->addWidget(scroll_, 1);
+}
 
+// ── Re-translation ────────────────────────────────────────────────────────────
+// Static legal text — rebuild the page on language change rather than caching
+// every label as a member. QScrollArea::setWidget() deletes the old content.
+
+void PrivacyScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange && scroll_) {
+        scroll_->setWidget(build_page());
+    }
+    QWidget::changeEvent(event);
+}
+
+// ── Page builder ──────────────────────────────────────────────────────────────
+
+QWidget* PrivacyScreen::build_page() {
     auto* page = new QWidget(this);
     page->setStyleSheet(QString("background: %1;").arg(colors::BG_BASE()));
     auto* vl = new QVBoxLayout(page);
@@ -78,7 +97,7 @@ PrivacyScreen::PrivacyScreen(QWidget* parent) : QWidget(parent) {
     vl->setSpacing(6);
 
     // Back
-    auto* back_btn = new QPushButton("< BACK");
+    auto* back_btn = new QPushButton(tr("< BACK"));
     back_btn->setCursor(Qt::PointingHandCursor);
     back_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
                                     "font-size: 12px; %2 } QPushButton:hover { color: %3; }")
@@ -86,13 +105,13 @@ PrivacyScreen::PrivacyScreen(QWidget* parent) : QWidget(parent) {
     connect(back_btn, &QPushButton::clicked, this, &PrivacyScreen::navigate_back);
     vl->addWidget(back_btn, 0, Qt::AlignLeft);
 
-    auto* title = new QLabel("PRIVACY POLICY");
+    auto* title = new QLabel(tr("PRIVACY POLICY"));
     title->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 700; letter-spacing: 1px; "
                                  "background: transparent; %2")
                              .arg(colors::AMBER(), MF));
     vl->addWidget(title);
 
-    auto* updated = new QLabel("Last updated: January 1, 2026");
+    auto* updated = new QLabel(tr("Last updated: January 1, 2026"));
     updated->setStyleSheet(
         QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY(), MF));
     vl->addWidget(updated);
@@ -107,81 +126,81 @@ PrivacyScreen::PrivacyScreen(QWidget* parent) : QWidget(parent) {
     pvl->setSpacing(6);
 
     // 1 — Commitment
-    pvl->addWidget(section_heading("#", "OUR COMMITMENT TO PRIVACY"));
+    pvl->addWidget(section_heading("#", tr("OUR COMMITMENT TO PRIVACY")));
     pvl->addWidget(
-        body_text("At Fincept Corporation, we are committed to protecting your privacy. This policy describes "
-                  "how we collect, use, and safeguard your personal information when you use Fincept Terminal."));
+        body_text(tr("At Fincept Corporation, we are committed to protecting your privacy. This policy describes "
+                     "how we collect, use, and safeguard your personal information when you use Fincept Terminal.")));
 
     // 2 — Information We Collect
-    pvl->addWidget(section_heading("@", "INFORMATION WE COLLECT"));
-    pvl->addWidget(body_text("Personal Information:"));
-    pvl->addWidget(bullet("Name and email address"));
-    pvl->addWidget(bullet("Account credentials (encrypted)"));
-    pvl->addWidget(bullet("Payment information (processed by third-party providers)"));
-    pvl->addWidget(bullet("Phone number (optional)"));
-    pvl->addWidget(bullet("Country and region"));
+    pvl->addWidget(section_heading("@", tr("INFORMATION WE COLLECT")));
+    pvl->addWidget(body_text(tr("Personal Information:")));
+    pvl->addWidget(bullet(tr("Name and email address")));
+    pvl->addWidget(bullet(tr("Account credentials (encrypted)")));
+    pvl->addWidget(bullet(tr("Payment information (processed by third-party providers)")));
+    pvl->addWidget(bullet(tr("Phone number (optional)")));
+    pvl->addWidget(bullet(tr("Country and region")));
 
     pvl->addSpacing(4);
-    pvl->addWidget(body_text("Usage Information:"));
-    pvl->addWidget(bullet("Feature usage and navigation patterns"));
-    pvl->addWidget(bullet("Device and browser information"));
-    pvl->addWidget(bullet("IP address and approximate location"));
-    pvl->addWidget(bullet("Error logs and performance metrics"));
-    pvl->addWidget(bullet("Session duration and frequency"));
+    pvl->addWidget(body_text(tr("Usage Information:")));
+    pvl->addWidget(bullet(tr("Feature usage and navigation patterns")));
+    pvl->addWidget(bullet(tr("Device and browser information")));
+    pvl->addWidget(bullet(tr("IP address and approximate location")));
+    pvl->addWidget(bullet(tr("Error logs and performance metrics")));
+    pvl->addWidget(bullet(tr("Session duration and frequency")));
 
     // 3 — How We Use
-    pvl->addWidget(section_heading("*", "HOW WE USE YOUR INFORMATION"));
+    pvl->addWidget(section_heading("*", tr("HOW WE USE YOUR INFORMATION")));
     {
         auto* grid = new QGridLayout;
         grid->setSpacing(8);
         grid->addWidget(
-            info_card("SERVICE DELIVERY",
-                      "Provide and maintain terminal features, process transactions, and deliver data feeds"),
+            info_card(tr("SERVICE DELIVERY"),
+                      tr("Provide and maintain terminal features, process transactions, and deliver data feeds")),
             0, 0);
         grid->addWidget(
-            info_card("SECURITY",
-                      "Protect accounts, detect fraud, enforce terms of service, and ensure platform integrity"),
+            info_card(tr("SECURITY"),
+                      tr("Protect accounts, detect fraud, enforce terms of service, and ensure platform integrity")),
             0, 1);
-        grid->addWidget(info_card("COMMUNICATION",
-                                  "Send service updates, security alerts, support responses, and optional marketing"),
+        grid->addWidget(info_card(tr("COMMUNICATION"),
+                                  tr("Send service updates, security alerts, support responses, and optional marketing")),
                         1, 0);
         grid->addWidget(
-            info_card("IMPROVEMENT", "Analyze usage to improve features, fix bugs, and develop new capabilities"), 1,
+            info_card(tr("IMPROVEMENT"), tr("Analyze usage to improve features, fix bugs, and develop new capabilities")), 1,
             1);
         pvl->addLayout(grid);
     }
 
     // 4 — Sharing
-    pvl->addWidget(section_heading("~", "INFORMATION SHARING"));
-    pvl->addWidget(body_text("We may share your information with:"));
-    pvl->addWidget(bullet("Service Providers — third-party services that help operate the platform"));
-    pvl->addWidget(bullet("Legal Requirements — when required by law or to protect our rights"));
-    pvl->addWidget(bullet("Business Transfer — in connection with a merger, acquisition, or sale"));
-    pvl->addWidget(bullet("With Your Consent — when you explicitly authorize sharing"));
+    pvl->addWidget(section_heading("~", tr("INFORMATION SHARING")));
+    pvl->addWidget(body_text(tr("We may share your information with:")));
+    pvl->addWidget(bullet(tr("Service Providers — third-party services that help operate the platform")));
+    pvl->addWidget(bullet(tr("Legal Requirements — when required by law or to protect our rights")));
+    pvl->addWidget(bullet(tr("Business Transfer — in connection with a merger, acquisition, or sale")));
+    pvl->addWidget(bullet(tr("With Your Consent — when you explicitly authorize sharing")));
 
     // 5 — Security
-    pvl->addWidget(section_heading("!", "DATA SECURITY"));
-    pvl->addWidget(body_text("We implement industry-standard security measures:"));
-    pvl->addWidget(bullet("End-to-end encryption for sensitive data"));
-    pvl->addWidget(bullet("Secure credential storage (encrypted at rest)"));
-    pvl->addWidget(bullet("Regular security audits and penetration testing"));
-    pvl->addWidget(bullet("Access controls and authentication requirements"));
-    pvl->addWidget(bullet("Automatic session expiry and logout"));
-    pvl->addWidget(bullet("HTTPS/TLS for all data transmission"));
+    pvl->addWidget(section_heading("!", tr("DATA SECURITY")));
+    pvl->addWidget(body_text(tr("We implement industry-standard security measures:")));
+    pvl->addWidget(bullet(tr("End-to-end encryption for sensitive data")));
+    pvl->addWidget(bullet(tr("Secure credential storage (encrypted at rest)")));
+    pvl->addWidget(bullet(tr("Regular security audits and penetration testing")));
+    pvl->addWidget(bullet(tr("Access controls and authentication requirements")));
+    pvl->addWidget(bullet(tr("Automatic session expiry and logout")));
+    pvl->addWidget(bullet(tr("HTTPS/TLS for all data transmission")));
 
     // 6 — Rights
-    pvl->addWidget(section_heading("=", "YOUR RIGHTS"));
-    pvl->addWidget(body_text("You have the right to:"));
-    pvl->addWidget(bullet("Access — Request a copy of your personal data"));
-    pvl->addWidget(bullet("Correction — Update inaccurate or incomplete data"));
-    pvl->addWidget(bullet("Deletion — Request deletion of your account and data"));
-    pvl->addWidget(bullet("Portability — Export your data in a machine-readable format"));
-    pvl->addWidget(bullet("Opt-out — Unsubscribe from marketing communications"));
+    pvl->addWidget(section_heading("=", tr("YOUR RIGHTS")));
+    pvl->addWidget(body_text(tr("You have the right to:")));
+    pvl->addWidget(bullet(tr("Access — Request a copy of your personal data")));
+    pvl->addWidget(bullet(tr("Correction — Update inaccurate or incomplete data")));
+    pvl->addWidget(bullet(tr("Deletion — Request deletion of your account and data")));
+    pvl->addWidget(bullet(tr("Portability — Export your data in a machine-readable format")));
+    pvl->addWidget(bullet(tr("Opt-out — Unsubscribe from marketing communications")));
 
     // 7 — Contact
-    pvl->addWidget(section_heading("@", "CONTACT US"));
-    pvl->addWidget(body_text("Privacy Officer: support@fincept.in"));
-    pvl->addWidget(body_text("For privacy-related inquiries, write to the address above."));
+    pvl->addWidget(section_heading("@", tr("CONTACT US")));
+    pvl->addWidget(body_text(tr("Privacy Officer: support@fincept.in")));
+    pvl->addWidget(body_text(tr("For privacy-related inquiries, write to the address above.")));
 
     vl->addWidget(panel);
 
@@ -201,21 +220,20 @@ PrivacyScreen::PrivacyScreen(QWidget* parent) : QWidget(parent) {
         return btn;
     };
 
-    auto* terms_link = make_link("Terms of Service");
+    auto* terms_link = make_link(tr("Terms of Service"));
     connect(terms_link, &QPushButton::clicked, this, &PrivacyScreen::navigate_terms);
     fhl->addWidget(terms_link);
 
     fhl->addStretch();
 
-    auto* contact_link = make_link("Contact Us");
+    auto* contact_link = make_link(tr("Contact Us"));
     connect(contact_link, &QPushButton::clicked, this, &PrivacyScreen::navigate_contact);
     fhl->addWidget(contact_link);
 
     vl->addWidget(footer);
     vl->addStretch();
 
-    scroll->setWidget(page);
-    root->addWidget(scroll, 1);
+    return page;
 }
 
 } // namespace fincept::screens

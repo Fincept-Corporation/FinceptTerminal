@@ -42,12 +42,12 @@ void HDXDataPanel::build_ui() {
     hhl->setContentsMargins(16, 0, 16, 0);
     hhl->setSpacing(8);
 
-    auto* title = new QLabel("HDX HUMANITARIAN DATA", header);
-    title->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
+    title_lbl_ = new QLabel(tr("HDX HUMANITARIAN DATA"), header);
+    title_lbl_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
                              .arg(ui::colors::CYAN())
                              .arg(ui::fonts::TINY)
                              .arg(ui::fonts::DATA_FAMILY()));
-    hhl->addWidget(title);
+    hhl->addWidget(title_lbl_);
 
     auto* div = new QWidget(header);
     div->setFixedSize(1, 20);
@@ -55,7 +55,8 @@ void HDXDataPanel::build_ui() {
     hhl->addWidget(div);
 
     auto rgb = cyan_rgb();
-    const QStringList views = {"Conflicts", "Humanitarian", "Explorer", "Datasets"};
+    const QStringList views = {tr("Conflicts"), tr("Humanitarian"), tr("Explorer"), tr("Datasets")};
+    view_labels_ = views;
     for (int i = 0; i < views.size(); ++i) {
         auto* btn = new QPushButton(views[i].toUpper(), header);
         btn->setCursor(Qt::PointingHandCursor);
@@ -76,7 +77,7 @@ void HDXDataPanel::build_ui() {
     hhl->addStretch();
 
     search_edit_ = new QLineEdit(header);
-    search_edit_->setPlaceholderText("Search HDX datasets...");
+    search_edit_->setPlaceholderText(tr("Search HDX datasets..."));
     search_edit_->setFixedWidth(240);
     search_edit_->setStyleSheet(QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
                                         "font-family:%4; font-size:%5px; padding:4px 8px; }"
@@ -94,7 +95,7 @@ void HDXDataPanel::build_ui() {
     });
     hhl->addWidget(search_edit_);
 
-    dataset_count_ = new QLabel("0 datasets", header);
+    dataset_count_ = new QLabel(tr("0 datasets"), header);
     dataset_count_->setFixedHeight(22);
     dataset_count_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:2px 6px;"
                                           "background:rgba(%4,0.08); border:1px solid rgba(%4,0.25); font-weight:700;")
@@ -109,7 +110,8 @@ void HDXDataPanel::build_ui() {
     // Datasets table
     datasets_table_ = new QTableWidget(this);
     datasets_table_->setColumnCount(5);
-    datasets_table_->setHorizontalHeaderLabels({"Title", "Organization", "Date", "Resources", "Tags"});
+    datasets_table_->setHorizontalHeaderLabels(
+        {tr("Title"), tr("Organization"), tr("Date"), tr("Resources"), tr("Tags")});
     datasets_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     datasets_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     datasets_table_->setAlternatingRowColors(true);
@@ -140,7 +142,7 @@ void HDXDataPanel::build_ui() {
                                        .arg(ui::colors::ROW_ALT()));
 
     // Loading overlay
-    loading_label_ = new QLabel("Loading HDX data...", this);
+    loading_label_ = new QLabel(tr("Loading HDX data..."), this);
     loading_label_->setAlignment(Qt::AlignCenter);
     loading_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; background:%4;")
                                       .arg(ui::colors::CYAN())
@@ -171,31 +173,32 @@ void HDXDataPanel::build_ui() {
                                .arg(ui::fonts::TINY)
                                .arg(ui::fonts::DATA_FAMILY);
 
-    auto* country_lbl = new QLabel("COUNTRY:", explorer_bar_);
-    country_lbl->setStyleSheet(bar_label_style);
-    ehl->addWidget(country_lbl);
+    country_lbl_ = new QLabel(tr("COUNTRY:"), explorer_bar_);
+    country_lbl_->setStyleSheet(bar_label_style);
+    ehl->addWidget(country_lbl_);
     country_combo_ = new QComboBox(explorer_bar_);
     country_combo_->setStyleSheet(combo_style);
     country_combo_->setEditable(true);
-    country_combo_->setPlaceholderText("Select country");
+    country_combo_->setPlaceholderText(tr("Select country"));
     for (const auto& r : critical_regions())
         country_combo_->addItem(r);
     ehl->addWidget(country_combo_);
 
-    auto* topic_lbl = new QLabel("TOPIC:", explorer_bar_);
-    topic_lbl->setStyleSheet(bar_label_style);
-    ehl->addWidget(topic_lbl);
+    topic_lbl_ = new QLabel(tr("TOPIC:"), explorer_bar_);
+    topic_lbl_->setStyleSheet(bar_label_style);
+    ehl->addWidget(topic_lbl_);
     topic_combo_ = new QComboBox(explorer_bar_);
     topic_combo_->setStyleSheet(combo_style);
+    // Topic values are search query keys passed to the HDX service — not UI labels.
     topic_combo_->addItems(
         {"conflict", "humanitarian", "displacement", "food security", "health", "education", "refugees"});
     ehl->addWidget(topic_combo_);
 
-    auto* explore_btn = new QPushButton("SEARCH", explorer_bar_);
-    explore_btn->setCursor(Qt::PointingHandCursor);
+    explore_btn_ = new QPushButton(tr("SEARCH"), explorer_bar_);
+    explore_btn_->setCursor(Qt::PointingHandCursor);
     {
         QColor cy(ui::colors::CYAN());
-        explore_btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; font-family:%3;"
+        explore_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; font-family:%3;"
                                            "font-size:%4px; font-weight:700; border:none; padding:6px 16px; }"
                                            "QPushButton:hover { background:%5; }")
                                        .arg(ui::colors::CYAN())
@@ -204,7 +207,7 @@ void HDXDataPanel::build_ui() {
                                        .arg(ui::fonts::SMALL)
                                        .arg(cy.darker(120).name()));
     }
-    connect(explore_btn, &QPushButton::clicked, this, [this]() {
+    connect(explore_btn_, &QPushButton::clicked, this, [this]() {
         auto country = country_combo_->currentText().trimmed();
         show_loading(true);
         if (!country.isEmpty()) {
@@ -217,7 +220,7 @@ void HDXDataPanel::build_ui() {
                 show_loading(false);
         }
     });
-    ehl->addWidget(explore_btn);
+    ehl->addWidget(explore_btn_);
     ehl->addStretch();
 
     root->addWidget(explorer_bar_);
@@ -328,7 +331,38 @@ void HDXDataPanel::populate_table(const QVector<HDXDataset>& datasets) {
     }
 
     datasets_table_->setSortingEnabled(true);
-    dataset_count_->setText(QString("%1 datasets").arg(datasets.size()));
+    dataset_count_->setText(tr("%1 datasets").arg(datasets.size()));
+}
+
+void HDXDataPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void HDXDataPanel::retranslateUi() {
+    if (title_lbl_)   title_lbl_->setText(tr("HDX HUMANITARIAN DATA"));
+    if (search_edit_) search_edit_->setPlaceholderText(tr("Search HDX datasets..."));
+    if (loading_label_) loading_label_->setText(tr("Loading HDX data..."));
+
+    // View-tab buttons — re-apply the fixed labels (upper-cased) in order.
+    const QStringList views = {tr("Conflicts"), tr("Humanitarian"), tr("Explorer"), tr("Datasets")};
+    view_labels_ = views;
+    for (int i = 0; i < view_buttons_.size() && i < views.size(); ++i)
+        if (view_buttons_[i]) view_buttons_[i]->setText(views[i].toUpper());
+
+    // Explorer filter bar
+    if (country_lbl_)   country_lbl_->setText(tr("COUNTRY:"));
+    if (topic_lbl_)     topic_lbl_->setText(tr("TOPIC:"));
+    if (country_combo_) country_combo_->setPlaceholderText(tr("Select country"));
+    if (explore_btn_)   explore_btn_->setText(tr("SEARCH"));
+
+    // Table headers
+    if (datasets_table_)
+        datasets_table_->setHorizontalHeaderLabels(
+            {tr("Title"), tr("Organization"), tr("Date"), tr("Resources"), tr("Tags")});
+
+    // dataset_count_ reflects the last populate_table() and refreshes on next load.
 }
 
 } // namespace fincept::screens

@@ -2,6 +2,7 @@
 
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
@@ -33,17 +34,22 @@ enum Column : int {
 };
 
 QString col_label(int c) {
+    // Anonymous-namespace helper — translate via QCoreApplication under the
+    // owning widget's context so column captions localize.
+    auto t = [](const char* s) {
+        return QCoreApplication::translate("PolymarketOrderBlotter", s);
+    };
     switch (c) {
-        case ColTime: return QStringLiteral("TIME");
-        case ColMarket: return QStringLiteral("MARKET");
-        case ColSide: return QStringLiteral("SIDE");
-        case ColOutcome: return QStringLiteral("OUTCOME");
-        case ColType: return QStringLiteral("TYPE");
-        case ColPrice: return QStringLiteral("PRICE");
-        case ColSize: return QStringLiteral("SIZE");
-        case ColFilled: return QStringLiteral("FILLED");
-        case ColStatus: return QStringLiteral("STATUS");
-        case ColActions: return QStringLiteral("ACTIONS");
+        case ColTime: return t("TIME");
+        case ColMarket: return t("MARKET");
+        case ColSide: return t("SIDE");
+        case ColOutcome: return t("OUTCOME");
+        case ColType: return t("TYPE");
+        case ColPrice: return t("PRICE");
+        case ColSize: return t("SIZE");
+        case ColFilled: return t("FILLED");
+        case ColStatus: return t("STATUS");
+        case ColActions: return t("ACTIONS");
     }
     return {};
 }
@@ -65,15 +71,16 @@ PolymarketOrderBlotter::PolymarketOrderBlotter(QWidget* parent) : QWidget(parent
     hhl->setContentsMargins(12, 0, 8, 0);
     hhl->setSpacing(8);
 
-    auto* title = new QLabel(QStringLiteral("OPEN ORDERS"), header_bar);
-    title->setStyleSheet(
+    title_label_ = new QLabel(tr("OPEN ORDERS"), header_bar);
+    title_label_->setStyleSheet(
         QString("color: %1; font-size: 9px; font-weight: 700; background: transparent; "
                 "letter-spacing: 0.8px;")
             .arg(colors::TEXT_SECONDARY()));
-    hhl->addWidget(title);
+    hhl->addWidget(title_label_);
     hhl->addStretch(1);
 
-    auto* cancel_all_btn = new QPushButton(QStringLiteral("CANCEL ALL"), header_bar);
+    cancel_all_btn_ = new QPushButton(tr("CANCEL ALL"), header_bar);
+    auto* cancel_all_btn = cancel_all_btn_;
     cancel_all_btn->setObjectName("orderBlotterCancelAll");
     cancel_all_btn->setCursor(Qt::PointingHandCursor);
     cancel_all_btn->setStyleSheet(
@@ -177,7 +184,7 @@ void PolymarketOrderBlotter::rebuild_rows() {
         // Polymarket so users don't double-click expecting behaviour.
         if (supports_amend_) {
             price_item->setFlags(price_item->flags() | Qt::ItemIsEnabled);
-            price_item->setToolTip(QStringLiteral("Double-click to amend price"));
+            price_item->setToolTip(tr("Double-click to amend price"));
         }
         table_->setItem(i, ColPrice, price_item);
 
@@ -213,7 +220,7 @@ void PolymarketOrderBlotter::install_row_controls(int row, const OpenOrder& orde
     auto* refresh_btn = new QPushButton(QStringLiteral("↻"), host);
     refresh_btn->setFixedSize(22, 20);
     refresh_btn->setCursor(Qt::PointingHandCursor);
-    refresh_btn->setToolTip(QStringLiteral("Refresh order state"));
+    refresh_btn->setToolTip(tr("Refresh order state"));
     refresh_btn->setStyleSheet(
         QString("QPushButton { background: transparent; color: %1; border: 1px solid %2; "
                 "font-size: 11px; } QPushButton:hover { color: %3; border-color: %3; }")
@@ -227,7 +234,7 @@ void PolymarketOrderBlotter::install_row_controls(int row, const OpenOrder& orde
     auto* cancel_btn = new QPushButton(QStringLiteral("✕"), host);
     cancel_btn->setFixedSize(22, 20);
     cancel_btn->setCursor(Qt::PointingHandCursor);
-    cancel_btn->setToolTip(QStringLiteral("Cancel order"));
+    cancel_btn->setToolTip(tr("Cancel order"));
     cancel_btn->setStyleSheet(
         QString("QPushButton { background: transparent; color: %1; border: 1px solid %1; "
                 "font-size: 11px; } QPushButton:hover { background: rgba(239,68,68,0.15); }")
@@ -249,8 +256,8 @@ void PolymarketOrderBlotter::on_cell_double_clicked(int row, int column) {
     // dialog to the valid range so users can't submit an order that the
     // exchange will reject.
     const double new_price = QInputDialog::getDouble(
-        this, QStringLiteral("Amend price"),
-        QStringLiteral("New limit price (0.01 – 0.99):"),
+        this, tr("Amend price"),
+        tr("New limit price (0.01 – 0.99):"),
         o.price, 0.01, 0.99, 2, &ok);
     if (!ok) return;
     emit amend_order(o.order_id, o.side.toLower(), new_price);
@@ -263,6 +270,25 @@ void PolymarketOrderBlotter::on_cancel_all_clicked() {
     for (const auto& o : orders_)
         if (!o.order_id.isEmpty()) ids.push_back(o.order_id);
     if (!ids.isEmpty()) emit cancel_all(ids);
+}
+
+void PolymarketOrderBlotter::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PolymarketOrderBlotter::retranslateUi() {
+    if (title_label_)    title_label_->setText(tr("OPEN ORDERS"));
+    if (cancel_all_btn_) cancel_all_btn_->setText(tr("CANCEL ALL"));
+    if (table_) {
+        QStringList headers;
+        for (int c = 0; c < ColCount; ++c) headers << col_label(c);
+        table_->setHorizontalHeaderLabels(headers);
+    }
+    // Per-row tooltips re-apply on the next rebuild_rows(); row data is
+    // exchange data (side / status / outcome) and is not translated.
+    rebuild_rows();
 }
 
 } // namespace fincept::screens::polymarket

@@ -205,14 +205,14 @@ void NodeCanvas::drawForeground(QPainter* painter, const QRectF& rect) {
     painter->setPen(QColor(t.text_tertiary));
 
     QRect vp = viewport()->rect();
-    painter->drawText(vp, Qt::AlignCenter, "Drag nodes from the palette to begin");
+    painter->drawText(vp, Qt::AlignCenter, tr("Drag nodes from the palette to begin"));
 
     // Subtle arrow hint
     QFont small("Consolas", 10);
     painter->setFont(small);
     painter->setPen(QColor(t.border_med));
     painter->drawText(QRect(vp.x(), vp.y() + vp.height() / 2 + 24, vp.width(), 20), Qt::AlignCenter,
-                      "or right-click for quick add");
+                      tr("or right-click for quick add"));
     painter->restore();
 }
 
@@ -270,6 +270,16 @@ void NodeCanvas::resizeEvent(QResizeEvent* event) {
             child->move(width() - child->width() - 10, height() - child->height() - 10);
         }
     }
+}
+
+void NodeCanvas::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        // The only translatable text (empty-state placeholder) is painted in
+        // drawForeground — repaint the viewport to pick up the new language.
+        if (viewport())
+            viewport()->update();
+    }
+    QGraphicsView::changeEvent(event);
 }
 
 } // namespace fincept::workflow

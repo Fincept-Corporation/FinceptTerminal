@@ -2,8 +2,10 @@
 #pragma once
 #include "services/forum/ForumModels.h"
 
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QVBoxLayout>
 #include <QVector>
 #include <QWidget>
@@ -27,13 +29,28 @@ class ForumSidebarPanel : public QWidget {
     void new_post_requested(int category_id);
     void search_requested(const QString& query);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
     void rebuild_categories();
     void rebuild_contributors();
+    void retranslateUi();
 
     // Brand
     QWidget* brand_accent_ = nullptr;
+
+    // Static chrome (cached for retranslateUi)
+    QLabel* brand_title_ = nullptr;
+    QLabel* activity_hdr_ = nullptr;
+    QLabel* stat_posts_lbl_ = nullptr;
+    QLabel* stat_comments_lbl_ = nullptr;
+    QLabel* stat_active_lbl_ = nullptr;
+    QPushButton* trending_btn_ = nullptr;
+    QLabel* channels_hdr_ = nullptr;
+    QPushButton* new_post_btn_ = nullptr;
+    QLabel* leaderboard_hdr_ = nullptr;
 
     // Profile card
     QLabel* avatar_lbl_ = nullptr;

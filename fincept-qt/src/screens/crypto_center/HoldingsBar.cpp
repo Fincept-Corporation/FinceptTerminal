@@ -117,30 +117,30 @@ void HoldingsBar::build_ui() {
     root->setContentsMargins(14, 8, 14, 8);
     root->setSpacing(18);
 
-    auto add_metric = [this, root](const QString& label_text, QLabel*& value_out,
-                                   const QString& object_name) {
+    auto add_metric = [this, root](const QString& label_text, QLabel*& label_out,
+                                   QLabel*& value_out, const QString& object_name) {
         auto* col = new QVBoxLayout;
         col->setContentsMargins(0, 0, 0, 0);
         col->setSpacing(2);
-        auto* label = new QLabel(label_text, this);
-        label->setObjectName(QStringLiteral("holdingsBarLabel"));
+        label_out = new QLabel(label_text, this);
+        label_out->setObjectName(QStringLiteral("holdingsBarLabel"));
         value_out = new QLabel(QStringLiteral("—"), this);
         value_out->setObjectName(object_name);
         value_out->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        col->addWidget(label);
+        col->addWidget(label_out);
         col->addWidget(value_out);
         root->addLayout(col);
     };
 
-    add_metric(QStringLiteral("SOL"), sol_value_,
+    add_metric(tr("SOL"), sol_caption_, sol_value_,
                QStringLiteral("holdingsBarValue"));
-    add_metric(QStringLiteral("$FNCPT"), fncpt_value_,
+    add_metric(tr("$FNCPT"), fncpt_caption_, fncpt_value_,
                QStringLiteral("holdingsBarValueAccent"));
-    add_metric(QStringLiteral("TOTAL"), total_value_,
+    add_metric(tr("TOTAL"), total_caption_, total_value_,
                QStringLiteral("holdingsBarValue"));
-    add_metric(QStringLiteral("$FNCPT PRICE"), fncpt_price_value_,
+    add_metric(tr("$FNCPT PRICE"), fncpt_price_caption_, fncpt_price_value_,
                QStringLiteral("holdingsBarValueDim"));
-    add_metric(QStringLiteral("UPDATED"), updated_value_,
+    add_metric(tr("UPDATED"), updated_caption_, updated_value_,
                QStringLiteral("holdingsBarValueDim"));
 
     root->addStretch(1);
@@ -150,7 +150,7 @@ void HoldingsBar::build_ui() {
     discount_chip_->hide();
     root->addWidget(discount_chip_);
 
-    feed_status_ = new QLabel(QStringLiteral("○ IDLE"), this);
+    feed_status_ = new QLabel(tr("○ IDLE"), this);
     feed_status_->setObjectName(QStringLiteral("holdingsBarFeedIdle"));
     root->addWidget(feed_status_);
 
@@ -223,7 +223,7 @@ void HoldingsBar::on_wallet_connected(const QString& pubkey, const QString& /*la
     fncpt_value_->setText(QStringLiteral("—"));
     total_value_->setText(QStringLiteral("—"));
     fncpt_price_value_->setText(QStringLiteral("—"));
-    updated_value_->setText(QStringLiteral("waiting…"));
+    updated_value_->setText(tr("waiting…"));
     last_balance_ts_ = 0;
     first_publish_received_ = false;
     update_rpc_indicator();
@@ -409,23 +409,23 @@ void HoldingsBar::set_feed_status(FeedStatus s) {
     QString object_name;
     switch (s) {
         case FeedStatus::Idle:
-            text = QStringLiteral("○ IDLE");
+            text = tr("○ IDLE");
             object_name = QStringLiteral("holdingsBarFeedIdle");
             break;
         case FeedStatus::Connecting:
-            text = QStringLiteral("◌ CONNECTING");
+            text = tr("◌ CONNECTING");
             object_name = QStringLiteral("holdingsBarFeedConnecting");
             break;
         case FeedStatus::Live:
-            text = QStringLiteral("● LIVE");
+            text = tr("● LIVE");
             object_name = QStringLiteral("holdingsBarFeedLive");
             break;
         case FeedStatus::Stale:
-            text = QStringLiteral("◐ STALE");
+            text = tr("◐ STALE");
             object_name = QStringLiteral("holdingsBarFeedStale");
             break;
         case FeedStatus::Error:
-            text = QStringLiteral("✕ ERROR");
+            text = tr("✕ ERROR");
             object_name = QStringLiteral("holdingsBarFeedError");
             break;
     }
@@ -474,6 +474,36 @@ void HoldingsBar::hideEvent(QHideEvent* e) {
     fincept::datahub::DataHub::instance().unsubscribe(this);
     current_balance_topic_.clear();
     price_topic_.clear();
+}
+
+void HoldingsBar::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void HoldingsBar::retranslateUi() {
+    // Metric captions (SOL / $FNCPT are kept as-is in the source; translators
+    // typically leave ticker captions untranslated).
+    if (sol_caption_)         sol_caption_->setText(tr("SOL"));
+    if (fncpt_caption_)       fncpt_caption_->setText(tr("$FNCPT"));
+    if (total_caption_)       total_caption_->setText(tr("TOTAL"));
+    if (fncpt_price_caption_) fncpt_price_caption_->setText(tr("$FNCPT PRICE"));
+    if (updated_caption_)     updated_caption_->setText(tr("UPDATED"));
+
+    // Feed-status pill — re-render the current state's label in the new locale.
+    if (feed_status_) {
+        switch (feed_status_state_) {
+            case FeedStatus::Idle:       feed_status_->setText(tr("○ IDLE")); break;
+            case FeedStatus::Connecting: feed_status_->setText(tr("◌ CONNECTING")); break;
+            case FeedStatus::Live:       feed_status_->setText(tr("● LIVE")); break;
+            case FeedStatus::Stale:      feed_status_->setText(tr("◐ STALE")); break;
+            case FeedStatus::Error:      feed_status_->setText(tr("✕ ERROR")); break;
+        }
+    }
+
+    // RPC chip tooltips depend on the active provider — re-apply.
+    update_rpc_indicator();
 }
 
 } // namespace fincept::screens

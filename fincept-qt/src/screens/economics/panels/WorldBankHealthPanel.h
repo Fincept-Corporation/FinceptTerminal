@@ -20,14 +20,20 @@ class WorldBankHealthPanel : public EconPanelBase {
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
     void on_result(const QString& request_id, const services::EconomicsResult& result) override;
+    void changeEvent(QEvent* event) override;
 
   private:
+    void retranslateUi() override;
     /// Flatten WB records [{date, value, indicator:{value}, country:{value}}]
     /// into [{date, value}], filtering null values, sorted oldest→newest.
     static QJsonArray flatten_wb(const QJsonObject& response);
 
     QComboBox* indicator_combo_ = nullptr;
     QComboBox* country_combo_ = nullptr;
+
+    // Cached for retranslateUi
+    QLabel* indicator_lbl_ = nullptr;
+    QLabel* country_lbl_ = nullptr;
 };
 
 } // namespace fincept::screens

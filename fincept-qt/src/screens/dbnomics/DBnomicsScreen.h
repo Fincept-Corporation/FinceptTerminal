@@ -4,6 +4,7 @@
 #include "services/dbnomics/DBnomicsModels.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QHideEvent>
 #include <QLabel>
 #include <QPushButton>
@@ -31,6 +32,7 @@ class DBnomicsScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_providers_loaded(const QVector<services::DbnProvider>& providers);
@@ -63,6 +65,7 @@ class DBnomicsScreen : public QWidget, public IStatefulScreen {
     void render_single_view();
     void assign_series_colors();
     void rebuild_comparison_view();
+    void retranslateUi();
 
     struct SlotCard {
         DBnomicsChartWidget* chart = nullptr;
@@ -79,6 +82,14 @@ class DBnomicsScreen : public QWidget, public IStatefulScreen {
     QComboBox* chart_type_combo_ = nullptr;
     QPushButton* single_btn_ = nullptr;
     QPushButton* compare_btn_ = nullptr;
+
+    // Toolbar + toggle chrome (cached for retranslateUi)
+    QLabel* toolbar_title_ = nullptr;
+    QPushButton* fetch_btn_ = nullptr;
+    QPushButton* refresh_btn_ = nullptr;
+    QPushButton* export_btn_ = nullptr;
+    QLabel* chart_type_label_ = nullptr;
+    QLabel* comparison_placeholder_ = nullptr;
 
     services::DbnViewMode view_mode_ = services::DbnViewMode::Single;
     services::DbnChartType single_chart_type_ = services::DbnChartType::Line;

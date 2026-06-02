@@ -27,7 +27,7 @@ DataHubInspector::DataHubInspector(QWidget* parent) : QWidget(parent) {
     table_ = new QTableWidget(this);
     table_->setColumnCount(6);
     table_->setHorizontalHeaderLabels(
-        {"Topic", "Subs", "Publishes", "Last Publish", "Last Refresh", "State"});
+        {tr("Topic"), tr("Subs"), tr("Publishes"), tr("Last Publish"), tr("Last Refresh"), tr("State")});
     // Interactive (not ResizeToContents) — the latter re-measures every row on
     // every cell write, turning each refresh into O(rows × cols × rows) of
     // layout work. We size columns once after the first populate.
@@ -61,6 +61,20 @@ void DataHubInspector::hideEvent(QHideEvent* e) {
     refresh_timer_.stop();
 }
 
+void DataHubInspector::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void DataHubInspector::retranslateUi() {
+    if (table_) {
+        table_->setHorizontalHeaderLabels(
+            {tr("Topic"), tr("Subs"), tr("Publishes"), tr("Last Publish"), tr("Last Refresh"), tr("State")});
+    }
+    // State-column cells are re-rendered (translated) on the next refresh().
+}
+
 void DataHubInspector::refresh() {
     const auto stats = datahub::DataHub::instance().stats();
     const int n = static_cast<int>(stats.size());
@@ -90,9 +104,9 @@ void DataHubInspector::refresh() {
         set_cell(row, 3, format_age(s.last_publish_ms));
         set_cell(row, 4, format_age(s.last_refresh_request_ms));
         QString state_label;
-        if (s.push_only) state_label = QStringLiteral("push");
-        else if (s.in_flight) state_label = QStringLiteral("in-flight");
-        else state_label = QStringLiteral("idle");
+        if (s.push_only) state_label = tr("push");
+        else if (s.in_flight) state_label = tr("in-flight");
+        else state_label = tr("idle");
         set_cell(row, 5, state_label);
     }
 

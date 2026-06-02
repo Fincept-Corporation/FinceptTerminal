@@ -26,12 +26,30 @@ ProfilesSection::ProfilesSection(QWidget* parent) : QWidget(parent) {
 }
 
 void ProfilesSection::build_ui() {
+    host_layout_ = new QVBoxLayout(this);
+    host_layout_->setContentsMargins(0, 0, 0, 0);
+    host_layout_->setSpacing(0);
+    rebuild();
+}
+
+void ProfilesSection::rebuild() {
+    if (content_) {
+        host_layout_->removeWidget(content_);
+        content_->deleteLater();
+    }
+    content_ = build_content();
+    host_layout_->addWidget(content_);
+}
+
+void ProfilesSection::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        rebuild(); // re-runs every tr() lookup in build_content()
+    QWidget::changeEvent(event);
+}
+
+QWidget* ProfilesSection::build_content() {
     using namespace settings_styles;
     using namespace settings_helpers;
-
-    auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(0, 0, 0, 0);
-    root->setSpacing(0);
 
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
@@ -135,7 +153,7 @@ void ProfilesSection::build_ui() {
 
     vl->addStretch();
     scroll->setWidget(page);
-    root->addWidget(scroll);
+    return scroll;
 }
 
 } // namespace fincept::screens

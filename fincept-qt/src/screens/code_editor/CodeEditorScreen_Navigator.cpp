@@ -53,11 +53,12 @@ CellNavigator::CellNavigator(QWidget* parent) : QWidget(parent) {
     auto* header_layout = new QHBoxLayout(header);
     header_layout->setContentsMargins(10, 0, 10, 0);
 
-    auto* title = new QLabel("CELLS", header);
-    title->setStyleSheet(QString("color:%1; font-family:%2; font-size:%3px; font-weight:700; letter-spacing:1px;")
-                             .arg(colors::AMBER(), fonts::DATA_FAMILY)
-                             .arg(fonts::TINY));
-    header_layout->addWidget(title);
+    header_title_ = new QLabel(tr("CELLS"), header);
+    header_title_->setStyleSheet(
+        QString("color:%1; font-family:%2; font-size:%3px; font-weight:700; letter-spacing:1px;")
+            .arg(colors::AMBER(), fonts::DATA_FAMILY)
+            .arg(fonts::TINY));
+    header_layout->addWidget(header_title_);
     layout->addWidget(header);
 
     list_ = new QListWidget(this);
@@ -90,7 +91,7 @@ CellNavigator::CellNavigator(QWidget* parent) : QWidget(parent) {
             return;
 
         QMenu menu(this);
-        auto* rename_action = menu.addAction("Rename Cell");
+        auto* rename_action = menu.addAction(tr("Rename Cell"));
         QAction* chosen = menu.exec(list_->viewport()->mapToGlobal(pos));
         if (chosen == rename_action) {
             emit rename_requested(item->data(Qt::UserRole).toString());
@@ -111,6 +112,10 @@ CellNavigator::CellNavigator(QWidget* parent) : QWidget(parent) {
 }
 
 void CellNavigator::rebuild(const QVector<NotebookCell>& cells, const QString& selected_id) {
+    // Cache so retranslateUi can re-render after a language change.
+    last_cells_ = cells;
+    last_selected_id_ = selected_id;
+
     list_->blockSignals(true);
     list_->clear();
 
@@ -126,7 +131,7 @@ void CellNavigator::rebuild(const QVector<NotebookCell>& cells, const QString& s
         if (preview.isEmpty())
             preview = cell.source.split('\n').first().trimmed();
         if (preview.isEmpty())
-            preview = "(empty)";
+            preview = tr("(empty)");
 
         const QString label = QString("%1  %2  %3%4").arg(i + 1, 2).arg(type_tag, -2).arg(preview, exec_tag);
         auto* item = new QListWidgetItem(label, list_);
@@ -140,6 +145,19 @@ void CellNavigator::rebuild(const QVector<NotebookCell>& cells, const QString& s
     if (selected_row >= 0)
         list_->setCurrentRow(selected_row);
     list_->blockSignals(false);
+}
+
+void CellNavigator::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void CellNavigator::retranslateUi() {
+    if (header_title_)
+        header_title_->setText(tr("CELLS"));
+    // Re-render list rows so the "(empty)" fallback picks up the new language.
+    rebuild(last_cells_, last_selected_id_);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

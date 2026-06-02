@@ -55,16 +55,16 @@ PositionsPanel::PositionsPanel(QWidget* parent) : QWidget(parent) {
     auto* hdr = new QWidget;
     auto* hl = new QHBoxLayout(hdr);
     hl->setContentsMargins(12, 6, 12, 6);
-    auto* title = new QLabel(QStringLiteral("OPEN POSITIONS"));
-    title->setObjectName("aaPanelTitle");
-    hl->addWidget(title);
+    title_ = new QLabel(tr("OPEN POSITIONS"));
+    title_->setObjectName("aaPanelTitle");
+    hl->addWidget(title_);
     hl->addStretch(1);
     root->addWidget(hdr);
 
     table_ = new QTableWidget(this);
     table_->setColumnCount(8);
     table_->setHorizontalHeaderLabels(
-        {"AGENT", "COIN", "QTY", "ENTRY", "MARK", "uPnL", "LEV", "LIQ DIST"});
+        {tr("AGENT"), tr("COIN"), tr("QTY"), tr("ENTRY"), tr("MARK"), tr("uPnL"), tr("LEV"), tr("LIQ DIST")});
     table_->horizontalHeader()->setStretchLastSection(true);
     table_->verticalHeader()->setVisible(false);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -145,6 +145,19 @@ void PositionsPanel::refresh() {
     table_->setSortingEnabled(true);
 }
 
+void PositionsPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PositionsPanel::retranslateUi() {
+    if (title_) title_->setText(tr("OPEN POSITIONS"));
+    if (table_)
+        table_->setHorizontalHeaderLabels(
+            {tr("AGENT"), tr("COIN"), tr("QTY"), tr("ENTRY"), tr("MARK"), tr("uPnL"), tr("LEV"), tr("LIQ DIST")});
+}
+
 // ── HitlPanel ───────────────────────────────────────────────────────────────
 
 HitlPanel::HitlPanel(QWidget* parent) : QWidget(parent) {
@@ -153,10 +166,10 @@ HitlPanel::HitlPanel(QWidget* parent) : QWidget(parent) {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    auto* hdr = new QLabel(QStringLiteral("PENDING HITL APPROVALS"));
-    hdr->setObjectName("aaPanelTitle");
-    hdr->setContentsMargins(12, 6, 12, 6);
-    root->addWidget(hdr);
+    title_ = new QLabel(tr("PENDING HITL APPROVALS"));
+    title_->setObjectName("aaPanelTitle");
+    title_->setContentsMargins(12, 6, 12, 6);
+    root->addWidget(title_);
 
     list_ = new QListWidget(this);
     list_->setObjectName("aaHitlList");
@@ -198,8 +211,8 @@ void HitlPanel::rebuild_buttons_for(const QString& approval_id, const QString& a
     auto* label = new QLabel(QStringLiteral("⚠ %1 — %2").arg(agent_id.left(8), summary));
     hl->addWidget(label, 1);
 
-    auto* approve = new QPushButton(QStringLiteral("APPROVE"));
-    auto* reject = new QPushButton(QStringLiteral("REJECT"));
+    auto* approve = new QPushButton(tr("APPROVE"));
+    auto* reject = new QPushButton(tr("REJECT"));
     hl->addWidget(approve);
     hl->addWidget(reject);
 
@@ -218,6 +231,18 @@ void HitlPanel::rebuild_buttons_for(const QString& approval_id, const QString& a
     });
 }
 
+void HitlPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void HitlPanel::retranslateUi() {
+    if (title_) title_->setText(tr("PENDING HITL APPROVALS"));
+    // Approval rows carry translated APPROVE / REJECT buttons — rebuild them.
+    refresh();
+}
+
 // ── RiskPanel ───────────────────────────────────────────────────────────────
 
 RiskPanel::RiskPanel(QWidget* parent) : QWidget(parent) {
@@ -226,12 +251,12 @@ RiskPanel::RiskPanel(QWidget* parent) : QWidget(parent) {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    auto* hdr = new QLabel(QStringLiteral("RISK & TELEMETRY"));
-    hdr->setObjectName("aaPanelTitle");
-    hdr->setContentsMargins(12, 6, 12, 6);
-    root->addWidget(hdr);
+    title_ = new QLabel(tr("RISK & TELEMETRY"));
+    title_->setObjectName("aaPanelTitle");
+    title_->setContentsMargins(12, 6, 12, 6);
+    root->addWidget(title_);
 
-    telemetry_label_ = new QLabel(QStringLiteral("Awaiting first tick…"));
+    telemetry_label_ = new QLabel(tr("Awaiting first tick…"));
     telemetry_label_->setObjectName("aaTelemetryLabel");
     telemetry_label_->setContentsMargins(12, 0, 12, 6);
     telemetry_label_->setStyleSheet("color:#aaa;font-family:monospace;");
@@ -240,7 +265,7 @@ RiskPanel::RiskPanel(QWidget* parent) : QWidget(parent) {
     table_ = new QTableWidget(this);
     table_->setColumnCount(6);
     table_->setHorizontalHeaderLabels(
-        {"AGENT", "STATE", "PARSE FAILS", "RISK REJECTS", "MAX DD", "AVG LEV"});
+        {tr("AGENT"), tr("STATE"), tr("PARSE FAILS"), tr("RISK REJECTS"), tr("MAX DD"), tr("AVG LEV")});
     table_->horizontalHeader()->setStretchLastSection(true);
     table_->verticalHeader()->setVisible(false);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -256,6 +281,7 @@ void RiskPanel::set_competition(const QString& competition_id) {
 void RiskPanel::refresh() {
     // Telemetry header — read regardless of agent table availability.
     if (telemetry_label_) {
+        telemetry_seen_ = true;
         const auto t = AlphaArenaEngine::instance().telemetry();
         telemetry_label_->setText(QStringLiteral(
             "tick latency  p50=%1ms  p99=%2ms   |   parse-fail %3%   risk-reject %4%   venue-err %5   (n=%6)")
@@ -318,6 +344,23 @@ void RiskPanel::refresh() {
     table_->setSortingEnabled(true);
 }
 
+void RiskPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void RiskPanel::retranslateUi() {
+    if (title_) title_->setText(tr("RISK & TELEMETRY"));
+    if (table_)
+        table_->setHorizontalHeaderLabels(
+            {tr("AGENT"), tr("STATE"), tr("PARSE FAILS"), tr("RISK REJECTS"), tr("MAX DD"), tr("AVG LEV")});
+    // Only the pre-first-tick placeholder is translatable; once real telemetry
+    // (a diagnostic key=value line) is shown we leave it untouched.
+    if (telemetry_label_ && !telemetry_seen_)
+        telemetry_label_->setText(tr("Awaiting first tick…"));
+}
+
 // ── AuditPanel ──────────────────────────────────────────────────────────────
 
 AuditPanel::AuditPanel(QWidget* parent) : QWidget(parent) {
@@ -326,10 +369,10 @@ AuditPanel::AuditPanel(QWidget* parent) : QWidget(parent) {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    auto* hdr = new QLabel(QStringLiteral("AUDIT LOG"));
-    hdr->setObjectName("aaPanelTitle");
-    hdr->setContentsMargins(12, 6, 12, 6);
-    root->addWidget(hdr);
+    title_ = new QLabel(tr("AUDIT LOG"));
+    title_->setObjectName("aaPanelTitle");
+    title_->setContentsMargins(12, 6, 12, 6);
+    root->addWidget(title_);
 
     list_ = new QListWidget(this);
     list_->setObjectName("aaAuditList");
@@ -366,6 +409,17 @@ void AuditPanel::refresh() {
         last_seq_ = std::max<qint64>(last_seq_, e.seq);
     }
     list_->scrollToBottom();
+}
+
+void AuditPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void AuditPanel::retranslateUi() {
+    if (title_) title_->setText(tr("AUDIT LOG"));
+    // Audit rows are timestamped event data — kept verbatim.
 }
 
 } // namespace fincept::screens::alpha_arena

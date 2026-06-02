@@ -19,6 +19,7 @@
 #include "screens/common/IStatefulScreen.h"
 #include "services/options/OptionChainTypes.h"
 
+#include <QEvent>
 #include <QHash>
 #include <QPointer>
 #include <QString>
@@ -28,6 +29,7 @@
 #include <QWidget>
 
 class QComboBox;
+class QLabel;
 class QListWidget;
 class QPushButton;
 
@@ -47,6 +49,7 @@ class MultiStraddleSubTab : public QWidget {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_add_clicked();
@@ -61,6 +64,7 @@ class MultiStraddleSubTab : public QWidget {
     };
 
     void setup_ui();
+    void retranslateUi();
     void on_chain_published(const QVariant& v);
     void rebuild_strike_combo(const fincept::services::options::OptionChain& chain);
     void subscribe_token(const QString& broker, qint64 token);
@@ -76,6 +80,10 @@ class MultiStraddleSubTab : public QWidget {
     QPushButton* add_btn_ = nullptr;
     QListWidget* selection_list_ = nullptr;
     MultiStraddleChart* chart_ = nullptr;
+
+    // Field labels (cached for retranslateUi)
+    QLabel* type_label_ = nullptr;
+    QLabel* anchor_label_ = nullptr;
 
     QVector<Selection> selections_;
     fincept::services::options::OptionChain last_chain_;

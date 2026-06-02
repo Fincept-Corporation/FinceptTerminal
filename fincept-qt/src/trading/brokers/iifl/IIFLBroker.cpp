@@ -1,6 +1,7 @@
 #include "trading/brokers/iifl/IIFLBroker.h"
 
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -204,7 +205,19 @@ TokenExchangeResponse IIFLBroker::exchange_token(const QString& api_key, const Q
 
     // Pack both tokens
     QString packed_token = trade_token + ":::" + feed_token;
-    return {true, packed_token, user_id, "", "", ""};
+    // IIFL XTS tokens (interactive + market) are minted from the appKey/secret
+    // pairs stored in api_key/api_secret — both are persisted, so the session is
+    // silently re-mintable. Tokens lapse at the daily reset.
+    const QString extra = with_token_expiry({}, next_ist_flush_epoch(6, 0));
+    return {true, packed_token, user_id, "", extra, ""};
+}
+
+// Silent refresh = re-run the XTS interactive + market logins from the stored
+// appKey/secret pairs (no TOTP/web code involved).
+TokenExchangeResponse IIFLBroker::refresh_session(const BrokerCredentials& creds) {
+    if (creds.api_key.isEmpty() || creds.api_secret.isEmpty())
+        return {false, "", "", "", "", "IIFL silent refresh requires stored app/secret keys"};
+    return exchange_token(creds.api_key, creds.api_secret, QString());
 }
 
 // ---------- place_order ----------

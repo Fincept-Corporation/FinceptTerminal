@@ -49,10 +49,10 @@ CreatePortfolioDialog::CreatePortfolioDialog(QWidget* parent) : QDialog(parent) 
     layout->setContentsMargins(20, 16, 20, 16);
 
     // Header
-    auto* title = new QLabel(tr("CREATE NEW PORTFOLIO"));
-    title->setStyleSheet(
+    title_label_ = new QLabel(tr("CREATE NEW PORTFOLIO"));
+    title_label_->setStyleSheet(
         QString("color:%1; font-size:13px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-    layout->addWidget(title);
+    layout->addWidget(title_label_);
 
     // Form
     auto* form = new QFormLayout;
@@ -61,11 +61,13 @@ CreatePortfolioDialog::CreatePortfolioDialog(QWidget* parent) : QDialog(parent) 
 
     name_edit_ = new QLineEdit;
     name_edit_->setPlaceholderText(tr("My Portfolio"));
-    form->addRow(tr("Name:"), name_edit_);
+    name_row_label_ = new QLabel(tr("Name:"));
+    form->addRow(name_row_label_, name_edit_);
 
     owner_edit_ = new QLineEdit;
     owner_edit_->setPlaceholderText(tr("Your name"));
-    form->addRow(tr("Owner:"), owner_edit_);
+    owner_row_label_ = new QLabel(tr("Owner:"));
+    form->addRow(owner_row_label_, owner_edit_);
 
     currency_cb_ = new QComboBox;
     QStringList currencies = {
@@ -74,7 +76,8 @@ CreatePortfolioDialog::CreatePortfolioDialog(QWidget* parent) : QDialog(parent) 
         "CZK", "HUF", "ILS", "AED", "SAR", "IDR", "MYR", "PHP", "VND", "NGN", "EGP", "BDT",
     };
     currency_cb_->addItems(currencies);
-    form->addRow(tr("Currency:"), currency_cb_);
+    currency_row_label_ = new QLabel(tr("Currency:"));
+    form->addRow(currency_row_label_, currency_cb_);
 
     layout->addLayout(form);
     layout->addStretch();
@@ -83,33 +86,51 @@ CreatePortfolioDialog::CreatePortfolioDialog(QWidget* parent) : QDialog(parent) 
     auto* btn_layout = new QHBoxLayout;
     btn_layout->addStretch();
 
-    auto* cancel_btn = new QPushButton(tr("CANCEL"));
-    cancel_btn->setFixedSize(90, 30);
-    cancel_btn->setCursor(Qt::PointingHandCursor);
-    cancel_btn->setStyleSheet(
+    cancel_btn_ = new QPushButton(tr("CANCEL"));
+    cancel_btn_->setFixedSize(90, 30);
+    cancel_btn_->setCursor(Qt::PointingHandCursor);
+    cancel_btn_->setStyleSheet(
         QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
                 "  font-size:10px; font-weight:700; }"
                 "QPushButton:hover { background:%3; color:%4; }")
             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY()));
-    connect(cancel_btn, &QPushButton::clicked, this, &QDialog::reject);
-    btn_layout->addWidget(cancel_btn);
+    connect(cancel_btn_, &QPushButton::clicked, this, &QDialog::reject);
+    btn_layout->addWidget(cancel_btn_);
 
-    auto* create_btn = new QPushButton(tr("CREATE"));
-    create_btn->setFixedSize(90, 30);
-    create_btn->setCursor(Qt::PointingHandCursor);
-    create_btn->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
+    create_btn_ = new QPushButton(tr("CREATE"));
+    create_btn_->setFixedSize(90, 30);
+    create_btn_->setCursor(Qt::PointingHandCursor);
+    create_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
                                       "  font-size:10px; font-weight:700; }"
                                       "QPushButton:hover { background:%2; }")
                                   .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_BASE()));
-    connect(create_btn, &QPushButton::clicked, this, [this]() {
+    connect(create_btn_, &QPushButton::clicked, this, [this]() {
         if (!name_edit_->text().trimmed().isEmpty())
             accept();
     });
-    btn_layout->addWidget(create_btn);
+    btn_layout->addWidget(create_btn_);
 
     layout->addLayout(btn_layout);
 
     name_edit_->setFocus();
+}
+
+void CreatePortfolioDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void CreatePortfolioDialog::retranslateUi() {
+    setWindowTitle(tr("Create Portfolio"));
+    if (title_label_)         title_label_->setText(tr("CREATE NEW PORTFOLIO"));
+    if (name_row_label_)      name_row_label_->setText(tr("Name:"));
+    if (owner_row_label_)     owner_row_label_->setText(tr("Owner:"));
+    if (currency_row_label_)  currency_row_label_->setText(tr("Currency:"));
+    if (name_edit_)           name_edit_->setPlaceholderText(tr("My Portfolio"));
+    if (owner_edit_)          owner_edit_->setPlaceholderText(tr("Your name"));
+    if (cancel_btn_)          cancel_btn_->setText(tr("CANCEL"));
+    if (create_btn_)          create_btn_->setText(tr("CREATE"));
 }
 
 QString CreatePortfolioDialog::name() const {
@@ -124,7 +145,8 @@ QString CreatePortfolioDialog::currency() const {
 
 // ── ConfirmDeleteDialog ──────────────────────────────────────────────────────
 
-ConfirmDeleteDialog::ConfirmDeleteDialog(const QString& portfolio_name, QWidget* parent) : QDialog(parent) {
+ConfirmDeleteDialog::ConfirmDeleteDialog(const QString& portfolio_name, QWidget* parent)
+    : QDialog(parent), portfolio_name_(portfolio_name) {
     setWindowTitle(tr("Delete Portfolio"));
     setFixedSize(340, 160);
     setStyleSheet(
@@ -134,43 +156,60 @@ ConfirmDeleteDialog::ConfirmDeleteDialog(const QString& portfolio_name, QWidget*
     layout->setContentsMargins(20, 16, 20, 16);
     layout->setSpacing(12);
 
-    auto* icon_label = new QLabel(tr("\u26A0  DELETE PORTFOLIO"));
-    icon_label->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700;").arg(ui::colors::NEGATIVE()));
-    layout->addWidget(icon_label);
+    icon_label_ = new QLabel(tr("\u26A0  DELETE PORTFOLIO"));
+    icon_label_->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700;").arg(ui::colors::NEGATIVE()));
+    layout->addWidget(icon_label_);
 
-    auto* msg = new QLabel(tr("Are you sure you want to delete \"%1\"?\n"
-                              "This will remove all holdings and transactions.")
-                               .arg(portfolio_name));
-    msg->setWordWrap(true);
-    msg->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
-    layout->addWidget(msg);
+    msg_label_ = new QLabel(tr("Are you sure you want to delete \"%1\"?\n"
+                               "This will remove all holdings and transactions.")
+                                .arg(portfolio_name_));
+    msg_label_->setWordWrap(true);
+    msg_label_->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
+    layout->addWidget(msg_label_);
 
     layout->addStretch();
 
     auto* btn_layout = new QHBoxLayout;
     btn_layout->addStretch();
 
-    auto* cancel_btn = new QPushButton(tr("CANCEL"));
-    cancel_btn->setFixedSize(90, 30);
-    cancel_btn->setCursor(Qt::PointingHandCursor);
-    cancel_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+    cancel_btn_ = new QPushButton(tr("CANCEL"));
+    cancel_btn_->setFixedSize(90, 30);
+    cancel_btn_->setCursor(Qt::PointingHandCursor);
+    cancel_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
                                       "  font-size:10px; font-weight:700; }"
                                       "QPushButton:hover { background:%3; }")
                                   .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
-    connect(cancel_btn, &QPushButton::clicked, this, &QDialog::reject);
-    btn_layout->addWidget(cancel_btn);
+    connect(cancel_btn_, &QPushButton::clicked, this, &QDialog::reject);
+    btn_layout->addWidget(cancel_btn_);
 
-    auto* delete_btn = new QPushButton(tr("DELETE"));
-    delete_btn->setFixedSize(90, 30);
-    delete_btn->setCursor(Qt::PointingHandCursor);
-    delete_btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
+    delete_btn_ = new QPushButton(tr("DELETE"));
+    delete_btn_->setFixedSize(90, 30);
+    delete_btn_->setCursor(Qt::PointingHandCursor);
+    delete_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
                                       "  font-size:10px; font-weight:700; }"
                                       "QPushButton:hover { background:%1; }")
                                   .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
-    connect(delete_btn, &QPushButton::clicked, this, &QDialog::accept);
-    btn_layout->addWidget(delete_btn);
+    connect(delete_btn_, &QPushButton::clicked, this, &QDialog::accept);
+    btn_layout->addWidget(delete_btn_);
 
     layout->addLayout(btn_layout);
+}
+
+void ConfirmDeleteDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void ConfirmDeleteDialog::retranslateUi() {
+    setWindowTitle(tr("Delete Portfolio"));
+    if (icon_label_) icon_label_->setText(tr("\u26A0  DELETE PORTFOLIO"));
+    if (msg_label_)
+        msg_label_->setText(tr("Are you sure you want to delete \"%1\"?\n"
+                               "This will remove all holdings and transactions.")
+                                .arg(portfolio_name_));
+    if (cancel_btn_) cancel_btn_->setText(tr("CANCEL"));
+    if (delete_btn_) delete_btn_->setText(tr("DELETE"));
 }
 
 // ── AddAssetDialog ───────────────────────────────────────────────────────────
@@ -193,15 +232,15 @@ AddAssetDialog::AddAssetDialog(QWidget* parent) : QDialog(parent) {
     layout->setSpacing(10);
     layout->setContentsMargins(20, 16, 20, 16);
 
-    auto* title = new QLabel(tr("BUY ASSET"));
-    title->setStyleSheet(
+    title_label_ = new QLabel(tr("BUY ASSET"));
+    title_label_->setStyleSheet(
         QString("color:%1; font-size:13px; font-weight:700; letter-spacing:1px;").arg(ui::colors::POSITIVE()));
-    layout->addWidget(title);
+    layout->addWidget(title_label_);
 
     // Hint label under title
-    auto* hint = new QLabel(tr("Type a ticker or company name to search"));
-    hint->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
-    layout->addWidget(hint);
+    hint_label_ = new QLabel(tr("Type a ticker or company name to search"));
+    hint_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
+    layout->addWidget(hint_label_);
 
     auto* form = new QFormLayout;
     form->setSpacing(8);
@@ -209,15 +248,18 @@ AddAssetDialog::AddAssetDialog(QWidget* parent) : QDialog(parent) {
     symbol_edit_ = new QLineEdit;
     symbol_edit_->setPlaceholderText(tr("e.g. AAPL, Apple, Reliance…"));
     symbol_edit_->installEventFilter(this);
-    form->addRow(tr("Symbol:"), symbol_edit_);
+    symbol_row_label_ = new QLabel(tr("Symbol:"));
+    form->addRow(symbol_row_label_, symbol_edit_);
 
     quantity_edit_ = new QLineEdit;
     quantity_edit_->setPlaceholderText(tr("e.g. 10"));
-    form->addRow(tr("Quantity:"), quantity_edit_);
+    quantity_row_label_ = new QLabel(tr("Quantity:"));
+    form->addRow(quantity_row_label_, quantity_edit_);
 
     price_edit_ = new QLineEdit;
     price_edit_->setPlaceholderText(tr("e.g. 150.00"));
-    form->addRow(tr("Price:"), price_edit_);
+    price_row_label_ = new QLabel(tr("Price:"));
+    form->addRow(price_row_label_, price_edit_);
 
     layout->addLayout(form);
     layout->addStretch();
@@ -225,28 +267,28 @@ AddAssetDialog::AddAssetDialog(QWidget* parent) : QDialog(parent) {
     auto* btn_layout = new QHBoxLayout;
     btn_layout->addStretch();
 
-    auto* cancel_btn = new QPushButton(tr("CANCEL"));
-    cancel_btn->setFixedSize(80, 28);
-    cancel_btn->setCursor(Qt::PointingHandCursor);
-    cancel_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+    cancel_btn_ = new QPushButton(tr("CANCEL"));
+    cancel_btn_->setFixedSize(80, 28);
+    cancel_btn_->setCursor(Qt::PointingHandCursor);
+    cancel_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
                                       "  font-size:10px; font-weight:700; }"
                                       "QPushButton:hover { background:%3; }")
                                   .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
-    connect(cancel_btn, &QPushButton::clicked, this, &QDialog::reject);
-    btn_layout->addWidget(cancel_btn);
+    connect(cancel_btn_, &QPushButton::clicked, this, &QDialog::reject);
+    btn_layout->addWidget(cancel_btn_);
 
-    auto* add_btn = new QPushButton(tr("ADD"));
-    add_btn->setFixedSize(80, 28);
-    add_btn->setCursor(Qt::PointingHandCursor);
-    add_btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
+    add_btn_ = new QPushButton(tr("ADD"));
+    add_btn_->setFixedSize(80, 28);
+    add_btn_->setCursor(Qt::PointingHandCursor);
+    add_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
                                    "  font-size:10px; font-weight:700; }"
                                    "QPushButton:hover { background:%1; }")
                                .arg(ui::colors::POSITIVE(), ui::colors::BG_BASE()));
-    connect(add_btn, &QPushButton::clicked, this, [this]() {
+    connect(add_btn_, &QPushButton::clicked, this, [this]() {
         if (!symbol_edit_->text().trimmed().isEmpty() && quantity() > 0 && price() > 0)
             accept();
     });
-    btn_layout->addWidget(add_btn);
+    btn_layout->addWidget(add_btn_);
 
     layout->addLayout(btn_layout);
 
@@ -462,6 +504,26 @@ bool AddAssetDialog::eventFilter(QObject* obj, QEvent* event) {
     return QDialog::eventFilter(obj, event);
 }
 
+void AddAssetDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void AddAssetDialog::retranslateUi() {
+    setWindowTitle(tr("Add Asset"));
+    if (title_label_)        title_label_->setText(tr("BUY ASSET"));
+    if (hint_label_)         hint_label_->setText(tr("Type a ticker or company name to search"));
+    if (symbol_row_label_)   symbol_row_label_->setText(tr("Symbol:"));
+    if (quantity_row_label_) quantity_row_label_->setText(tr("Quantity:"));
+    if (price_row_label_)    price_row_label_->setText(tr("Price:"));
+    if (symbol_edit_)        symbol_edit_->setPlaceholderText(tr("e.g. AAPL, Apple, Reliance…"));
+    if (quantity_edit_)      quantity_edit_->setPlaceholderText(tr("e.g. 10"));
+    if (price_edit_)         price_edit_->setPlaceholderText(tr("e.g. 150.00"));
+    if (cancel_btn_)         cancel_btn_->setText(tr("CANCEL"));
+    if (add_btn_)            add_btn_->setText(tr("ADD"));
+}
+
 QString AddAssetDialog::symbol() const {
     return symbol_edit_->text().trimmed().toUpper();
 }
@@ -474,7 +536,8 @@ double AddAssetDialog::price() const {
 
 // ── SellAssetDialog ──────────────────────────────────────────────────────────
 
-SellAssetDialog::SellAssetDialog(const QString& symbol, double held_qty, QWidget* parent) : QDialog(parent) {
+SellAssetDialog::SellAssetDialog(const QString& symbol, double held_qty, QWidget* parent)
+    : QDialog(parent), symbol_(symbol), held_qty_(held_qty) {
     setWindowTitle(tr("Sell Asset"));
     setFixedSize(340, 220);
     setStyleSheet(QString("QDialog { background:%1; color:%2; }"
@@ -489,25 +552,27 @@ SellAssetDialog::SellAssetDialog(const QString& symbol, double held_qty, QWidget
     layout->setSpacing(10);
     layout->setContentsMargins(20, 16, 20, 16);
 
-    auto* title = new QLabel(tr("SELL %1").arg(symbol));
-    title->setStyleSheet(
+    title_label_ = new QLabel(tr("SELL %1").arg(symbol_));
+    title_label_->setStyleSheet(
         QString("color:%1; font-size:13px; font-weight:700; letter-spacing:1px;").arg(ui::colors::NEGATIVE()));
-    layout->addWidget(title);
+    layout->addWidget(title_label_);
 
-    auto* held_label = new QLabel(tr("Currently holding: %1 shares").arg(held_qty));
-    held_label->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
-    layout->addWidget(held_label);
+    held_label_ = new QLabel(tr("Currently holding: %1 shares").arg(held_qty_));
+    held_label_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
+    layout->addWidget(held_label_);
 
     auto* form = new QFormLayout;
     form->setSpacing(8);
 
     quantity_edit_ = new QLineEdit;
-    quantity_edit_->setPlaceholderText(tr("Max %1").arg(held_qty));
-    form->addRow(tr("Quantity:"), quantity_edit_);
+    quantity_edit_->setPlaceholderText(tr("Max %1").arg(held_qty_));
+    quantity_row_label_ = new QLabel(tr("Quantity:"));
+    form->addRow(quantity_row_label_, quantity_edit_);
 
     price_edit_ = new QLineEdit;
     price_edit_->setPlaceholderText(tr("Sell price"));
-    form->addRow(tr("Price:"), price_edit_);
+    price_row_label_ = new QLabel(tr("Price:"));
+    form->addRow(price_row_label_, price_edit_);
 
     layout->addLayout(form);
     layout->addStretch();
@@ -515,31 +580,49 @@ SellAssetDialog::SellAssetDialog(const QString& symbol, double held_qty, QWidget
     auto* btn_layout = new QHBoxLayout;
     btn_layout->addStretch();
 
-    auto* cancel_btn = new QPushButton(tr("CANCEL"));
-    cancel_btn->setFixedSize(80, 28);
-    cancel_btn->setCursor(Qt::PointingHandCursor);
-    cancel_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+    cancel_btn_ = new QPushButton(tr("CANCEL"));
+    cancel_btn_->setFixedSize(80, 28);
+    cancel_btn_->setCursor(Qt::PointingHandCursor);
+    cancel_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
                                       "  font-size:10px; font-weight:700; }"
                                       "QPushButton:hover { background:%3; }")
                                   .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
-    connect(cancel_btn, &QPushButton::clicked, this, &QDialog::reject);
-    btn_layout->addWidget(cancel_btn);
+    connect(cancel_btn_, &QPushButton::clicked, this, &QDialog::reject);
+    btn_layout->addWidget(cancel_btn_);
 
-    auto* sell_btn = new QPushButton(tr("SELL"));
-    sell_btn->setFixedSize(80, 28);
-    sell_btn->setCursor(Qt::PointingHandCursor);
-    sell_btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
+    sell_btn_ = new QPushButton(tr("SELL"));
+    sell_btn_->setFixedSize(80, 28);
+    sell_btn_->setCursor(Qt::PointingHandCursor);
+    sell_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
                                     "  font-size:10px; font-weight:700; }"
                                     "QPushButton:hover { background:%1; }")
                                 .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
-    connect(sell_btn, &QPushButton::clicked, this, [this, held_qty]() {
-        if (quantity() > 0 && quantity() <= held_qty && price() > 0)
+    connect(sell_btn_, &QPushButton::clicked, this, [this]() {
+        if (quantity() > 0 && quantity() <= held_qty_ && price() > 0)
             accept();
     });
-    btn_layout->addWidget(sell_btn);
+    btn_layout->addWidget(sell_btn_);
 
     layout->addLayout(btn_layout);
     quantity_edit_->setFocus();
+}
+
+void SellAssetDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void SellAssetDialog::retranslateUi() {
+    setWindowTitle(tr("Sell Asset"));
+    if (title_label_)        title_label_->setText(tr("SELL %1").arg(symbol_));
+    if (held_label_)         held_label_->setText(tr("Currently holding: %1 shares").arg(held_qty_));
+    if (quantity_row_label_) quantity_row_label_->setText(tr("Quantity:"));
+    if (price_row_label_)    price_row_label_->setText(tr("Price:"));
+    if (quantity_edit_)      quantity_edit_->setPlaceholderText(tr("Max %1").arg(held_qty_));
+    if (price_edit_)         price_edit_->setPlaceholderText(tr("Sell price"));
+    if (cancel_btn_)         cancel_btn_->setText(tr("CANCEL"));
+    if (sell_btn_)           sell_btn_->setText(tr("SELL"));
 }
 
 double SellAssetDialog::quantity() const {
@@ -573,10 +656,10 @@ ImportPortfolioDialog::ImportPortfolioDialog(const QVector<portfolio::Portfolio>
     layout->setSpacing(10);
     layout->setContentsMargins(20, 16, 20, 16);
 
-    auto* title = new QLabel(tr("IMPORT PORTFOLIO"));
-    title->setStyleSheet(
+    title_label_ = new QLabel(tr("IMPORT PORTFOLIO"));
+    title_label_->setStyleSheet(
         QString("color:%1; font-size:13px; font-weight:700; letter-spacing:1px;").arg(ui::colors::CYAN()));
-    layout->addWidget(title);
+    layout->addWidget(title_label_);
 
     // File picker
     auto* file_row = new QHBoxLayout;
@@ -585,32 +668,32 @@ ImportPortfolioDialog::ImportPortfolioDialog(const QVector<portfolio::Portfolio>
     file_edit_->setReadOnly(true);
     file_row->addWidget(file_edit_, 1);
 
-    auto* browse_btn = new QPushButton(tr("BROWSE"));
-    browse_btn->setFixedSize(80, 30);
-    browse_btn->setCursor(Qt::PointingHandCursor);
-    browse_btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
+    browse_btn_ = new QPushButton(tr("BROWSE"));
+    browse_btn_->setFixedSize(80, 30);
+    browse_btn_->setCursor(Qt::PointingHandCursor);
+    browse_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
                                       "  font-size:10px; font-weight:700; }"
                                       "QPushButton:hover { background:%1; }")
                                   .arg(ui::colors::CYAN(), ui::colors::BG_BASE()));
-    connect(browse_btn, &QPushButton::clicked, this, &ImportPortfolioDialog::browse_file);
-    file_row->addWidget(browse_btn);
+    connect(browse_btn_, &QPushButton::clicked, this, &ImportPortfolioDialog::browse_file);
+    file_row->addWidget(browse_btn_);
 
     layout->addLayout(file_row);
 
     // Demo JSON download hint
     auto* demo_row = new QHBoxLayout;
-    auto* demo_hint = new QLabel(tr("Need a template? Download the demo portfolio JSON:"));
-    demo_hint->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
-    demo_row->addWidget(demo_hint, 1);
+    demo_hint_label_ = new QLabel(tr("Need a template? Download the demo portfolio JSON:"));
+    demo_hint_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
+    demo_row->addWidget(demo_hint_label_, 1);
 
-    auto* demo_dl_btn = new QPushButton(tr("DOWNLOAD DEMO"));
-    demo_dl_btn->setFixedSize(120, 24);
-    demo_dl_btn->setCursor(Qt::PointingHandCursor);
-    demo_dl_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
+    demo_dl_btn_ = new QPushButton(tr("DOWNLOAD DEMO"));
+    demo_dl_btn_->setFixedSize(120, 24);
+    demo_dl_btn_->setCursor(Qt::PointingHandCursor);
+    demo_dl_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                                        "  font-size:9px; font-weight:700; letter-spacing:0.3px; }"
                                        "QPushButton:hover { background:%1; color:%2; }")
                                    .arg(ui::colors::CYAN(), ui::colors::BG_BASE()));
-    connect(demo_dl_btn, &QPushButton::clicked, this, [this]() {
+    connect(demo_dl_btn_, &QPushButton::clicked, this, [this]() {
         QString path = QFileDialog::getSaveFileName(this, tr("Save Demo Portfolio JSON"), "demo_portfolio.json",
                                                     tr("JSON Files (*.json)"));
         if (path.isEmpty())
@@ -664,14 +747,14 @@ ImportPortfolioDialog::ImportPortfolioDialog(const QVector<portfolio::Portfolio>
             QMessageBox::warning(this, tr("Save Failed"), tr("Could not write to: %1").arg(path));
         }
     });
-    demo_row->addWidget(demo_dl_btn);
+    demo_row->addWidget(demo_dl_btn_);
     layout->addLayout(demo_row);
 
     // Import mode
-    auto* mode_label = new QLabel(tr("IMPORT MODE"));
-    mode_label->setStyleSheet(
+    mode_label_ = new QLabel(tr("IMPORT MODE"));
+    mode_label_->setStyleSheet(
         QString("color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY()));
-    layout->addWidget(mode_label);
+    layout->addWidget(mode_label_);
 
     new_radio_ = new QRadioButton(tr("Create new portfolio from file"));
     new_radio_->setChecked(true);
@@ -698,30 +781,50 @@ ImportPortfolioDialog::ImportPortfolioDialog(const QVector<portfolio::Portfolio>
     auto* btn_layout = new QHBoxLayout;
     btn_layout->addStretch();
 
-    auto* cancel_btn = new QPushButton(tr("CANCEL"));
-    cancel_btn->setFixedSize(80, 28);
-    cancel_btn->setCursor(Qt::PointingHandCursor);
-    cancel_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+    cancel_btn_ = new QPushButton(tr("CANCEL"));
+    cancel_btn_->setFixedSize(80, 28);
+    cancel_btn_->setCursor(Qt::PointingHandCursor);
+    cancel_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
                                       "  font-size:10px; font-weight:700; }"
                                       "QPushButton:hover { background:%3; }")
                                   .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
-    connect(cancel_btn, &QPushButton::clicked, this, &QDialog::reject);
-    btn_layout->addWidget(cancel_btn);
+    connect(cancel_btn_, &QPushButton::clicked, this, &QDialog::reject);
+    btn_layout->addWidget(cancel_btn_);
 
-    auto* import_btn = new QPushButton(tr("IMPORT"));
-    import_btn->setFixedSize(80, 28);
-    import_btn->setCursor(Qt::PointingHandCursor);
-    import_btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
+    import_btn_ = new QPushButton(tr("IMPORT"));
+    import_btn_->setFixedSize(80, 28);
+    import_btn_->setCursor(Qt::PointingHandCursor);
+    import_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
                                       "  font-size:10px; font-weight:700; }"
                                       "QPushButton:hover { background:%1; }")
                                   .arg(ui::colors::CYAN(), ui::colors::BG_BASE()));
-    connect(import_btn, &QPushButton::clicked, this, [this]() {
+    connect(import_btn_, &QPushButton::clicked, this, [this]() {
         if (!file_edit_->text().isEmpty())
             accept();
     });
-    btn_layout->addWidget(import_btn);
+    btn_layout->addWidget(import_btn_);
 
     layout->addLayout(btn_layout);
+}
+
+void ImportPortfolioDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void ImportPortfolioDialog::retranslateUi() {
+    setWindowTitle(tr("Import Portfolio"));
+    if (title_label_)      title_label_->setText(tr("IMPORT PORTFOLIO"));
+    if (file_edit_)        file_edit_->setPlaceholderText(tr("Select JSON file..."));
+    if (browse_btn_)       browse_btn_->setText(tr("BROWSE"));
+    if (demo_hint_label_)  demo_hint_label_->setText(tr("Need a template? Download the demo portfolio JSON:"));
+    if (demo_dl_btn_)      demo_dl_btn_->setText(tr("DOWNLOAD DEMO"));
+    if (mode_label_)       mode_label_->setText(tr("IMPORT MODE"));
+    if (new_radio_)        new_radio_->setText(tr("Create new portfolio from file"));
+    if (merge_radio_)      merge_radio_->setText(tr("Merge transactions into existing portfolio:"));
+    if (cancel_btn_)       cancel_btn_->setText(tr("CANCEL"));
+    if (import_btn_)       import_btn_->setText(tr("IMPORT"));
 }
 
 void ImportPortfolioDialog::browse_file() {
@@ -746,7 +849,8 @@ QString ImportPortfolioDialog::merge_target_id() const {
 
 // ── EditTransactionDialog ────────────────────────────────────────────────────
 
-EditTransactionDialog::EditTransactionDialog(const portfolio::Transaction& txn, QWidget* parent) : QDialog(parent) {
+EditTransactionDialog::EditTransactionDialog(const portfolio::Transaction& txn, QWidget* parent)
+    : QDialog(parent), txn_type_(txn.transaction_type), txn_symbol_(txn.symbol) {
     setWindowTitle(tr("Edit Transaction"));
     setFixedSize(380, 280);
     setStyleSheet(QString("QDialog { background:%1; color:%2; }"
@@ -761,19 +865,21 @@ EditTransactionDialog::EditTransactionDialog(const portfolio::Transaction& txn, 
     layout->setSpacing(10);
     layout->setContentsMargins(20, 16, 20, 16);
 
-    auto* title = new QLabel(tr("EDIT %1 — %2").arg(txn.transaction_type, txn.symbol));
-    title->setStyleSheet(
+    title_label_ = new QLabel(tr("EDIT %1 — %2").arg(txn_type_, txn_symbol_));
+    title_label_->setStyleSheet(
         QString("color:%1; font-size:13px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-    layout->addWidget(title);
+    layout->addWidget(title_label_);
 
     auto* form = new QFormLayout;
     form->setSpacing(8);
 
     quantity_edit_ = new QLineEdit(QString::number(txn.quantity, 'f', 2));
-    form->addRow(tr("Quantity:"), quantity_edit_);
+    quantity_row_label_ = new QLabel(tr("Quantity:"));
+    form->addRow(quantity_row_label_, quantity_edit_);
 
     price_edit_ = new QLineEdit(QString::number(txn.price, 'f', 2));
-    form->addRow(tr("Price:"), price_edit_);
+    price_row_label_ = new QLabel(tr("Price:"));
+    form->addRow(price_row_label_, price_edit_);
 
     date_edit_ = new QDateEdit;
     date_edit_->setCalendarPopup(true);
@@ -789,11 +895,13 @@ EditTransactionDialog::EditTransactionDialog(const portfolio::Transaction& txn, 
                 "QDateEdit::drop-down { border:none; width:18px; }"
                 "QCalendarWidget { background:%1; color:%2; }")
             .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
-    form->addRow(tr("Date:"), date_edit_);
+    date_row_label_ = new QLabel(tr("Date:"));
+    form->addRow(date_row_label_, date_edit_);
 
     notes_edit_ = new QLineEdit(txn.notes);
     notes_edit_->setPlaceholderText(tr("Optional notes"));
-    form->addRow(tr("Notes:"), notes_edit_);
+    notes_row_label_ = new QLabel(tr("Notes:"));
+    form->addRow(notes_row_label_, notes_edit_);
 
     layout->addLayout(form);
     layout->addStretch();
@@ -801,31 +909,49 @@ EditTransactionDialog::EditTransactionDialog(const portfolio::Transaction& txn, 
     auto* btn_layout = new QHBoxLayout;
     btn_layout->addStretch();
 
-    auto* cancel_btn = new QPushButton(tr("CANCEL"));
-    cancel_btn->setFixedSize(80, 28);
-    cancel_btn->setCursor(Qt::PointingHandCursor);
-    cancel_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+    cancel_btn_ = new QPushButton(tr("CANCEL"));
+    cancel_btn_->setFixedSize(80, 28);
+    cancel_btn_->setCursor(Qt::PointingHandCursor);
+    cancel_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
                                       "  font-size:10px; font-weight:700; }"
                                       "QPushButton:hover { background:%3; }")
                                   .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
-    connect(cancel_btn, &QPushButton::clicked, this, &QDialog::reject);
-    btn_layout->addWidget(cancel_btn);
+    connect(cancel_btn_, &QPushButton::clicked, this, &QDialog::reject);
+    btn_layout->addWidget(cancel_btn_);
 
-    auto* save_btn = new QPushButton(tr("SAVE"));
-    save_btn->setFixedSize(80, 28);
-    save_btn->setCursor(Qt::PointingHandCursor);
-    save_btn->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
+    save_btn_ = new QPushButton(tr("SAVE"));
+    save_btn_->setFixedSize(80, 28);
+    save_btn_->setCursor(Qt::PointingHandCursor);
+    save_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
                                     "  font-size:10px; font-weight:700; }"
                                     "QPushButton:hover { background:%2; }")
                                 .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_BASE()));
-    connect(save_btn, &QPushButton::clicked, this, [this]() {
+    connect(save_btn_, &QPushButton::clicked, this, [this]() {
         if (quantity() > 0 && price() > 0)
             accept();
     });
-    btn_layout->addWidget(save_btn);
+    btn_layout->addWidget(save_btn_);
 
     layout->addLayout(btn_layout);
     quantity_edit_->setFocus();
+}
+
+void EditTransactionDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void EditTransactionDialog::retranslateUi() {
+    setWindowTitle(tr("Edit Transaction"));
+    if (title_label_)        title_label_->setText(tr("EDIT %1 — %2").arg(txn_type_, txn_symbol_));
+    if (quantity_row_label_) quantity_row_label_->setText(tr("Quantity:"));
+    if (price_row_label_)    price_row_label_->setText(tr("Price:"));
+    if (date_row_label_)     date_row_label_->setText(tr("Date:"));
+    if (notes_row_label_)    notes_row_label_->setText(tr("Notes:"));
+    if (notes_edit_)         notes_edit_->setPlaceholderText(tr("Optional notes"));
+    if (cancel_btn_)         cancel_btn_->setText(tr("CANCEL"));
+    if (save_btn_)           save_btn_->setText(tr("SAVE"));
 }
 
 double EditTransactionDialog::quantity() const {
@@ -866,14 +992,14 @@ SectorMappingDialog::SectorMappingDialog(const QVector<portfolio::HoldingWithQuo
     layout->setSpacing(8);
     layout->setContentsMargins(20, 16, 20, 16);
 
-    auto* title = new QLabel(tr("MAP HOLDINGS TO SECTORS"));
-    title->setStyleSheet(
+    title_label_ = new QLabel(tr("MAP HOLDINGS TO SECTORS"));
+    title_label_->setStyleSheet(
         QString("color:%1; font-size:13px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-    layout->addWidget(title);
+    layout->addWidget(title_label_);
 
-    auto* desc = new QLabel(tr("Assign each holding to a sector for allocation analysis."));
-    desc->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
-    layout->addWidget(desc);
+    desc_label_ = new QLabel(tr("Assign each holding to a sector for allocation analysis."));
+    desc_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
+    layout->addWidget(desc_label_);
 
     // Scrollable grid
     auto* scroll = new QScrollArea;
@@ -905,27 +1031,41 @@ SectorMappingDialog::SectorMappingDialog(const QVector<portfolio::HoldingWithQuo
     auto* btn_layout = new QHBoxLayout;
     btn_layout->addStretch();
 
-    auto* cancel_btn = new QPushButton(tr("CANCEL"));
-    cancel_btn->setFixedSize(80, 28);
-    cancel_btn->setCursor(Qt::PointingHandCursor);
-    cancel_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+    cancel_btn_ = new QPushButton(tr("CANCEL"));
+    cancel_btn_->setFixedSize(80, 28);
+    cancel_btn_->setCursor(Qt::PointingHandCursor);
+    cancel_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
                                       "  font-size:10px; font-weight:700; }"
                                       "QPushButton:hover { background:%3; }")
                                   .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
-    connect(cancel_btn, &QPushButton::clicked, this, &QDialog::reject);
-    btn_layout->addWidget(cancel_btn);
+    connect(cancel_btn_, &QPushButton::clicked, this, &QDialog::reject);
+    btn_layout->addWidget(cancel_btn_);
 
-    auto* save_btn = new QPushButton(tr("SAVE"));
-    save_btn->setFixedSize(80, 28);
-    save_btn->setCursor(Qt::PointingHandCursor);
-    save_btn->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
+    save_btn_ = new QPushButton(tr("SAVE"));
+    save_btn_->setFixedSize(80, 28);
+    save_btn_->setCursor(Qt::PointingHandCursor);
+    save_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
                                     "  font-size:10px; font-weight:700; }"
                                     "QPushButton:hover { background:%2; }")
                                 .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_BASE()));
-    connect(save_btn, &QPushButton::clicked, this, &QDialog::accept);
-    btn_layout->addWidget(save_btn);
+    connect(save_btn_, &QPushButton::clicked, this, &QDialog::accept);
+    btn_layout->addWidget(save_btn_);
 
     layout->addLayout(btn_layout);
+}
+
+void SectorMappingDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void SectorMappingDialog::retranslateUi() {
+    setWindowTitle(tr("Sector Mapping"));
+    if (title_label_) title_label_->setText(tr("MAP HOLDINGS TO SECTORS"));
+    if (desc_label_)  desc_label_->setText(tr("Assign each holding to a sector for allocation analysis."));
+    if (cancel_btn_)  cancel_btn_->setText(tr("CANCEL"));
+    if (save_btn_)    save_btn_->setText(tr("SAVE"));
 }
 
 QHash<QString, QString> SectorMappingDialog::sector_map() const {
@@ -960,10 +1100,10 @@ AddDividendDialog::AddDividendDialog(const QStringList& symbols, QWidget* parent
     layout->setSpacing(12);
     layout->setContentsMargins(20, 16, 20, 16);
 
-    auto* title = new QLabel(tr("RECORD DIVIDEND"));
-    title->setStyleSheet(
+    title_label_ = new QLabel(tr("RECORD DIVIDEND"));
+    title_label_->setStyleSheet(
         QString("color:%1; font-size:13px; font-weight:700; letter-spacing:1px;").arg(ui::colors::CYAN()));
-    layout->addWidget(title);
+    layout->addWidget(title_label_);
 
     auto* form = new QFormLayout;
     form->setSpacing(8);
@@ -972,21 +1112,25 @@ AddDividendDialog::AddDividendDialog(const QStringList& symbols, QWidget* parent
     symbol_cb_ = new QComboBox;
     for (const auto& s : symbols)
         symbol_cb_->addItem(s);
-    form->addRow(tr("Symbol:"), symbol_cb_);
+    symbol_row_label_ = new QLabel(tr("Symbol:"));
+    form->addRow(symbol_row_label_, symbol_cb_);
 
     amount_edit_ = new QLineEdit;
     amount_edit_->setPlaceholderText(tr("e.g. 0.88"));
-    form->addRow(tr("Amount/share:"), amount_edit_);
+    amount_row_label_ = new QLabel(tr("Amount/share:"));
+    form->addRow(amount_row_label_, amount_edit_);
 
     date_edit_ = new QDateEdit;
     date_edit_->setCalendarPopup(true);
     date_edit_->setDisplayFormat("yyyy-MM-dd");
     date_edit_->setDate(QDate::currentDate());
-    form->addRow(tr("Ex-div date:"), date_edit_);
+    date_row_label_ = new QLabel(tr("Ex-div date:"));
+    form->addRow(date_row_label_, date_edit_);
 
     notes_edit_ = new QLineEdit;
     notes_edit_->setPlaceholderText(tr("Optional note"));
-    form->addRow(tr("Notes:"), notes_edit_);
+    notes_row_label_ = new QLabel(tr("Notes:"));
+    form->addRow(notes_row_label_, notes_edit_);
 
     layout->addLayout(form);
     layout->addStretch();
@@ -994,31 +1138,50 @@ AddDividendDialog::AddDividendDialog(const QStringList& symbols, QWidget* parent
     auto* btn_row = new QHBoxLayout;
     btn_row->addStretch();
 
-    auto* cancel = new QPushButton(tr("CANCEL"));
-    cancel->setFixedHeight(32);
-    cancel->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+    cancel_btn_ = new QPushButton(tr("CANCEL"));
+    cancel_btn_->setFixedHeight(32);
+    cancel_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
                                   "  font-size:10px; font-weight:700; padding:0 16px; }"
                                   "QPushButton:hover { background:%3; }")
                               .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
-    connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
-    btn_row->addWidget(cancel);
+    connect(cancel_btn_, &QPushButton::clicked, this, &QDialog::reject);
+    btn_row->addWidget(cancel_btn_);
 
-    auto* ok = new QPushButton(tr("RECORD"));
-    ok->setFixedHeight(32);
-    ok->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
+    record_btn_ = new QPushButton(tr("RECORD"));
+    record_btn_->setFixedHeight(32);
+    record_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
                               "  font-size:10px; font-weight:700; padding:0 16px; }"
                               "QPushButton:hover { background:%2; }")
                           .arg(ui::colors::CYAN(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_BASE()));
-    connect(ok, &QPushButton::clicked, this, [this]() {
+    connect(record_btn_, &QPushButton::clicked, this, [this]() {
         if (amount_edit_->text().trimmed().isEmpty()) {
             amount_edit_->setPlaceholderText(tr("Required!"));
             return;
         }
         accept();
     });
-    btn_row->addWidget(ok);
+    btn_row->addWidget(record_btn_);
 
     layout->addLayout(btn_row);
+}
+
+void AddDividendDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void AddDividendDialog::retranslateUi() {
+    setWindowTitle(tr("Record Dividend"));
+    if (title_label_)      title_label_->setText(tr("RECORD DIVIDEND"));
+    if (symbol_row_label_) symbol_row_label_->setText(tr("Symbol:"));
+    if (amount_row_label_) amount_row_label_->setText(tr("Amount/share:"));
+    if (date_row_label_)   date_row_label_->setText(tr("Ex-div date:"));
+    if (notes_row_label_)  notes_row_label_->setText(tr("Notes:"));
+    if (amount_edit_)      amount_edit_->setPlaceholderText(tr("e.g. 0.88"));
+    if (notes_edit_)       notes_edit_->setPlaceholderText(tr("Optional note"));
+    if (cancel_btn_)       cancel_btn_->setText(tr("CANCEL"));
+    if (record_btn_)       record_btn_->setText(tr("RECORD"));
 }
 
 QString AddDividendDialog::symbol() const {

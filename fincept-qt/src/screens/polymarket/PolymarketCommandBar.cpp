@@ -403,6 +403,7 @@ void PolymarketCommandBar::set_loading(bool loading) {
 }
 
 void PolymarketCommandBar::set_ws_status(bool connected) {
+    ws_connected_ = connected;
     if (connected) {
         ws_indicator_->setText(tr("● LIVE"));
         ws_indicator_->setStyleSheet(
@@ -424,6 +425,8 @@ void PolymarketCommandBar::set_market_count(int count) {
 
 void PolymarketCommandBar::set_account_status(bool connected, const QString& label) {
     if (!account_chip_) return;
+    account_connected_ = connected;
+    account_label_ = label;
     if (connected) {
         account_chip_->setText(QString("✓ %1").arg(label.isEmpty() ? tr("Account") : label));
         account_chip_->setStyleSheet(
@@ -441,6 +444,35 @@ void PolymarketCommandBar::set_account_status(bool connected, const QString& lab
                 .arg(colors::TEXT_DIM(), colors::BORDER_DIM(),
                      colors::TEXT_PRIMARY(), colors::BORDER_BRIGHT()));
     }
+}
+
+void PolymarketCommandBar::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PolymarketCommandBar::retranslateUi() {
+    if (exchange_combo_) exchange_combo_->setToolTip(tr("Switch prediction market exchange"));
+    if (account_chip_)   account_chip_->setToolTip(tr("Connect a trading account"));
+    if (search_input_)   search_input_->setPlaceholderText(tr("Search markets..."));
+    if (refresh_btn_)    refresh_btn_->setToolTip(tr("Refresh"));
+
+    // Sort combo display strings (logical sort key is index-mapped via SORT_KEYS).
+    if (sort_combo_) {
+        const QSignalBlocker block(sort_combo_);
+        const int idx = sort_combo_->currentIndex();
+        const QStringList labels = {tr("VOLUME"), tr("LIQUIDITY"), tr("DATE")};
+        for (int i = 0; i < sort_combo_->count() && i < labels.size(); ++i)
+            sort_combo_->setItemText(i, labels[i]);
+        sort_combo_->setCurrentIndex(idx);
+    }
+
+    // State-bearing widgets — re-derive from stored state so the new language
+    // is reflected. View pills + category chips carry exchange code values and
+    // are rebuilt from the presentation, not retranslated.
+    set_ws_status(ws_connected_);
+    set_account_status(account_connected_, account_label_);
 }
 
 void PolymarketCommandBar::set_exchanges(const QStringList& ids, const QStringList& labels,

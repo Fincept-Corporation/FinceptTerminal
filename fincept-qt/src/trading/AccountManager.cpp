@@ -4,14 +4,20 @@
 #include "storage/repositories/AccountRepository.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "storage/secure/SecureStorage.h"
+#include "trading/BrokerInterface.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/PaperTrading.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMutexLocker>
+#include <QPointer>
+#include <QTimer>
 #include <QUuid>
+#include <QtConcurrent>
 
 #include <cmath>
 #include <exception>
@@ -47,29 +53,32 @@ void AccountManager::load_from_db() {
         accounts_.insert(a.account_id, std::move(a));
     LOG_INFO("AccountManager", QString("Loaded %1 broker accounts from DB").arg(accounts_.size()));
 
-    // Restore connection state from persisted credentials.
-    // Check token_expires_at in additional_data — mark TokenExpired if stale.
+    // Restore a *tentative* connection state from the persisted token-expiry
+    // hint. This is a fast path so the UI isn't blank on launch — it is NOT
+    // authoritative. start_session_monitor() runs a live validation sweep right
+    // after startup that overrides every state here with the real broker answer
+    // (and silently refreshes where supported). A past expiry ⇒ TokenExpired; an
+    // unknown/future expiry ⇒ optimistically Connected pending the sweep.
     auto& secure = SecureStorage::instance();
+    const qint64 now = QDateTime::currentSecsSinceEpoch();
     for (auto it = accounts_.begin(); it != accounts_.end(); ++it) {
         auto token_r = secure.retrieve(acct_key(it->account_id, "access_token"));
         if (!token_r.is_ok() || token_r.value().isEmpty())
             continue;
         auto extra_r = secure.retrieve(acct_key(it->account_id, "additional_data"));
-        qint64 expires_at = 0;
-        if (extra_r.is_ok() && !extra_r.value().isEmpty()) {
-            auto doc = QJsonDocument::fromJson(extra_r.value().toUtf8());
-            expires_at = static_cast<qint64>(doc.object().value("token_expires_at").toDouble(0));
-        }
-        // Fyers tokens expire in 24h — if no expiry stored, assume expired
-        if (expires_at > 0 && expires_at <= QDateTime::currentSecsSinceEpoch()) {
+        const qint64 expires_at = extra_r.is_ok() ? token_expires_at_of(extra_r.value()) : 0;
+        // Never show green unless we can positively justify it:
+        //   past expiry          → TokenExpired (red) — definitively dead
+        //   future expiry         → Connected (green) — positive validity hint
+        //   unknown expiry (==0)  → Connecting (neutral) — legacy token with no
+        //                           recorded expiry; the live sweep decides green
+        //                           vs red. Do NOT assume green for these.
+        if (expires_at > 0 && expires_at <= now)
             it->state = ConnectionState::TokenExpired;
-            continue;
-        }
-        if (expires_at == 0 && it->broker_id == QStringLiteral("fyers")) {
-            it->state = ConnectionState::TokenExpired;
-            continue;
-        }
-        it->state = ConnectionState::Connected;
+        else if (expires_at > now)
+            it->state = ConnectionState::Connected;
+        else
+            it->state = ConnectionState::Connecting;
     }
 }
 
@@ -398,6 +407,23 @@ void AccountManager::clear_credentials(const QString& account_id) {
     secure.remove(acct_key(account_id, "additional_data"));
 }
 
+void AccountManager::clear_session(const QString& account_id) {
+    auto& secure = SecureStorage::instance();
+    secure.remove(acct_key(account_id, "access_token"));
+    secure.remove(acct_key(account_id, "refresh_token"));
+    // Drop the expiry hint from additional_data but keep the reusable login
+    // material (TOTP secret, secret_api_key, client_code, feed_token, …) so the
+    // user can reconnect without re-entering everything.
+    auto extra_r = secure.retrieve(acct_key(account_id, "additional_data"));
+    if (extra_r.is_ok() && !extra_r.value().isEmpty()) {
+        auto obj = QJsonDocument::fromJson(extra_r.value().toUtf8()).object();
+        obj.remove(QStringLiteral("token_expires_at"));
+        secure.store(acct_key(account_id, "additional_data"),
+                     QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact)));
+    }
+    LOG_INFO("AccountManager", QString("Purged stale session token for account %1").arg(account_id));
+}
+
 // ── Connection state ────────────────────────────────────────────────────────
 
 void AccountManager::set_connection_state(const QString& account_id, ConnectionState state, const QString& error) {
@@ -432,6 +458,174 @@ IBroker* AccountManager::broker_for(const QString& account_id) const {
         broker_id = it->broker_id;
     }
     return BrokerRegistry::instance().get(broker_id);
+}
+
+// ── Live session monitoring ─────────────────────────────────────────────────
+
+void AccountManager::start_session_monitor() {
+    if (!validator_timer_) {
+        validator_timer_ = new QTimer(this);
+        validator_timer_->setInterval(5 * 60 * 1000); // 5 minutes
+        connect(validator_timer_, &QTimer::timeout, this, &AccountManager::validate_all_sessions);
+    }
+    validator_timer_->start();
+    validate_all_sessions(); // confirm restored states immediately on launch
+}
+
+// Pings each active account's broker on a worker thread to determine the real
+// token state, silently refreshing where supported. All SecureStorage access
+// stays on the main thread; only the broker HTTP calls run off-thread (P1).
+void AccountManager::validate_all_sessions() {
+    bool expected = false;
+    if (!sweeping_.compare_exchange_strong(expected, true))
+        return; // a sweep is already in flight — skip this tick
+
+    // Snapshot the work on the main thread (loads credentials from SecureStorage).
+    struct Work {
+        QString account_id;
+        QString broker_id;
+        BrokerCredentials creds;
+    };
+    QVector<Work> work;
+    for (const auto& a : active_accounts()) {
+        auto creds = load_credentials(a.account_id);
+        if (creds.access_token.isEmpty())
+            continue; // never connected — nothing to validate
+        work.push_back({a.account_id, a.broker_id, std::move(creds)});
+    }
+    if (work.isEmpty()) {
+        sweeping_.store(false);
+        return;
+    }
+
+    LOG_INFO("AccountManager", QString("Session sweep: validating %1 active account(s)").arg(work.size()));
+
+    QPointer<AccountManager> self = this; // singleton, but keep the guard idiom
+    (void)QtConcurrent::run([self, work]() {
+        struct Outcome {
+            QString account_id;
+            ConnectionState state;
+            bool has_new_creds = false;
+            BrokerCredentials new_creds;
+            bool purge_session = false; // clear the dead token from storage
+            QString error;
+        };
+        QVector<Outcome> outcomes;
+        auto& registry = BrokerRegistry::instance();
+        const qint64 now = QDateTime::currentSecsSinceEpoch();
+
+        for (const auto& w : work) {
+            IBroker* broker = registry.get(w.broker_id);
+            if (!broker)
+                continue;
+
+            // Broker validate/refresh code runs HTTP + JSON/crypto helpers; a
+            // throw here would propagate out of the QtConcurrent worker and
+            // call std::terminate (hard crash, no crashdump). Contain it per
+            // account — a failure to validate one account must never abort the
+            // sweep or the app. Mirrors the pt_create_portfolio guard above.
+            try {
+            auto v = broker->validate_session(w.creds);
+            if (v.status == SessionCheck::Status::Inconclusive) {
+                // network/rate-limit/other — never downgrade or purge
+                LOG_INFO("AccountManager", QString("sweep[%1/%2]: INCONCLUSIVE — leaving state unchanged (%3)")
+                                               .arg(w.broker_id, w.account_id, v.detail.left(160)));
+                continue;
+            }
+
+            const bool valid = v.status == SessionCheck::Status::Valid;
+            const qint64 stored_exp = token_expires_at_of(w.creds.additional_data);
+            const bool near_expiry = stored_exp > 0 && (stored_exp - now) < 600; // <10 min
+            const bool can_refresh = broker->supports_silent_refresh();
+            LOG_INFO("AccountManager", QString("sweep[%1/%2]: valid=%3 near_expiry=%4 can_refresh=%5 real_exp=%6 %7")
+                                           .arg(w.broker_id, w.account_id)
+                                           .arg(valid).arg(near_expiry).arg(can_refresh)
+                                           .arg(v.expires_at_epoch)
+                                           .arg(v.detail.left(120)));
+
+            // Healthy and not about to lapse → confirm Connected, and write the
+            // broker's real expiry back to storage if it differs from our hint
+            // (stops the persisted token_expires_at from going stale).
+            if (valid && !(near_expiry && can_refresh)) {
+                if (v.expires_at_epoch > 0 && v.expires_at_epoch != stored_exp) {
+                    BrokerCredentials nc = w.creds;
+                    nc.additional_data = with_token_expiry(nc.additional_data, v.expires_at_epoch);
+                    LOG_INFO("AccountManager", QString("sweep[%1/%2]: refreshed stored expiry → %3")
+                                                   .arg(w.broker_id, w.account_id).arg(v.expires_at_epoch));
+                    outcomes.push_back({w.account_id, ConnectionState::Connected, true, nc, false, {}});
+                } else {
+                    outcomes.push_back({w.account_id, ConnectionState::Connected, false, {}, false, {}});
+                }
+                continue;
+            }
+
+            // Expired, or valid-but-imminently-expiring with refresh available.
+            if (can_refresh) {
+                LOG_INFO("AccountManager", QString("sweep[%1/%2]: attempting silent refresh").arg(w.broker_id, w.account_id));
+                auto t = broker->refresh_session(w.creds);
+                if (t.success && !t.access_token.isEmpty()) {
+                    BrokerCredentials nc = w.creds;
+                    nc.access_token = t.access_token;
+                    if (!t.refresh_token.isEmpty())
+                        nc.refresh_token = t.refresh_token;
+                    if (!t.user_id.isEmpty())
+                        nc.user_id = t.user_id;
+                    if (!t.additional_data.isEmpty()) {
+                        auto base = QJsonDocument::fromJson(nc.additional_data.toUtf8()).object();
+                        const auto add = QJsonDocument::fromJson(t.additional_data.toUtf8()).object();
+                        for (auto it = add.begin(); it != add.end(); ++it)
+                            base.insert(it.key(), it.value());
+                        nc.additional_data = QString::fromUtf8(QJsonDocument(base).toJson(QJsonDocument::Compact));
+                    }
+                    LOG_INFO("AccountManager", QString("sweep[%1/%2]: silent refresh OK → Connected").arg(w.broker_id, w.account_id));
+                    outcomes.push_back({w.account_id, ConnectionState::Connected, true, nc, false, {}});
+                    continue;
+                }
+                // Refresh failed. If the token is still valid (we were only
+                // pre-emptively refreshing), keep it Connected. If it is dead,
+                // purge the stale session so it stops being re-validated.
+                if (valid) {
+                    outcomes.push_back({w.account_id, ConnectionState::Connected, false, {}, false, {}});
+                } else {
+                    LOG_WARN("AccountManager", QString("sweep[%1/%2]: refresh FAILED on dead token → purge + TokenExpired (%3)")
+                                                   .arg(w.broker_id, w.account_id, t.error.left(160)));
+                    outcomes.push_back({w.account_id, ConnectionState::TokenExpired, false, {}, true, t.error});
+                }
+                continue;
+            }
+
+            // No silent refresh available → reflect the live answer; purge if dead.
+            if (!valid) {
+                LOG_WARN("AccountManager", QString("sweep[%1/%2]: token DEAD, no silent refresh → purge + TokenExpired (%3)")
+                                               .arg(w.broker_id, w.account_id, v.detail.left(160)));
+                outcomes.push_back({w.account_id, ConnectionState::TokenExpired, false, {}, true, v.detail});
+            }
+            } catch (const std::exception& e) {
+                LOG_ERROR("AccountManager", QString("Session validation threw for %1 (%2): %3")
+                                                .arg(w.account_id, w.broker_id, QString::fromUtf8(e.what())));
+            } catch (...) {
+                LOG_ERROR("AccountManager", QString("Session validation threw (non-std) for %1 (%2)")
+                                                .arg(w.account_id, w.broker_id));
+            }
+        }
+
+        // Apply results on the main thread (SecureStorage + signal emission).
+        QMetaObject::invokeMethod(
+            qApp,
+            [self, outcomes]() {
+                if (self) {
+                    for (const auto& o : outcomes) {
+                        if (o.purge_session)
+                            self->clear_session(o.account_id); // drop the dead token from storage
+                        else if (o.has_new_creds)
+                            self->save_credentials(o.account_id, o.new_creds);
+                        self->set_connection_state(o.account_id, o.state, o.error);
+                    }
+                    self->sweeping_.store(false);
+                }
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 } // namespace fincept::trading

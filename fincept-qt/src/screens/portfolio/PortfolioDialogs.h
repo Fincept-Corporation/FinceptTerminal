@@ -6,11 +6,13 @@
 #include <QComboBox>
 #include <QDateEdit>
 #include <QDialog>
+#include <QEvent>
 #include <QFrame>
 #include <QLabel>
 #include <QLineEdit>
 #include <QList>
 #include <QListWidget>
+#include <QPushButton>
 #include <QRadioButton>
 #include <QString>
 #include <QTimer>
@@ -27,10 +29,21 @@ class CreatePortfolioDialog : public QDialog {
     QString owner() const;
     QString currency() const;
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    void retranslateUi();
+
     QLineEdit* name_edit_ = nullptr;
     QLineEdit* owner_edit_ = nullptr;
     QComboBox* currency_cb_ = nullptr;
+    QLabel* title_label_ = nullptr;
+    QLabel* name_row_label_ = nullptr;
+    QLabel* owner_row_label_ = nullptr;
+    QLabel* currency_row_label_ = nullptr;
+    QPushButton* cancel_btn_ = nullptr;
+    QPushButton* create_btn_ = nullptr;
 };
 
 /// Confirmation dialog for deleting a portfolio.
@@ -38,6 +51,18 @@ class ConfirmDeleteDialog : public QDialog {
     Q_OBJECT
   public:
     explicit ConfirmDeleteDialog(const QString& portfolio_name, QWidget* parent = nullptr);
+
+  protected:
+    void changeEvent(QEvent* event) override;
+
+  private:
+    void retranslateUi();
+
+    QString portfolio_name_;
+    QLabel* icon_label_ = nullptr;
+    QLabel* msg_label_ = nullptr;
+    QPushButton* cancel_btn_ = nullptr;
+    QPushButton* delete_btn_ = nullptr;
 };
 
 /// Dialog for adding an asset (BUY).
@@ -54,8 +79,10 @@ class AddAssetDialog : public QDialog {
 
   protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
+    void retranslateUi();
     void schedule_search(const QString& query);
     void fire_search(const QString& query);
     void show_results(const QList<fincept::services::MarketSearchService::Item>& results);
@@ -65,6 +92,13 @@ class AddAssetDialog : public QDialog {
     QLineEdit* symbol_edit_ = nullptr;
     QLineEdit* quantity_edit_ = nullptr;
     QLineEdit* price_edit_ = nullptr;
+    QLabel* title_label_ = nullptr;
+    QLabel* hint_label_ = nullptr;
+    QLabel* symbol_row_label_ = nullptr;
+    QLabel* quantity_row_label_ = nullptr;
+    QLabel* price_row_label_ = nullptr;
+    QPushButton* cancel_btn_ = nullptr;
+    QPushButton* add_btn_ = nullptr;
 
     // Ticker search dropdown (parented to dialog, floats over form)
     QFrame* search_frame_ = nullptr;
@@ -84,9 +118,22 @@ class SellAssetDialog : public QDialog {
     double quantity() const;
     double price() const;
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    void retranslateUi();
+
+    QString symbol_;
+    double held_qty_ = 0;
     QLineEdit* quantity_edit_ = nullptr;
     QLineEdit* price_edit_ = nullptr;
+    QLabel* title_label_ = nullptr;
+    QLabel* held_label_ = nullptr;
+    QLabel* quantity_row_label_ = nullptr;
+    QLabel* price_row_label_ = nullptr;
+    QPushButton* cancel_btn_ = nullptr;
+    QPushButton* sell_btn_ = nullptr;
 };
 
 /// Dialog for editing an existing transaction.
@@ -100,11 +147,25 @@ class EditTransactionDialog : public QDialog {
     QString date() const;
     QString notes() const;
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    void retranslateUi();
+
+    QString txn_type_;
+    QString txn_symbol_;
     QLineEdit* quantity_edit_ = nullptr;
     QLineEdit* price_edit_ = nullptr;
     QDateEdit* date_edit_ = nullptr;
     QLineEdit* notes_edit_ = nullptr;
+    QLabel* title_label_ = nullptr;
+    QLabel* quantity_row_label_ = nullptr;
+    QLabel* price_row_label_ = nullptr;
+    QLabel* date_row_label_ = nullptr;
+    QLabel* notes_row_label_ = nullptr;
+    QPushButton* cancel_btn_ = nullptr;
+    QPushButton* save_btn_ = nullptr;
 };
 
 /// Dialog for mapping symbols to sectors.
@@ -115,8 +176,17 @@ class SectorMappingDialog : public QDialog {
 
     QHash<QString, QString> sector_map() const;
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    void retranslateUi();
+
     QHash<QString, QComboBox*> combos_;
+    QLabel* title_label_ = nullptr;
+    QLabel* desc_label_ = nullptr;
+    QPushButton* cancel_btn_ = nullptr;
+    QPushButton* save_btn_ = nullptr;
 };
 
 /// Dialog for recording a dividend payment for a holding.
@@ -130,11 +200,23 @@ class AddDividendDialog : public QDialog {
     QString date() const;
     QString notes() const;
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    void retranslateUi();
+
     QComboBox* symbol_cb_ = nullptr;
     QLineEdit* amount_edit_ = nullptr;
     QDateEdit* date_edit_ = nullptr;
     QLineEdit* notes_edit_ = nullptr;
+    QLabel* title_label_ = nullptr;
+    QLabel* symbol_row_label_ = nullptr;
+    QLabel* amount_row_label_ = nullptr;
+    QLabel* date_row_label_ = nullptr;
+    QLabel* notes_row_label_ = nullptr;
+    QPushButton* cancel_btn_ = nullptr;
+    QPushButton* record_btn_ = nullptr;
 };
 
 /// Dialog for importing a portfolio from JSON file.
@@ -147,14 +229,25 @@ class ImportPortfolioDialog : public QDialog {
     portfolio::ImportMode mode() const;
     QString merge_target_id() const;
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void browse_file();
+    void retranslateUi();
 
     QLineEdit* file_edit_ = nullptr;
     QRadioButton* new_radio_ = nullptr;
     QRadioButton* merge_radio_ = nullptr;
     QComboBox* target_cb_ = nullptr;
     QLabel* status_label_ = nullptr;
+    QLabel* title_label_ = nullptr;
+    QLabel* demo_hint_label_ = nullptr;
+    QLabel* mode_label_ = nullptr;
+    QPushButton* browse_btn_ = nullptr;
+    QPushButton* demo_dl_btn_ = nullptr;
+    QPushButton* cancel_btn_ = nullptr;
+    QPushButton* import_btn_ = nullptr;
 };
 
 } // namespace fincept::screens

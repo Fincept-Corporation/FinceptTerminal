@@ -13,6 +13,7 @@
 #include "ui/theme/ThemeManager.h"
 
 #include <QCompleter>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QEvent>
 #include <QFrame>
@@ -61,10 +62,10 @@ static QString role_color(const QString& role) {
 
 static QString role_label(const QString& role) {
     if (role == "user")
-        return "You";
+        return QCoreApplication::translate("AgentChatPanel", "You");
     if (role == "system")
-        return "System";
-    return "Agent";
+        return QCoreApplication::translate("AgentChatPanel", "System");
+    return QCoreApplication::translate("AgentChatPanel", "Agent");
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -75,8 +76,8 @@ AgentChatPanel::AgentChatPanel(QWidget* parent) : QWidget(parent) {
     typing_timer_ = new QTimer(this);
     typing_timer_->setInterval(400);
     connect(typing_timer_, &QTimer::timeout, this, [this]() {
-        static const QStringList states = {"Agent is thinking", "Agent is thinking.", "Agent is thinking..",
-                                           "Agent is thinking..."};
+        const QStringList states = {tr("Agent is thinking"), tr("Agent is thinking."), tr("Agent is thinking.."),
+                                    tr("Agent is thinking...")};
         typing_step_ = (typing_step_ + 1) % states.size();
         typing_dots_lbl_->setText(states[typing_step_]);
     });
@@ -89,7 +90,7 @@ AgentChatPanel::AgentChatPanel(QWidget* parent) : QWidget(parent) {
     if (!cached.isEmpty()) {
         agent_selector_->blockSignals(true);
         agent_selector_->clear();
-        agent_selector_->addItem("Default (global LLM)", QString{});
+        agent_selector_->addItem(tr("Default (global LLM)"), QString{});
         for (const auto& a : cached)
             agent_selector_->addItem(QString("[%1] %2").arg(a.category, a.name), a.id);
         agent_selector_->blockSignals(false);
@@ -117,9 +118,10 @@ void AgentChatPanel::build_ui() {
     hl->setContentsMargins(14, 0, 12, 0);
     hl->setSpacing(10);
 
-    auto* title = new QLabel(tr("AGENT CHAT"));
-    title->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;letter-spacing:1.5px;").arg(col::AMBER()));
-    hl->addWidget(title);
+    header_title_ = new QLabel(tr("AGENT CHAT"));
+    header_title_->setStyleSheet(
+        QString("color:%1;font-size:13px;font-weight:700;letter-spacing:1.5px;").arg(col::AMBER()));
+    hl->addWidget(header_title_);
 
     // Thin divider
     auto* div1 = new QFrame;
@@ -129,25 +131,25 @@ void AgentChatPanel::build_ui() {
     hl->addWidget(div1);
 
     // Agent selector
-    auto* agent_lbl = new QLabel("AGENT:");
-    agent_lbl->setStyleSheet(
+    agent_caption_ = new QLabel(tr("AGENT:"));
+    agent_caption_->setStyleSheet(
         QString("color:%1;font-size:9px;font-weight:600;letter-spacing:0.5px;").arg(col::TEXT_TERTIARY()));
-    hl->addWidget(agent_lbl);
+    hl->addWidget(agent_caption_);
 
     agent_selector_ = new QComboBox;
-    agent_selector_->addItem("Default (global LLM)", QString{});
+    agent_selector_->addItem(tr("Default (global LLM)"), QString{});
     agent_selector_->setMinimumWidth(200);
     agent_selector_->setMaximumWidth(420);
     agent_selector_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     agent_selector_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     agent_selector_->setCursor(Qt::PointingHandCursor);
-    agent_selector_->setToolTip("Select a configured agent, or Default to use the global LLM.");
+    agent_selector_->setToolTip(tr("Select a configured agent, or Default to use the global LLM."));
 
     // Editable + completer gives us an inline search bar inside the dropdown.
     // PopupCompletion shows filtered matches as a popup list while typing.
     agent_selector_->setEditable(true);
     agent_selector_->setInsertPolicy(QComboBox::NoInsert);
-    agent_selector_->lineEdit()->setPlaceholderText("Search agent...");
+    agent_selector_->lineEdit()->setPlaceholderText(tr("Search agent..."));
     agent_selector_->lineEdit()->setClearButtonEnabled(true);
     {
         auto* completer = new QCompleter(agent_selector_->model(), agent_selector_);
@@ -189,15 +191,15 @@ void AgentChatPanel::build_ui() {
     hl->addStretch();
 
     // Active model pill
-    hdr_model_lbl_ = new QLabel("No model");
+    hdr_model_lbl_ = new QLabel(tr("No model"));
     hdr_model_lbl_->setStyleSheet(QString("color:%1;font-size:9px;background:%2;border:1px solid %3;"
                                           "border-radius:3px;padding:2px 8px;")
                                       .arg(col::TEXT_SECONDARY(), col::BG_BASE(), col::BORDER_MED()));
-    hdr_model_lbl_->setToolTip("Active LLM — configure in Settings > LLM Configuration");
+    hdr_model_lbl_->setToolTip(tr("Active LLM — configure in Settings > LLM Configuration"));
     hl->addWidget(hdr_model_lbl_);
 
     // Status chip
-    hdr_status_lbl_ = new QLabel("Ready");
+    hdr_status_lbl_ = new QLabel(tr("Ready"));
     hdr_status_lbl_->setFixedWidth(72);
     hdr_status_lbl_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::POSITIVE()));
@@ -210,11 +212,11 @@ void AgentChatPanel::build_ui() {
     hl->addWidget(div2);
 
     // Auto-route toggle
-    route_toggle_ = new QPushButton("AUTO-ROUTE");
+    route_toggle_ = new QPushButton(tr("AUTO-ROUTE"));
     route_toggle_->setCheckable(true);
     route_toggle_->setCursor(Qt::PointingHandCursor);
     route_toggle_->setFixedHeight(28);
-    route_toggle_->setToolTip("When ON, the system picks the best agent for each query.");
+    route_toggle_->setToolTip(tr("When ON, the system picks the best agent for each query."));
     route_toggle_->setStyleSheet(
         QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                 "padding:3px 10px;font-size:9px;font-weight:600;border-radius:3px;}"
@@ -226,11 +228,11 @@ void AgentChatPanel::build_ui() {
     // Run-as-task toggle — visible only when Agentic Mode is enabled.
     // When ON, send_message() dispatches via AgentService::start_task and the
     // query becomes a durable background task (visible in the AGENTIC tab).
-    run_as_task_toggle_ = new QPushButton("RUN AS TASK");
+    run_as_task_toggle_ = new QPushButton(tr("RUN AS TASK"));
     run_as_task_toggle_->setCheckable(true);
     run_as_task_toggle_->setCursor(Qt::PointingHandCursor);
     run_as_task_toggle_->setFixedHeight(28);
-    run_as_task_toggle_->setToolTip("When ON, this query runs as a durable background task with per-step progress.");
+    run_as_task_toggle_->setToolTip(tr("When ON, this query runs as a durable background task with per-step progress."));
     run_as_task_toggle_->setStyleSheet(
         QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                 "padding:3px 10px;font-size:9px;font-weight:600;border-radius:3px;}"
@@ -241,7 +243,7 @@ void AgentChatPanel::build_ui() {
     hl->addWidget(run_as_task_toggle_);
 
     // Clear button
-    clear_btn_ = new QPushButton("CLEAR");
+    clear_btn_ = new QPushButton(tr("CLEAR"));
     clear_btn_->setCursor(Qt::PointingHandCursor);
     clear_btn_->setFixedHeight(28);
     clear_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
@@ -259,13 +261,13 @@ void AgentChatPanel::build_ui() {
     pl->setContentsMargins(14, 0, 14, 0);
     pl->setSpacing(8);
 
-    auto* plbl = new QLabel("PORTFOLIO:");
-    plbl->setStyleSheet(
+    portfolio_caption_ = new QLabel(tr("PORTFOLIO:"));
+    portfolio_caption_->setStyleSheet(
         QString("color:%1;font-size:9px;font-weight:600;letter-spacing:0.5px;").arg(col::TEXT_TERTIARY()));
-    pl->addWidget(plbl);
+    pl->addWidget(portfolio_caption_);
 
     portfolio_combo_ = new QComboBox;
-    portfolio_combo_->addItem("None");
+    portfolio_combo_->addItem(tr("None"));
     portfolio_combo_->setFixedWidth(160);
     portfolio_combo_->setStyleSheet(QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:2px 8px;"
                                             "font-size:10px;border-radius:3px;}"
@@ -285,9 +287,9 @@ void AgentChatPanel::build_ui() {
                              .arg(clr, col::BORDER_DIM()));
         return b;
     };
-    analyze_btn_ = qbtn("ANALYZE", col::CYAN);
-    rebalance_btn_ = qbtn("REBALANCE", col::AMBER);
-    risk_btn_ = qbtn("RISK", col::NEGATIVE);
+    analyze_btn_ = qbtn(tr("ANALYZE"), col::CYAN);
+    rebalance_btn_ = qbtn(tr("REBALANCE"), col::AMBER);
+    risk_btn_ = qbtn(tr("RISK"), col::NEGATIVE);
     pl->addWidget(analyze_btn_);
     pl->addWidget(rebalance_btn_);
     pl->addWidget(risk_btn_);
@@ -320,18 +322,19 @@ void AgentChatPanel::build_ui() {
     wvl->setSpacing(16);
     wvl->addStretch();
 
-    auto* w_title = new QLabel("How can I help you?");
-    w_title->setAlignment(Qt::AlignCenter);
-    w_title->setStyleSheet(
+    welcome_title_ = new QLabel(tr("How can I help you?"));
+    welcome_title_->setAlignment(Qt::AlignCenter);
+    welcome_title_->setStyleSheet(
         QString("color:%1;font-size:22px;font-weight:700;background:transparent;").arg(col::TEXT_PRIMARY()));
-    wvl->addWidget(w_title);
+    wvl->addWidget(welcome_title_);
 
-    auto* w_sub = new QLabel("Ask about markets, portfolios, or any financial topic.\n"
-                             "Select an agent above, or use Auto-Route to let the system decide.");
-    w_sub->setAlignment(Qt::AlignCenter);
-    w_sub->setWordWrap(true);
-    w_sub->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(col::TEXT_SECONDARY()));
-    wvl->addWidget(w_sub);
+    welcome_subtitle_ = new QLabel(tr("Ask about markets, portfolios, or any financial topic.\n"
+                                      "Select an agent above, or use Auto-Route to let the system decide."));
+    welcome_subtitle_->setAlignment(Qt::AlignCenter);
+    welcome_subtitle_->setWordWrap(true);
+    welcome_subtitle_->setStyleSheet(
+        QString("color:%1;font-size:12px;background:transparent;").arg(col::TEXT_SECONDARY()));
+    wvl->addWidget(welcome_subtitle_);
 
     // Suggestion chips
     auto* chip_row = new QHBoxLayout;
@@ -349,13 +352,13 @@ void AgentChatPanel::build_ui() {
         {"Risk", col::NEGATIVE, "Run risk analysis on my portfolio"},
     };
     for (const auto& c : chips) {
-        auto* btn = new QPushButton(c.label);
+        auto* btn = new QPushButton(tr(c.label));
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;"
                                    "padding:6px 14px;font-size:10px;font-weight:600;border-radius:4px;}"
                                    "QPushButton:hover{background:%4;}")
                                .arg(col::BG_RAISED(), c.color, col::BORDER_MED(), col::BG_HOVER()));
-        const QString q = c.query;
+        const QString q = tr(c.query);
         connect(btn, &QPushButton::clicked, this, [this, q]() {
             input_edit_->setPlainText(q);
             send_message();
@@ -374,7 +377,7 @@ void AgentChatPanel::build_ui() {
     typing_indicator_->setStyleSheet("background:transparent;");
     auto* til = new QHBoxLayout(typing_indicator_);
     til->setContentsMargins(4, 0, 0, 0);
-    typing_dots_lbl_ = new QLabel("Agent is thinking");
+    typing_dots_lbl_ = new QLabel(tr("Agent is thinking"));
     typing_dots_lbl_->setStyleSheet(
         QString("color:%1;font-size:11px;font-style:italic;background:transparent;").arg(col::TEXT_DIM()));
     til->addWidget(typing_dots_lbl_);
@@ -392,7 +395,7 @@ void AgentChatPanel::build_ui() {
     il->setSpacing(10);
 
     input_edit_ = new QTextEdit;
-    input_edit_->setPlaceholderText("Message agent... (Shift+Enter for new line, Enter to send)");
+    input_edit_->setPlaceholderText(tr("Message agent... (Shift+Enter for new line, Enter to send)"));
     input_edit_->setFixedHeight(44);
     input_edit_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     input_edit_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -411,7 +414,7 @@ void AgentChatPanel::build_ui() {
     });
     il->addWidget(input_edit_, 1);
 
-    send_btn_ = new QPushButton("Send");
+    send_btn_ = new QPushButton(tr("Send"));
     send_btn_->setFixedSize(76, 44);
     send_btn_->setCursor(Qt::PointingHandCursor);
     send_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:none;border-radius:6px;"
@@ -452,13 +455,13 @@ void AgentChatPanel::setup_connections() {
 
     connect(route_toggle_, &QPushButton::toggled, this, [this](bool on) {
         auto_routing_ = on;
-        route_toggle_->setText(on ? "AUTO-ROUTE: ON" : "AUTO-ROUTE");
+        route_toggle_->setText(on ? tr("AUTO-ROUTE: ON") : tr("AUTO-ROUTE"));
         agent_selector_->setEnabled(!on);
     });
 
     connect(run_as_task_toggle_, &QPushButton::toggled, this, [this](bool on) {
         run_as_task_ = on;
-        run_as_task_toggle_->setText(on ? "RUN AS TASK: ON" : "RUN AS TASK");
+        run_as_task_toggle_->setText(on ? tr("RUN AS TASK: ON") : tr("RUN AS TASK"));
     });
 
     // Visibility of the "RUN AS TASK" toggle follows the Agentic Mode setting.
@@ -486,7 +489,7 @@ void AgentChatPanel::setup_connections() {
                 const QString prev_id = agent_selector_->currentData().toString();
                 agent_selector_->blockSignals(true);
                 agent_selector_->clear();
-                agent_selector_->addItem("Default (global LLM)", QString{});
+                agent_selector_->addItem(tr("Default (global LLM)"), QString{});
                 for (const auto& a : agents)
                     agent_selector_->addItem(QString("[%1] %2").arg(a.category, a.name), a.id);
                 // Restore previous selection
@@ -535,7 +538,7 @@ void AgentChatPanel::setup_connections() {
                     }
                     scroll_to_bottom();
                 }
-                status_label_->setText("Streaming...");
+                status_label_->setText(tr("Streaming..."));
             });
 
     connect(&svc, &services::AgentService::agent_stream_done, this, [this](services::AgentExecutionResult r) {
@@ -546,7 +549,7 @@ void AgentChatPanel::setup_connections() {
 
         if (streaming_bubble_widget_) {
             if (!r.success) {
-                streaming_bubble_widget_->setPlainText("Error: " + r.error);
+                streaming_bubble_widget_->setPlainText(tr("Error: %1").arg(r.error));
             } else {
                 // Replace streamed plain-text tokens with fully rendered markdown HTML.
                 const QString final_text = r.response.isEmpty() ? streaming_text_ : r.response;
@@ -563,17 +566,17 @@ void AgentChatPanel::setup_connections() {
         } else if (r.success && !r.response.isEmpty()) {
             add_assistant_bubble(r.response);
         } else if (!r.success) {
-            add_system_bubble("Error: " + r.error);
+            add_system_bubble(tr("Error: %1").arg(r.error));
         }
 
         streaming_text_.clear();
         if (r.success) {
-            status_label_->setText(QString("Response received (%1ms)").arg(r.execution_time_ms));
-            hdr_status_lbl_->setText("Ready");
+            status_label_->setText(tr("Response received (%1ms)").arg(r.execution_time_ms));
+            hdr_status_lbl_->setText(tr("Ready"));
             hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::POSITIVE()));
         } else {
-            status_label_->setText("Agent execution failed");
-            hdr_status_lbl_->setText("Error");
+            status_label_->setText(tr("Agent execution failed"));
+            hdr_status_lbl_->setText(tr("Error"));
             hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::NEGATIVE()));
         }
         scroll_to_bottom();
@@ -584,37 +587,38 @@ void AgentChatPanel::setup_connections() {
         if (r.request_id != pending_request_id_)
             return;
         if (r.success) {
-            add_system_bubble(QString("Routed to: %1 (intent: %2, confidence: %3%)")
+            add_system_bubble(tr("Routed to: %1 (intent: %2, confidence: %3%)")
                                   .arg(r.agent_id, r.intent)
                                   .arg(static_cast<int>(r.confidence * 100)));
             pending_request_id_ = services::AgentService::instance().run_agent_streaming(last_query_, r.config);
         } else {
-            add_system_bubble("Auto-routing failed — using default agent.");
+            add_system_bubble(tr("Auto-routing failed — using default agent."));
             pending_request_id_ = services::AgentService::instance().run_agent_streaming(last_query_, {});
         }
     });
 
-    // Portfolio quick actions
+    // Portfolio quick actions. The "None" entry has no data role, so an empty
+    // currentData() means "no portfolio selected" (survives translation).
     connect(analyze_btn_, &QPushButton::clicked, this, [this]() {
         const QString pf = portfolio_combo_->currentText();
-        if (pf == "None")
+        if (portfolio_combo_->currentData().toString().isEmpty())
             return;
-        input_edit_->setPlainText(QString("Analyze my portfolio '%1' — give key metrics and recommendations.").arg(pf));
+        input_edit_->setPlainText(tr("Analyze my portfolio '%1' — give key metrics and recommendations.").arg(pf));
         send_message();
     });
     connect(rebalance_btn_, &QPushButton::clicked, this, [this]() {
         const QString pf = portfolio_combo_->currentText();
-        if (pf == "None")
+        if (portfolio_combo_->currentData().toString().isEmpty())
             return;
-        input_edit_->setPlainText(QString("Suggest rebalancing for portfolio '%1' to optimize risk-return.").arg(pf));
+        input_edit_->setPlainText(tr("Suggest rebalancing for portfolio '%1' to optimize risk-return.").arg(pf));
         send_message();
     });
     connect(risk_btn_, &QPushButton::clicked, this, [this]() {
         const QString pf = portfolio_combo_->currentText();
-        if (pf == "None")
+        if (portfolio_combo_->currentData().toString().isEmpty())
             return;
         input_edit_->setPlainText(
-            QString("Perform risk analysis on portfolio '%1' — VaR, drawdown, stress test.").arg(pf));
+            tr("Perform risk analysis on portfolio '%1' — VaR, drawdown, stress test.").arg(pf));
         send_message();
     });
 }
@@ -638,16 +642,16 @@ void AgentChatPanel::update_llm_status() {
         hdr_model_lbl_->setStyleSheet(QString("color:%1;font-size:9px;background:%2;border:1px solid %3;"
                                               "border-radius:3px;padding:2px 8px;")
                                           .arg(col::TEXT_SECONDARY(), col::BG_BASE(), col::BORDER_MED()));
-        hdr_status_lbl_->setText("Ready");
+        hdr_status_lbl_->setText(tr("Ready"));
         hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::POSITIVE()));
     } else {
-        hdr_model_lbl_->setText("No LLM configured");
+        hdr_model_lbl_->setText(tr("No LLM configured"));
         hdr_model_lbl_->setStyleSheet(QString("color:%1;font-size:9px;background:%2;border:1px solid %3;"
                                               "border-radius:3px;padding:2px 8px;")
                                           .arg(col::NEGATIVE(), col::BG_BASE(), col::NEGATIVE()));
-        hdr_status_lbl_->setText("Unconfigured");
+        hdr_status_lbl_->setText(tr("Unconfigured"));
         hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::NEGATIVE()));
-        status_label_->setText("No LLM provider configured — go to Settings > LLM Configuration");
+        status_label_->setText(tr("No LLM provider configured — go to Settings > LLM Configuration"));
     }
 }
 
@@ -661,7 +665,7 @@ void AgentChatPanel::send_message() {
     // Guard: require LLM config
     auto& llm = ai_chat::LlmService::instance();
     if (!llm.is_configured()) {
-        add_system_bubble("No LLM provider configured. Go to Settings > LLM Configuration to set one up.");
+        add_system_bubble(tr("No LLM provider configured. Go to Settings > LLM Configuration to set one up."));
         return;
     }
 
@@ -680,7 +684,7 @@ void AgentChatPanel::send_message() {
     // Show which portfolio is active in the status bar
     if (!pf_ctx.isEmpty()) {
         const QString pf_name = portfolio_combo_->currentText();
-        status_label_->setText(QString("Portfolio context: %1").arg(pf_name));
+        status_label_->setText(tr("Portfolio context: %1").arg(pf_name));
     }
 
     // Create streaming bubble — seed with "..." so height bootstraps correctly
@@ -701,7 +705,7 @@ void AgentChatPanel::send_message() {
         pending_request_id_ = services::AgentService::instance().start_task(last_query_, config);
         if (streaming_bubble_widget_) {
             streaming_bubble_widget_->setPlainText(
-                QStringLiteral("Task started. Open the AGENTIC tab to watch progress."));
+                tr("Task started. Open the AGENTIC tab to watch progress."));
             streaming_bubble_widget_->setReadOnly(true);
             streaming_bubble_widget_ = nullptr;
         }
@@ -755,7 +759,9 @@ void AgentChatPanel::resizeEvent(QResizeEvent* event) {
 
 QString AgentChatPanel::build_portfolio_context() const {
     const QString pf_name = portfolio_combo_->currentText();
-    if (pf_name == "None" || pf_name.isEmpty())
+    // The first combo item ("None") carries no data role — treat any empty-data
+    // selection as "no portfolio" so the check survives translation.
+    if (portfolio_combo_->currentData().toString().isEmpty() || pf_name.isEmpty())
         return {};
 
     const QString pf_id = portfolio_combo_->currentData().toString();
@@ -779,7 +785,7 @@ void AgentChatPanel::refresh_portfolios() {
     portfolio_combo_->blockSignals(true);
     const QString prev = portfolio_combo_->currentText();
     portfolio_combo_->clear();
-    portfolio_combo_->addItem("None");
+    portfolio_combo_->addItem(tr("None"));
     const auto result = PortfolioRepository::instance().list_portfolios();
     if (result.is_ok()) {
         for (const auto& p : result.value())
@@ -858,7 +864,7 @@ void AgentChatPanel::add_assistant_bubble(const QString& text, const QString& ag
     cvl->setSpacing(4);
 
     auto* hdr_row = new QHBoxLayout;
-    auto* role_lbl = new QLabel(agent_name.isEmpty() ? "Agent" : agent_name);
+    auto* role_lbl = new QLabel(agent_name.isEmpty() ? tr("Agent") : agent_name);
     role_lbl->setStyleSheet(
         QString("color:%1;font-size:9px;font-weight:600;background:transparent;").arg(role_color(role)));
     hdr_row->addWidget(role_lbl);
@@ -944,7 +950,7 @@ QTextEdit* AgentChatPanel::add_streaming_bubble(const QString& agent_name) {
     cvl->setContentsMargins(0, 0, 0, 0);
     cvl->setSpacing(4);
 
-    auto* role_lbl = new QLabel(agent_name.isEmpty() ? "Agent" : agent_name);
+    auto* role_lbl = new QLabel(agent_name.isEmpty() ? tr("Agent") : agent_name);
     role_lbl->setStyleSheet(QString("color:%1;font-size:9px;font-weight:600;background:transparent;").arg(col::CYAN()));
     cvl->addWidget(role_lbl);
 
@@ -993,11 +999,11 @@ void AgentChatPanel::scroll_to_bottom() {
 void AgentChatPanel::set_executing(bool on) {
     executing_ = on;
     send_btn_->setEnabled(!on);
-    send_btn_->setText(on ? "..." : "Send");
+    send_btn_->setText(on ? tr("...") : tr("Send"));
     if (on) {
-        hdr_status_lbl_->setText("Streaming");
+        hdr_status_lbl_->setText(tr("Streaming"));
         hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::AMBER()));
-        status_label_->setText("Processing...");
+        status_label_->setText(tr("Processing..."));
     }
     if (!on) {
         pending_request_id_.clear();
@@ -1014,7 +1020,7 @@ void AgentChatPanel::show_typing(bool on) {
         return;
     if (on) {
         typing_step_ = 0;
-        typing_dots_lbl_->setText("Agent is thinking");
+        typing_dots_lbl_->setText(tr("Agent is thinking"));
         typing_indicator_->show();
         typing_timer_->start();
     } else {
@@ -1045,9 +1051,66 @@ void AgentChatPanel::clear_chat() {
     }
 
     show_welcome(true);
-    hdr_status_lbl_->setText("Ready");
+    hdr_status_lbl_->setText(tr("Ready"));
     hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::POSITIVE()));
     status_label_->clear();
+    update_llm_status();
+}
+
+// ── Re-translation ───────────────────────────────────────────────────────────
+
+void AgentChatPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void AgentChatPanel::retranslateUi() {
+    // Header.
+    if (header_title_)  header_title_->setText(tr("AGENT CHAT"));
+    if (agent_caption_) agent_caption_->setText(tr("AGENT:"));
+    if (agent_selector_) {
+        agent_selector_->setToolTip(tr("Select a configured agent, or Default to use the global LLM."));
+        if (agent_selector_->lineEdit())
+            agent_selector_->lineEdit()->setPlaceholderText(tr("Search agent..."));
+        // Item 0 is the fixed "Default (global LLM)" entry (empty data role).
+        if (agent_selector_->count() > 0 && agent_selector_->itemData(0).toString().isEmpty())
+            agent_selector_->setItemText(0, tr("Default (global LLM)"));
+    }
+    // Toggle buttons reflect on/off state — re-apply the matching label.
+    if (route_toggle_)
+        route_toggle_->setText(route_toggle_->isChecked() ? tr("AUTO-ROUTE: ON") : tr("AUTO-ROUTE"));
+    if (route_toggle_)
+        route_toggle_->setToolTip(tr("When ON, the system picks the best agent for each query."));
+    if (run_as_task_toggle_)
+        run_as_task_toggle_->setText(run_as_task_toggle_->isChecked() ? tr("RUN AS TASK: ON") : tr("RUN AS TASK"));
+    if (run_as_task_toggle_)
+        run_as_task_toggle_->setToolTip(
+            tr("When ON, this query runs as a durable background task with per-step progress."));
+    if (clear_btn_)      clear_btn_->setText(tr("CLEAR"));
+    if (hdr_model_lbl_)  hdr_model_lbl_->setToolTip(tr("Active LLM — configure in Settings > LLM Configuration"));
+
+    // Portfolio context bar.
+    if (portfolio_caption_) portfolio_caption_->setText(tr("PORTFOLIO:"));
+    // Item 0 is the fixed "None" entry (no data role).
+    if (portfolio_combo_ && portfolio_combo_->count() > 0 &&
+        portfolio_combo_->itemData(0).toString().isEmpty())
+        portfolio_combo_->setItemText(0, tr("None"));
+    if (analyze_btn_)   analyze_btn_->setText(tr("ANALYZE"));
+    if (rebalance_btn_) rebalance_btn_->setText(tr("REBALANCE"));
+    if (risk_btn_)      risk_btn_->setText(tr("RISK"));
+
+    // Welcome panel.
+    if (welcome_title_)    welcome_title_->setText(tr("How can I help you?"));
+    if (welcome_subtitle_) welcome_subtitle_->setText(tr("Ask about markets, portfolios, or any financial topic.\n"
+                                                         "Select an agent above, or use Auto-Route to let the system decide."));
+
+    // Input bar (send_btn_ flips to "..." while executing — leave that state).
+    if (input_edit_) input_edit_->setPlaceholderText(tr("Message agent... (Shift+Enter for new line, Enter to send)"));
+    if (send_btn_ && !executing_) send_btn_->setText(tr("Send"));
+
+    // Header status pill + live status bar hold runtime state. Refresh the LLM
+    // status (it re-derives Ready / model / Unconfigured text from current config).
     update_llm_status();
 }
 

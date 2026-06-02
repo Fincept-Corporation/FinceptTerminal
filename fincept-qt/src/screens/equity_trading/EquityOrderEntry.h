@@ -6,6 +6,7 @@
 #include "trading/TradingTypes.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -37,12 +38,16 @@ class EquityOrderEntry : public QWidget {
     void broadcast_requested(const trading::UnifiedOrder& order);
     void strategy_order_submitted(const trading::BasketOrderRequest& basket);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_submit();
     void on_place_strategy();
 
   private:
     void update_cost_preview();
+    void retranslateUi();
     void set_buy_side(bool is_buy);
     void set_order_type(int idx);
 
@@ -96,6 +101,22 @@ class EquityOrderEntry : public QWidget {
     QLabel* margin_label_ = nullptr; // required margin from broker API
     QLabel* status_label_ = nullptr;
     QLabel* mode_label_ = nullptr;
+
+    // Static section / field titles (cached for retranslateUi)
+    QLabel* title_label_ = nullptr;
+    QLabel* product_title_ = nullptr;
+    QLabel* exchange_title_ = nullptr;
+    QLabel* qty_title_ = nullptr;
+    QLabel* price_title_ = nullptr;
+    QLabel* trigger_title_ = nullptr;
+    QLabel* sl_title_ = nullptr;
+    QLabel* tp_title_ = nullptr;
+    QLabel* strat_title_ = nullptr;
+    QLabel* strat_strike_title_ = nullptr;
+    QLabel* strat_expiry_title_ = nullptr;
+    QLabel* strat_lot_title_ = nullptr;
+    QLabel* strat_width_title_ = nullptr;
+    QLabel* strat_legs_title_ = nullptr;
 
     // State
     double balance_ = 0;

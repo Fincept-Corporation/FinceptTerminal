@@ -99,7 +99,7 @@ void EquityTradingScreen::on_account_changed(const QString& account_id) {
     // Update mode button to reflect this account's trading mode
     const bool is_live = (account.trading_mode == "live");
     mode_btn_->setChecked(is_live);
-    mode_btn_->setText(is_live ? "LIVE" : "PAPER");
+    mode_btn_->setText(is_live ? tr("LIVE") : tr("PAPER"));
     mode_btn_->setProperty("mode", is_live ? "live" : "paper");
     mode_btn_->style()->unpolish(mode_btn_);
     mode_btn_->style()->polish(mode_btn_);
@@ -216,7 +216,7 @@ void EquityTradingScreen::on_mode_toggled() {
         return;
 
     const bool is_live = mode_btn_->isChecked();
-    mode_btn_->setText(is_live ? "LIVE" : "PAPER");
+    mode_btn_->setText(is_live ? tr("LIVE") : tr("PAPER"));
     mode_btn_->setProperty("mode", is_live ? "live" : "paper");
     mode_btn_->style()->unpolish(mode_btn_);
     mode_btn_->style()->polish(mode_btn_);
@@ -254,7 +254,7 @@ void EquityTradingScreen::handle_token_expired(const QString& account_id) {
     if (!token_expired_shown_.compare_exchange_strong(expected, true))
         return;
 
-    conn_label_->setText(QString::fromUtf8("\xe2\x9a\xa0 TOKEN EXPIRED — click ACCOUNTS"));
+    conn_label_->setText(tr("\xe2\x9a\xa0 TOKEN EXPIRED — click ACCOUNTS"));
     conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::NEGATIVE()));
     LOG_WARN(TAG, QString("Access token expired for account %1 — user must re-authenticate").arg(account_id));
     update_connection_status();
@@ -323,7 +323,7 @@ void EquityTradingScreen::on_accounts_clicked() {
 
 void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
     if (focused_account_id_.isEmpty()) {
-        order_entry_->show_order_status("No account selected — add one via ACCOUNTS", false);
+        order_entry_->show_order_status(tr("No account selected — add one via ACCOUNTS"), false);
         return;
     }
 
@@ -332,7 +332,7 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
     if (account.trading_mode == "paper") {
         const QString portfolio_id = account.paper_portfolio_id;
         if (portfolio_id.isEmpty()) {
-            order_entry_->show_order_status("No paper portfolio for this account", false);
+            order_entry_->show_order_status(tr("No paper portfolio for this account"), false);
             return;
         }
 
@@ -357,7 +357,7 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
             stop_opt = order.stop_price;
 
         if (order.order_type == OrderType::Market && !price_opt) {
-            order_entry_->show_order_status("Price not available yet — wait for quotes to load", false);
+            order_entry_->show_order_status(tr("Price not available yet — wait for quotes to load"), false);
             return;
         }
 
@@ -367,18 +367,18 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
             if (order.order_type == OrderType::Market) {
                 double fill_price = current_price_ > 0 ? current_price_ : (order.price > 0 ? order.price : 0.0);
                 if (fill_price <= 0) {
-                    order_entry_->show_order_status("No price available for fill", false);
+                    order_entry_->show_order_status(tr("No price available for fill"), false);
                     return;
                 }
                 pt_fill_order(pt_order.id, fill_price);
                 order_entry_->show_order_status(
-                    QString("Paper order filled: %1 @ %2").arg(order.symbol).arg(fill_price, 0, 'f', 2), true);
+                    tr("Paper order filled: %1 @ %2").arg(order.symbol).arg(fill_price, 0, 'f', 2), true);
             } else {
                 OrderMatcher::instance().add_order(pt_order);
-                order_entry_->show_order_status(QString("Paper order queued: %1").arg(order.symbol), true);
+                order_entry_->show_order_status(tr("Paper order queued: %1").arg(order.symbol), true);
             }
         } catch (const std::exception& e) {
-            order_entry_->show_order_status(QString("Order failed: %1").arg(e.what()), false);
+            order_entry_->show_order_status(tr("Order failed: %1").arg(e.what()), false);
             return;
         }
 
@@ -409,9 +409,9 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
                 acct_id, "placeorder", ActionCenter::serialize_unified_order(order));
             if (!pending_id.isEmpty())
                 order_entry_->show_order_status(
-                    QStringLiteral("Order queued for approval in Action Center"), true);
+                    tr("Order queued for approval in Action Center"), true);
             else
-                order_entry_->show_order_status(QStringLiteral("Failed to queue order"), false);
+                order_entry_->show_order_status(tr("Failed to queue order"), false);
             return;
         }
 
@@ -428,7 +428,7 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
                         return;
                     if (result.success) {
                         LOG_INFO(TAG, QString("Order placed: %1").arg(result.order_id));
-                        self->order_entry_->show_order_status(QString("Order placed: %1").arg(result.order_id), true);
+                        self->order_entry_->show_order_status(self->tr("Order placed: %1").arg(result.order_id), true);
                     } else {
                         LOG_ERROR(TAG, QString("Order failed: %1").arg(result.message));
                         self->order_entry_->show_order_status(result.message, false);
@@ -510,6 +510,124 @@ void EquityTradingScreen::async_modify_order(const QString& order_id, double qty
             },
             Qt::QueuedConnection);
     });
+}
+
+void EquityTradingScreen::refresh_paper_panels() {
+    auto account = AccountManager::instance().get_account(focused_account_id_);
+    if (account.trading_mode != "paper" || account.paper_portfolio_id.isEmpty())
+        return; // live data flows from AccountDataStream via the hub
+    try {
+        auto portfolio = pt_get_portfolio(account.paper_portfolio_id);
+        auto positions = pt_get_positions(account.paper_portfolio_id);
+        auto orders = pt_get_orders(account.paper_portfolio_id);
+        auto trades = pt_get_trades(account.paper_portfolio_id, 50);
+        auto stats = pt_get_stats(account.paper_portfolio_id);
+        order_entry_->set_balance(portfolio.balance);
+        bottom_panel_->set_paper_positions(positions);
+        bottom_panel_->set_paper_orders(orders);
+        bottom_panel_->set_paper_trades(trades);
+        bottom_panel_->set_paper_stats(stats);
+    } catch (...) {
+        LOG_WARN(TAG, "Exception refreshing paper panels");
+    }
+}
+
+void EquityTradingScreen::on_cancel_all_orders() {
+    if (focused_account_id_.isEmpty()) {
+        order_entry_->show_order_status(tr("No account selected — add one via ACCOUNTS"), false);
+        return;
+    }
+    const QString acct_id = focused_account_id_;
+    QPointer<EquityTradingScreen> self = this;
+    (void)QtConcurrent::run([self, acct_id]() {
+        if (!self)
+            return;
+        auto result = UnifiedTrading::instance().cancel_all_orders(acct_id);
+        QMetaObject::invokeMethod(
+            self,
+            [self, result]() {
+                if (!self)
+                    return;
+                if (result.success && result.data) {
+                    const auto& r = *result.data;
+                    self->order_entry_->show_order_status(
+                        self->tr("Cancelled %1 order(s)%2")
+                            .arg(r.canceled_order_ids.size())
+                            .arg(r.failed.isEmpty() ? QString() : self->tr(", %1 failed").arg(r.failed.size())),
+                        r.failed.isEmpty());
+                } else {
+                    self->order_entry_->show_order_status(result.error, false);
+                }
+                self->refresh_paper_panels();
+            },
+            Qt::QueuedConnection);
+    });
+}
+
+void EquityTradingScreen::on_close_all_positions() {
+    if (focused_account_id_.isEmpty()) {
+        order_entry_->show_order_status(tr("No account selected — add one via ACCOUNTS"), false);
+        return;
+    }
+    const QString acct_id = focused_account_id_;
+    QPointer<EquityTradingScreen> self = this;
+    (void)QtConcurrent::run([self, acct_id]() {
+        if (!self)
+            return;
+        auto result = UnifiedTrading::instance().close_all_positions(acct_id);
+        QMetaObject::invokeMethod(
+            self,
+            [self, result]() {
+                if (!self)
+                    return;
+                if (result.success && result.data) {
+                    const auto& r = *result.data;
+                    self->order_entry_->show_order_status(
+                        self->tr("Closed %1 position(s)%2")
+                            .arg(r.closed_symbols.size())
+                            .arg(r.failed.isEmpty() ? QString() : self->tr(", %1 failed").arg(r.failed.size())),
+                        r.failed.isEmpty());
+                } else {
+                    self->order_entry_->show_order_status(result.error, false);
+                }
+                self->refresh_paper_panels();
+            },
+            Qt::QueuedConnection);
+    });
+}
+
+void EquityTradingScreen::on_strategy_submitted(const trading::BasketOrderRequest& basket) {
+    if (focused_account_id_.isEmpty()) {
+        order_entry_->show_order_status(tr("No account selected — add one via ACCOUNTS"), false);
+        return;
+    }
+    if (basket.orders.isEmpty()) {
+        order_entry_->show_order_status(tr("Strategy has no legs to place"), false);
+        return;
+    }
+    const QString acct_id = focused_account_id_;
+    QPointer<EquityTradingScreen> self = this;
+    // place_basket_orders runs async on its own worker and delivers the result
+    // back on the caller's thread; marshal to the UI thread defensively.
+    UnifiedTrading::instance().place_basket_orders(
+        acct_id, basket, [self](const trading::BasketOrderResult& result) {
+            if (!self)
+                return;
+            QMetaObject::invokeMethod(
+                self,
+                [self, result]() {
+                    if (!self)
+                        return;
+                    self->order_entry_->show_order_status(
+                        self->tr("Strategy: %1/%2 legs placed%3")
+                            .arg(result.successful)
+                            .arg(result.total)
+                            .arg(result.failed > 0 ? self->tr(", %1 failed").arg(result.failed) : QString()),
+                        result.failed == 0);
+                    self->refresh_paper_panels();
+                },
+                Qt::QueuedConnection);
+        });
 }
 
 // ============================================================================

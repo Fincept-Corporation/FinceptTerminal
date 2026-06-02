@@ -4,6 +4,7 @@
 #include "core/session/ScreenStateManager.h"
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -238,7 +239,7 @@ class TradeFlowChordWidget : public QWidget {
         // Import scale — above center
         int sx = cx - 50;
         int sy = cy - radius / 5;
-        p.drawText(sx, sy - 2, "Imports ($M)");
+        p.drawText(sx, sy - 2, QCoreApplication::translate("TradeFlowChordWidget", "Imports ($M)"));
         for (int i = 0; i <= 4; ++i) {
             double val = max_val * i / 4.0 / 1000.0;
             int tx = sx + i * 22;
@@ -247,7 +248,7 @@ class TradeFlowChordWidget : public QWidget {
 
         // Export scale — below center
         sy = cy + radius / 5;
-        p.drawText(sx, sy + 14, "Exports ($M)");
+        p.drawText(sx, sy + 14, QCoreApplication::translate("TradeFlowChordWidget", "Exports ($M)"));
 
         // ── Color legend bar (bottom-left) ───────────────────────────────────
         int bx = 10;
@@ -308,11 +309,12 @@ QWidget* TradeVizScreen::build_tab_bar() {
                                .arg(ui::colors::TEXT_SECONDARY()));
         bl->addWidget(num);
 
-        auto* lbl = new QLabel(t.label);
+        auto* lbl = new QLabel(tr(t.label));
         lbl->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;"
                                    " font-family: 'Consolas','Courier New',monospace;")
                                .arg(ui::colors::TEXT_PRIMARY()));
         bl->addWidget(lbl);
+        tab_labels_.append(lbl);
 
         hl->addWidget(btn);
     }
@@ -320,11 +322,11 @@ QWidget* TradeVizScreen::build_tab_bar() {
     hl->addStretch();
 
     // Right side: "Trade Flow" title
-    auto* title = new QLabel("Trade Flow");
-    title->setStyleSheet(QString("color: %1; font-size: 16px; font-weight: bold; background: transparent;"
-                                 " padding-right: 14px; font-family: 'Consolas','Courier New',monospace;")
-                             .arg(ui::colors::AMBER()));
-    hl->addWidget(title);
+    flow_title_ = new QLabel(tr("Trade Flow"));
+    flow_title_->setStyleSheet(QString("color: %1; font-size: 16px; font-weight: bold; background: transparent;"
+                                       " padding-right: 14px; font-family: 'Consolas','Courier New',monospace;")
+                                   .arg(ui::colors::AMBER()));
+    hl->addWidget(flow_title_);
 
     return bar;
 }
@@ -342,7 +344,7 @@ QWidget* TradeVizScreen::build_filter_bar() {
     hl->setContentsMargins(10, 0, 10, 0);
     hl->setSpacing(10);
 
-    // Country selector
+    // Country selector — items are country data names (selector keys), not translated.
     country_combo_ = new QComboBox;
     country_combo_->setStyleSheet(combo_ss());
     country_combo_->addItems({"United States", "China", "Germany", "Japan", "United Kingdom", "France", "India",
@@ -352,38 +354,38 @@ QWidget* TradeVizScreen::build_filter_bar() {
     hl->addWidget(country_combo_);
 
     // Browse button
-    auto* browse = new QLabel("20) Browse");
-    browse->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold; background: transparent;"
-                                  " font-family: 'Consolas','Courier New',monospace;")
-                              .arg(ui::colors::TEXT_PRIMARY()));
-    hl->addWidget(browse);
+    browse_label_ = new QLabel(tr("20) Browse"));
+    browse_label_->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold; background: transparent;"
+                                         " font-family: 'Consolas','Courier New',monospace;")
+                                     .arg(ui::colors::TEXT_PRIMARY()));
+    hl->addWidget(browse_label_);
 
     hl->addSpacing(10);
 
     // Order by
-    auto* order_lbl = new QLabel("Order by");
-    order_lbl->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;"
-                                     " font-family: 'Consolas','Courier New',monospace;")
-                                 .arg(ui::colors::TEXT_SECONDARY()));
-    hl->addWidget(order_lbl);
+    order_caption_ = new QLabel(tr("Order by"));
+    order_caption_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;"
+                                          " font-family: 'Consolas','Courier New',monospace;")
+                                      .arg(ui::colors::TEXT_SECONDARY()));
+    hl->addWidget(order_caption_);
 
     order_combo_ = new QComboBox;
     order_combo_->setStyleSheet(combo_ss());
-    order_combo_->addItems({"Total Trade", "Imports", "Exports", "Trade Balance", "% of GDP"});
+    order_combo_->addItems({tr("Total Trade"), tr("Imports"), tr("Exports"), tr("Trade Balance"), tr("% of GDP")});
     hl->addWidget(order_combo_);
 
     hl->addSpacing(10);
 
     // Periodicity
-    auto* period_lbl = new QLabel("Periodicity");
-    period_lbl->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;"
-                                      " font-family: 'Consolas','Courier New',monospace;")
-                                  .arg(ui::colors::TEXT_SECONDARY()));
-    hl->addWidget(period_lbl);
+    period_caption_ = new QLabel(tr("Periodicity"));
+    period_caption_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;"
+                                           " font-family: 'Consolas','Courier New',monospace;")
+                                       .arg(ui::colors::TEXT_SECONDARY()));
+    hl->addWidget(period_caption_);
 
     period_combo_ = new QComboBox;
     period_combo_->setStyleSheet(combo_ss());
-    period_combo_->addItems({"Yearly", "Quarterly", "Monthly"});
+    period_combo_->addItems({tr("Yearly"), tr("Quarterly"), tr("Monthly")});
     hl->addWidget(period_combo_);
 
     hl->addSpacing(10);
@@ -443,7 +445,7 @@ QWidget* TradeVizScreen::build_partner_table() {
     partner_table_ = new QTableWidget;
     partner_table_->setStyleSheet(table_ss());
     partner_table_->setColumnCount(3);
-    partner_table_->setHorizontalHeaderLabels({"", "Trading Partner", "Total Trade ($M)"});
+    partner_table_->setHorizontalHeaderLabels({QString(), tr("Trading Partner"), tr("Total Trade ($M)")});
     partner_table_->verticalHeader()->setVisible(false);
     partner_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     partner_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -547,12 +549,57 @@ void TradeVizScreen::setup_ui() {
                                     "QSplitter::handle { background: %2; width: 1px; }")
                                 .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
 
-    splitter->addWidget(new TradeFlowChordWidget);
+    auto* chord = new TradeFlowChordWidget;
+    chord_widget_ = chord;
+    splitter->addWidget(chord);
     splitter->addWidget(build_partner_table());
     splitter->setStretchFactor(0, 3);
     splitter->setStretchFactor(1, 2);
 
     root->addWidget(splitter, 1);
+}
+
+// ── Live language switch ──────────────────────────────────────────────────────
+
+void TradeVizScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void TradeVizScreen::retranslateUi() {
+    // Tab labels — fixed order matches build_tab_bar().
+    if (tab_labels_.size() == 4) {
+        tab_labels_[0]->setText(tr("Table"));
+        tab_labels_[1]->setText(tr("Settings"));
+        tab_labels_[2]->setText(tr("Export"));
+        tab_labels_[3]->setText(tr("Notes"));
+    }
+    if (flow_title_)     flow_title_->setText(tr("Trade Flow"));
+    if (browse_label_)   browse_label_->setText(tr("20) Browse"));
+    if (order_caption_)  order_caption_->setText(tr("Order by"));
+    if (period_caption_) period_caption_->setText(tr("Periodicity"));
+
+    // Combo option labels — re-set by index (selection index drives logic, not text).
+    if (order_combo_ && order_combo_->count() >= 5) {
+        order_combo_->setItemText(0, tr("Total Trade"));
+        order_combo_->setItemText(1, tr("Imports"));
+        order_combo_->setItemText(2, tr("Exports"));
+        order_combo_->setItemText(3, tr("Trade Balance"));
+        order_combo_->setItemText(4, tr("% of GDP"));
+    }
+    if (period_combo_ && period_combo_->count() >= 3) {
+        period_combo_->setItemText(0, tr("Yearly"));
+        period_combo_->setItemText(1, tr("Quarterly"));
+        period_combo_->setItemText(2, tr("Monthly"));
+    }
+
+    if (partner_table_)
+        partner_table_->setHorizontalHeaderLabels({QString(), tr("Trading Partner"), tr("Total Trade ($M)")});
+
+    // Chord diagram draws translatable axis labels in paintEvent — force a repaint.
+    if (chord_widget_)
+        chord_widget_->update();
 }
 
 // ── IStatefulScreen ──────────────────────────────────────────────────────────

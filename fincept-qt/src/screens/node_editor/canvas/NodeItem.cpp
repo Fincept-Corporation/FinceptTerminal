@@ -248,12 +248,12 @@ void NodeItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
                                "QMenu::separator { background: %3; height: 1px; margin: 2px 6px; }")
                            .arg(tm.bg_raised, tm.text_primary, tm.border_dim, tm.accent, tm.bg_base));
 
-    auto* duplicate_action = menu.addAction("Duplicate");
-    auto* disable_action = menu.addAction(def_.disabled ? "Enable" : "Disable");
+    auto* duplicate_action = menu.addAction(tr("Duplicate"));
+    auto* disable_action = menu.addAction(def_.disabled ? tr("Enable") : tr("Disable"));
     menu.addSeparator();
-    auto* exec_from_action = menu.addAction("Execute From Here");
+    auto* exec_from_action = menu.addAction(tr("Execute From Here"));
     menu.addSeparator();
-    auto* delete_action = menu.addAction("Delete");
+    auto* delete_action = menu.addAction(tr("Delete"));
     delete_action->setShortcut(QKeySequence::Delete);
 
     auto* chosen = menu.exec(event->screenPos());

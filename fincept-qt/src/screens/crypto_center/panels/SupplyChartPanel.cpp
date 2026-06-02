@@ -69,16 +69,16 @@ void SupplyChartPanel::build_ui() {
     auto* hl = new QHBoxLayout(head);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(8);
-    auto* title = new QLabel(QStringLiteral("SUPPLY CHART · 12 MONTHS"), head);
-    title->setObjectName(QStringLiteral("supplyChartTitle"));
-    auto* legend = new QLabel(
-        QStringLiteral("● TOTAL  ● CIRCULATING  ● BURNED"), head);
-    legend->setObjectName(QStringLiteral("supplyChartLegend"));
-    status_pill_ = new QLabel(QStringLiteral("LIVE"), head);
+    title_ = new QLabel(tr("SUPPLY CHART · 12 MONTHS"), head);
+    title_->setObjectName(QStringLiteral("supplyChartTitle"));
+    legend_ = new QLabel(
+        tr("● TOTAL  ● CIRCULATING  ● BURNED"), head);
+    legend_->setObjectName(QStringLiteral("supplyChartLegend"));
+    status_pill_ = new QLabel(tr("LIVE"), head);
     status_pill_->setObjectName(QStringLiteral("supplyChartPill"));
-    hl->addWidget(title);
+    hl->addWidget(title_);
     hl->addStretch();
-    hl->addWidget(legend);
+    hl->addWidget(legend_);
     hl->addSpacing(12);
     hl->addWidget(status_pill_);
     root->addWidget(head);
@@ -220,6 +220,26 @@ void SupplyChartPanel::hideEvent(QHideEvent* e) {
     fincept::datahub::DataHub::instance().unsubscribe(this);
 }
 
+void SupplyChartPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void SupplyChartPanel::retranslateUi() {
+    if (title_)  title_->setText(tr("SUPPLY CHART · 12 MONTHS"));
+    if (legend_) legend_->setText(tr("● TOTAL  ● CIRCULATING  ● BURNED"));
+    // Re-derive the LIVE/DEMO pill the same way on_supply_history_update does
+    // (mirror the canonical treasury:buyback_epoch mock flag).
+    bool is_mock = false;
+    const auto epoch_v = fincept::datahub::DataHub::instance().peek(
+        QStringLiteral("treasury:buyback_epoch"));
+    if (epoch_v.canConvert<fincept::wallet::BuybackEpoch>()) {
+        is_mock = epoch_v.value<fincept::wallet::BuybackEpoch>().is_mock;
+    }
+    update_demo_chip(is_mock);
+}
+
 // ── Updates ────────────────────────────────────────────────────────────────
 
 void SupplyChartPanel::on_supply_history_update(const QVariant& v) {
@@ -292,10 +312,10 @@ void SupplyChartPanel::clear_error_strip() {
 
 void SupplyChartPanel::update_demo_chip(bool is_mock) {
     if (is_mock) {
-        status_pill_->setText(QStringLiteral("DEMO"));
+        status_pill_->setText(tr("DEMO"));
         status_pill_->setObjectName(QStringLiteral("supplyChartPillDemo"));
     } else {
-        status_pill_->setText(QStringLiteral("LIVE"));
+        status_pill_->setText(tr("LIVE"));
         status_pill_->setObjectName(QStringLiteral("supplyChartPill"));
     }
     status_pill_->style()->unpolish(status_pill_);

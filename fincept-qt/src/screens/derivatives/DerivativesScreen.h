@@ -4,6 +4,7 @@
 #include <QComboBox>
 #include <QDateEdit>
 #include <QDoubleSpinBox>
+#include <QEvent>
 #include <QJsonObject>
 #include <QLabel>
 #include <QPushButton>
@@ -27,6 +28,9 @@ class DerivativesScreen : public QWidget, public IStatefulScreen {
     void restore_state(const QVariantMap& state) override;
     QString state_key() const override { return "derivatives"; }
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_instrument_changed(int index);
     void on_calculate();
@@ -35,6 +39,7 @@ class DerivativesScreen : public QWidget, public IStatefulScreen {
   private:
     // UI setup
     void setup_ui();
+    void retranslateUi();
     QWidget* create_header_bar();
     QWidget* create_instrument_bar();
     QWidget* create_bonds_panel();
@@ -69,6 +74,13 @@ class DerivativesScreen : public QWidget, public IStatefulScreen {
     QWidget* results_container_ = nullptr;
     QLabel* status_instrument_ = nullptr;
     QLabel* status_engine_ = nullptr;
+
+    // Header + status fixed-label widgets (cached for retranslateUi)
+    QLabel* header_title_ = nullptr;
+    QLabel* header_sub_ = nullptr;
+    QLabel* header_badge_ = nullptr;
+    QLabel* status_left_ = nullptr;
+    QLabel* results_title_ = nullptr;
 
     // Instrument tab buttons
     QList<QPushButton*> instrument_btns_;

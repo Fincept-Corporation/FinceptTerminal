@@ -2,8 +2,10 @@
 // Crypto Credentials — dialog for entering exchange API keys
 
 #include <QDialog>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QTimer>
 
 namespace fincept::screens::crypto {
@@ -22,12 +24,16 @@ class CryptoCredentials : public QDialog {
   signals:
     void credentials_saved(const QString& api_key, const QString& api_secret, const QString& password);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_save();
     void on_clear();
     void on_totp_tick();
 
   private:
+    void retranslateUi();
     void refresh_totp();
     void set_status(const QString& text, const QString& object_name);
 
@@ -36,6 +42,16 @@ class CryptoCredentials : public QDialog {
     QLineEdit* password_edit_ = nullptr;
     QLabel* status_label_ = nullptr;
     QString exchange_id_;
+
+    // Text-bearing widgets (cached for retranslateUi)
+    QLabel* title_label_ = nullptr;
+    QLabel* info_label_ = nullptr;
+    QLabel* key_field_label_ = nullptr;
+    QLabel* secret_field_label_ = nullptr;
+    QLabel* password_field_label_ = nullptr;
+    QLabel* totp_field_label_ = nullptr;
+    QPushButton* clear_btn_ = nullptr;
+    QPushButton* save_btn_ = nullptr;
 
     // TOTP section
     QLineEdit* totp_secret_edit_ = nullptr;

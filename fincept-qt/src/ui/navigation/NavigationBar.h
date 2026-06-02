@@ -1,4 +1,5 @@
 #pragma once
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
@@ -19,13 +20,18 @@ class NavigationBar : public QWidget {
     void navigate_profile();
     void logout_clicked();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void update_clock();
 
   private:
     void refresh_theme();
+    void retranslateUi();
 
     QLabel* clock_label_ = nullptr;
+    QLabel* live_label_ = nullptr;
     QLabel* user_label_ = nullptr;
     QLabel* credits_label_ = nullptr;
     QLabel* plan_label_ = nullptr;

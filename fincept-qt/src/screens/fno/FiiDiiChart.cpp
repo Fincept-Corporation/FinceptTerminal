@@ -42,7 +42,7 @@ FiiDiiChart::FiiDiiChart(QWidget* parent) : QChartView(parent) {
     chart_->setPlotAreaBackgroundBrush(QColor(colors::BG_BASE()));
     chart_->setPlotAreaBackgroundVisible(true);
     chart_->setMargins(QMargins(0, 4, 0, 0));
-    chart_->setTitle(QStringLiteral("Daily Net Flows (₹ Cr)"));
+    chart_->setTitle(tr("Daily Net Flows (₹ Cr)"));
     chart_->setTitleBrush(QColor(colors::TEXT_SECONDARY()));
     QFont title_font = chart_->titleFont();
     title_font.setPointSize(9);
@@ -107,6 +107,16 @@ void FiiDiiChart::set_data(const QVector<FiiDiiDay>& days) {
     axis_x_->append(categories);
     const double pad = std::max(std::abs(y_max - y_min) * 0.05, 1.0);
     axis_y_->setRange(y_min - pad, y_max + pad);
+}
+
+void FiiDiiChart::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QChartView::changeEvent(event);
+}
+
+void FiiDiiChart::retranslateUi() {
+    if (chart_) chart_->setTitle(tr("Daily Net Flows (₹ Cr)"));
 }
 
 } // namespace fincept::screens::fno

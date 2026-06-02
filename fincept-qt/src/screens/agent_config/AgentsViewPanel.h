@@ -6,6 +6,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -34,6 +35,7 @@ class AgentsViewPanel : public QWidget {
 
   protected:
     void showEvent(QShowEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
@@ -41,6 +43,10 @@ class AgentsViewPanel : public QWidget {
     QWidget* build_config_panel();
     QWidget* build_query_panel();
     void setup_connections();
+
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
 
     void populate_agent_list(const QVector<services::AgentInfo>& agents);
     void on_agent_selected(int row);
@@ -55,13 +61,22 @@ class AgentsViewPanel : public QWidget {
     void load_profile_combo();
 
     // ── Left panel ───────────────────────────────────────────────────────────
+    QLabel* list_title_ = nullptr;
     QListWidget* agent_list_ = nullptr;
     QComboBox* category_combo_ = nullptr;
     QLabel* list_count_label_ = nullptr;
+    QPushButton* list_refresh_btn_ = nullptr;
 
     // ── Center panel ─────────────────────────────────────────────────────────
+    QPushButton* json_toggle_btn_ = nullptr;
+    QPushButton* add_team_btn_ = nullptr;
     QLabel* agent_name_label_ = nullptr;
     QLabel* agent_desc_label_ = nullptr;
+    // Section headers in the config form.
+    QLabel* llm_profile_hdr_ = nullptr;
+    QLabel* instructions_hdr_ = nullptr;
+    QLabel* tools_hdr_ = nullptr;
+    QLabel* features_hdr_ = nullptr;
     // LLM profile picker — selects which named profile this agent uses
     QComboBox* llm_profile_combo_ = nullptr; // "Default (Global)" + named profiles
     QLabel* llm_resolved_lbl_ = nullptr;     // shows resolved provider/model beneath
@@ -76,15 +91,17 @@ class AgentsViewPanel : public QWidget {
     QCheckBox* agentic_memory_check_ = nullptr;
     QPushButton* save_btn_ = nullptr;
     QPushButton* delete_btn_ = nullptr;
-    QPushButton* add_team_btn_ = nullptr;
     // JSON editor
-    QPushButton* json_toggle_btn_ = nullptr;
+    QPushButton* json_apply_btn_ = nullptr;
     QPlainTextEdit* json_editor_ = nullptr;
     QWidget* form_widget_ = nullptr;
     QWidget* json_widget_ = nullptr;
     bool json_mode_ = false;
 
     // ── Right panel ──────────────────────────────────────────────────────────
+    QLabel* test_query_hdr_ = nullptr;
+    QLabel* output_caption_ = nullptr;
+    QLabel* result_hdr_ = nullptr;
     QPlainTextEdit* query_input_ = nullptr;
     QPushButton* run_btn_ = nullptr;
     QTextEdit* result_display_ = nullptr;

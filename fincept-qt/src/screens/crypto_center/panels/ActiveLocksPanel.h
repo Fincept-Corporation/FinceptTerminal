@@ -2,6 +2,7 @@
 
 #include "services/wallet/WalletTypes.h"
 
+#include <QEvent>
 #include <QString>
 #include <QVariant>
 #include <QVector>
@@ -40,10 +41,12 @@ class ActiveLocksPanel : public QWidget {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
     void apply_theme();
+    void retranslateUi();
 
     void on_wallet_connected(const QString& pubkey, const QString& label);
     void on_wallet_disconnected();
@@ -57,6 +60,7 @@ class ActiveLocksPanel : public QWidget {
     void update_demo_chip(bool is_mock);
 
     // Head
+    QLabel* title_ = nullptr;          // "ACTIVE LOCKS"
     QLabel* summary_label_ = nullptr;
     QLabel* status_pill_ = nullptr;
 

@@ -39,6 +39,17 @@ struct ProviderDef {
     QVector<FieldDef> fields;
 };
 
+// make_row() builds the label QLabel internally; grab it back from the row's
+// direct child QLabels so retranslateUi() can re-apply text. Order is
+// deterministic: title label first, description label (when present) second.
+void capture_row_labels(QWidget* row, QLabel** label_out, QLabel** desc_out = nullptr) {
+    const auto labels = row->findChildren<QLabel*>(QString(), Qt::FindDirectChildrenOnly);
+    if (!labels.isEmpty() && label_out)
+        *label_out = labels.at(0);
+    if (labels.size() > 1 && desc_out)
+        *desc_out = labels.at(1);
+}
+
 const QVector<ProviderDef>& provider_defs() {
     static const QVector<ProviderDef> defs = {
         {"telegram", "Telegram", "✈",
@@ -129,9 +140,9 @@ void NotificationsSection::build_ui() {
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(6);
 
-    auto* hdr_lbl = new QLabel(tr("NOTIFICATION PROVIDERS"));
-    hdr_lbl->setStyleSheet(section_title_ss());
-    vl->addWidget(hdr_lbl);
+    providers_hdr_ = new QLabel(tr("NOTIFICATION PROVIDERS"));
+    providers_hdr_->setStyleSheet(section_title_ss());
+    vl->addWidget(providers_hdr_);
     vl->addWidget(make_sep());
     vl->addSpacing(8);
 
@@ -183,12 +194,19 @@ void NotificationsSection::build_ui() {
 
         for (const auto& fd : def.fields) {
             auto* field = new QLineEdit;
+            // Placeholders are concrete config examples (URLs, host names, phone
+            // numbers) — left untranslated. Field labels are UI text.
             field->setPlaceholderText(fd.placeholder);
             field->setStyleSheet(input_ss());
             if (fd.is_password)
                 field->setEchoMode(QLineEdit::Password);
             pw.fields[fd.key] = field;
-            bvl->addWidget(make_row(fd.label, field));
+            auto* field_row = make_row(tr(fd.label.toUtf8().constData()), field);
+            QLabel* row_lbl = nullptr;
+            capture_row_labels(field_row, &row_lbl);
+            if (row_lbl)
+                pw.field_labels[fd.key] = row_lbl;
+            bvl->addWidget(field_row);
         }
 
         // Test button + status
@@ -262,9 +280,9 @@ void NotificationsSection::build_ui() {
     vl->addSpacing(8);
 
     // ── Alert triggers ────────────────────────────────────────────────────────
-    auto* trig_hdr = new QLabel(tr("ALERT TRIGGERS"));
-    trig_hdr->setStyleSheet(sub_title_ss());
-    vl->addWidget(trig_hdr);
+    triggers_hdr_ = new QLabel(tr("ALERT TRIGGERS"));
+    triggers_hdr_->setStyleSheet(sub_title_ss());
+    vl->addWidget(triggers_hdr_);
     vl->addSpacing(4);
 
     trigger_inapp_  = new QCheckBox; trigger_inapp_->setStyleSheet(check_ss());
@@ -272,10 +290,16 @@ void NotificationsSection::build_ui() {
     trigger_news_   = new QCheckBox; trigger_news_->setStyleSheet(check_ss());
     trigger_orders_ = new QCheckBox; trigger_orders_->setStyleSheet(check_ss());
 
-    vl->addWidget(make_row(tr("In-App Alerts (toast + bell)"), trigger_inapp_,
-                           tr("Show slide-in toasts and update bell badge.")));
-    vl->addWidget(make_row(tr("Price Alerts"), trigger_price_, tr("Notify when price alert thresholds are crossed.")));
-    vl->addWidget(make_row(tr("News Alerts"), trigger_news_, tr("Enable news notifications (configure which types below).")));
+    auto* row_inapp = make_row(tr("In-App Alerts (toast + bell)"), trigger_inapp_,
+                               tr("Show slide-in toasts and update bell badge."));
+    capture_row_labels(row_inapp, &row_inapp_lbl_, &row_inapp_desc_);
+    vl->addWidget(row_inapp);
+    auto* row_price = make_row(tr("Price Alerts"), trigger_price_, tr("Notify when price alert thresholds are crossed."));
+    capture_row_labels(row_price, &row_price_lbl_, &row_price_desc_);
+    vl->addWidget(row_price);
+    auto* row_news = make_row(tr("News Alerts"), trigger_news_, tr("Enable news notifications (configure which types below)."));
+    capture_row_labels(row_news, &row_news_lbl_, &row_news_desc_);
+    vl->addWidget(row_news);
 
     // News alert sub-options
     news_subopts_frame_ = new QFrame;
@@ -292,30 +316,40 @@ void NotificationsSection::build_ui() {
     news_deviations_ = new QCheckBox; news_deviations_->setStyleSheet(check_ss());
     news_flash_      = new QCheckBox; news_flash_->setStyleSheet(check_ss());
 
-    sub_vl->addWidget(make_row(tr("Breaking News"), news_breaking_,
-                               tr("Notify on FLASH/BREAKING/URGENT priority clusters.")));
-    sub_vl->addWidget(make_row(tr("Monitor Keyword Matches"), news_monitors_,
-                               tr("Notify when a news monitor watch list gets new matches.")));
-    sub_vl->addWidget(make_row(tr("Category Volume Spikes"), news_deviations_,
-                               tr("Notify when a category has abnormally high article volume (z-score ≥ 3).")));
-    sub_vl->addWidget(make_row(tr("FLASH + High-Impact Articles"), news_flash_,
-                               tr("Notify on individual articles that are both FLASH priority and high market impact.")));
+    auto* row_breaking = make_row(tr("Breaking News"), news_breaking_,
+                                  tr("Notify on FLASH/BREAKING/URGENT priority clusters."));
+    capture_row_labels(row_breaking, &row_breaking_lbl_, &row_breaking_desc_);
+    sub_vl->addWidget(row_breaking);
+    auto* row_monitors = make_row(tr("Monitor Keyword Matches"), news_monitors_,
+                                  tr("Notify when a news monitor watch list gets new matches."));
+    capture_row_labels(row_monitors, &row_monitors_lbl_, &row_monitors_desc_);
+    sub_vl->addWidget(row_monitors);
+    auto* row_deviations = make_row(tr("Category Volume Spikes"), news_deviations_,
+                                    tr("Notify when a category has abnormally high article volume (z-score ≥ 3)."));
+    capture_row_labels(row_deviations, &row_deviations_lbl_, &row_deviations_desc_);
+    sub_vl->addWidget(row_deviations);
+    auto* row_flash = make_row(tr("FLASH + High-Impact Articles"), news_flash_,
+                               tr("Notify on individual articles that are both FLASH priority and high market impact."));
+    capture_row_labels(row_flash, &row_flash_lbl_, &row_flash_desc_);
+    sub_vl->addWidget(row_flash);
 
     vl->addWidget(news_subopts_frame_);
 
     connect(trigger_news_, &QCheckBox::toggled, this,
             [this](bool on) { news_subopts_frame_->setVisible(on); });
 
-    vl->addWidget(make_row(tr("Order Fill Alerts"), trigger_orders_,
-                           tr("Notify when orders are filled or rejected.")));
+    auto* row_orders = make_row(tr("Order Fill Alerts"), trigger_orders_,
+                                tr("Notify when orders are filled or rejected."));
+    capture_row_labels(row_orders, &row_orders_lbl_, &row_orders_desc_);
+    vl->addWidget(row_orders);
 
     vl->addSpacing(16);
 
     // Save
-    auto* save_btn = new QPushButton(tr("Save All Providers"));
-    save_btn->setFixedWidth(200);
-    save_btn->setStyleSheet(btn_primary_ss());
-    connect(save_btn, &QPushButton::clicked, this, [this]() {
+    save_btn_ = new QPushButton(tr("Save All Providers"));
+    save_btn_->setFixedWidth(200);
+    save_btn_->setStyleSheet(btn_primary_ss());
+    connect(save_btn_, &QPushButton::clicked, this, [this]() {
         auto& repo = SettingsRepository::instance();
         auto b = [](bool v) { return v ? "1" : "0"; };
         repo.set("notifications.inapp",           b(trigger_inapp_->isChecked()),  "notifications");
@@ -333,7 +367,7 @@ void NotificationsSection::build_ui() {
         NotificationService::instance().reload_all_configs();
         LOG_INFO("Settings", "All notification providers saved");
     });
-    vl->addWidget(save_btn);
+    vl->addWidget(save_btn_);
     vl->addStretch();
 
     scroll->setWidget(page);
@@ -377,6 +411,50 @@ void NotificationsSection::reload() {
             auto r = repo.get(cat + "." + fd.key);
             if (r.is_ok() && pw.fields[fd.key])
                 pw.fields[fd.key]->setText(r.value());
+        }
+    }
+}
+
+void NotificationsSection::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void NotificationsSection::retranslateUi() {
+    if (providers_hdr_) providers_hdr_->setText(tr("NOTIFICATION PROVIDERS"));
+    if (triggers_hdr_)  triggers_hdr_->setText(tr("ALERT TRIGGERS"));
+    if (save_btn_)      save_btn_->setText(tr("Save All Providers"));
+
+    // Trigger rows.
+    if (row_inapp_lbl_)  row_inapp_lbl_->setText(tr("In-App Alerts (toast + bell)"));
+    if (row_inapp_desc_) row_inapp_desc_->setText(tr("Show slide-in toasts and update bell badge."));
+    if (row_price_lbl_)  row_price_lbl_->setText(tr("Price Alerts"));
+    if (row_price_desc_) row_price_desc_->setText(tr("Notify when price alert thresholds are crossed."));
+    if (row_news_lbl_)   row_news_lbl_->setText(tr("News Alerts"));
+    if (row_news_desc_)  row_news_desc_->setText(tr("Enable news notifications (configure which types below)."));
+    if (row_orders_lbl_)  row_orders_lbl_->setText(tr("Order Fill Alerts"));
+    if (row_orders_desc_) row_orders_desc_->setText(tr("Notify when orders are filled or rejected."));
+
+    // News sub-option rows.
+    if (row_breaking_lbl_)  row_breaking_lbl_->setText(tr("Breaking News"));
+    if (row_breaking_desc_) row_breaking_desc_->setText(tr("Notify on FLASH/BREAKING/URGENT priority clusters."));
+    if (row_monitors_lbl_)  row_monitors_lbl_->setText(tr("Monitor Keyword Matches"));
+    if (row_monitors_desc_) row_monitors_desc_->setText(tr("Notify when a news monitor watch list gets new matches."));
+    if (row_deviations_lbl_)  row_deviations_lbl_->setText(tr("Category Volume Spikes"));
+    if (row_deviations_desc_) row_deviations_desc_->setText(tr("Notify when a category has abnormally high article volume (z-score ≥ 3)."));
+    if (row_flash_lbl_)  row_flash_lbl_->setText(tr("FLASH + High-Impact Articles"));
+    if (row_flash_desc_) row_flash_desc_->setText(tr("Notify on individual articles that are both FLASH priority and high market impact."));
+
+    // Per-provider: Test Send button + field row labels (provider names + icons
+    // are brand data, left as-is; placeholders are config examples, left as-is).
+    for (const auto& def : provider_defs()) {
+        if (!provider_widgets_.contains(def.id)) continue;
+        const auto& pw = provider_widgets_[def.id];
+        if (pw.test_btn) pw.test_btn->setText(tr("Test Send"));
+        for (const auto& fd : def.fields) {
+            if (auto* lbl = pw.field_labels.value(fd.key, nullptr))
+                lbl->setText(tr(fd.label.toUtf8().constData()));
         }
     }
 }

@@ -34,6 +34,7 @@ class DataSourcesScreen : public QWidget, public fincept::screens::IStatefulScre
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void changeEvent(QEvent* event) override;
     bool eventFilter(QObject* obj, QEvent* event) override;
 
   private slots:
@@ -86,6 +87,7 @@ class DataSourcesScreen : public QWidget, public fincept::screens::IStatefulScre
     void update_provider_ladder();
     void update_detail_panel();
     void update_action_states();
+    void retranslateUi();
     void show_config_dialog(const ConnectorConfig& config, const QString& edit_id = "", bool duplicate = false);
     void update_connection_status_cell(const QString& conn_id, bool ok, const QString& msg);
     void apply_stat_filter(int stat_index);
@@ -140,6 +142,35 @@ class DataSourcesScreen : public QWidget, public fincept::screens::IStatefulScre
 
     // ── Connections table ─────────────────────────────────────────────────────
     QTableWidget* connections_table_ = nullptr;
+
+    // ── Static chrome cached for retranslateUi ──────────────────────────────────
+    QLabel* header_title_ = nullptr;
+    QLabel* header_subtitle_ = nullptr;
+    QPushButton* import_btn_ = nullptr;
+    QPushButton* export_btn_ = nullptr;
+    QPushButton* tpl_btn_ = nullptr;
+    QLabel* universe_stat_label_ = nullptr;
+    QLabel* configured_stat_label_ = nullptr;
+    QLabel* active_stat_label_ = nullptr;
+    QLabel* auth_stat_label_ = nullptr;
+    QPushButton* browse_tab_ = nullptr;
+    QPushButton* conns_tab_ = nullptr;
+    QLabel* category_hdr_title_ = nullptr;
+    QLabel* provider_hdr_title_ = nullptr;
+    QLabel* connector_panel_title_ = nullptr;
+    QLabel* inspector_hdr_title_ = nullptr;
+    QLabel* detail_category_label_ = nullptr;
+    QLabel* detail_transport_label_ = nullptr;
+    QLabel* detail_auth_label_ = nullptr;
+    QLabel* detail_test_label_ = nullptr;
+    QLabel* detail_fields_label_ = nullptr;
+    QLabel* detail_configured_label_ = nullptr;
+    QLabel* detail_enabled_label_ = nullptr;
+    QLabel* detail_last_status_label_ = nullptr;
+    QLabel* config_fields_label_ = nullptr;
+    QLabel* detail_saved_conns_label_ = nullptr;
+    QLabel* conns_page_title_ = nullptr;
+    QPushButton* conns_add_btn_ = nullptr;
 
     // ── Page stack ────────────────────────────────────────────────────────────
     QStackedWidget* page_stack_ = nullptr;

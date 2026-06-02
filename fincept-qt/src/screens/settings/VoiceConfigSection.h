@@ -11,6 +11,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -31,6 +32,9 @@ class VoiceConfigSection : public QWidget {
     /// and TtsService.
     void config_changed();
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void on_provider_changed();
     void on_show_hide_key();
@@ -41,6 +45,10 @@ class VoiceConfigSection : public QWidget {
     void build_ui();
     void apply_provider_visibility();
     void set_status(const QString& msg, bool error = false);
+
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
 
     // Provider selectors (independent)
     QComboBox*   stt_provider_combo_ = nullptr;
@@ -73,6 +81,25 @@ class VoiceConfigSection : public QWidget {
     QWidget*     deepgram_group_    = nullptr;   // shared key + buttons
     QWidget*     stt_dg_group_      = nullptr;   // Deepgram STT-only rows
     QWidget*     tts_dg_group_      = nullptr;   // Deepgram TTS-only rows
+
+    // ── Fixed text widgets / row labels (captured for retranslateUi) ──────────
+    QLabel* title_lbl_            = nullptr;
+    QLabel* blurb_lbl_            = nullptr;
+    QLabel* stt_section_lbl_      = nullptr;
+    QLabel* stt_provider_row_lbl_ = nullptr;
+    QLabel* stt_model_row_lbl_    = nullptr;
+    QLabel* stt_language_row_lbl_ = nullptr;
+    QLabel* keyterms_row_lbl_     = nullptr;
+    QLabel* gain_row_lbl_         = nullptr;
+    QLabel* device_row_lbl_       = nullptr;
+    QLabel* tts_section_lbl_      = nullptr;
+    QLabel* tts_provider_row_lbl_ = nullptr;
+    QLabel* tts_voice_row_lbl_    = nullptr;
+    QLabel* dg_title_lbl_         = nullptr;
+    QLabel* key_lbl_             = nullptr;
+    QLabel* clap_section_lbl_     = nullptr;
+    QLabel* clap_blurb_lbl_       = nullptr;
+    QLabel* clap_trigger_row_lbl_ = nullptr;
 };
 
 } // namespace fincept::screens

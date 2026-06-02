@@ -25,15 +25,15 @@ void DBnomicsDataTable::build_ui() {
     root->setSpacing(0);
 
     // ── Section header (always visible) ──────────────────────────────────────
-    auto* header_label = new QLabel("OBSERVATION DATA", this);
-    header_label->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: 700; "
+    header_label_ = new QLabel(tr("OBSERVATION DATA"), this);
+    header_label_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: 700; "
                                         "font-family: 'Consolas','Courier New',monospace; "
                                         "padding: 6px 12px; background: %2; "
                                         "border-bottom: 1px solid %3;")
                                     .arg(ui::colors::AMBER())
                                     .arg(ui::colors::BG_RAISED())
                                     .arg(ui::colors::BORDER_DIM()));
-    root->addWidget(header_label);
+    root->addWidget(header_label_);
 
     stack_ = new QStackedWidget(this);
 
@@ -93,15 +93,30 @@ void DBnomicsDataTable::build_ui() {
     spin_timer_->setInterval(120);
     connect(spin_timer_, &QTimer::timeout, this, [this]() {
         static const QString frames[] = {"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"};
-        spin_label_->setText(QString("%1  LOADING OBSERVATIONS...").arg(frames[frame_ % 8]));
+        spin_label_->setText(tr("%1  LOADING OBSERVATIONS...").arg(frames[frame_ % 8]));
         ++frame_;
     });
+}
+
+// ── Live language switch ─────────────────────────────────────────────────────
+
+void DBnomicsDataTable::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void DBnomicsDataTable::retranslateUi() {
+    if (header_label_) header_label_->setText(tr("OBSERVATION DATA"));
+    // The table headers / cells are rebuilt by set_data(); only the empty-state
+    // placeholder needs an explicit re-apply here.
+    if (showing_placeholder_) clear();
 }
 
 void DBnomicsDataTable::set_loading(bool on) {
     if (on) {
         frame_ = 0;
-        spin_label_->setText("⣾  LOADING OBSERVATIONS...");
+        spin_label_->setText(tr("%1  LOADING OBSERVATIONS...").arg(QStringLiteral("⣾")));
         stack_->setCurrentIndex(0);
         spin_timer_->start();
     } else {
@@ -114,12 +129,13 @@ void DBnomicsDataTable::clear() {
     table_->clear();
     table_->setRowCount(1);
     table_->setColumnCount(1);
-    table_->setHorizontalHeaderLabels({"STATUS"});
-    auto* item = new QTableWidgetItem("No data — select a series");
+    table_->setHorizontalHeaderLabels({tr("STATUS")});
+    auto* item = new QTableWidgetItem(tr("No data — select a series"));
     item->setForeground(QColor(ui::colors::TEXT_TERTIARY()));
     item->setTextAlignment(Qt::AlignCenter);
     table_->setItem(0, 0, item);
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    showing_placeholder_ = true;
 }
 
 void DBnomicsDataTable::set_data(const QVector<services::DbnDataPoint>& series) {
@@ -128,6 +144,7 @@ void DBnomicsDataTable::set_data(const QVector<services::DbnDataPoint>& series) 
         clear();
         return;
     }
+    showing_placeholder_ = false;
 
     // Collect all unique periods across all series, sorted descending
     QSet<QString> period_set;
@@ -145,7 +162,7 @@ void DBnomicsDataTable::set_data(const QVector<services::DbnDataPoint>& series) 
     const int col_count = 1 + series.size();
     table_->setColumnCount(col_count);
     QStringList headers;
-    headers << "PERIOD";
+    headers << tr("PERIOD");
     for (const auto& dp : series) {
         QString short_name = dp.series_name;
         if (short_name.length() > 20)

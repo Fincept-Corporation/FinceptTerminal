@@ -81,7 +81,7 @@ void WebSocketClient::connect_to(const QString& url) {
             return;
         self->url_ = u;
         self->reconnect_attempts_ = 0;
-        self->reconnect_enabled_ = true; // a fresh connect re-enables auto-reconnect
+        self->reconnect_stopped_ = false; // a fresh connect re-enables auto-reconnect
         LOG_INFO(kTag, QString("[%1] Connecting to %2").arg(thread_label(), u));
         self->socket_->open(QUrl(u));
     });
@@ -107,17 +107,6 @@ void WebSocketClient::stop_reconnect() {
         self->reconnect_timer_.stop();
         LOG_INFO(kTag, QString("[%1] Auto-reconnect halted for %2 (fatal error or explicit stop)")
                            .arg(thread_label(), redact_url(self->url_)));
-    });
-}
-
-void WebSocketClient::stop_reconnect() {
-    QPointer<WebSocketClient> self(this);
-    run_on_owning_thread(this, [self]() {
-        if (!self)
-            return;
-        LOG_INFO(kTag, QString("[%1] Auto-reconnect halted for %2").arg(thread_label(), self->url_));
-        self->reconnect_enabled_ = false;
-        self->reconnect_timer_.stop();
     });
 }
 
@@ -157,7 +146,7 @@ void WebSocketClient::on_disconnected() {
                        .arg(thread_label(), url_)
                        .arg(static_cast<int>(socket_ ? socket_->state() : QAbstractSocket::UnconnectedState)));
     emit disconnected();
-    if (reconnect_enabled_ && reconnect_attempts_ < MAX_RECONNECT_ATTEMPTS) {
+    if (!reconnect_stopped_ && reconnect_attempts_ < MAX_RECONNECT_ATTEMPTS) {
         const int delay = std::min(1000 * (1 << reconnect_attempts_), 30000);
         LOG_INFO(kTag, QString("[%1] Scheduling reconnect attempt %2/%3 in %4ms")
                            .arg(thread_label())

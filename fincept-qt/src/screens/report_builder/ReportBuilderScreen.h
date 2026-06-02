@@ -13,6 +13,8 @@
 #include "screens/report_builder/DocumentCanvas.h"
 #include "screens/report_builder/PropertiesPanel.h"
 
+#include <QEvent>
+#include <QLabel>
 #include <QPropertyAnimation>
 #include <QPushButton>
 #include <QSplitter>
@@ -119,6 +121,19 @@ class ReportBuilderScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* e) override;
+
+  private:
+    void retranslateUi();
+
+    // Top-toolbar text widgets (cached for retranslateUi)
+    QLabel* toolbar_title_ = nullptr;
+    QPushButton* undo_btn_ = nullptr;
+    QPushButton* redo_btn_ = nullptr;
+    QPushButton* open_btn_ = nullptr;
+    QPushButton* save_btn_ = nullptr;
+    QPushButton* pdf_btn_ = nullptr;
+    QPushButton* preview_btn_ = nullptr;
 };
 
 } // namespace fincept::screens

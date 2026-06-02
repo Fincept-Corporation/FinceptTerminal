@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QEvent>
 #include <QString>
 #include <QVariant>
 #include <QWidget>
@@ -30,10 +31,12 @@ class TreasuryPanel : public QWidget {
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
     void apply_theme();
+    void retranslateUi();
 
     void on_reserves_update(const QVariant& v);
     void on_runway_update(const QVariant& v);
@@ -45,9 +48,15 @@ class TreasuryPanel : public QWidget {
     void update_demo_chip();
 
     // Head
+    QLabel* title_ = nullptr;          // "TREASURY"
     QLabel* status_pill_ = nullptr;
 
     // Body
+    QLabel* usdc_caption_ = nullptr;     // "USDC RESERVES"
+    QLabel* sol_caption_ = nullptr;      // "SOL RESERVES"
+    QLabel* total_caption_ = nullptr;    // "TOTAL USD"
+    QLabel* runway_caption_ = nullptr;   // "RUNWAY @ CURRENT"
+    QLabel* multisig_caption_ = nullptr; // "MULTI-SIG"
     QLabel* usdc_value_ = nullptr;
     QLabel* sol_value_ = nullptr;
     QLabel* total_usd_value_ = nullptr;

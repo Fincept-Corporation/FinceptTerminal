@@ -4,6 +4,7 @@
 // their installed versions, and allows install/upgrade via uv pip.
 
 #include <QComboBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QProcess>
@@ -24,6 +25,7 @@ class PythonEnvSection : public QWidget {
 
   protected:
     void showEvent(QShowEvent* e) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     // ── UI ────────────────────────────────────────────────────────────────────
@@ -37,6 +39,11 @@ class PythonEnvSection : public QWidget {
     QPushButton*   install_missing_btn_ = nullptr;
     QPushButton*   upgrade_all_btn_     = nullptr;
     QPushButton*   batch_action_btn_    = nullptr;  // "Install/Upgrade Selected"
+
+    // Fixed text widgets captured for retranslateUi.
+    QLabel*        title_lbl_           = nullptr;
+    QLabel*        info_lbl_            = nullptr;
+    QLabel*        warn_text_           = nullptr;
 
     // ── Processes — signal-driven, never waitForFinished on UI thread ─────────
     QProcess*      list_proc_           = nullptr;  // uv pip list, reused sequentially
@@ -73,6 +80,10 @@ class PythonEnvSection : public QWidget {
 
     // ── Builders ──────────────────────────────────────────────────────────────
     void build_ui();
+
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
 
     // ── Load phase ────────────────────────────────────────────────────────────
     void load_packages();

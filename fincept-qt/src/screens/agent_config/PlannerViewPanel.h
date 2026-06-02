@@ -4,6 +4,7 @@
 #include "ui/widgets/LoadingOverlay.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -25,6 +26,7 @@ class PlannerViewPanel : public QWidget {
 
   protected:
     void showEvent(QShowEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
@@ -32,6 +34,10 @@ class PlannerViewPanel : public QWidget {
     QWidget* build_plan_editor();
     QWidget* build_results_panel();
     void setup_connections();
+
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
 
     void generate_plan();
     void execute_plan();
@@ -45,9 +51,13 @@ class PlannerViewPanel : public QWidget {
     void copy_result();
 
     // Left
+    QLabel* templates_title_ = nullptr;
+    QLabel* llm_profile_title_ = nullptr;
     QComboBox* llm_profile_combo_ = nullptr;
+    QLabel* portfolio_title_ = nullptr;
     QComboBox* portfolio_combo_ = nullptr;
     QListWidget* template_list_ = nullptr;
+    QLabel* custom_query_title_ = nullptr;
     QPlainTextEdit* custom_query_ = nullptr;
     QPushButton* generate_btn_ = nullptr;
     QListWidget* history_list_ = nullptr;
@@ -55,6 +65,7 @@ class PlannerViewPanel : public QWidget {
     QLabel* history_header_ = nullptr;
 
     // Center
+    QLabel* plan_editor_title_ = nullptr;
     QTableWidget* steps_table_ = nullptr;
     QPushButton* execute_btn_ = nullptr;
     QPushButton* add_step_btn_ = nullptr;

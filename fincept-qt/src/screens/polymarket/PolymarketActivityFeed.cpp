@@ -3,6 +3,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QBrush>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QTimeZone>
 #include <QHeaderView>
@@ -23,7 +24,9 @@ constexpr int kFlashMs = 600;
 void apply_row(QTableWidget* table, int row, const PredictionTrade& t, int price_decimals) {
     const QString time = QDateTime::fromMSecsSinceEpoch(t.ts_ms, QTimeZone::UTC).toString("HH:mm:ss");
     table->setItem(row, 0, new QTableWidgetItem(time));
-    table->setItem(row, 1, new QTableWidgetItem("TRADE"));
+    // Free helper (anonymous namespace) — translate via QCoreApplication.
+    table->setItem(row, 1, new QTableWidgetItem(
+                              QCoreApplication::translate("PolymarketActivityFeed", "TRADE")));
 
     auto* side_item = new QTableWidgetItem(t.side);
     side_item->setForeground(QColor(t.side.compare("BUY", Qt::CaseInsensitive) == 0
@@ -70,7 +73,7 @@ PolymarketActivityFeed::PolymarketActivityFeed(QWidget* parent) : QWidget(parent
 
     table_ = new QTableWidget;
     table_->setColumnCount(5);
-    table_->setHorizontalHeaderLabels({"TIME", "TYPE", "SIDE", "PRICE", "SIZE"});
+    table_->setHorizontalHeaderLabels({tr("TIME"), tr("TYPE"), tr("SIDE"), tr("PRICE"), tr("SIZE")});
     table_->horizontalHeader()->setStretchLastSection(true);
     table_->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     table_->verticalHeader()->setVisible(false);
@@ -142,6 +145,20 @@ void PolymarketActivityFeed::set_presentation(const ExchangePresentation& p) {
     const bool decimals_changed = p.price_decimal_places != presentation_.price_decimal_places;
     presentation_ = p;
     if (decimals_changed && !last_trades_.isEmpty()) set_trades(last_trades_);
+}
+
+void PolymarketActivityFeed::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PolymarketActivityFeed::retranslateUi() {
+    if (table_)
+        table_->setHorizontalHeaderLabels({tr("TIME"), tr("TYPE"), tr("SIDE"), tr("PRICE"), tr("SIZE")});
+    // Re-render rows so the per-row "TRADE" type label picks up the new
+    // language (side/price/size are data).
+    if (!last_trades_.isEmpty()) set_trades(last_trades_);
 }
 
 } // namespace fincept::screens::polymarket

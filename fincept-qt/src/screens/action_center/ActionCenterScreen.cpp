@@ -73,33 +73,37 @@ void ActionCenterScreen::build_ui() {
     hlay->setContentsMargins(14, 8, 14, 8);
     hlay->setSpacing(12);
 
-    auto* title = new QLabel("ACTION CENTER");
-    title->setObjectName("acTitle");
-    hlay->addWidget(title);
+    title_label_ = new QLabel(tr("ACTION CENTER"));
+    title_label_->setObjectName("acTitle");
+    hlay->addWidget(title_label_);
     hlay->addSpacing(16);
 
-    hlay->addWidget(new QLabel("Account:"));
+    account_caption_ = new QLabel(tr("Account:"));
+    hlay->addWidget(account_caption_);
     account_combo_ = new QComboBox;
     account_combo_->setObjectName("acCombo");
     account_combo_->setMinimumWidth(180);
     hlay->addWidget(account_combo_);
 
-    hlay->addWidget(new QLabel("Show:"));
+    show_caption_ = new QLabel(tr("Show:"));
+    hlay->addWidget(show_caption_);
     status_filter_ = new QComboBox;
     status_filter_->setObjectName("acCombo");
-    status_filter_->addItem("Pending", "pending");
-    status_filter_->addItem("Approved", "approved");
-    status_filter_->addItem("Rejected", "rejected");
-    status_filter_->addItem("All", "all");
+    // Visible text is translatable; the userData key (e.g. "pending") drives logic.
+    status_filter_->addItem(tr("Pending"), "pending");
+    status_filter_->addItem(tr("Approved"), "approved");
+    status_filter_->addItem(tr("Rejected"), "rejected");
+    status_filter_->addItem(tr("All"), "all");
     hlay->addWidget(status_filter_);
 
     hlay->addStretch(1);
 
-    hlay->addWidget(new QLabel("Mode:"));
+    mode_caption_ = new QLabel(tr("Mode:"));
+    hlay->addWidget(mode_caption_);
     mode_combo_ = new QComboBox;
     mode_combo_->setObjectName("acCombo");
-    mode_combo_->addItem("Auto", "auto");
-    mode_combo_->addItem("Semi-Auto", "semi_auto");
+    mode_combo_->addItem(tr("Auto"), "auto");
+    mode_combo_->addItem(tr("Semi-Auto"), "semi_auto");
     hlay->addWidget(mode_combo_);
 
     root->addWidget(header);
@@ -111,32 +115,32 @@ void ActionCenterScreen::build_ui() {
     slay->setContentsMargins(14, 6, 14, 6);
     slay->setSpacing(28);
 
-    auto make_stat = [&](const QString& caption, QLabel*& out) {
+    auto make_stat = [&](const QString& caption, QLabel*& cap_out, QLabel*& out) {
         auto* cell = new QWidget;
         auto* cv = new QVBoxLayout(cell);
         cv->setContentsMargins(0, 0, 0, 0);
         cv->setSpacing(1);
-        auto* cap = new QLabel(caption);
-        cap->setObjectName("acStatCaption");
+        cap_out = new QLabel(caption);
+        cap_out->setObjectName("acStatCaption");
         out = new QLabel("0");
         out->setObjectName("acStatValue");
-        cv->addWidget(cap);
+        cv->addWidget(cap_out);
         cv->addWidget(out);
         slay->addWidget(cell);
     };
-    make_stat("PENDING", stat_pending_);
-    make_stat("APPROVED", stat_approved_);
-    make_stat("REJECTED", stat_rejected_);
-    make_stat("BUY", stat_buy_);
-    make_stat("SELL", stat_sell_);
+    make_stat(tr("PENDING"), stat_pending_cap_, stat_pending_);
+    make_stat(tr("APPROVED"), stat_approved_cap_, stat_approved_);
+    make_stat(tr("REJECTED"), stat_rejected_cap_, stat_rejected_);
+    make_stat(tr("BUY"), stat_buy_cap_, stat_buy_);
+    make_stat(tr("SELL"), stat_sell_cap_, stat_sell_);
     slay->addStretch(1);
 
-    approve_all_btn_ = new QPushButton("APPROVE ALL");
+    approve_all_btn_ = new QPushButton(tr("APPROVE ALL"));
     approve_all_btn_->setObjectName("acApproveAll");
     approve_all_btn_->setCursor(Qt::PointingHandCursor);
     slay->addWidget(approve_all_btn_);
 
-    reject_all_btn_ = new QPushButton("REJECT ALL");
+    reject_all_btn_ = new QPushButton(tr("REJECT ALL"));
     reject_all_btn_->setObjectName("acRejectAll");
     reject_all_btn_->setCursor(Qt::PointingHandCursor);
     slay->addWidget(reject_all_btn_);
@@ -147,8 +151,8 @@ void ActionCenterScreen::build_ui() {
     table_ = new QTableWidget;
     table_->setObjectName("acTable");
     table_->setColumnCount(kColCount);
-    table_->setHorizontalHeaderLabels(
-        {"Time", "Account", "Type", "Symbol", "Side", "Qty", "Price Type", "Status", "Actions"});
+    table_->setHorizontalHeaderLabels({tr("Time"), tr("Account"), tr("Type"), tr("Symbol"), tr("Side"),
+                                       tr("Qty"), tr("Price Type"), tr("Status"), tr("Actions")});
     table_->verticalHeader()->setVisible(false);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -186,8 +190,8 @@ void ActionCenterScreen::build_ui() {
     });
     connect(approve_all_btn_, &QPushButton::clicked, this, [this]() {
         const QString acct = selected_account();
-        auto ans = QMessageBox::question(this, "Approve All",
-                                         "Execute ALL pending orders now?",
+        auto ans = QMessageBox::question(this, tr("Approve All"),
+                                         tr("Execute ALL pending orders now?"),
                                          QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (ans != QMessageBox::Yes)
             return;
@@ -196,18 +200,58 @@ void ActionCenterScreen::build_ui() {
     connect(reject_all_btn_, &QPushButton::clicked, this, [this]() {
         const QString acct = selected_account();
         if (acct.isEmpty()) {
-            QMessageBox::information(this, "Reject All",
-                                    "Select a specific account to reject all its pending orders.");
+            QMessageBox::information(this, tr("Reject All"),
+                                    tr("Select a specific account to reject all its pending orders."));
             return;
         }
         bool ok = false;
-        const QString reason = QInputDialog::getText(this, "Reject All",
-                                                     "Rejection reason:", QLineEdit::Normal,
-                                                     "Rejected by user", &ok);
+        const QString reason = QInputDialog::getText(this, tr("Reject All"),
+                                                     tr("Rejection reason:"), QLineEdit::Normal,
+                                                     tr("Rejected by user"), &ok);
         if (!ok)
             return;
         ActionCenter::instance().reject_all_pending(acct, reason);
     });
+}
+
+void ActionCenterScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ActionCenterScreen::retranslateUi() {
+    if (title_label_)     title_label_->setText(tr("ACTION CENTER"));
+    if (account_caption_) account_caption_->setText(tr("Account:"));
+    if (show_caption_)    show_caption_->setText(tr("Show:"));
+    if (mode_caption_)    mode_caption_->setText(tr("Mode:"));
+
+    // Combo items: re-set visible text by index; userData keys are unchanged.
+    if (status_filter_ && status_filter_->count() >= 4) {
+        status_filter_->setItemText(0, tr("Pending"));
+        status_filter_->setItemText(1, tr("Approved"));
+        status_filter_->setItemText(2, tr("Rejected"));
+        status_filter_->setItemText(3, tr("All"));
+    }
+    if (mode_combo_ && mode_combo_->count() >= 2) {
+        mode_combo_->setItemText(0, tr("Auto"));
+        mode_combo_->setItemText(1, tr("Semi-Auto"));
+    }
+
+    if (stat_pending_cap_)  stat_pending_cap_->setText(tr("PENDING"));
+    if (stat_approved_cap_) stat_approved_cap_->setText(tr("APPROVED"));
+    if (stat_rejected_cap_) stat_rejected_cap_->setText(tr("REJECTED"));
+    if (stat_buy_cap_)      stat_buy_cap_->setText(tr("BUY"));
+    if (stat_sell_cap_)     stat_sell_cap_->setText(tr("SELL"));
+
+    if (approve_all_btn_) approve_all_btn_->setText(tr("APPROVE ALL"));
+    if (reject_all_btn_)  reject_all_btn_->setText(tr("REJECT ALL"));
+
+    if (table_) {
+        table_->setHorizontalHeaderLabels({tr("Time"), tr("Account"), tr("Type"), tr("Symbol"), tr("Side"),
+                                           tr("Qty"), tr("Price Type"), tr("Status"), tr("Actions")});
+    }
+    // Per-row Approve/Reject button widgets are rebuilt on the next refresh().
 }
 
 QString ActionCenterScreen::selected_account() const {
@@ -218,7 +262,7 @@ void ActionCenterScreen::reload_accounts() {
     const QString prev = selected_account();
     QSignalBlocker b(account_combo_);
     account_combo_->clear();
-    account_combo_->addItem("All Accounts", QString());
+    account_combo_->addItem(tr("All Accounts"), QString());
     for (const auto& acct : trading::AccountManager::instance().list_accounts()) {
         const QString label = acct.display_name.isEmpty() ? acct.account_id : acct.display_name;
         account_combo_->addItem(label, acct.account_id);
@@ -280,14 +324,14 @@ void ActionCenterScreen::refresh() {
             auto* cl = new QHBoxLayout(cell);
             cl->setContentsMargins(4, 2, 4, 2);
             cl->setSpacing(6);
-            auto* approve = new QPushButton("Approve");
+            auto* approve = new QPushButton(tr("Approve"));
             approve->setCursor(Qt::PointingHandCursor);
             approve->setStyleSheet(QString("QPushButton{background:rgba(34,197,94,0.14);color:%1;"
                                            "border:1px solid %1;padding:2px 10px;font-size:10px;"
                                            "font-weight:700;border-radius:2px;}"
                                            "QPushButton:hover{background:rgba(34,197,94,0.28);}")
                                        .arg(fincept::ui::colors::POSITIVE()));
-            auto* reject = new QPushButton("Reject");
+            auto* reject = new QPushButton(tr("Reject"));
             reject->setCursor(Qt::PointingHandCursor);
             reject->setStyleSheet(QString("QPushButton{background:rgba(220,38,38,0.12);color:%1;"
                                           "border:1px solid %1;padding:2px 10px;font-size:10px;"
@@ -326,8 +370,8 @@ void ActionCenterScreen::approve_row(const QString& pending_id) {
 
 void ActionCenterScreen::reject_row(const QString& pending_id) {
     bool ok = false;
-    const QString reason = QInputDialog::getText(this, "Reject Order", "Rejection reason:",
-                                                 QLineEdit::Normal, "Rejected by user", &ok);
+    const QString reason = QInputDialog::getText(this, tr("Reject Order"), tr("Rejection reason:"),
+                                                 QLineEdit::Normal, tr("Rejected by user"), &ok);
     if (!ok)
         return;
     ActionCenter::instance().reject_order(pending_id, reason);

@@ -7,6 +7,7 @@
 
 #include <QCheckBox>
 #include <QDialog>
+#include <QEvent>
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -22,8 +23,12 @@ class BroadcastOrderDialog : public QDialog {
   signals:
     void broadcast_completed(const QVector<trading::UnifiedTrading::BroadcastResult>& results);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void setup_ui();
+    void retranslateUi();
     void on_select_all(bool checked);
     void on_place_order();
     void show_results(const QVector<trading::UnifiedTrading::BroadcastResult>& results);
@@ -34,9 +39,12 @@ class BroadcastOrderDialog : public QDialog {
     QVector<QCheckBox*> account_cbs_;
     QVector<QString> account_ids_;
     QPushButton* place_btn_ = nullptr;
+    QPushButton* cancel_btn_ = nullptr;
+    QLabel* header_label_ = nullptr;
     QLabel* status_label_ = nullptr;
     QWidget* results_widget_ = nullptr;
     QVBoxLayout* results_layout_ = nullptr;
+    bool results_shown_ = false; // place_btn_ shows DONE after results
 };
 
 } // namespace fincept::screens::equity

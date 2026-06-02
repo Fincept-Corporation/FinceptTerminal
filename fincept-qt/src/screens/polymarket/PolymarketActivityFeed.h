@@ -3,6 +3,7 @@
 #include "screens/polymarket/ExchangePresentation.h"
 #include "services/prediction/PredictionTypes.h"
 
+#include <QEvent>
 #include <QTableWidget>
 #include <QWidget>
 
@@ -26,7 +27,12 @@ class PolymarketActivityFeed : public QWidget {
     /// Per-exchange number formatting (decimals on the price column).
     void set_presentation(const ExchangePresentation& p);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    void retranslateUi();
+
     QTableWidget* table_ = nullptr;
     ExchangePresentation presentation_ = ExchangePresentation::for_polymarket();
 

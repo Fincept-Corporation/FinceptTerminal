@@ -49,8 +49,8 @@ TradingEconomicsPanel::TradingEconomicsPanel(QWidget* parent)
 }
 
 void TradingEconomicsPanel::activate() {
-    show_empty("Set TRADING_ECONOMICS_API_KEY environment variable, then select a dataset and click FETCH\n"
-               "Get a key at: tradingeconomics.com/api");
+    show_empty(tr("Set TRADING_ECONOMICS_API_KEY environment variable, then select a dataset and click FETCH\n"
+                  "Get a key at: tradingeconomics.com/api"));
 }
 
 void TradingEconomicsPanel::build_controls(QHBoxLayout* thl) {
@@ -71,11 +71,11 @@ void TradingEconomicsPanel::build_controls(QHBoxLayout* thl) {
         country_combo_->addItem(c.first, c.second);
     country_combo_->setFixedHeight(26);
     country_combo_->setMinimumWidth(130);
-    country_combo_->setToolTip("Required for yield_curve and country_data");
+    country_combo_->setToolTip(tr("Required for yield_curve and country_data"));
 
-    thl->addWidget(lbl("DATASET"));
+    thl->addWidget(dataset_lbl_ = lbl(tr("DATASET")));
     thl->addWidget(dataset_combo_);
-    thl->addWidget(lbl("COUNTRY"));
+    thl->addWidget(country_lbl_ = lbl(tr("COUNTRY")));
     thl->addWidget(country_combo_);
 }
 
@@ -84,7 +84,7 @@ void TradingEconomicsPanel::on_fetch() {
     const auto& dataset = kTEDatasets[idx];
     const QString country = country_combo_->currentData().toString();
 
-    show_loading("Fetching Trading Economics: " + dataset.label + "…");
+    show_loading(tr("Fetching Trading Economics: %1…").arg(dataset.label));
 
     QStringList args = {dataset.command};
     if (dataset.country_arg == "required" || dataset.country_arg == "optional")
@@ -142,9 +142,9 @@ void TradingEconomicsPanel::on_result(const QString& request_id, const services:
     if (!result.success) {
         const QString msg = result.error;
         if (msg.contains("API key") || msg.contains("TRADING_ECONOMICS_API_KEY")) {
-            show_error("Trading Economics API key not configured.\n"
-                       "Set TRADING_ECONOMICS_API_KEY environment variable.\n"
-                       "Get a key at: tradingeconomics.com/api");
+            show_error(tr("Trading Economics API key not configured.\n"
+                          "Set TRADING_ECONOMICS_API_KEY environment variable.\n"
+                          "Get a key at: tradingeconomics.com/api"));
         } else {
             show_error(msg);
         }
@@ -156,9 +156,9 @@ void TradingEconomicsPanel::on_result(const QString& request_id, const services:
         const QString err = result.data["error"].toString();
         if (!err.isEmpty() && err != "false") {
             if (err.contains("API key") || err.contains("TRADING_ECONOMICS")) {
-                show_error("Trading Economics API key not configured.\n"
-                           "Set TRADING_ECONOMICS_API_KEY environment variable.\n"
-                           "Get a key at: tradingeconomics.com/api");
+                show_error(tr("Trading Economics API key not configured.\n"
+                              "Set TRADING_ECONOMICS_API_KEY environment variable.\n"
+                              "Get a key at: tradingeconomics.com/api"));
             } else {
                 show_error(err);
             }
@@ -168,7 +168,7 @@ void TradingEconomicsPanel::on_result(const QString& request_id, const services:
 
     const QJsonArray rows = extract_te_rows(result.data);
     if (rows.isEmpty()) {
-        show_error("No data returned — API key may be required");
+        show_error(tr("No data returned — API key may be required"));
         return;
     }
 
@@ -177,6 +177,24 @@ void TradingEconomicsPanel::on_result(const QString& request_id, const services:
         "Trading Economics: " + (idx >= 0 && idx < kTEDatasets.size() ? kTEDatasets[idx].label : request_id.mid(3));
     display(rows, title);
     LOG_INFO("TradingEconomicsPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void TradingEconomicsPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void TradingEconomicsPanel::retranslateUi() {
+    if (dataset_lbl_)
+        dataset_lbl_->setText(tr("DATASET"));
+    if (country_lbl_)
+        country_lbl_->setText(tr("COUNTRY"));
+    if (country_combo_)
+        country_combo_->setToolTip(tr("Required for yield_curve and country_data"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

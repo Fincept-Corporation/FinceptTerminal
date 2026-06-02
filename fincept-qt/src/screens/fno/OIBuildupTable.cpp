@@ -63,10 +63,10 @@ OIBuildupModel::Buildup OIBuildupModel::classify(double price_chg, double oi_chg
 
 QString OIBuildupModel::class_str(Buildup b) {
     switch (b) {
-        case Buildup::LongBuildup:    return QStringLiteral("Long Build-up");
-        case Buildup::ShortBuildup:   return QStringLiteral("Short Build-up");
-        case Buildup::ShortCovering:  return QStringLiteral("Short Covering");
-        case Buildup::LongUnwinding:  return QStringLiteral("Long Unwinding");
+        case Buildup::LongBuildup:    return tr("Long Build-up");
+        case Buildup::ShortBuildup:   return tr("Short Build-up");
+        case Buildup::ShortCovering:  return tr("Short Covering");
+        case Buildup::LongUnwinding:  return tr("Long Unwinding");
         default:                      return QStringLiteral("—");
     }
 }
@@ -127,14 +127,15 @@ QVariant OIBuildupModel::data(const QModelIndex& index, int role) const {
 QVariant OIBuildupModel::headerData(int section, Qt::Orientation orient, int role) const {
     if (orient != Qt::Horizontal || role != Qt::DisplayRole)
         return {};
-    static const char* kHeaders[ColCount] = {
-        "Strike",
-        "CE Action", "CE Δ%", "CE ΔOI%",
-        "PE Action", "PE Δ%", "PE ΔOI%",
+    // tr() per-call — owning QHeaderView re-polls on QEvent::LanguageChange.
+    const QString headers[ColCount] = {
+        tr("Strike"),
+        tr("CE Action"), tr("CE Δ%"), tr("CE ΔOI%"),
+        tr("PE Action"), tr("PE Δ%"), tr("PE ΔOI%"),
     };
     if (section < 0 || section >= ColCount)
         return {};
-    return QString::fromLatin1(kHeaders[section]);
+    return headers[section];
 }
 
 void OIBuildupModel::set_chain(const OptionChain& chain) {

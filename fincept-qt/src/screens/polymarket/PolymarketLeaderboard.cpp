@@ -33,18 +33,18 @@ PolymarketLeaderboard::PolymarketLeaderboard(QWidget* parent) : QWidget(parent) 
             .arg(colors::BG_RAISED(), colors::BORDER_DIM()));
     auto* hbl = new QHBoxLayout(header_bar);
     hbl->setContentsMargins(12, 0, 8, 0);
-    auto* header = new QLabel("LEADERBOARD");
-    header->setStyleSheet(
+    header_ = new QLabel(tr("LEADERBOARD"));
+    header_->setStyleSheet(
         QString("color: %1; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; "
                 "background: transparent;")
             .arg(colors::TEXT_SECONDARY()));
-    hbl->addWidget(header);
+    hbl->addWidget(header_);
     hbl->addStretch(1);
     vl->addWidget(header_bar);
 
     table_ = new QTableWidget;
     table_->setColumnCount(5);
-    table_->setHorizontalHeaderLabels({"#", "TRADER", "PNL", "VOLUME", "TRADES"});
+    table_->setHorizontalHeaderLabels({tr("#"), tr("TRADER"), tr("PNL"), tr("VOLUME"), tr("TRADES")});
     table_->horizontalHeader()->setStretchLastSection(true);
     table_->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     table_->verticalHeader()->setVisible(false);
@@ -101,6 +101,19 @@ void PolymarketLeaderboard::set_loading(bool loading) {
     if (loading) {
         table_->setRowCount(0);
     }
+}
+
+void PolymarketLeaderboard::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PolymarketLeaderboard::retranslateUi() {
+    if (header_) header_->setText(tr("LEADERBOARD"));
+    if (table_)
+        table_->setHorizontalHeaderLabels({tr("#"), tr("TRADER"), tr("PNL"), tr("VOLUME"), tr("TRADES")});
+    // Row data refreshes via set_entries().
 }
 
 } // namespace fincept::screens::polymarket

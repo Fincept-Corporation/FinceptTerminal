@@ -4,12 +4,14 @@
 #include "services/geopolitics/GeopoliticsTypes.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QShowEvent>
 #include <QStackedWidget>
+#include <QStringList>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -39,6 +41,7 @@ class GeopoliticsScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_apply_filters();
@@ -55,12 +58,29 @@ class GeopoliticsScreen : public QWidget, public IStatefulScreen {
     QWidget* build_status_bar();
     void connect_service();
     void refresh_theme();
+    void retranslateUi();
     void rebuild_legend(const QVector<services::geo::UniqueCategory>& cats);
 
     // Filter inputs
     QLineEdit* country_edit_ = nullptr;
     QLineEdit* city_edit_ = nullptr;
     QComboBox* category_combo_ = nullptr;
+
+    // Static text widgets (cached for retranslateUi)
+    QLabel* filters_title_ = nullptr;
+    QLabel* country_lbl_ = nullptr;
+    QLabel* city_lbl_ = nullptr;
+    QLabel* category_lbl_ = nullptr;
+    QPushButton* apply_btn_ = nullptr;
+    QPushButton* clear_btn_ = nullptr;
+    QLabel* legend_title_ = nullptr;
+    QLabel* clock_label_ = nullptr;
+    QLabel* status_source_lbl_ = nullptr;
+    QLabel* status_source_val_ = nullptr;
+    QLabel* status_engine_lbl_ = nullptr;
+    QLabel* status_engine_val_ = nullptr;
+    // Fixed English tab labels, re-applied in retranslateUi.
+    QStringList tab_labels_;
 
     // Content
     QStackedWidget* content_stack_ = nullptr;

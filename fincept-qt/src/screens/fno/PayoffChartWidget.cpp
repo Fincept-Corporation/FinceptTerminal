@@ -257,7 +257,7 @@ void PayoffChartWidget::update_crosshair(const QPoint& widget_pos) {
     hover_line_->setLine(scene_pos.x(), plot.top(), scene_pos.x(), plot.bottom());
     hover_line_->setVisible(true);
 
-    QString text = QString("Spot: %1\nExpiry P/L: %2\nTarget P/L: %3")
+    QString text = tr("Spot: %1\nExpiry P/L: %2\nTarget P/L: %3")
                        .arg(p.spot, 0, 'f', 2)
                        .arg(p.pnl_expiry, 0, 'f', 2)
                        .arg(p.pnl_target, 0, 'f', 2);

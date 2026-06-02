@@ -180,7 +180,7 @@ void ChatModeScreen::on_session_selected(const QString& uuid) {
 
 void ChatModeScreen::on_new_session() {
     QPointer<ChatModeScreen> self = this;
-    ChatModeService::instance().create_session("New Conversation", [self](bool ok, ChatSession session, QString err) {
+    ChatModeService::instance().create_session(tr("New Conversation"), [self](bool ok, ChatSession session, QString err) {
         if (!self)
             return;
         if (!ok) {
@@ -247,7 +247,7 @@ void ChatModeScreen::ensure_active_session(std::function<void(const QString&)> t
     }
     QPointer<ChatModeScreen> self = this;
     ChatModeService::instance().create_session(
-        "New Conversation", [self, then = std::move(then)](bool ok, ChatSession session, QString err) {
+        tr("New Conversation"), [self, then = std::move(then)](bool ok, ChatSession session, QString err) {
             if (!self)
                 return;
             if (!ok) {

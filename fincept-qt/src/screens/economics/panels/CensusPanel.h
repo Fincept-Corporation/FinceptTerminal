@@ -20,12 +20,17 @@ class CensusPanel : public EconPanelBase {
     void build_controls(QHBoxLayout* thl) override;
     void on_fetch() override;
     void on_result(const QString& request_id, const services::EconomicsResult& result) override;
+    void changeEvent(QEvent* event) override;
 
   private:
+    void retranslateUi() override;
     /// Flatten Census {headers, data} shape into [{col1, col2, ...}] for display().
     static QJsonArray flatten_census(const QJsonObject& response);
 
     QComboBox* dataset_combo_ = nullptr;
+
+    // Cached for retranslateUi
+    QLabel* dataset_lbl_ = nullptr;
 };
 
 } // namespace fincept::screens

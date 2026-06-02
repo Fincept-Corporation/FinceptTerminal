@@ -60,14 +60,14 @@ QWidget* LlmConfigSection::build_profile_list_panel() {
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
 
-    auto* lbl = new QLabel(tr("PROFILES"));
-    lbl->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";font-weight:700;letter-spacing:1px;");
-    vl->addWidget(lbl);
+    profile_list_title_ = new QLabel(tr("PROFILES"));
+    profile_list_title_->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";font-weight:700;letter-spacing:1px;");
+    vl->addWidget(profile_list_title_);
 
-    auto* hint = new QLabel(tr("A profile = named LLM config you can assign to any agent or team."));
-    hint->setWordWrap(true);
-    hint->setStyleSheet("color:" + QString(ui::colors::TEXT_TERTIARY()) + ";padding-bottom:4px;");
-    vl->addWidget(hint);
+    profile_list_hint_ = new QLabel(tr("A profile = named LLM config you can assign to any agent or team."));
+    profile_list_hint_->setWordWrap(true);
+    profile_list_hint_->setStyleSheet("color:" + QString(ui::colors::TEXT_TERTIARY()) + ";padding-bottom:4px;");
+    vl->addWidget(profile_list_hint_);
 
     profile_list_ = new QListWidget;
     profile_list_->setStyleSheet(
@@ -83,20 +83,20 @@ QWidget* LlmConfigSection::build_profile_list_panel() {
     vl->addWidget(profile_list_, 1);
 
     auto* btn_row = new QHBoxLayout;
-    auto* add_btn = new QPushButton("+ New");
-    add_btn->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" +
+    profile_add_btn_ = new QPushButton(tr("+ New"));
+    profile_add_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" +
                            QString(ui::colors::AMBER()) + ";border:1px solid " + QString(ui::colors::AMBER()) +
                            ";"
                            "border-radius:3px;padding:5px 10px;font-weight:600;}"
                            "QPushButton:hover{background:" +
                            QString(ui::colors::BG_RAISED()) + ";}");
-    connect(add_btn, &QPushButton::clicked, this, [this]() {
+    connect(profile_add_btn_, &QPushButton::clicked, this, [this]() {
         editing_profile_id_.clear();
         clear_profile_form();
     });
-    btn_row->addWidget(add_btn);
+    btn_row->addWidget(profile_add_btn_);
 
-    profile_delete_btn_ = new QPushButton("Delete");
+    profile_delete_btn_ = new QPushButton(tr("Delete"));
     profile_delete_btn_->setEnabled(false);
     profile_delete_btn_->setStyleSheet("QPushButton{background:transparent;color:" + QString(ui::colors::NEGATIVE()) +
                                        ";border:1px solid " + QString(ui::colors::NEGATIVE()) +
@@ -143,13 +143,15 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
                        QString(ui::colors::BORDER_MED()) + ";padding:6px 10px;");
     };
 
-    vl->addWidget(lbl("PROFILE NAME"));
+    profile_name_field_lbl_ = lbl(tr("PROFILE NAME"));
+    vl->addWidget(profile_name_field_lbl_);
     profile_name_edit_ = new QLineEdit;
-    profile_name_edit_->setPlaceholderText("e.g. Fast Groq, Careful Claude, Coding minimax");
+    profile_name_edit_->setPlaceholderText(tr("e.g. Fast Groq, Careful Claude, Coding minimax"));
     profile_name_edit_->setStyleSheet(field_style());
     vl->addWidget(profile_name_edit_);
 
-    vl->addWidget(lbl("PROVIDER"));
+    profile_provider_field_lbl_ = lbl(tr("PROVIDER"));
+    vl->addWidget(profile_provider_field_lbl_);
     profile_provider_combo_ = new QComboBox;
     profile_provider_combo_->addItems(KNOWN_PROVIDERS);
     profile_provider_combo_->setStyleSheet(
@@ -158,28 +160,32 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
             &LlmConfigSection::on_profile_provider_changed);
     vl->addWidget(profile_provider_combo_);
 
-    vl->addWidget(lbl("MODEL"));
+    profile_model_field_lbl_ = lbl(tr("MODEL"));
+    vl->addWidget(profile_model_field_lbl_);
     profile_model_combo_ = new QComboBox;
     profile_model_combo_->setEditable(true);
     profile_model_combo_->setStyleSheet(QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(field_style()));
     vl->addWidget(profile_model_combo_);
 
-    vl->addWidget(lbl("API KEY"));
+    profile_api_key_field_lbl_ = lbl(tr("API KEY"));
+    vl->addWidget(profile_api_key_field_lbl_);
     profile_api_key_edit_ = new QLineEdit;
     profile_api_key_edit_->setEchoMode(QLineEdit::Password);
-    profile_api_key_edit_->setPlaceholderText("Leave blank to inherit from provider");
+    profile_api_key_edit_->setPlaceholderText(tr("Leave blank to inherit from provider"));
     profile_api_key_edit_->setStyleSheet(field_style());
     vl->addWidget(profile_api_key_edit_);
 
-    vl->addWidget(lbl("BASE URL (custom endpoint)"));
+    profile_base_url_field_lbl_ = lbl(tr("BASE URL (custom endpoint)"));
+    vl->addWidget(profile_base_url_field_lbl_);
     profile_base_url_edit_ = new QLineEdit;
-    profile_base_url_edit_->setPlaceholderText("Leave blank to use provider default");
+    profile_base_url_edit_->setPlaceholderText(tr("Leave blank to use provider default"));
     profile_base_url_edit_->setStyleSheet(field_style());
     vl->addWidget(profile_base_url_edit_);
 
     auto* param_row = new QHBoxLayout;
     auto* temp_col = new QVBoxLayout;
-    temp_col->addWidget(lbl("TEMPERATURE"));
+    profile_temp_field_lbl_ = lbl(tr("TEMPERATURE"));
+    temp_col->addWidget(profile_temp_field_lbl_);
     profile_temp_spin_ = new QDoubleSpinBox;
     profile_temp_spin_->setRange(0.0, 2.0);
     profile_temp_spin_->setSingleStep(0.1);
@@ -189,7 +195,8 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
     param_row->addLayout(temp_col);
 
     auto* tok_col = new QVBoxLayout;
-    tok_col->addWidget(lbl("MAX TOKENS"));
+    profile_tokens_field_lbl_ = lbl(tr("MAX TOKENS"));
+    tok_col->addWidget(profile_tokens_field_lbl_);
     profile_tokens_spin_ = new QSpinBox;
     profile_tokens_spin_->setRange(256, 128000);
     profile_tokens_spin_->setSingleStep(256);
@@ -199,15 +206,16 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
     param_row->addLayout(tok_col);
     vl->addLayout(param_row);
 
-    vl->addWidget(lbl("SYSTEM PROMPT OVERRIDE (optional)"));
+    profile_prompt_field_lbl_ = lbl(tr("SYSTEM PROMPT OVERRIDE (optional)"));
+    vl->addWidget(profile_prompt_field_lbl_);
     profile_prompt_edit_ = new QPlainTextEdit;
-    profile_prompt_edit_->setPlaceholderText("Leave blank to use global system prompt");
+    profile_prompt_edit_->setPlaceholderText(tr("Leave blank to use global system prompt"));
     profile_prompt_edit_->setMaximumHeight(80);
     profile_prompt_edit_->setStyleSheet(QString("QPlainTextEdit{%1}").arg(field_style()));
     vl->addWidget(profile_prompt_edit_);
 
     auto* btn_row = new QHBoxLayout;
-    profile_save_btn_ = new QPushButton("SAVE PROFILE");
+    profile_save_btn_ = new QPushButton(tr("SAVE PROFILE"));
     profile_save_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::AMBER()) +
                                      ";color:" + QString(ui::colors::BG_BASE()) +
                                      ";border:none;padding:8px 20px;"
@@ -217,7 +225,7 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
     connect(profile_save_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_save_profile);
     btn_row->addWidget(profile_save_btn_);
 
-    profile_default_btn_ = new QPushButton("SET AS DEFAULT");
+    profile_default_btn_ = new QPushButton(tr("SET AS DEFAULT"));
     profile_default_btn_->setEnabled(false);
     profile_default_btn_->setStyleSheet("QPushButton{background:transparent;color:" + QString(ui::colors::AMBER()) +
                                         ";border:1px solid " + QString(ui::colors::AMBER()) +
@@ -348,7 +356,7 @@ void LlmConfigSection::on_profile_provider_changed(const QString& provider) {
         // so the connection is auto-severed if the section is destroyed.
         profile_api_key_edit_->clear();
         profile_api_key_edit_->setEnabled(false);
-        profile_api_key_edit_->setPlaceholderText("Not required — local provider");
+        profile_api_key_edit_->setPlaceholderText(tr("Not required — local provider"));
 
         auto conn = std::make_shared<QMetaObject::Connection>();
         *conn = connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::models_fetched, this,
@@ -358,7 +366,7 @@ void LlmConfigSection::on_profile_provider_changed(const QString& provider) {
                             disconnect(*conn);
                             if (!err.isEmpty()) {
                                 show_profile_status(
-                                    "Cannot reach Ollama — is `ollama serve` running locally?", true);
+                                    tr("Cannot reach Ollama — is `ollama serve` running locally?"), true);
                                 return;
                             }
                             const QString current = profile_model_combo_->currentText();
@@ -372,7 +380,7 @@ void LlmConfigSection::on_profile_provider_changed(const QString& provider) {
     }
 
     profile_api_key_edit_->setEnabled(true);
-    profile_api_key_edit_->setPlaceholderText("Leave blank to inherit from provider");
+    profile_api_key_edit_->setPlaceholderText(tr("Leave blank to inherit from provider"));
 
     // Pre-fill api_key from saved provider if present and field is empty
     if (profile_api_key_edit_->text().isEmpty()) {
@@ -391,13 +399,13 @@ void LlmConfigSection::on_profile_provider_changed(const QString& provider) {
 void LlmConfigSection::on_save_profile() {
     QString name = profile_name_edit_->text().trimmed();
     if (name.isEmpty()) {
-        show_profile_status("Profile name is required", true);
+        show_profile_status(tr("Profile name is required"), true);
         return;
     }
     QString provider = profile_provider_combo_->currentText().trimmed();
     QString model = profile_model_combo_->currentText().trimmed();
     if (model.isEmpty()) {
-        show_profile_status("Model is required", true);
+        show_profile_status(tr("Model is required"), true);
         return;
     }
 
@@ -429,11 +437,11 @@ void LlmConfigSection::on_save_profile() {
 
     auto r = LlmProfileRepository::instance().save_profile(profile);
     if (r.is_err()) {
-        show_profile_status("Save failed: " + QString::fromStdString(r.error()), true);
+        show_profile_status(tr("Save failed: ") + QString::fromStdString(r.error()), true);
         return;
     }
 
-    show_profile_status("Profile saved", false);
+    show_profile_status(tr("Profile saved"), false);
     load_profiles();
     emit config_changed();
     LOG_INFO(TAG_PROFILES,QString("LLM profile saved: %1 (%2 / %3)").arg(name, provider, model));
@@ -449,7 +457,7 @@ void LlmConfigSection::on_delete_profile() {
         emit config_changed();
         LOG_INFO(TAG_PROFILES,"LLM profile deleted: " + editing_profile_id_);
     } else {
-        show_profile_status("Delete failed: " + QString::fromStdString(r.error()), true);
+        show_profile_status(tr("Delete failed: ") + QString::fromStdString(r.error()), true);
     }
 }
 
@@ -463,7 +471,7 @@ void LlmConfigSection::on_set_default_profile() {
         emit config_changed();
         LOG_INFO(TAG_PROFILES,"LLM default profile set: " + editing_profile_id_);
     } else {
-        show_profile_status("Failed: " + QString::fromStdString(r.error()), true);
+        show_profile_status(tr("Failed: ") + QString::fromStdString(r.error()), true);
     }
 }
 

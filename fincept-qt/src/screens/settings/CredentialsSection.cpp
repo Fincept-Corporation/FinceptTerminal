@@ -77,16 +77,16 @@ void CredentialsSection::build_ui() {
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(0);
 
-    auto* t = new QLabel(tr("API CREDENTIALS"));
-    t->setStyleSheet(section_title_ss());
-    vl->addWidget(t);
+    title_ = new QLabel(tr("API CREDENTIALS"));
+    title_->setStyleSheet(section_title_ss());
+    vl->addWidget(title_);
     vl->addSpacing(4);
 
-    auto* info = new QLabel(
+    info_ = new QLabel(
         tr("Store API keys securely in the OS keychain. Keys are never written to disk in plain text."));
-    info->setWordWrap(true);
-    info->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
-    vl->addWidget(info);
+    info_->setWordWrap(true);
+    info_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+    vl->addWidget(info_);
     vl->addSpacing(16);
     vl->addWidget(make_sep());
     vl->addSpacing(16);
@@ -139,6 +139,7 @@ void CredentialsSection::build_ui() {
         save_btn->setFixedWidth(70);
         save_btn->setStyleSheet(btn_primary_ss());
         bhl->addWidget(save_btn);
+        cred_save_btns_[key] = save_btn;
 
         connect(save_btn, &QPushButton::clicked, this, [this, key, field, status_lbl]() {
             QString val = field->text().trimmed();
@@ -197,6 +198,30 @@ void CredentialsSection::reload() {
             status->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
         }
     }
+}
+
+void CredentialsSection::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void CredentialsSection::retranslateUi() {
+    if (title_) title_->setText(tr("API CREDENTIALS"));
+    if (info_)
+        info_->setText(
+            tr("Store API keys securely in the OS keychain. Keys are never written to disk in plain text."));
+
+    // Per-credential Save buttons. (Credential names are product/brand names —
+    // not translated. Provider name labels stay as-is.)
+    for (auto it = cred_save_btns_.constBegin(); it != cred_save_btns_.constEnd(); ++it) {
+        if (it.value()) it.value()->setText(tr("Save"));
+    }
+
+    // reload() re-applies state-dependent placeholders ("Not configured" /
+    // "•••••••• (saved)") and status labels ("Not set" / "Saved ✓") in the
+    // current language.
+    reload();
 }
 
 } // namespace fincept::screens

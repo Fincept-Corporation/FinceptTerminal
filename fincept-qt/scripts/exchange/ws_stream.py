@@ -486,6 +486,20 @@ async def main():
         "options":         {"defaultType": default_type},
     })
 
+    # Windows DNS fix: aiohttp's default resolver (aiodns/pycares) cannot read
+    # the system DNS config on Windows, so EVERY ccxt.pro REST + WS call fails
+    # with ExchangeNotAvailable ("Could not contact DNS servers") — even though
+    # the synchronous REST daemon (which uses requests' system resolver) works
+    # fine. Force aiohttp's ThreadedResolver (same getaddrinfo path) so all
+    # daemon exchanges resolve. ccxt.pro reuses this session for the WS upgrade
+    # too. Gated to Windows so Linux/macOS keep the faster native resolver.
+    if sys.platform == "win32":
+        import aiohttp
+        exchange.session = aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver(), ttl_dns_cache=300),
+            trust_env=True,
+        )
+
     # IMPORTANT: Always call load_markets() — do NOT restore from a disk cache by
     # assigning exchange.markets directly. That leaves ccxt.pro's internal indexes
     # (currencies, safeMarket lookups) incomplete, causing "NoneType has no len()"

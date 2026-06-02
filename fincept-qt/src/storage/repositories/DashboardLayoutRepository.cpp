@@ -1,6 +1,7 @@
 #include "storage/repositories/DashboardLayoutRepository.h"
 
 #include "core/logging/Logger.h"
+#include "storage/sync/SyncOutbox.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -106,6 +107,7 @@ Result<void> DashboardLayoutRepository::save_layout(const screens::GridLayout& l
     }
 
     LOG_INFO("DashboardRepo", QString("Saved %1 widgets for profile '%2'").arg(layout.items.size()).arg(profile_name));
+    SyncOutbox::record_unique("dashboard", profile_name, "upsert");
     return Result<void>::ok();
 }
 

@@ -132,6 +132,23 @@ void SurfaceAnalyticsScreen::hideEvent(QHideEvent* e) {
     disconnect(&svc, nullptr, this, nullptr);
 }
 
+// ── Live language switch ──────────────────────────────────────────────────────
+void SurfaceAnalyticsScreen::changeEvent(QEvent* e) {
+    if (e->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(e);
+}
+
+void SurfaceAnalyticsScreen::retranslateUi() {
+    // Fixed-label toolbar buttons. Category/surface chips carry data-domain
+    // names (chart_type_name / category name) and are not translated.
+    if (import_btn_)  import_btn_->setText(tr("IMPORT CSV"));
+    if (refresh_btn_) refresh_btn_->setText(tr("REFRESH"));
+    if (btn_3d_)      btn_3d_->setText(tr("3D"));
+    if (btn_table_)   btn_table_->setText(tr("TABLE"));
+    if (btn_line_)    btn_line_->setText(tr("LINE"));
+}
+
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap SurfaceAnalyticsScreen::save_state() const {

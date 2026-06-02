@@ -3,6 +3,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QClipboard>
+#include <QCoreApplication>
 #include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
@@ -92,7 +93,9 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
     // ── Content ────────────────────────────────────────────────────
     if (!ok) {
         // Error message
-        auto* err = new QLabel(result.error.isEmpty() ? "Unknown error" : result.error);
+        auto* err = new QLabel(result.error.isEmpty()
+                                   ? QCoreApplication::translate("ExecutionResultsPanel", "Unknown error")
+                                   : result.error);
         err->setWordWrap(true);
         err->setTextInteractionFlags(Qt::TextSelectableByMouse);
         err->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;"
@@ -119,7 +122,8 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
 
             // Show exec time if present
             if (obj.contains("exec_ms")) {
-                auto* meta = new QLabel(QString("Agent ran in %1ms").arg(obj.value("exec_ms").toInt()));
+                auto* meta = new QLabel(QCoreApplication::translate("ExecutionResultsPanel", "Agent ran in %1ms")
+                                            .arg(obj.value("exec_ms").toInt()));
                 meta->setStyleSheet(
                     QString("color: %1; font-family: Consolas; font-size: 9px;").arg(ui::colors::TEXT_TERTIARY()));
                 vl->addWidget(meta);
@@ -212,15 +216,15 @@ void ExecutionResultsPanel::build_ui() {
                                          "  border: none; font-size: 10px; }"
                                          "QPushButton:hover { color: %2; }")
                                      .arg(ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_PRIMARY()));
-    collapse_btn_->setToolTip("Expand / Collapse");
+    collapse_btn_->setToolTip(tr("Expand / Collapse"));
     connect(collapse_btn_, &QPushButton::clicked, this, [this]() { set_collapsed(!collapsed_); });
     hl->addWidget(collapse_btn_);
 
-    auto* title = new QLabel("EXECUTION RESULTS");
-    title->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;"
-                                 " font-weight: bold; letter-spacing: 0.5px;")
-                             .arg(ui::colors::AMBER()));
-    hl->addWidget(title);
+    title_label_ = new QLabel(tr("EXECUTION RESULTS"));
+    title_label_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;"
+                                         " font-weight: bold; letter-spacing: 0.5px;")
+                                    .arg(ui::colors::AMBER()));
+    hl->addWidget(title_label_);
 
     // Node counter badge
     node_counter_ = new QLabel("");
@@ -231,7 +235,7 @@ void ExecutionResultsPanel::build_ui() {
     hl->addStretch();
 
     // Status label
-    status_label_ = new QLabel("IDLE");
+    status_label_ = new QLabel(tr("IDLE"));
     status_label_->setStyleSheet(QString("color: %1; font-family: Consolas;"
                                          " font-size: 10px; font-weight: bold;")
                                      .arg(ui::colors::TEXT_TERTIARY()));
@@ -244,7 +248,7 @@ void ExecutionResultsPanel::build_ui() {
     hl->addWidget(vsep);
 
     // Clear button
-    clear_btn_ = new QPushButton("CLEAR");
+    clear_btn_ = new QPushButton(tr("CLEAR"));
     clear_btn_->setFixedHeight(20);
     clear_btn_->setStyleSheet(QString("QPushButton { background: transparent; color: %1;"
                                       "  border: none; font-family: Consolas; font-size: 10px; }"
@@ -254,21 +258,21 @@ void ExecutionResultsPanel::build_ui() {
     hl->addWidget(clear_btn_);
 
     // Copy button
-    copy_btn_ = new QPushButton("COPY");
+    copy_btn_ = new QPushButton(tr("COPY"));
     copy_btn_->setFixedHeight(20);
     copy_btn_->setStyleSheet(QString("QPushButton { background: transparent; color: %1;"
                                      "  border: none; font-family: Consolas; font-size: 10px; }"
                                      "QPushButton:hover { color: %2; }")
                                  .arg(ui::colors::TEXT_TERTIARY(), ui::colors::AMBER()));
-    copy_btn_->setToolTip("Copy all results to clipboard");
+    copy_btn_->setToolTip(tr("Copy all results to clipboard"));
     connect(copy_btn_, &QPushButton::clicked, this, [this]() {
         QGuiApplication::clipboard()->setText(copy_buffer_);
-        copy_btn_->setText("COPIED!");
+        copy_btn_->setText(tr("COPIED!"));
         copy_btn_->setStyleSheet(QString("QPushButton { background: transparent; color: %1;"
                                          "  border: none; font-family: Consolas; font-size: 10px; }")
                                      .arg(ui::colors::POSITIVE()));
         QTimer::singleShot(1500, copy_btn_, [this]() {
-            copy_btn_->setText("COPY");
+            copy_btn_->setText(tr("COPY"));
             copy_btn_->setStyleSheet(QString("QPushButton { background: transparent; color: %1;"
                                              "  border: none; font-family: Consolas; font-size: 10px; }"
                                              "QPushButton:hover { color: %2; }")
@@ -321,7 +325,8 @@ void ExecutionResultsPanel::clear() {
     error_count_ = 0;
     copy_buffer_.clear();
     node_counter_->setText("");
-    status_label_->setText("IDLE");
+    run_state_ = RunState::Idle;
+    status_label_->setText(tr("IDLE"));
     status_label_->setStyleSheet(QString("color: %1; font-family: Consolas;"
                                          " font-size: 10px; font-weight: bold;")
                                      .arg(ui::colors::TEXT_TERTIARY()));
@@ -332,7 +337,8 @@ void ExecutionResultsPanel::set_started(const QString& workflow_id) {
     clear();
     show();
     set_collapsed(false); // auto-expand when execution starts
-    status_label_->setText("RUNNING…");
+    run_state_ = RunState::Running;
+    status_label_->setText(tr("RUNNING…"));
     status_label_->setStyleSheet(QString("color: %1; font-family: Consolas;"
                                          " font-size: 10px; font-weight: bold;")
                                      .arg(ui::colors::AMBER()));
@@ -344,13 +350,7 @@ void ExecutionResultsPanel::add_node_result(const NodeExecutionResult& result) {
         ++error_count_;
 
     // Update counter
-    QString counter = QString("%1 node%2").arg(node_count_).arg(node_count_ == 1 ? "" : "s");
-    if (error_count_ > 0)
-        counter += QString("  %1 error%2").arg(error_count_).arg(error_count_ == 1 ? "" : "s");
-    node_counter_->setText(counter);
-    node_counter_->setStyleSheet(
-        QString("color: %1; font-family: Consolas; font-size: 10px;")
-            .arg(error_count_ > 0 ? ui::colors::NEGATIVE.get() : ui::colors::TEXT_TERTIARY.get()));
+    refresh_node_counter();
 
     // Append plain-text representation to copy buffer
     copy_buffer_ += QString("[%1] %2  %3\n")
@@ -384,19 +384,87 @@ void ExecutionResultsPanel::add_node_result(const NodeExecutionResult& result) {
 }
 
 void ExecutionResultsPanel::set_finished(const WorkflowExecutionResult& result) {
+    last_total_ms_ = result.total_duration_ms;
     if (result.success) {
-        status_label_->setText(QString("DONE  %1").arg(format_duration(result.total_duration_ms)));
-        status_label_->setStyleSheet(QString("color: %1; font-family: Consolas;"
-                                             " font-size: 10px; font-weight: bold;")
-                                         .arg(ui::colors::POSITIVE()));
+        run_state_ = RunState::Done;
+    } else if (result.error.startsWith("Execution stopped")) {
+        run_state_ = RunState::Stopped;
+        last_failure_.clear();
     } else {
-        QString msg =
-            result.error.startsWith("Execution stopped") ? "STOPPED" : QString("FAILED  %1").arg(result.error);
-        status_label_->setText(msg);
-        status_label_->setStyleSheet(QString("color: %1; font-family: Consolas;"
-                                             " font-size: 10px; font-weight: bold;")
-                                         .arg(ui::colors::NEGATIVE()));
+        run_state_ = RunState::Failed;
+        last_failure_ = result.error;
     }
+    refresh_status_label();
+}
+
+// Re-render the node/error counter for the current counts.
+void ExecutionResultsPanel::refresh_node_counter() {
+    if (!node_counter_)
+        return;
+    if (node_count_ == 0) {
+        node_counter_->setText("");
+        return;
+    }
+    QString counter = tr("%n node(s)", "", node_count_);
+    if (error_count_ > 0)
+        counter += "  " + tr("%n error(s)", "", error_count_);
+    node_counter_->setText(counter);
+    node_counter_->setStyleSheet(
+        QString("color: %1; font-family: Consolas; font-size: 10px;")
+            .arg(error_count_ > 0 ? ui::colors::NEGATIVE.get() : ui::colors::TEXT_TERTIARY.get()));
+}
+
+// Re-render the status badge for the current run state.
+void ExecutionResultsPanel::refresh_status_label() {
+    if (!status_label_)
+        return;
+    QString text;
+    QString color = ui::colors::TEXT_TERTIARY.get();
+    switch (run_state_) {
+    case RunState::Idle:
+        text = tr("IDLE");
+        color = ui::colors::TEXT_TERTIARY.get();
+        break;
+    case RunState::Running:
+        text = tr("RUNNING…");
+        color = ui::colors::AMBER.get();
+        break;
+    case RunState::Done:
+        text = tr("DONE  %1").arg(format_duration(last_total_ms_));
+        color = ui::colors::POSITIVE.get();
+        break;
+    case RunState::Stopped:
+        text = tr("STOPPED");
+        color = ui::colors::NEGATIVE.get();
+        break;
+    case RunState::Failed:
+        text = tr("FAILED  %1").arg(last_failure_);
+        color = ui::colors::NEGATIVE.get();
+        break;
+    }
+    status_label_->setText(text);
+    status_label_->setStyleSheet(QString("color: %1; font-family: Consolas;"
+                                         " font-size: 10px; font-weight: bold;")
+                                     .arg(color));
+}
+
+void ExecutionResultsPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ExecutionResultsPanel::retranslateUi() {
+    if (title_label_) title_label_->setText(tr("EXECUTION RESULTS"));
+    if (collapse_btn_) collapse_btn_->setToolTip(tr("Expand / Collapse"));
+    if (clear_btn_) clear_btn_->setText(tr("CLEAR"));
+    if (copy_btn_) {
+        copy_btn_->setText(tr("COPY"));
+        copy_btn_->setToolTip(tr("Copy all results to clipboard"));
+    }
+    refresh_status_label();
+    refresh_node_counter();
+    // Result cards are data-driven snapshots of past executions — left as rendered.
 }
 
 } // namespace fincept::workflow

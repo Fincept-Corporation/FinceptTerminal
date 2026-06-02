@@ -9,6 +9,7 @@
 #include "trading/BrokerAccount.h"
 #include "trading/TradingTypes.h"
 
+#include <QEvent>
 #include <QHash>
 #include <QHideEvent>
 #include <QLabel>
@@ -53,6 +54,7 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     // Multi-account slots
@@ -63,6 +65,9 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void handle_token_expired(const QString& account_id);
     void on_order_submitted(const trading::UnifiedOrder& order);
     void on_cancel_order(const QString& order_id);
+    void on_cancel_all_orders();                                          // CANCEL ALL ORDERS button
+    void on_close_all_positions();                                        // SQUARE OFF ALL button
+    void on_strategy_submitted(const trading::BasketOrderRequest& basket); // options strategy → basket
     void on_ob_price_clicked(double price);
     void on_import_holdings_requested(const QVector<trading::BrokerHolding>& holdings);
 
@@ -89,12 +94,16 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
   private:
     void setup_ui();
     void setup_timers();
+    void retranslateUi();
     void connect_data_stream_signals();
     void init_focused_account();
     void switch_symbol(const QString& symbol);
     void update_account_menu();
     void update_connection_status();
     void async_modify_order(const QString& order_id, double qty, double price);
+    // Re-reads the focused account's paper portfolio into the panels. No-op for
+    // live accounts (their data flows from AccountDataStream via the hub).
+    void refresh_paper_panels();
 
     // DataHub subscription helpers (D4 migration)
     void hub_subscribe_streaming();

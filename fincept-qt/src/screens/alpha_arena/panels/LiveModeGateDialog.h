@@ -16,6 +16,7 @@
 
 #include <QCheckBox>
 #include <QDialog>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -31,18 +32,27 @@ class LiveModeGateDialog : public QDialog {
     /// Available after accept() returned QDialog::Accepted.
     QString agent_key_handle() const { return agent_key_handle_; }
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private slots:
     void update_confirm_state();
     void on_confirm();
 
   private:
+    void retranslateUi();
+
     QString competition_id_;
     QString agent_key_handle_;
 
+    QLabel* warn_label_ = nullptr;
+    QLabel* phrase_prompt_ = nullptr;
     QLineEdit* phrase_input_;
     QCheckBox* age_check_;
     QCheckBox* jurisdiction_check_;
+    QLabel* key_prompt_ = nullptr;
     QLineEdit* private_key_input_;
+    QPushButton* cancel_btn_ = nullptr;
     QPushButton* confirm_btn_;
     QLabel* status_label_;
 };

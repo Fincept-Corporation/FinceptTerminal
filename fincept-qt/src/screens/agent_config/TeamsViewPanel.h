@@ -5,6 +5,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -24,6 +25,7 @@ class TeamsViewPanel : public QWidget {
 
   protected:
     void showEvent(QShowEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   public slots:
     void add_agent_from_panel(const services::AgentInfo& agent);
@@ -36,6 +38,13 @@ class TeamsViewPanel : public QWidget {
     QWidget* build_execution_panel();
     void setup_connections();
 
+    /// Re-apply tr() lookups to every widget whose text we keep a handle to.
+    /// Called from changeEvent() on QEvent::LanguageChange.
+    void retranslateUi();
+
+    /// Translated description for a team mode code ("coordinate"/"route"/"collaborate").
+    static QString mode_description(const QString& mode);
+
     void populate_available_agents(const QVector<services::AgentInfo>& agents);
     void add_to_team(const services::AgentInfo& agent);
     void remove_from_team(int row);
@@ -45,18 +54,28 @@ class TeamsViewPanel : public QWidget {
     void refresh_team_llm_label();
 
     // Left: team
+    QLabel* team_title_ = nullptr;
+    QLabel* mode_caption_ = nullptr;
     QListWidget* team_list_ = nullptr;
     QComboBox* mode_combo_ = nullptr;
+    QLabel* leader_caption_ = nullptr;
     QComboBox* leader_combo_ = nullptr;
     QCheckBox* show_responses_check_ = nullptr;
+    QPushButton* team_remove_btn_ = nullptr;
     QLabel* team_count_ = nullptr;
     QLabel* mode_desc_label_ = nullptr;
 
     // Center: available agents
+    QLabel* available_title_ = nullptr;
     QListWidget* available_list_ = nullptr;
+    QPushButton* add_to_team_btn_ = nullptr;
     QLabel* available_count_ = nullptr;
 
     // Right: execution + LLM profile
+    QLabel* coordinator_hdr_ = nullptr;
+    QLabel* query_hdr_ = nullptr;
+    QLabel* log_hdr_ = nullptr;
+    QLabel* result_hdr_ = nullptr;
     QComboBox* team_profile_combo_ = nullptr; // coordinator profile picker
     QLabel* team_resolved_lbl_ = nullptr;     // shows resolved provider/model
     QPlainTextEdit* query_input_ = nullptr;

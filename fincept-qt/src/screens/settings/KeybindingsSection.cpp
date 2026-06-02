@@ -21,7 +21,7 @@ namespace fincept::screens {
 // ── KeyCaptureDialog ──────────────────────────────────────────────────────────
 
 KeyCaptureDialog::KeyCaptureDialog(KeyAction action, const QKeySequence& current, QWidget* parent)
-    : QDialog(parent), action_(action) {
+    : QDialog(parent), action_(action), current_(current) {
     setWindowTitle(tr("Rebind: %1").arg(KeyConfigManager::instance().display_name(action)));
     setFixedSize(360, 200);
     setModal(true);
@@ -30,8 +30,8 @@ KeyCaptureDialog::KeyCaptureDialog(KeyAction action, const QKeySequence& current
     layout->setSpacing(12);
     layout->setContentsMargins(20, 20, 20, 20);
 
-    auto* current_lbl = new QLabel(tr("Current: %1").arg(current.toString(QKeySequence::NativeText)));
-    current_lbl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_SECONDARY()));
+    current_label_ = new QLabel(tr("Current: %1").arg(current.toString(QKeySequence::NativeText)));
+    current_label_->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_SECONDARY()));
 
     hint_label_ = new QLabel(tr("Press new key combination..."));
     hint_label_->setStyleSheet(QString("color:%1;font-weight:bold;").arg(ui::colors::TEXT_PRIMARY()));
@@ -47,13 +47,13 @@ KeyCaptureDialog::KeyCaptureDialog(KeyAction action, const QKeySequence& current
 
     auto* btn_box = new QDialogButtonBox(Qt::Horizontal);
     apply_btn_ = btn_box->addButton(tr("Apply"), QDialogButtonBox::AcceptRole);
-    btn_box->addButton(tr("Cancel"), QDialogButtonBox::RejectRole);
+    cancel_btn_ = btn_box->addButton(tr("Cancel"), QDialogButtonBox::RejectRole);
     apply_btn_->setEnabled(false);
 
     connect(btn_box, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(btn_box, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
-    layout->addWidget(current_lbl);
+    layout->addWidget(current_label_);
     layout->addWidget(hint_label_);
     layout->addWidget(captured_label_);
     layout->addWidget(conflict_label_);
@@ -62,6 +62,23 @@ KeyCaptureDialog::KeyCaptureDialog(KeyAction action, const QKeySequence& current
 
     setFocusPolicy(Qt::StrongFocus);
     setFocus();
+}
+
+void KeyCaptureDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void KeyCaptureDialog::retranslateUi() {
+    setWindowTitle(tr("Rebind: %1").arg(KeyConfigManager::instance().display_name(action_)));
+    if (current_label_) current_label_->setText(tr("Current: %1").arg(current_.toString(QKeySequence::NativeText)));
+    if (hint_label_)    hint_label_->setText(tr("Press new key combination..."));
+    if (apply_btn_)     apply_btn_->setText(tr("Apply"));
+    if (cancel_btn_)    cancel_btn_->setText(tr("Cancel"));
+    // captured_label_ / conflict_label_ hold dynamically-built text reflecting
+    // the last key press; left as-is (a modal capture dialog cannot outlive a
+    // language switch in practice).
 }
 
 void KeyCaptureDialog::keyPressEvent(QKeyEvent* event) {
@@ -125,19 +142,19 @@ void KeybindingsSection::build_ui() {
     rebuild_rows();
 
     // Reset All button
-    auto* reset_all_btn = new QPushButton(tr("Reset All to Defaults"));
-    reset_all_btn->setStyleSheet(
+    reset_all_btn_ = new QPushButton(tr("Reset All to Defaults"));
+    reset_all_btn_->setStyleSheet(
         QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:0 12px;height:32px;}"
                 "QPushButton:hover{background:%4;}")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
                  ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
-    connect(reset_all_btn, &QPushButton::clicked, this, []() {
+    connect(reset_all_btn_, &QPushButton::clicked, this, []() {
         KeyConfigManager::instance().reset_all();
     });
 
     root->addWidget(search_input_);
     root->addWidget(scroll, 1);
-    root->addWidget(reset_all_btn);
+    root->addWidget(reset_all_btn_);
 }
 
 void KeybindingsSection::rebuild_rows() {
@@ -224,6 +241,20 @@ QWidget* KeybindingsSection::build_group(const QString& group_name, const QList<
     }
 
     return group_widget;
+}
+
+void KeybindingsSection::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void KeybindingsSection::retranslateUi() {
+    if (search_input_)  search_input_->setPlaceholderText(tr("Search actions..."));
+    if (reset_all_btn_) reset_all_btn_->setText(tr("Reset All to Defaults"));
+    // Per-row "Reset" buttons live in dynamically-built groups; rebuild_rows()
+    // recreates them (and re-reads action display names from KeyConfigManager).
+    rebuild_rows();
 }
 
 bool KeybindingsSection::eventFilter(QObject* obj, QEvent* event) {

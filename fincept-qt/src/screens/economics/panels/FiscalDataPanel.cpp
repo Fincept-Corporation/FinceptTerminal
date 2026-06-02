@@ -40,14 +40,14 @@ FiscalDataPanel::FiscalDataPanel(QWidget* parent) : EconPanelBase(kFiscalDataSou
 }
 
 void FiscalDataPanel::activate() {
-    show_empty("Select a dataset and click FETCH\n"
-               "Source: US Treasury FiscalData API (fiscaldata.treasury.gov)\n"
-               "No API key required");
+    show_empty(tr("Select a dataset and click FETCH\n"
+                  "Source: US Treasury FiscalData API (fiscaldata.treasury.gov)\n"
+                  "No API key required"));
 }
 
 void FiscalDataPanel::build_controls(QHBoxLayout* thl) {
-    auto* lbl = new QLabel("DATASET");
-    lbl->setStyleSheet(ctrl_label_style());
+    dataset_lbl_ = new QLabel(tr("DATASET"));
+    dataset_lbl_->setStyleSheet(ctrl_label_style());
 
     series_combo_ = new QComboBox;
     for (const auto& s : kFiscalDataSeries)
@@ -55,7 +55,7 @@ void FiscalDataPanel::build_controls(QHBoxLayout* thl) {
     series_combo_->setFixedHeight(26);
     series_combo_->setMinimumWidth(240);
 
-    thl->addWidget(lbl);
+    thl->addWidget(dataset_lbl_);
     thl->addWidget(series_combo_);
 }
 
@@ -63,7 +63,7 @@ void FiscalDataPanel::on_fetch() {
     const int idx = series_combo_->currentIndex();
     const auto& series = kFiscalDataSeries[idx];
 
-    show_loading("Fetching FiscalData: " + series.label + "…");
+    show_loading(tr("Fetching FiscalData: %1…").arg(series.label));
 
     QStringList args = {series.command};
     args << series.args;
@@ -92,7 +92,7 @@ void FiscalDataPanel::on_result(const QString& request_id, const services::Econo
     QJsonArray rows = result.data["data"].toArray();
 
     if (rows.isEmpty()) {
-        show_error("No data returned");
+        show_error(tr("No data returned"));
         return;
     }
 
@@ -102,6 +102,20 @@ void FiscalDataPanel::on_result(const QString& request_id, const services::Econo
 
     display(rows, title);
     LOG_INFO("FiscalDataPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void FiscalDataPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void FiscalDataPanel::retranslateUi() {
+    if (dataset_lbl_)
+        dataset_lbl_->setText(tr("DATASET"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

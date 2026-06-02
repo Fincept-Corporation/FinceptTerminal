@@ -7,6 +7,7 @@
 
 #include "screens/common/IStatefulScreen.h"
 
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMap>
@@ -32,10 +33,14 @@ class EconomicsScreen : public QWidget, public IStatefulScreen {
     QString state_key() const override { return "economics"; }
     int state_version() const override { return 1; }
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
     void switch_to(const QString& source_id);
     void refresh_theme();
+    void retranslateUi();
 
     // badge bar + stacked panels
     QWidget* header_ = nullptr;

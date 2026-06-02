@@ -3,6 +3,7 @@
 #include "services/algo_trading/AlgoTradingTypes.h"
 
 #include <QComboBox>
+#include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -36,15 +37,20 @@ class StrategyListPanel : public QWidget {
     void on_delete_clicked(int row);
     void go_to_page(int page);
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
     void build_ui();
     void connect_service();
     void render_page();
     void update_pagination_controls();
+    void retranslateUi();
 
     static constexpr int kPageSize = 50;
 
     QLineEdit*    search_edit_   = nullptr;
+    QLabel*       sort_caption_  = nullptr;
     QLabel*       count_label_   = nullptr;
     QComboBox*    sort_combo_    = nullptr;
     QComboBox*    cat_combo_     = nullptr;

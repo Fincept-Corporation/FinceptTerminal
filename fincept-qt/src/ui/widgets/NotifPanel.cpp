@@ -32,23 +32,23 @@ NotifPanel::NotifPanel(QWidget* parent) : QFrame(parent, Qt::Popup | Qt::Framele
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(12, 0, 8, 0);
 
-    auto* title_lbl = new QLabel("NOTIFICATIONS");
-    title_lbl->setStyleSheet(
+    title_lbl_ = new QLabel(tr("NOTIFICATIONS"));
+    title_lbl_->setStyleSheet(
         QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;").arg(ui::colors::AMBER()));
-    hl->addWidget(title_lbl);
+    hl->addWidget(title_lbl_);
     hl->addStretch();
 
-    auto* mark_all_btn = new QPushButton("Mark all read");
-    mark_all_btn->setFlat(true);
-    mark_all_btn->setStyleSheet(
+    mark_all_btn_ = new QPushButton(tr("Mark all read"));
+    mark_all_btn_->setFlat(true);
+    mark_all_btn_->setStyleSheet(
         QString("QPushButton { color: %1; background: transparent; border: none; font-size: 11px; }"
                 "QPushButton:hover { color: %2; }")
             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
-    connect(mark_all_btn, &QPushButton::clicked, this, [this]() {
+    connect(mark_all_btn_, &QPushButton::clicked, this, [this]() {
         NotificationService::instance().mark_all_read();
         refresh();
     });
-    hl->addWidget(mark_all_btn);
+    hl->addWidget(mark_all_btn_);
     vl->addWidget(header);
 
     // ── Scroll area ───────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ void NotifPanel::refresh() {
 
     const auto& hist = NotificationService::instance().history();
     if (hist.isEmpty()) {
-        auto* empty = new QLabel("No notifications");
+        auto* empty = new QLabel(tr("No notifications"));
         empty->setAlignment(Qt::AlignCenter);
         empty->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; padding: 24px;")
                                  .arg(ui::colors::TEXT_TERTIARY()));
@@ -154,6 +154,22 @@ void NotifPanel::refresh() {
 
         list_layout_->insertWidget(list_layout_->count() - 1, row);
     }
+}
+
+void NotifPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QFrame::changeEvent(event);
+}
+
+void NotifPanel::retranslateUi() {
+    if (title_lbl_)
+        title_lbl_->setText(tr("NOTIFICATIONS"));
+    if (mark_all_btn_)
+        mark_all_btn_->setText(tr("Mark all read"));
+    // Rebuild the list so the empty-state label (and any future row labels)
+    // pick up the new locale.
+    refresh();
 }
 
 void NotifPanel::anchor_to(QWidget* ref_widget) {

@@ -41,14 +41,14 @@ OnsPanel::OnsPanel(QWidget* parent) : EconPanelBase(kOnsSourceId, kOnsColor, par
 }
 
 void OnsPanel::activate() {
-    show_empty("Select a series and click FETCH\n"
-               "Source: UK Office for National Statistics (no API key required)\n"
-               "Data via api.beta.ons.gov.uk — GDP, CPI, labour market, housing");
+    show_empty(tr("Select a series and click FETCH\n"
+                  "Source: UK Office for National Statistics (no API key required)\n"
+                  "Data via api.beta.ons.gov.uk — GDP, CPI, labour market, housing"));
 }
 
 void OnsPanel::build_controls(QHBoxLayout* thl) {
-    auto* lbl = new QLabel("SERIES");
-    lbl->setStyleSheet(ctrl_label_style());
+    series_lbl_ = new QLabel(tr("SERIES"));
+    series_lbl_->setStyleSheet(ctrl_label_style());
 
     series_combo_ = new QComboBox;
     for (const auto& s : kOnsSeries)
@@ -56,7 +56,7 @@ void OnsPanel::build_controls(QHBoxLayout* thl) {
     series_combo_->setFixedHeight(26);
     series_combo_->setMinimumWidth(240);
 
-    thl->addWidget(lbl);
+    thl->addWidget(series_lbl_);
     thl->addWidget(series_combo_);
 }
 
@@ -64,7 +64,7 @@ void OnsPanel::on_fetch() {
     const int idx = series_combo_->currentIndex();
     const auto& series = kOnsSeries[idx];
 
-    show_loading("Fetching ONS: " + series.label + "…");
+    show_loading(tr("Fetching ONS: %1…").arg(series.label));
     services::EconomicsService::instance().execute(kOnsSourceId, kOnsScript, series.command, {},
                                                    "ons_" + series.command);
 }
@@ -90,7 +90,7 @@ void OnsPanel::on_result(const QString& request_id, const services::EconomicsRes
     QJsonArray rows = result.data["data"].toArray();
 
     if (rows.isEmpty()) {
-        show_error("No data returned");
+        show_error(tr("No data returned"));
         return;
     }
 
@@ -105,6 +105,20 @@ void OnsPanel::on_result(const QString& request_id, const services::EconomicsRes
 
     display(rows, title);
     LOG_INFO("OnsPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
+}
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+
+void OnsPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    EconPanelBase::changeEvent(event);
+}
+
+void OnsPanel::retranslateUi() {
+    if (series_lbl_)
+        series_lbl_->setText(tr("SERIES"));
+    EconPanelBase::retranslateUi();
 }
 
 } // namespace fincept::screens

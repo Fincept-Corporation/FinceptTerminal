@@ -95,13 +95,13 @@ void HomeTab::build_ui() {
         auto* head_l = new QHBoxLayout(head);
         head_l->setContentsMargins(12, 0, 12, 0);
         head_l->setSpacing(0);
-        auto* title = new QLabel(QStringLiteral("WALLET"), head);
-        title->setObjectName(QStringLiteral("homeTabPanelTitle"));
-        auto* status = new QLabel(QStringLiteral("● CONNECTED"), head);
-        status->setObjectName(QStringLiteral("homeTabPanelStatusOk"));
-        head_l->addWidget(title);
+        wallet_title_ = new QLabel(tr("WALLET"), head);
+        wallet_title_->setObjectName(QStringLiteral("homeTabPanelTitle"));
+        wallet_status_ = new QLabel(tr("● CONNECTED"), head);
+        wallet_status_->setObjectName(QStringLiteral("homeTabPanelStatusOk"));
+        head_l->addWidget(wallet_title_);
         head_l->addStretch();
-        head_l->addWidget(status);
+        head_l->addWidget(wallet_status_);
         outer->addWidget(head);
 
         auto* body = new QWidget(wallet_panel_);
@@ -109,8 +109,8 @@ void HomeTab::build_ui() {
         body_l->setContentsMargins(0, 0, 0, 0);
         body_l->setSpacing(0);
 
-        auto add_row = [body_l, body](const QString& caption, QLabel*& val_out,
-                                      bool last) {
+        auto add_row = [body_l, body](const QString& caption, QLabel*& cap_out,
+                                      QLabel*& val_out, bool last) {
             auto* row = new QWidget(body);
             row->setObjectName(QStringLiteral("homeTabRow"));
             row->setProperty("isLast", last);
@@ -118,19 +118,19 @@ void HomeTab::build_ui() {
             auto* rl = new QHBoxLayout(row);
             rl->setContentsMargins(12, 0, 12, 0);
             rl->setSpacing(8);
-            auto* cap = new QLabel(caption, row);
-            cap->setObjectName(QStringLiteral("homeTabCaption"));
+            cap_out = new QLabel(caption, row);
+            cap_out->setObjectName(QStringLiteral("homeTabCaption"));
             val_out = new QLabel(QStringLiteral("—"), row);
             val_out->setObjectName(QStringLiteral("homeTabRowValue"));
             val_out->setTextInteractionFlags(Qt::TextSelectableByMouse);
-            rl->addWidget(cap);
+            rl->addWidget(cap_out);
             rl->addStretch(1);
             rl->addWidget(val_out);
             body_l->addWidget(row);
         };
-        add_row(QStringLiteral("PROVIDER"), row_label_value_, false);
-        add_row(QStringLiteral("ADDRESS"), row_pubkey_value_, false);
-        add_row(QStringLiteral("CONNECTED"), row_connected_value_, true);
+        add_row(tr("PROVIDER"), provider_caption_, row_label_value_, false);
+        add_row(tr("ADDRESS"), address_caption_, row_pubkey_value_, false);
+        add_row(tr("CONNECTED"), connected_caption_, row_connected_value_, true);
         outer->addWidget(body);
 
         auto* btn_row = new QWidget(wallet_panel_);
@@ -169,16 +169,16 @@ void HomeTab::build_ui() {
         auto* head_l = new QHBoxLayout(head);
         head_l->setContentsMargins(12, 0, 12, 0);
         head_l->setSpacing(8);
-        auto* title = new QLabel(QStringLiteral("HOLDINGS"), head);
-        title->setObjectName(QStringLiteral("homeTabPanelTitle"));
+        holdings_title_ = new QLabel(tr("HOLDINGS"), head);
+        holdings_title_->setObjectName(QStringLiteral("homeTabPanelTitle"));
 
         // Mode toggle — mirrored from Settings.
-        mode_poll_button_ = new QPushButton(QStringLiteral("POLL"), head);
+        mode_poll_button_ = new QPushButton(tr("POLL"), head);
         mode_poll_button_->setObjectName(QStringLiteral("homeTabToggle"));
         mode_poll_button_->setCheckable(true);
         mode_poll_button_->setFixedHeight(22);
         mode_poll_button_->setCursor(Qt::PointingHandCursor);
-        mode_stream_button_ = new QPushButton(QStringLiteral("STREAM"), head);
+        mode_stream_button_ = new QPushButton(tr("STREAM"), head);
         mode_stream_button_->setObjectName(QStringLiteral("homeTabToggle"));
         mode_stream_button_->setCheckable(true);
         mode_stream_button_->setFixedHeight(22);
@@ -188,15 +188,15 @@ void HomeTab::build_ui() {
         mode_group_->addButton(mode_poll_button_);
         mode_group_->addButton(mode_stream_button_);
 
-        auto* mode_label = new QLabel(QStringLiteral("MAINNET"), head);
-        mode_label->setObjectName(QStringLiteral("homeTabPanelStatus"));
+        mode_label_ = new QLabel(tr("MAINNET"), head);
+        mode_label_->setObjectName(QStringLiteral("homeTabPanelStatus"));
 
-        head_l->addWidget(title);
+        head_l->addWidget(holdings_title_);
         head_l->addStretch();
         head_l->addWidget(mode_poll_button_);
         head_l->addWidget(mode_stream_button_);
         head_l->addSpacing(6);
-        head_l->addWidget(mode_label);
+        head_l->addWidget(mode_label_);
         outer->addWidget(head);
 
         // Body wraps the embedded HoldingsTable + an error strip.
@@ -217,12 +217,12 @@ void HomeTab::build_ui() {
         auto* es_l = new QHBoxLayout(error_strip_);
         es_l->setContentsMargins(10, 6, 10, 6);
         es_l->setSpacing(8);
-        auto* es_icon = new QLabel(QStringLiteral("!"), error_strip_);
-        es_icon->setObjectName(QStringLiteral("homeTabErrorIcon"));
+        error_icon_ = new QLabel(QStringLiteral("!"), error_strip_);
+        error_icon_->setObjectName(QStringLiteral("homeTabErrorIcon"));
         error_strip_text_ = new QLabel(QString(), error_strip_);
         error_strip_text_->setObjectName(QStringLiteral("homeTabErrorText"));
         error_strip_text_->setWordWrap(true);
-        es_l->addWidget(es_icon);
+        es_l->addWidget(error_icon_);
         es_l->addWidget(error_strip_text_, 1);
         error_strip_->hide();
         body_l->addWidget(error_strip_);
@@ -262,21 +262,21 @@ void HomeTab::build_ui() {
         auto* head_l = new QHBoxLayout(head);
         head_l->setContentsMargins(12, 0, 12, 0);
         head_l->setSpacing(0);
-        auto* title = new QLabel(QStringLiteral("$FNCPT ROADMAP"), head);
-        title->setObjectName(QStringLiteral("homeTabPanelTitle"));
-        auto* phase = new QLabel(QStringLiteral("PHASE 2"), head);
-        phase->setObjectName(QStringLiteral("homeTabPanelStatus"));
-        head_l->addWidget(title);
+        roadmap_title_ = new QLabel(tr("$FNCPT ROADMAP"), head);
+        roadmap_title_->setObjectName(QStringLiteral("homeTabPanelTitle"));
+        roadmap_phase_ = new QLabel(tr("PHASE 2"), head);
+        roadmap_phase_->setObjectName(QStringLiteral("homeTabPanelStatus"));
+        head_l->addWidget(roadmap_title_);
         head_l->addStretch();
-        head_l->addWidget(phase);
+        head_l->addWidget(roadmap_phase_);
         outer->addWidget(head);
 
         roadmap_body_ = new QLabel(
-            QStringLiteral("PHASE 1   WALLET & BALANCE        SHIPPED        connect Solana wallet, view $FNCPT + SOL\n"
-                           "PHASE 2   SWAP & FEE DISCOUNT     IN PROGRESS    buy $FNCPT via PumpPortal, fee discount\n"
-                           "PHASE 3   STAKING & TIERS         UPCOMING       lock $FNCPT for bronze / silver / gold tiers\n"
-                           "PHASE 4   PREDICTION MARKETS      UPCOMING       earnings, fed, weather — settled in $FNCPT\n"
-                           "PHASE 5   BUYBACK & BURN          UPCOMING       terminal revenue auto-buys & burns $FNCPT"),
+            tr("PHASE 1   WALLET & BALANCE        SHIPPED        connect Solana wallet, view $FNCPT + SOL\n"
+               "PHASE 2   SWAP & FEE DISCOUNT     IN PROGRESS    buy $FNCPT via PumpPortal, fee discount\n"
+               "PHASE 3   STAKING & TIERS         UPCOMING       lock $FNCPT for bronze / silver / gold tiers\n"
+               "PHASE 4   PREDICTION MARKETS      UPCOMING       earnings, fed, weather — settled in $FNCPT\n"
+               "PHASE 5   BUYBACK & BURN          UPCOMING       terminal revenue auto-buys & burns $FNCPT"),
             roadmap_panel_);
         roadmap_body_->setObjectName(QStringLiteral("homeTabRoadmapBody"));
         roadmap_body_->setContentsMargins(14, 12, 14, 14);
@@ -423,6 +423,41 @@ void HomeTab::showEvent(QShowEvent* e) {
 
 void HomeTab::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+}
+
+void HomeTab::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void HomeTab::retranslateUi() {
+    // Wallet panel chrome.
+    if (wallet_title_)      wallet_title_->setText(tr("WALLET"));
+    if (wallet_status_)     wallet_status_->setText(tr("● CONNECTED"));
+    if (provider_caption_)  provider_caption_->setText(tr("PROVIDER"));
+    if (address_caption_)   address_caption_->setText(tr("ADDRESS"));
+    if (connected_caption_) connected_caption_->setText(tr("CONNECTED"));
+    if (copy_button_)       copy_button_->setText(tr("COPY ADDRESS"));
+    if (disconnect_button_) disconnect_button_->setText(tr("DISCONNECT"));
+
+    // Holdings panel chrome.
+    if (holdings_title_)     holdings_title_->setText(tr("HOLDINGS"));
+    if (mode_poll_button_)   mode_poll_button_->setText(tr("POLL"));
+    if (mode_stream_button_) mode_stream_button_->setText(tr("STREAM"));
+    if (mode_label_)         mode_label_->setText(tr("MAINNET"));
+    if (refresh_button_)     refresh_button_->setText(tr("REFRESH"));
+
+    // Roadmap panel.
+    if (roadmap_title_) roadmap_title_->setText(tr("$FNCPT ROADMAP"));
+    if (roadmap_phase_) roadmap_phase_->setText(tr("PHASE 2"));
+    if (roadmap_body_)
+        roadmap_body_->setText(
+            tr("PHASE 1   WALLET & BALANCE        SHIPPED        connect Solana wallet, view $FNCPT + SOL\n"
+               "PHASE 2   SWAP & FEE DISCOUNT     IN PROGRESS    buy $FNCPT via PumpPortal, fee discount\n"
+               "PHASE 3   STAKING & TIERS         UPCOMING       lock $FNCPT for bronze / silver / gold tiers\n"
+               "PHASE 4   PREDICTION MARKETS      UPCOMING       earnings, fed, weather — settled in $FNCPT\n"
+               "PHASE 5   BUYBACK & BURN          UPCOMING       terminal revenue auto-buys & burns $FNCPT"));
 }
 
 } // namespace fincept::screens

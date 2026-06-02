@@ -63,7 +63,7 @@ ChainSubTab::ChainSubTab(QWidget* parent) : QWidget(parent) {
     table_ = new OptionChainTable(body_wrap);
     body_stack->addWidget(table_);
 
-    empty_label_ = new QLabel("Connect a broker to load F&O data.", body_wrap);
+    empty_label_ = new QLabel(tr("Connect a broker to load F&O data."), body_wrap);
     empty_label_->setObjectName("fnoEmptyLabel");
     empty_label_->setAlignment(Qt::AlignCenter);
     body_stack->addWidget(empty_label_);
@@ -85,7 +85,7 @@ ChainSubTab::ChainSubTab(QWidget* parent) : QWidget(parent) {
     connect(&InstrumentService::instance(), &InstrumentService::refresh_failed,
             this, [this](const QString& broker_id, const QString& error) {
                 if (broker_id == header_->broker_id())
-                    show_empty_state(QString("Failed to load %1 instruments: %2").arg(broker_id, error));
+                    show_empty_state(tr("Failed to load %1 instruments: %2").arg(broker_id, error));
             });
 
     // Populate broker picker from connected accounts + Databento (always visible).
@@ -97,7 +97,7 @@ ChainSubTab::ChainSubTab(QWidget* parent) : QWidget(parent) {
                 broker_ids.append(acc.broker_id);
         }
         if (broker_ids.isEmpty()) {
-            show_empty_state("No broker accounts or data sources configured.");
+            show_empty_state(tr("No broker accounts or data sources configured."));
             return;
         }
         const QString prefer = !last_broker_.isEmpty() && broker_ids.contains(last_broker_)
@@ -155,6 +155,22 @@ void ChainSubTab::hideEvent(QHideEvent* e) {
         fincept::datahub::DataHub::instance().unsubscribe(this, active_topic_);
         active_topic_.clear();
     }
+}
+
+void ChainSubTab::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void ChainSubTab::retranslateUi() {
+    // The empty label carries dynamic, state-dependent status text (loading,
+    // error, etc.) that refreshes on the next state change — like GovData's
+    // status label, those are not re-applied here. Only the default idle
+    // "connect a broker" message (shown when no broker is selected) is safe
+    // to re-translate in place. The FnoHeaderBar child retranslates itself.
+    if (empty_label_ && header_ && header_->broker_id().isEmpty())
+        empty_label_->setText(tr("Connect a broker to load F&O data."));
 }
 
 void ChainSubTab::on_broker_changed(const QString& broker_id) {
@@ -216,19 +232,19 @@ void ChainSubTab::rebuild_picker_for_broker(const QString& broker_id, bool keep_
     LOG_INFO("FnoChain", QString("rebuild_picker_for_broker: broker='%1' keep=%2").arg(broker_id).arg(keep_selection));
     if (broker_id.isEmpty()) {
         LOG_WARN("FnoChain", "rebuild_picker_for_broker: empty broker_id — showing 'Select a broker'");
-        show_empty_state("Select a broker.");
+        show_empty_state(tr("Select a broker."));
         return;
     }
     if (broker_id == QStringLiteral("databento")) {
         if (!fincept::DatabentoService::instance().has_api_key()) {
-            show_empty_state("Databento selected — enter your API key in Settings > Credentials to load US options data.");
+            show_empty_state(tr("Databento selected — enter your API key in Settings > Credentials to load US options data."));
             header_->set_underlyings({});
             header_->set_expiries({});
             return;
         }
         auto unders = OptionChainService::instance().list_underlyings(QStringLiteral("databento"));
         if (unders.isEmpty()) {
-            show_empty_state("Databento configuration error.");
+            show_empty_state(tr("Databento configuration error."));
             return;
         }
         QString prefer;
@@ -243,7 +259,7 @@ void ChainSubTab::rebuild_picker_for_broker(const QString& broker_id, bool keep_
     const bool loaded = InstrumentService::instance().is_loaded(broker_id);
     LOG_INFO("FnoChain", QString("rebuild_picker_for_broker: is_loaded('%1')=%2").arg(broker_id).arg(loaded));
     if (!loaded) {
-        show_empty_state(QString("Loading %1 instruments...").arg(broker_id));
+        show_empty_state(tr("Loading %1 instruments...").arg(broker_id));
         header_->set_underlyings({});
         header_->set_expiries({});
 
@@ -261,10 +277,10 @@ void ChainSubTab::rebuild_picker_for_broker(const QString& broker_id, bool keep_
             QString account_id = find_account_for_broker(broker_id);
             LOG_INFO("FnoChain", QString("find_account_for_broker('%1') → '%2'").arg(broker_id, account_id));
             if (account_id.isEmpty()) {
-                self->show_empty_state(QString("No account configured for %1. Connect one in Equity Trading.").arg(broker_id));
+                self->show_empty_state(ChainSubTab::tr("No account configured for %1. Connect one in Equity Trading.").arg(broker_id));
                 return;
             }
-            self->show_empty_state(QString("Downloading %1 instruments from broker...").arg(broker_id));
+            self->show_empty_state(ChainSubTab::tr("Downloading %1 instruments from broker...").arg(broker_id));
             auto creds = trading::AccountManager::instance().load_credentials(account_id);
             InstrumentService::instance().refresh(broker_id, creds);
         });
@@ -273,7 +289,7 @@ void ChainSubTab::rebuild_picker_for_broker(const QString& broker_id, bool keep_
     auto unders = OptionChainService::instance().list_underlyings(broker_id);
     LOG_INFO("FnoChain", QString("list_underlyings('%1') → %2 items").arg(broker_id).arg(unders.size()));
     if (unders.isEmpty()) {
-        show_empty_state("No NFO instruments cached for " + broker_id + ".");
+        show_empty_state(tr("No NFO instruments cached for %1.").arg(broker_id));
         header_->set_underlyings({});
         header_->set_expiries({});
         return;
@@ -307,7 +323,7 @@ void ChainSubTab::rebuild_expiries_for_underlying(const QString& broker_id, cons
             return;
         }
         header_->set_expiries({});
-        show_empty_state(QString("Loading expiries for %1 from Databento...").arg(underlying));
+        show_empty_state(tr("Loading expiries for %1 from Databento...").arg(underlying));
         QPointer<ChainSubTab> self = this;
         OptionChainService::instance().list_databento_expiries(
             underlying,
@@ -315,7 +331,7 @@ void ChainSubTab::rebuild_expiries_for_underlying(const QString& broker_id, cons
                 if (!self) return;
                 if (exps.isEmpty()) {
                     self->show_empty_state(
-                        QString("No expiries found for %1. Check Databento API key and OPRA access.").arg(underlying));
+                        ChainSubTab::tr("No expiries found for %1. Check Databento API key and OPRA access.").arg(underlying));
                     return;
                 }
                 QString prefer;
@@ -335,7 +351,7 @@ void ChainSubTab::rebuild_expiries_for_underlying(const QString& broker_id, cons
     auto exps = OptionChainService::instance().list_expiries(broker_id, underlying);
     LOG_INFO("FnoChain", QString("list_expiries('%1','%2') → %3 items").arg(broker_id, underlying).arg(exps.size()));
     if (exps.isEmpty()) {
-        show_empty_state(QString("No expiries cached for %1.").arg(underlying));
+        show_empty_state(tr("No expiries cached for %1.").arg(underlying));
         header_->set_expiries({});
         return;
     }
@@ -359,7 +375,7 @@ void ChainSubTab::resubscribe() {
     }
     const QString topic = current_topic();
     if (topic.isEmpty()) {
-        show_empty_state("Pick a broker, underlying, and expiry.");
+        show_empty_state(tr("Pick a broker, underlying, and expiry."));
         return;
     }
     hide_empty_state();
@@ -379,7 +395,7 @@ void ChainSubTab::resubscribe() {
     hub.subscribe_errors(this, topic, [self](const QString& err) {
         if (!self)
             return;
-        self->show_empty_state("Chain unavailable: " + err);
+        self->show_empty_state(ChainSubTab::tr("Chain unavailable: %1").arg(err));
     });
 
     // Cold-start: ask producer for an immediate refresh so the user doesn't

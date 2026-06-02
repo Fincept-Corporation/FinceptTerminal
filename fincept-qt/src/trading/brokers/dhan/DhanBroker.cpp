@@ -16,6 +16,7 @@
 #include "core/logging/Logger.h"
 #include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerTokenUtil.h"
 #include "trading/instruments/InstrumentService.h"
 
 #include <QDateTime>
@@ -85,16 +86,43 @@ QString DhanBroker::lookup_security_id(const QString& symbol, const QString& exc
 
 // ── Token expiry detection ────────────────────────────────────────────────────
 bool DhanBroker::is_token_expired(const BrokerHttpResponse& resp) {
-    if (resp.status_code == 401)
-        return true;
-    // Dhan sets errorType field for auth errors
     const QString error_type = resp.json.value("errorType").toString();
-    if (error_type == "Invalid_Authentication" || error_type == "Unauthorized")
-        return true;
-    // Also check raw body for auth error string (some endpoints return differently)
-    if (resp.raw_body.contains("Invalid_Authentication"))
-        return true;
-    return false;
+    const QString error_code = resp.json.value("errorCode").toString();
+    const QString msg = resp.json.value("errorMessage").toString();
+
+    // Rate-limiting / throttling is TRANSIENT — it must never be treated as an
+    // expired token (doing so disconnects a perfectly valid session). DhanHQ v2
+    // signals this with DH-904 ("Too many requests... try throttling") or 805
+    // (data-API connection/rate limit). Some gateways ride these on an HTTP 401,
+    // so this check comes first and short-circuits the 401 path below.
+    const bool rate_limited = error_code.contains("904") || error_code.contains("805") ||
+                              error_type.compare("Rate_Limit", Qt::CaseInsensitive) == 0 ||
+                              msg.contains("rate limit", Qt::CaseInsensitive) ||
+                              msg.contains("Too many requests", Qt::CaseInsensitive);
+    if (rate_limited) {
+        LOG_WARN(TAG, QString("Dhan rate-limited (status=%1 code=%2 type=%3) — NOT treating as token expiry; "
+                              "throttle and retry. msg=%4")
+                          .arg(resp.status_code)
+                          .arg(error_code, error_type, msg));
+        return false;
+    }
+
+    // Definitive auth-token failures per the DhanHQ v2 error annexure:
+    //   DH-901 invalid/expired, DH-807 expired, DH-809 invalid, DH-810 bad client id.
+    const bool auth_err = resp.status_code == 401 || error_type == "Invalid_Authentication" ||
+                          error_type == "Unauthorized" || error_code == "DH-901" || error_code == "DH-807" ||
+                          error_code == "DH-809" || error_code == "DH-810" ||
+                          resp.raw_body.contains("Invalid_Authentication");
+
+    if (auth_err) {
+        // Log the exact response that triggers a disconnect so a *misclassified*
+        // transient error is diagnosable from the log rather than guessed at.
+        LOG_WARN(TAG, QString("Dhan classified TOKEN_EXPIRED → will disconnect. status=%1 type=%2 code=%3 msg=%4 "
+                              "body=%5")
+                          .arg(resp.status_code)
+                          .arg(error_type, error_code, msg, resp.raw_body.left(400)));
+    }
+    return auth_err;
 }
 
 QString DhanBroker::checked_error(const BrokerHttpResponse& resp, const QString& fallback) {
@@ -107,6 +135,44 @@ QString DhanBroker::checked_error(const BrokerHttpResponse& resp, const QString&
     if (is_token_expired(resp))
         return "[TOKEN_EXPIRED] " + msg;
     return msg;
+}
+
+// Authoritative session check. DhanHQ v2 recommends GET /v2/profile, which
+// returns the account's dhanClientId + tokenValidity for a live token. This is
+// lighter and less prone to spurious errors than repeatedly polling fundlimit,
+// and it logs the raw response so any disconnect is fully diagnosable.
+SessionCheck DhanBroker::validate_session(const BrokerCredentials& creds) {
+    auto resp = BrokerHttp::instance().get(BASE + "/v2/profile", auth_headers(creds));
+    LOG_INFO(TAG, QString("validate_session GET /v2/profile → status=%1 success=%2 body=%3")
+                      .arg(resp.status_code)
+                      .arg(resp.success)
+                      .arg(resp.raw_body.left(300)));
+
+    // A 200 carrying the client id means the token is live. Parse the real
+    // tokenValidity ("DD/MM/YYYY HH:mm", IST) so the persisted expiry hint is
+    // updated to the broker's actual value instead of our coarse 24h estimate.
+    if (resp.success && (resp.json.contains("dhanClientId") || resp.json.contains("tokenValidity"))) {
+        qint64 exp = 0;
+        const QString tv = resp.json.value("tokenValidity").toString();
+        if (!tv.isEmpty()) {
+            QDateTime dt = QDateTime::fromString(tv, "dd/MM/yyyy HH:mm");
+            if (dt.isValid()) {
+                dt.setTimeZone(ist_zone());
+                exp = dt.toSecsSinceEpoch();
+            }
+        }
+        return {SessionCheck::Status::Valid, exp, QString()};
+    }
+
+    // Definitive auth failure → expired. Anything else (rate limit, 5xx,
+    // network) is inconclusive — the caller must NOT disconnect on it.
+    if (is_token_expired(resp))
+        return {SessionCheck::Status::Expired, 0,
+                QStringLiteral("[TOKEN_EXPIRED] ") + checked_error(resp, "token invalid/expired")};
+
+    LOG_WARN(TAG, QString("validate_session inconclusive (status=%1) — leaving connection state unchanged")
+                      .arg(resp.status_code));
+    return {SessionCheck::Status::Inconclusive, 0, checked_error(resp, "profile check failed")};
 }
 
 // ── Auth headers ──────────────────────────────────────────────────────────────
@@ -141,9 +207,13 @@ TokenExchangeResponse DhanBroker::exchange_token(const QString& api_key, const Q
     if (is_token_expired(resp)) {
         return {false, "", "", "", "", "[TOKEN_EXPIRED] Access token is invalid or expired"};
     }
-    // Accept any non-auth error (market closed, etc.) as token valid
+    // Accept any non-auth error (market closed, etc.) as token valid.
+    // Dhan v2 access tokens are valid for 24h from generation (rolling window).
+    // The live validation sweep is the authoritative guard; this expiry is only
+    // a startup hint so a token isn't shown green long after it has lapsed.
+    const QString extra = with_token_expiry({}, rolling_expiry_epoch(24));
     LOG_INFO(TAG, "Token exchange OK, client_id=" + api_key);
-    return {true, api_secret, /*refresh*/ "", api_key, /*additional*/ "", ""};
+    return {true, api_secret, /*refresh*/ "", api_key, /*additional*/ extra, ""};
 }
 
 // ── Place Order ───────────────────────────────────────────────────────────────

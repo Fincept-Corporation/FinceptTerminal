@@ -154,10 +154,20 @@ void CryptoTimeSales::rebuild_cache() {
 
     if (count == 0) {
         p.setPen(kTextDim());
-        p.drawText(rect(), Qt::AlignCenter, "Waiting for trades...");
+        p.drawText(rect(), Qt::AlignCenter, tr("Waiting for trades..."));
     }
 
     cache_dirty_ = false;
+}
+
+void CryptoTimeSales::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange) {
+        // The only text is the painted empty-state message — force a repaint
+        // so it re-renders in the new language.
+        cache_dirty_ = true;
+        update();
+    }
+    QWidget::changeEvent(event);
 }
 
 } // namespace fincept::screens::crypto

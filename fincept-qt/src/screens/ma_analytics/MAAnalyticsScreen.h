@@ -3,6 +3,7 @@
 #include "screens/common/IStatefulScreen.h"
 #include "services/ma_analytics/MAAnalyticsTypes.h"
 
+#include <QEvent>
 #include <QHideEvent>
 #include <QLabel>
 #include <QPushButton>
@@ -32,6 +33,7 @@ class MAAnalyticsScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private slots:
     void on_module_selected(int index);
@@ -45,6 +47,7 @@ class MAAnalyticsScreen : public QWidget, public IStatefulScreen {
     QWidget* build_status_bar();
     void update_right_panel();
     void update_sidebar_selection();
+    void retranslateUi();
 
     // Module data
     QVector<services::ma::ModuleInfo> modules_;
@@ -77,6 +80,17 @@ class MAAnalyticsScreen : public QWidget, public IStatefulScreen {
     QLabel* stats_title_ = nullptr;
     QWidget* stats_card_ = nullptr;
     QLabel* tips_label_ = nullptr;
+
+    // Quick-stat name labels (cached for retranslateUi)
+    QLabel* stat_total_modules_lbl_ = nullptr;
+    QLabel* stat_valuation_methods_lbl_ = nullptr;
+    QLabel* stat_python_scripts_lbl_ = nullptr;
+    QLabel* stat_analysis_tools_lbl_ = nullptr;
+    // Status-bar name labels + the translatable READY value (cached)
+    QLabel* status_module_lbl_ = nullptr;
+    QLabel* status_engine_lbl_ = nullptr;
+    QLabel* status_status_lbl_ = nullptr;
+    QLabel* status_ready_val_ = nullptr;
 
     bool left_open_ = true;
     bool right_open_ = true;

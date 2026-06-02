@@ -4,6 +4,7 @@
 
 #include <QButtonGroup>
 #include <QComboBox>
+#include <QEvent>
 #include <QJsonArray>
 #include <QLabel>
 #include <QLineEdit>
@@ -35,12 +36,14 @@ class FileManagerScreen : public QWidget, public IStatefulScreen {
 
   protected:
     void showEvent(QShowEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
   private:
     void build_ui();
     void build_filter_bar(QVBoxLayout* root);
     void build_quota_bar(QVBoxLayout* root);
     QWidget* build_preview_panel();
+    void retranslateUi();
 
     void render_files();
     void upload_files();
@@ -61,6 +64,7 @@ class FileManagerScreen : public QWidget, public IStatefulScreen {
     // ── Search / filter bar ──────────────────────────────────────────────
     QLineEdit* search_input_ = nullptr;
     QComboBox* sort_combo_ = nullptr;
+    QLabel* sort_label_ = nullptr; // "Sort:" (cached for retranslateUi)
     // Screen filter chips — one QPushButton per source screen + "All"
     QWidget* chips_bar_ = nullptr;
     QButtonGroup* chip_group_ = nullptr;
@@ -78,6 +82,8 @@ class FileManagerScreen : public QWidget, public IStatefulScreen {
     QVector<QString> check_ids_;       // parallel file IDs
     QPushButton* bulk_delete_btn_ = nullptr;
     QWidget* bulk_bar_ = nullptr;
+    QLabel* bulk_sel_label_ = nullptr;     // "Selected files:" (cached for retranslateUi)
+    QPushButton* bulk_clear_btn_ = nullptr; // "CLEAR SELECTION" (cached for retranslateUi)
 
     // ── Preview panel ────────────────────────────────────────────────────
     QWidget* preview_panel_ = nullptr;
@@ -91,6 +97,9 @@ class FileManagerScreen : public QWidget, public IStatefulScreen {
     QLabel* stats_label_ = nullptr;
     QPushButton* upload_btn_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;
+    QLabel* title_label_ = nullptr;    // "FILE MANAGER" (cached for retranslateUi)
+    QLabel* subtitle_label_ = nullptr; // header subtitle (cached for retranslateUi)
+    QLabel* preview_header_label_ = nullptr; // "PREVIEW" (cached for retranslateUi)
 
     // ── Splitter ─────────────────────────────────────────────────────────
     QSplitter* splitter_ = nullptr;

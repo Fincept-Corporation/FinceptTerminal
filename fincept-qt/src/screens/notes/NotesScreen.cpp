@@ -3,9 +3,11 @@
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "services/cloud/CloudSyncEngine.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QFile>
 #include <QFileDialog>
@@ -107,6 +109,29 @@ static const QVector<Category> kCategories = {
 static const QStringList kPriorities = {"HIGH", "MEDIUM", "LOW"};
 static const QStringList kSentiments = {"BULLISH", "BEARISH", "NEUTRAL"};
 
+// Translatable display label for a category id. The id stays a stable data key;
+// only the visible text is localized. Used by retranslateUi for the sidebar
+// list and the editor category combo.
+static QString category_display_label(const QString& id) {
+    if (id == "ALL")
+        return QCoreApplication::translate("NotesScreen", "ALL NOTES");
+    if (id == "TRADE_IDEA")
+        return QCoreApplication::translate("NotesScreen", "TRADE IDEAS");
+    if (id == "RESEARCH")
+        return QCoreApplication::translate("NotesScreen", "RESEARCH");
+    if (id == "MARKET_ANALYSIS")
+        return QCoreApplication::translate("NotesScreen", "MARKET ANALYSIS");
+    if (id == "EARNINGS")
+        return QCoreApplication::translate("NotesScreen", "EARNINGS");
+    if (id == "ECONOMIC")
+        return QCoreApplication::translate("NotesScreen", "ECONOMIC");
+    if (id == "PORTFOLIO")
+        return QCoreApplication::translate("NotesScreen", "PORTFOLIO");
+    if (id == "GENERAL")
+        return QCoreApplication::translate("NotesScreen", "GENERAL");
+    return id;
+}
+
 static QString priority_color(const QString& p) {
     if (p == "HIGH")
         return NEGATIVE();
@@ -121,6 +146,15 @@ NotesScreen::NotesScreen(QWidget* parent) : QWidget(parent) {
     setStyleSheet(QString("background: %1;").arg(BG_BASE()));
     build_ui();
     load_notes();
+
+    // Reload from the local cache when a cloud pull updates notes.
+    connect(&fincept::services::cloud::CloudSyncEngine::instance(),
+            &fincept::services::cloud::CloudSyncEngine::cloud_data_changed, this, [this](const QString& entity) {
+                if (entity == QLatin1String("note")) {
+                    load_notes();
+                    update_notes_list();
+                }
+            });
 }
 
 void NotesScreen::build_ui() {
@@ -138,6 +172,9 @@ void NotesScreen::build_ui() {
     splitter->setStretchFactor(2, 1);
 
     root->addWidget(splitter);
+
+    // Populate empty-display combos/lists and apply all translatable text.
+    retranslateUi();
 }
 
 // ── Category Sidebar ─────────────────────────────────────────────────────────
@@ -152,20 +189,19 @@ QWidget* NotesScreen::build_category_sidebar() {
     lay->setSpacing(0);
 
     // Header
-    auto* header = new QLabel("  CATEGORIES");
-    header->setFixedHeight(34);
-    header->setStyleSheet(QString("background: %1; color: %2; font-size: 12px; font-weight: 700; "
-                                  "letter-spacing: 0.5px; border-bottom: 1px solid %3; padding-left: 12px; "
-                                  "font-family: 'Consolas','Courier New',monospace;")
-                              .arg(BG_RAISED(), AMBER(), BORDER_DIM()));
-    lay->addWidget(header);
+    category_header_ = new QLabel(tr("  CATEGORIES"));
+    category_header_->setFixedHeight(34);
+    category_header_->setStyleSheet(QString("background: %1; color: %2; font-size: 12px; font-weight: 700; "
+                                            "letter-spacing: 0.5px; border-bottom: 1px solid %3; padding-left: 12px; "
+                                            "font-family: 'Consolas','Courier New',monospace;")
+                                        .arg(BG_RAISED(), AMBER(), BORDER_DIM()));
+    lay->addWidget(category_header_);
 
-    // Category list
+    // Category list — labels applied in retranslateUi (ids stay as data).
     category_list_ = new QListWidget;
     category_list_->setStyleSheet(kListItem());
-    for (const auto& cat : kCategories) {
-        category_list_->addItem(cat.label);
-    }
+    for (int i = 0; i < kCategories.size(); ++i)
+        category_list_->addItem(QString());
     category_list_->setCurrentRow(0);
     connect(category_list_, &QListWidget::currentRowChanged, this, &NotesScreen::on_category_selected);
     lay->addWidget(category_list_);
@@ -202,17 +238,17 @@ QWidget* NotesScreen::build_notes_list_panel() {
     tl->setSpacing(6);
 
     search_input_ = new QLineEdit;
-    search_input_->setPlaceholderText("Search notes...");
+    search_input_->setPlaceholderText(tr("Search notes..."));
     search_input_->setStyleSheet(kInput());
     search_input_->setFixedHeight(28);
     connect(search_input_, &QLineEdit::textChanged, this, &NotesScreen::on_search_changed);
     tl->addWidget(search_input_);
 
-    auto* new_btn = new QPushButton("+ NEW");
-    new_btn->setFixedSize(70, 24);
-    new_btn->setStyleSheet(kActionBtn());
-    connect(new_btn, &QPushButton::clicked, this, &NotesScreen::on_new_note);
-    tl->addWidget(new_btn);
+    new_btn_ = new QPushButton(tr("+ NEW"));
+    new_btn_->setFixedSize(70, 24);
+    new_btn_->setStyleSheet(kActionBtn());
+    connect(new_btn_, &QPushButton::clicked, this, &NotesScreen::on_new_note);
+    tl->addWidget(new_btn_);
 
     lay->addWidget(toolbar);
 
@@ -223,7 +259,7 @@ QWidget* NotesScreen::build_notes_list_panel() {
     lay->addWidget(notes_list_);
 
     // Footer count
-    count_label_ = new QLabel("0 notes");
+    count_label_ = new QLabel(tr("%1 notes").arg(0));
     count_label_->setFixedHeight(26);
     count_label_->setAlignment(Qt::AlignCenter);
     count_label_->setStyleSheet(QString("background: %1; color: %2; font-size: 11px; border-top: 1px solid %3; "
@@ -244,10 +280,10 @@ QWidget* NotesScreen::build_editor_panel() {
     empty->setStyleSheet(QString("background: %1;").arg(BG_BASE()));
     auto* el = new QVBoxLayout(empty);
     el->setAlignment(Qt::AlignCenter);
-    auto* empty_label = new QLabel("Select a note or create a new one");
-    empty_label->setStyleSheet(
+    empty_label_ = new QLabel(tr("Select a note or create a new one"));
+    empty_label_->setStyleSheet(
         QString("color: %1; font-size: 14px; font-family: 'Consolas','Courier New',monospace;").arg(TEXT_TERTIARY()));
-    el->addWidget(empty_label, 0, Qt::AlignCenter);
+    el->addWidget(empty_label_, 0, Qt::AlignCenter);
     right_stack_->addWidget(empty); // index 0
 
     // ── Page 1: View mode ────────────────────────────────────────────────────
@@ -259,25 +295,25 @@ QWidget* NotesScreen::build_editor_panel() {
 
     // View toolbar
     auto* view_toolbar = new QHBoxLayout;
-    auto* edit_btn = new QPushButton("EDIT");
-    edit_btn->setStyleSheet(kSecondaryBtn());
-    connect(edit_btn, &QPushButton::clicked, this, &NotesScreen::enter_edit_mode);
-    view_toolbar->addWidget(edit_btn);
+    view_edit_btn_ = new QPushButton(tr("EDIT"));
+    view_edit_btn_->setStyleSheet(kSecondaryBtn());
+    connect(view_edit_btn_, &QPushButton::clicked, this, &NotesScreen::enter_edit_mode);
+    view_toolbar->addWidget(view_edit_btn_);
 
-    auto* fav_btn = new QPushButton("FAV");
-    fav_btn->setStyleSheet(kSecondaryBtn());
-    connect(fav_btn, &QPushButton::clicked, this, &NotesScreen::on_toggle_favorite);
-    view_toolbar->addWidget(fav_btn);
+    view_fav_btn_ = new QPushButton(tr("FAV"));
+    view_fav_btn_->setStyleSheet(kSecondaryBtn());
+    connect(view_fav_btn_, &QPushButton::clicked, this, &NotesScreen::on_toggle_favorite);
+    view_toolbar->addWidget(view_fav_btn_);
 
-    auto* archive_btn = new QPushButton("ARCHIVE");
-    archive_btn->setStyleSheet(kSecondaryBtn());
-    connect(archive_btn, &QPushButton::clicked, this, &NotesScreen::on_toggle_archive);
-    view_toolbar->addWidget(archive_btn);
+    view_archive_btn_ = new QPushButton(tr("ARCHIVE"));
+    view_archive_btn_->setStyleSheet(kSecondaryBtn());
+    connect(view_archive_btn_, &QPushButton::clicked, this, &NotesScreen::on_toggle_archive);
+    view_toolbar->addWidget(view_archive_btn_);
 
-    auto* del_btn = new QPushButton("DELETE");
-    del_btn->setStyleSheet(kDangerBtn());
-    connect(del_btn, &QPushButton::clicked, this, &NotesScreen::on_delete_note);
-    view_toolbar->addWidget(del_btn);
+    view_delete_btn_ = new QPushButton(tr("DELETE"));
+    view_delete_btn_->setStyleSheet(kDangerBtn());
+    connect(view_delete_btn_, &QPushButton::clicked, this, &NotesScreen::on_delete_note);
+    view_toolbar->addWidget(view_delete_btn_);
 
     view_toolbar->addStretch();
     vl->addLayout(view_toolbar);
@@ -325,14 +361,14 @@ QWidget* NotesScreen::build_editor_panel() {
 
     // Save/Cancel bar
     auto* edit_toolbar = new QHBoxLayout;
-    auto* save_btn = new QPushButton("SAVE");
-    save_btn->setStyleSheet(kActionBtn());
-    connect(save_btn, &QPushButton::clicked, this, &NotesScreen::on_save_note);
-    edit_toolbar->addWidget(save_btn);
+    edit_save_btn_ = new QPushButton(tr("SAVE"));
+    edit_save_btn_->setStyleSheet(kActionBtn());
+    connect(edit_save_btn_, &QPushButton::clicked, this, &NotesScreen::on_save_note);
+    edit_toolbar->addWidget(edit_save_btn_);
 
-    auto* cancel_btn = new QPushButton("CANCEL");
-    cancel_btn->setStyleSheet(kSecondaryBtn());
-    connect(cancel_btn, &QPushButton::clicked, this, [this]() {
+    edit_cancel_btn_ = new QPushButton(tr("CANCEL"));
+    edit_cancel_btn_->setStyleSheet(kSecondaryBtn());
+    connect(edit_cancel_btn_, &QPushButton::clicked, this, [this]() {
         if (selected_note_id_ > 0) {
             enter_view_mode();
         } else {
@@ -340,20 +376,20 @@ QWidget* NotesScreen::build_editor_panel() {
             is_editing_ = false;
         }
     });
-    edit_toolbar->addWidget(cancel_btn);
+    edit_toolbar->addWidget(edit_cancel_btn_);
 
-    auto* export_btn = new QPushButton("EXPORT");
-    export_btn->setStyleSheet(kSecondaryBtn());
-    export_btn->setToolTip("Export this note as a Markdown file to the File Manager");
-    connect(export_btn, &QPushButton::clicked, this, &NotesScreen::on_export_note);
-    edit_toolbar->addWidget(export_btn);
+    edit_export_btn_ = new QPushButton(tr("EXPORT"));
+    edit_export_btn_->setStyleSheet(kSecondaryBtn());
+    edit_export_btn_->setToolTip(tr("Export this note as a Markdown file to the File Manager"));
+    connect(edit_export_btn_, &QPushButton::clicked, this, &NotesScreen::on_export_note);
+    edit_toolbar->addWidget(edit_export_btn_);
 
     edit_toolbar->addStretch();
     edl->addLayout(edit_toolbar);
 
     // Title
     edit_title_ = new QLineEdit;
-    edit_title_->setPlaceholderText("Note title...");
+    edit_title_->setPlaceholderText(tr("Note title..."));
     edit_title_->setStyleSheet(kInput() + " QLineEdit { font-size: 16px; font-weight: 700; }");
     edit_title_->setFixedHeight(28);
     edl->addWidget(edit_title_);
@@ -369,14 +405,19 @@ QWidget* NotesScreen::build_editor_panel() {
         return l;
     };
 
-    meta_row->addWidget(make_label("CAT:"));
+    lbl_cat_ = make_label(tr("CAT:"));
+    meta_row->addWidget(lbl_cat_);
+    // Category combo — display text applied in retranslateUi (ids stay as data).
     edit_category_ = new QComboBox;
     edit_category_->setStyleSheet(kCombo());
     for (int i = 1; i < kCategories.size(); ++i) // skip "ALL"
-        edit_category_->addItem(kCategories[i].label, kCategories[i].id);
+        edit_category_->addItem(QString(), kCategories[i].id);
     meta_row->addWidget(edit_category_);
 
-    meta_row->addWidget(make_label("PRI:"));
+    lbl_pri_ = make_label(tr("PRI:"));
+    meta_row->addWidget(lbl_pri_);
+    // Priority is stored verbatim in the DB (note.priority) and matched via
+    // currentText() — these are code values, intentionally left untranslated.
     edit_priority_ = new QComboBox;
     edit_priority_->setStyleSheet(kCombo());
     for (const auto& p : kPriorities)
@@ -384,7 +425,9 @@ QWidget* NotesScreen::build_editor_panel() {
     edit_priority_->setCurrentText("MEDIUM");
     meta_row->addWidget(edit_priority_);
 
-    meta_row->addWidget(make_label("SENT:"));
+    lbl_sent_ = make_label(tr("SENT:"));
+    meta_row->addWidget(lbl_sent_);
+    // Sentiment is also a stored code value (note.sentiment) — left untranslated.
     edit_sentiment_ = new QComboBox;
     edit_sentiment_->setStyleSheet(kCombo());
     for (const auto& s : kSentiments)
@@ -398,15 +441,17 @@ QWidget* NotesScreen::build_editor_panel() {
     // Tags + Tickers row
     auto* tag_row = new QHBoxLayout;
     tag_row->setSpacing(8);
-    tag_row->addWidget(make_label("TAGS:"));
+    lbl_tags_ = make_label(tr("TAGS:"));
+    tag_row->addWidget(lbl_tags_);
     edit_tags_ = new QLineEdit;
-    edit_tags_->setPlaceholderText("tag1, tag2, ...");
+    edit_tags_->setPlaceholderText(tr("tag1, tag2, ..."));
     edit_tags_->setStyleSheet(kInput());
     tag_row->addWidget(edit_tags_);
 
-    tag_row->addWidget(make_label("TICKERS:"));
+    lbl_tickers_ = make_label(tr("TICKERS:"));
+    tag_row->addWidget(lbl_tickers_);
     edit_tickers_ = new QLineEdit;
-    edit_tickers_->setPlaceholderText("AAPL, MSFT, ...");
+    edit_tickers_->setPlaceholderText(tr("AAPL, MSFT, ..."));
     edit_tickers_->setStyleSheet(kInput());
     tag_row->addWidget(edit_tickers_);
     edl->addLayout(tag_row);
@@ -414,7 +459,7 @@ QWidget* NotesScreen::build_editor_panel() {
     // Content editor
     edit_content_ = new QTextEdit;
     edit_content_->setStyleSheet(kTextEdit());
-    edit_content_->setPlaceholderText("Write your note here...");
+    edit_content_->setPlaceholderText(tr("Write your note here..."));
     edl->addWidget(edit_content_, 1);
 
     right_stack_->addWidget(edit_page); // index 2
@@ -469,7 +514,7 @@ void NotesScreen::update_notes_list() {
     }
     notes_list_->blockSignals(false);
 
-    count_label_->setText(QString("%1 notes").arg(filtered_notes_.size()));
+    count_label_->setText(tr("%1 notes").arg(filtered_notes_.size()));
 
     // Update stats
     int fav_count = 0;
@@ -477,7 +522,7 @@ void NotesScreen::update_notes_list() {
         if (n.is_favorite)
             ++fav_count;
     }
-    stats_label_->setText(QString("Total: %1  |  Fav: %2").arg(notes_.size()).arg(fav_count));
+    stats_label_->setText(tr("Total: %1  |  Fav: %2").arg(notes_.size()).arg(fav_count));
 }
 
 // ── Slots ────────────────────────────────────────────────────────────────────
@@ -569,7 +614,7 @@ void NotesScreen::on_delete_note() {
     if (selected_note_id_ <= 0)
         return;
 
-    auto reply = QMessageBox::question(this, "Delete Note", "Are you sure you want to delete this note?",
+    auto reply = QMessageBox::question(this, tr("Delete Note"), tr("Are you sure you want to delete this note?"),
                                        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
 
     if (reply != QMessageBox::Yes)
@@ -650,12 +695,12 @@ void NotesScreen::show_note(const fincept::FinancialNote& note) {
 
     QStringList meta_parts;
     meta_parts << note.category;
-    meta_parts << QString("PRI: %1").arg(note.priority);
-    meta_parts << QString("SENT: %1").arg(note.sentiment);
+    meta_parts << tr("PRI: %1").arg(note.priority);
+    meta_parts << tr("SENT: %1").arg(note.sentiment);
     if (!note.tags.isEmpty())
-        meta_parts << QString("TAGS: %1").arg(note.tags);
+        meta_parts << tr("TAGS: %1").arg(note.tags);
     if (!note.tickers.isEmpty())
-        meta_parts << QString("TICKERS: %1").arg(note.tickers);
+        meta_parts << tr("TICKERS: %1").arg(note.tickers);
     meta_parts << note.updated_at;
 
     view_meta_->setText(meta_parts.join("  |  "));
@@ -695,6 +740,83 @@ void NotesScreen::enter_edit_mode() {
 void NotesScreen::enter_view_mode() {
     is_editing_ = false;
     right_stack_->setCurrentIndex(1);
+}
+
+// ── Live language switch ─────────────────────────────────────────────────────
+
+void NotesScreen::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void NotesScreen::retranslateUi() {
+    if (category_header_) category_header_->setText(tr("  CATEGORIES"));
+
+    // Category sidebar list — re-apply translated labels (ids stay as data).
+    if (category_list_) {
+        for (int i = 0; i < kCategories.size() && i < category_list_->count(); ++i)
+            category_list_->item(i)->setText(category_display_label(kCategories[i].id));
+    }
+
+    // Editor category combo — re-apply translated item text by data role.
+    if (edit_category_) {
+        for (int i = 0; i < edit_category_->count(); ++i)
+            edit_category_->setItemText(i, category_display_label(edit_category_->itemData(i).toString()));
+    }
+
+    // Notes list panel
+    if (search_input_) search_input_->setPlaceholderText(tr("Search notes..."));
+    if (new_btn_) new_btn_->setText(tr("+ NEW"));
+
+    // Editor / viewer
+    if (empty_label_) empty_label_->setText(tr("Select a note or create a new one"));
+
+    // View-mode toolbar
+    if (view_edit_btn_) view_edit_btn_->setText(tr("EDIT"));
+    if (view_fav_btn_) view_fav_btn_->setText(tr("FAV"));
+    if (view_archive_btn_) view_archive_btn_->setText(tr("ARCHIVE"));
+    if (view_delete_btn_) view_delete_btn_->setText(tr("DELETE"));
+
+    // Edit-mode toolbar
+    if (edit_save_btn_) edit_save_btn_->setText(tr("SAVE"));
+    if (edit_cancel_btn_) edit_cancel_btn_->setText(tr("CANCEL"));
+    if (edit_export_btn_) {
+        edit_export_btn_->setText(tr("EXPORT"));
+        edit_export_btn_->setToolTip(tr("Export this note as a Markdown file to the File Manager"));
+    }
+
+    // Edit-mode field labels
+    if (lbl_cat_) lbl_cat_->setText(tr("CAT:"));
+    if (lbl_pri_) lbl_pri_->setText(tr("PRI:"));
+    if (lbl_sent_) lbl_sent_->setText(tr("SENT:"));
+    if (lbl_tags_) lbl_tags_->setText(tr("TAGS:"));
+    if (lbl_tickers_) lbl_tickers_->setText(tr("TICKERS:"));
+
+    // Edit-mode placeholders
+    if (edit_title_) edit_title_->setPlaceholderText(tr("Note title..."));
+    if (edit_tags_) edit_tags_->setPlaceholderText(tr("tag1, tag2, ..."));
+    if (edit_tickers_) edit_tickers_->setPlaceholderText(tr("AAPL, MSFT, ..."));
+    if (edit_content_) edit_content_->setPlaceholderText(tr("Write your note here..."));
+
+    // Re-render count + stats footers in the new language (without disturbing
+    // the list selection — note titles are data and need no re-translation).
+    if (count_label_)
+        count_label_->setText(tr("%1 notes").arg(filtered_notes_.size()));
+    if (stats_label_) {
+        int fav_count = 0;
+        for (const auto& n : notes_)
+            if (n.is_favorite)
+                ++fav_count;
+        stats_label_->setText(tr("Total: %1  |  Fav: %2").arg(notes_.size()).arg(fav_count));
+    }
+
+    // Re-render the currently-displayed note metadata (PRI:/SENT:/… prefixes).
+    if (selected_note_id_ > 0) {
+        auto r = fincept::NotesRepository::instance().get(selected_note_id_);
+        if (r.is_ok())
+            show_note(r.value());
+    }
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
@@ -769,6 +891,8 @@ void NotesScreen::restore_state(const QVariantMap& state) {
 void NotesScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     subscribe_mcp_events();
+    // Rate-gated pull of cloud notes on screen entry (no-op when sync is off).
+    fincept::services::cloud::CloudSyncEngine::instance().request_pull(QStringLiteral("note"));
 }
 
 void NotesScreen::hideEvent(QHideEvent* event) {

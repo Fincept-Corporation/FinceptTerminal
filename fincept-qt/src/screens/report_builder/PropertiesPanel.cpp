@@ -51,10 +51,10 @@ void PropertiesPanel::build_empty_page() {
     auto* vl = new QVBoxLayout(empty_widget_);
     vl->setAlignment(Qt::AlignCenter);
 
-    auto* lbl = new QLabel("Select a component\nto edit properties");
-    lbl->setAlignment(Qt::AlignCenter);
-    lbl->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(ui::colors::MUTED()));
-    vl->addWidget(lbl);
+    empty_label_ = new QLabel(tr("Select a component\nto edit properties"));
+    empty_label_->setAlignment(Qt::AlignCenter);
+    empty_label_->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(ui::colors::MUTED()));
+    vl->addWidget(empty_label_);
 
     stack_->addWidget(empty_widget_);
 }
@@ -80,6 +80,7 @@ void PropertiesPanel::build_editor_page() {
 
 void PropertiesPanel::show_empty() {
     current_index_ = -1;
+    has_component_ = false;
     stack_->setCurrentIndex(0);
 }
 
@@ -97,6 +98,8 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
     }
 
     current_index_ = index;
+    last_component_ = *component; // cache for retranslateUi rebuilds
+    has_component_ = true;
 
     // Clear previous editor content (keep the stretch at end)
     while (editor_layout_->count() > 0) {
@@ -117,7 +120,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
     // ── Text-based types ──────────────────────────────────────────────────────
     if (component->type == "heading" || component->type == "text" || component->type == "code" ||
         component->type == "quote") {
-        editor_layout_->addWidget(make_label("Content:"));
+        editor_layout_->addWidget(make_label(tr("Content:")));
         auto* edit = new QTextEdit;
         edit->setPlainText(component->content);
         edit->setMinimumHeight(80);
@@ -139,13 +142,13 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         drl->setContentsMargins(0, 0, 0, 0);
         drl->setSpacing(8);
 
-        drl->addWidget(make_label("Rows:"));
+        drl->addWidget(make_label(tr("Rows:")));
         auto* rows_spin = new QSpinBox;
         rows_spin->setRange(1, 50);
         rows_spin->setValue(rows);
         drl->addWidget(rows_spin);
 
-        drl->addWidget(make_label("Cols:"));
+        drl->addWidget(make_label(tr("Cols:")));
         auto* cols_spin = new QSpinBox;
         cols_spin->setRange(1, 20);
         cols_spin->setValue(cols);
@@ -153,7 +156,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         editor_layout_->addWidget(dim_row);
 
         // Cell editor table
-        editor_layout_->addWidget(make_label("Cell data:"));
+        editor_layout_->addWidget(make_label(tr("Cell data:")));
         auto* cell_table = new QTableWidget(rows, cols);
         cell_table->setMinimumHeight(150);
         cell_table->setMaximumHeight(250);
@@ -214,8 +217,9 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
 
     // ── Chart: type + title + data + labels + width ───────────────────────────
     if (component->type == "chart") {
-        editor_layout_->addWidget(make_label("Chart Type:"));
+        editor_layout_->addWidget(make_label(tr("Chart Type:")));
         auto* type_combo = new QComboBox;
+        // Values are config keys (matched via findText, stored in config) — not translated.
         type_combo->addItems({"line", "bar", "pie"});
         int idx = type_combo->findText(component->config.value("chart_type", "line"));
         if (idx >= 0)
@@ -224,13 +228,13 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
                 [this](const QString& val) { emit config_changed(current_index_, "chart_type", val); });
         editor_layout_->addWidget(type_combo);
 
-        editor_layout_->addWidget(make_label("Title:"));
+        editor_layout_->addWidget(make_label(tr("Title:")));
         auto* title_edit = new QLineEdit(component->config.value("title", "Chart"));
         connect(title_edit, &QLineEdit::textChanged, this,
                 [this](const QString& val) { emit config_changed(current_index_, "title", val); });
         editor_layout_->addWidget(title_edit);
 
-        editor_layout_->addWidget(make_label("Data (CSV values, e.g. 10,20,15,30):"));
+        editor_layout_->addWidget(make_label(tr("Data (CSV values, e.g. 10,20,15,30):")));
         auto* data_edit = new QTextEdit;
         data_edit->setPlainText(component->config.value("data", ""));
         data_edit->setMaximumHeight(80);
@@ -239,14 +243,14 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
                 [this, data_edit]() { emit config_changed(current_index_, "data", data_edit->toPlainText()); });
         editor_layout_->addWidget(data_edit);
 
-        editor_layout_->addWidget(make_label("X Labels (comma-separated):"));
+        editor_layout_->addWidget(make_label(tr("X Labels (comma-separated):")));
         auto* labels_edit = new QLineEdit(component->config.value("labels", ""));
         labels_edit->setPlaceholderText("Jan,Feb,Mar,Apr,May,Jun");
         connect(labels_edit, &QLineEdit::textChanged, this,
                 [this](const QString& val) { emit config_changed(current_index_, "labels", val); });
         editor_layout_->addWidget(labels_edit);
 
-        editor_layout_->addWidget(make_label("Width (px):"));
+        editor_layout_->addWidget(make_label(tr("Width (px):")));
         auto* w_spin = new QSpinBox;
         w_spin->setRange(200, 760);
         w_spin->setSingleStep(20);
@@ -261,7 +265,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         sep_hist->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER()));
         editor_layout_->addWidget(sep_hist);
 
-        editor_layout_->addWidget(make_label("Fetch Price History:"));
+        editor_layout_->addWidget(make_label(tr("Fetch Price History:")));
         auto* hist_row = new QWidget(this);
         hist_row->setStyleSheet("background: transparent;");
         auto* hr_hl = new QHBoxLayout(hist_row);
@@ -269,10 +273,10 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         hr_hl->setSpacing(4);
 
         auto* hist_ticker = new QLineEdit;
-        hist_ticker->setPlaceholderText("e.g. AAPL");
+        hist_ticker->setPlaceholderText(tr("e.g. AAPL"));
         hr_hl->addWidget(hist_ticker, 1);
 
-        auto* hist_btn = new QPushButton("Fetch");
+        auto* hist_btn = new QPushButton(tr("Fetch"));
         hist_btn->setFixedWidth(52);
         hist_btn->setStyleSheet(
             QString("QPushButton { background: %1; color: %2; font-weight: bold; border: 1px solid %3; }"
@@ -287,7 +291,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
                 emit config_changed(current_index_, "fetch_history", sym);
         });
 
-        auto* hint = new QLabel("Tip: re-select component after\nediting data to re-render.");
+        auto* hint = new QLabel(tr("Tip: re-select component after\nediting data to re-render."));
         hint->setWordWrap(true);
         hint->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::MUTED()));
         editor_layout_->addWidget(hint);
@@ -295,14 +299,14 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
 
     // ── Stats Block: title + key:value pairs + auto-fetch ────────────────────
     if (component->type == "stats_block") {
-        editor_layout_->addWidget(make_label("Block Title:"));
+        editor_layout_->addWidget(make_label(tr("Block Title:")));
         auto* title_edit = new QLineEdit(component->config.value("title", "Key Statistics"));
         connect(title_edit, &QLineEdit::textChanged, this,
                 [this](const QString& val) { emit config_changed(current_index_, "title", val); });
         editor_layout_->addWidget(title_edit);
 
         // Auto-fetch row
-        editor_layout_->addWidget(make_label("Auto-fill from Ticker:"));
+        editor_layout_->addWidget(make_label(tr("Auto-fill from Ticker:")));
         auto* ticker_row = new QWidget(this);
         ticker_row->setStyleSheet("background: transparent;");
         auto* tr_hl = new QHBoxLayout(ticker_row);
@@ -310,10 +314,10 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         tr_hl->setSpacing(4);
 
         auto* ticker_edit = new QLineEdit;
-        ticker_edit->setPlaceholderText("e.g. AAPL");
+        ticker_edit->setPlaceholderText(tr("e.g. AAPL"));
         tr_hl->addWidget(ticker_edit, 1);
 
-        auto* fetch_stats_btn = new QPushButton("Fetch");
+        auto* fetch_stats_btn = new QPushButton(tr("Fetch"));
         fetch_stats_btn->setFixedWidth(52);
         fetch_stats_btn->setStyleSheet(
             QString("QPushButton { background: %1; color: %2; font-weight: bold; border: 1px solid %3; }"
@@ -333,7 +337,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
             }
         });
 
-        editor_layout_->addWidget(make_label("Stats (one per line, Label:Value):"));
+        editor_layout_->addWidget(make_label(tr("Stats (one per line, Label:Value):")));
         auto* data_edit = new QTextEdit;
         data_edit->setPlainText(component->config.value("data", ""));
         data_edit->setMinimumHeight(120);
@@ -351,8 +355,9 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
 
     // ── Callout box: style + heading + content ────────────────────────────────
     if (component->type == "callout") {
-        editor_layout_->addWidget(make_label("Style:"));
+        editor_layout_->addWidget(make_label(tr("Style:")));
         auto* style_combo = new QComboBox;
+        // Values are config keys (matched via findText, stored in config) — not translated.
         style_combo->addItems({"info", "success", "warning", "danger"});
         int si = style_combo->findText(component->config.value("style", "info"));
         if (si >= 0)
@@ -361,14 +366,14 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
                 [this](const QString& val) { emit config_changed(current_index_, "style", val); });
         editor_layout_->addWidget(style_combo);
 
-        editor_layout_->addWidget(make_label("Heading (optional):"));
+        editor_layout_->addWidget(make_label(tr("Heading (optional):")));
         auto* heading_edit = new QLineEdit(component->config.value("heading", ""));
-        heading_edit->setPlaceholderText("e.g. Key Risk, Note, Important");
+        heading_edit->setPlaceholderText(tr("e.g. Key Risk, Note, Important"));
         connect(heading_edit, &QLineEdit::textChanged, this,
                 [this](const QString& val) { emit config_changed(current_index_, "heading", val); });
         editor_layout_->addWidget(heading_edit);
 
-        editor_layout_->addWidget(make_label("Content:"));
+        editor_layout_->addWidget(make_label(tr("Content:")));
         auto* body_edit = new QTextEdit;
         body_edit->setPlainText(component->content);
         body_edit->setMaximumHeight(120);
@@ -379,28 +384,28 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
 
     // ── Sparkline: title + data + current value + change% ────────────────────
     if (component->type == "sparkline") {
-        editor_layout_->addWidget(make_label("Label:"));
+        editor_layout_->addWidget(make_label(tr("Label:")));
         auto* title_edit = new QLineEdit(component->config.value("title", ""));
-        title_edit->setPlaceholderText("e.g. AAPL");
+        title_edit->setPlaceholderText(tr("e.g. AAPL"));
         connect(title_edit, &QLineEdit::textChanged, this,
                 [this](const QString& val) { emit config_changed(current_index_, "title", val); });
         editor_layout_->addWidget(title_edit);
 
-        editor_layout_->addWidget(make_label("Current Value:"));
+        editor_layout_->addWidget(make_label(tr("Current Value:")));
         auto* val_edit = new QLineEdit(component->config.value("current", ""));
-        val_edit->setPlaceholderText("e.g. $189.30");
+        val_edit->setPlaceholderText(tr("e.g. $189.30"));
         connect(val_edit, &QLineEdit::textChanged, this,
                 [this](const QString& val) { emit config_changed(current_index_, "current", val); });
         editor_layout_->addWidget(val_edit);
 
-        editor_layout_->addWidget(make_label("Change %:"));
+        editor_layout_->addWidget(make_label(tr("Change %:")));
         auto* chg_edit = new QLineEdit(component->config.value("change_pct", ""));
-        chg_edit->setPlaceholderText("e.g. +2.34 or -1.10");
+        chg_edit->setPlaceholderText(tr("e.g. +2.34 or -1.10"));
         connect(chg_edit, &QLineEdit::textChanged, this,
                 [this](const QString& val) { emit config_changed(current_index_, "change_pct", val); });
         editor_layout_->addWidget(chg_edit);
 
-        editor_layout_->addWidget(make_label("Price Series (CSV values):"));
+        editor_layout_->addWidget(make_label(tr("Price Series (CSV values):")));
         auto* data_edit = new QTextEdit;
         data_edit->setPlainText(component->config.value("data", ""));
         data_edit->setMaximumHeight(80);
@@ -409,7 +414,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
                 [this, data_edit]() { emit config_changed(current_index_, "data", data_edit->toPlainText()); });
         editor_layout_->addWidget(data_edit);
 
-        auto* hint = new QLabel("Tip: re-select after editing\ndata to refresh sparkline.");
+        auto* hint = new QLabel(tr("Tip: re-select after editing\ndata to refresh sparkline."));
         hint->setWordWrap(true);
         hint->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::MUTED()));
         editor_layout_->addWidget(hint);
@@ -417,17 +422,17 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
 
     // ── Image: file + clipboard + width + alignment + caption ────────────────
     if (component->type == "image") {
-        editor_layout_->addWidget(make_label("Image File:"));
-        auto* path_lbl = new QLabel(component->config.value("path", "(none)"));
+        editor_layout_->addWidget(make_label(tr("Image File:")));
+        auto* path_lbl = new QLabel(component->config.value("path", tr("(none)")));
         path_lbl->setWordWrap(true);
         path_lbl->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::MUTED()));
         editor_layout_->addWidget(path_lbl);
 
         // Browse button
-        auto* browse = new QPushButton("Browse File...");
+        auto* browse = new QPushButton(tr("Browse File..."));
         connect(browse, &QPushButton::clicked, this, [this, path_lbl]() {
             QString path =
-                QFileDialog::getOpenFileName(this, "Select Image", "", "Images (*.png *.jpg *.jpeg *.bmp *.svg)");
+                QFileDialog::getOpenFileName(this, tr("Select Image"), "", tr("Images (*.png *.jpg *.jpeg *.bmp *.svg)"));
             if (!path.isEmpty()) {
                 path_lbl->setText(QFileInfo(path).fileName());
                 emit config_changed(current_index_, "path", path);
@@ -437,7 +442,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         editor_layout_->addWidget(browse);
 
         // Paste from clipboard button
-        auto* paste_btn = new QPushButton("Paste from Clipboard");
+        auto* paste_btn = new QPushButton(tr("Paste from Clipboard"));
         paste_btn->setStyleSheet(
             QString("QPushButton { background: %1; color: %2; border: 1px solid %3; }"
                     "QPushButton:hover { background: %4; }")
@@ -451,18 +456,18 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
                 QString tmp = QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
                               QString("/fincept_paste_%1.png").arg(QDateTime::currentMSecsSinceEpoch());
                 if (img.save(tmp)) {
-                    path_lbl->setText("(clipboard image)");
+                    path_lbl->setText(tr("(clipboard image)"));
                     emit config_changed(current_index_, "path", tmp);
                     emit config_changed(current_index_, "clipboard", "1");
                 }
             } else {
-                path_lbl->setText("(no image in clipboard)");
+                path_lbl->setText(tr("(no image in clipboard)"));
             }
         });
         editor_layout_->addWidget(paste_btn);
 
         // Width
-        editor_layout_->addWidget(make_label("Width (px):"));
+        editor_layout_->addWidget(make_label(tr("Width (px):")));
         auto* width_spin = new QSpinBox;
         width_spin->setRange(50, 794);
         width_spin->setValue(component->config.value("width", "400").toInt());
@@ -471,8 +476,9 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         editor_layout_->addWidget(width_spin);
 
         // Alignment
-        editor_layout_->addWidget(make_label("Alignment:"));
+        editor_layout_->addWidget(make_label(tr("Alignment:")));
         auto* align_combo = new QComboBox;
+        // Values are config keys (matched via findText, stored in config) — not translated.
         align_combo->addItems({"left", "center", "right"});
         int ai = align_combo->findText(component->config.value("align", "left"));
         if (ai >= 0)
@@ -482,9 +488,9 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         editor_layout_->addWidget(align_combo);
 
         // Caption
-        editor_layout_->addWidget(make_label("Caption (optional):"));
+        editor_layout_->addWidget(make_label(tr("Caption (optional):")));
         auto* caption_edit = new QLineEdit(component->config.value("caption", ""));
-        caption_edit->setPlaceholderText("e.g. Figure 1: Revenue growth");
+        caption_edit->setPlaceholderText(tr("e.g. Figure 1: Revenue growth"));
         connect(caption_edit, &QLineEdit::textChanged, this,
                 [this](const QString& val) { emit config_changed(current_index_, "caption", val); });
         editor_layout_->addWidget(caption_edit);
@@ -492,7 +498,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
 
     // ── List editor ───────────────────────────────────────────────────────────
     if (component->type == "list") {
-        editor_layout_->addWidget(make_label("Items (one per line):"));
+        editor_layout_->addWidget(make_label(tr("Items (one per line):")));
         auto* edit = new QTextEdit;
         edit->setPlainText(component->content);
         edit->setMaximumHeight(160);
@@ -503,13 +509,13 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
 
     // ── Market Data: ticker input ─────────────────────────────────────────────
     if (component->type == "market_data") {
-        editor_layout_->addWidget(make_label("Ticker Symbol:"));
+        editor_layout_->addWidget(make_label(tr("Ticker Symbol:")));
         auto* sym_edit = new QLineEdit;
-        sym_edit->setPlaceholderText("e.g. AAPL, BTC-USD, ^GSPC");
+        sym_edit->setPlaceholderText(tr("e.g. AAPL, BTC-USD, ^GSPC"));
         sym_edit->setText(component->config.value("symbol", ""));
         editor_layout_->addWidget(sym_edit);
 
-        auto* fetch_btn = new QPushButton("Fetch Price");
+        auto* fetch_btn = new QPushButton(tr("Fetch Price"));
         fetch_btn->setStyleSheet(QString("QPushButton { background: %1; color: %2; font-weight: bold; }"
                                          "QPushButton:hover { background: %3; }")
                                      .arg(ui::colors::AMBER_DIM(), ui::colors::WHITE(), ui::colors::AMBER()));
@@ -538,7 +544,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
             editor_layout_->addWidget(sep2);
 
             auto* price_row =
-                new QLabel(QString("Price: %1   Chg: %2%")
+                new QLabel(tr("Price: %1   Chg: %2%")
                                .arg(component->config.value("price"), component->config.value("change_pct")));
             price_row->setStyleSheet(
                 QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER()));
@@ -548,7 +554,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
 
     // ── Page Break: no extra settings ─────────────────────────────────────────
     if (component->type == "page_break") {
-        auto* info = new QLabel("Inserts a page break\nin PDF/print output.");
+        auto* info = new QLabel(tr("Inserts a page break\nin PDF/print output."));
         info->setAlignment(Qt::AlignCenter);
         info->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::MUTED()));
         editor_layout_->addWidget(info);
@@ -556,7 +562,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
 
     // ── TOC: no extra settings ────────────────────────────────────────────────
     if (component->type == "toc") {
-        auto* info = new QLabel("Auto-generated from\nHeading components.");
+        auto* info = new QLabel(tr("Auto-generated from\nHeading components."));
         info->setAlignment(Qt::AlignCenter);
         info->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::MUTED()));
         editor_layout_->addWidget(info);
@@ -568,11 +574,11 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
     sep->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER()));
     editor_layout_->addWidget(sep);
 
-    auto* dup_btn = new QPushButton("Duplicate");
+    auto* dup_btn = new QPushButton(tr("Duplicate"));
     connect(dup_btn, &QPushButton::clicked, this, [this]() { emit duplicate_requested(current_index_); });
     editor_layout_->addWidget(dup_btn);
 
-    auto* del_btn = new QPushButton("Delete");
+    auto* del_btn = new QPushButton(tr("Delete"));
     del_btn->setStyleSheet(QString("QPushButton { color: %1; border: 1px solid %1; }"
                                    "QPushButton:hover { background: %1; color: white; }")
                                .arg(ui::colors::RED()));
@@ -581,6 +587,21 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
 
     editor_layout_->addStretch();
     stack_->setCurrentIndex(1);
+}
+
+void PropertiesPanel::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QWidget::changeEvent(event);
+}
+
+void PropertiesPanel::retranslateUi() {
+    if (empty_label_)
+        empty_label_->setText(tr("Select a component\nto edit properties"));
+    // The editor page is rebuilt wholesale per selection; re-run for the
+    // currently-shown component so its labels pick up the new language.
+    if (has_component_)
+        show_properties(&last_component_, current_index_);
 }
 
 } // namespace fincept::screens

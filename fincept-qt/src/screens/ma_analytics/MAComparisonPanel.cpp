@@ -41,9 +41,9 @@ QWidget* MAModulePanel::build_comparison_panel() {
     cmp_vl->setContentsMargins(12, 12, 12, 12);
     cmp_vl->setSpacing(8);
 
-    auto* cmp_hint = new QLabel("Enter deal data as JSON array. Each deal: "
-                                "{\"acquirer\":\"...\",\"target\":\"...\",\"deal_value\":N,\"premium\":N,"
-                                "\"ev_revenue\":N,\"ev_ebitda\":N}",
+    auto* cmp_hint = new QLabel(tr("Enter deal data as JSON array. Each deal: "
+                                   "{\"acquirer\":\"...\",\"target\":\"...\",\"deal_value\":N,\"premium\":N,"
+                                   "\"ev_revenue\":N,\"ev_ebitda\":N}"),
                                 cmp);
     cmp_hint->setWordWrap(true);
     cmp_hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
@@ -63,9 +63,9 @@ QWidget* MAModulePanel::build_comparison_panel() {
                                 .arg(ui::fonts::SMALL));
     cmp_vl->addWidget(cmp_text);
 
-    auto* cmp_run = make_run_button("COMPARE DEALS", cmp);
+    auto* cmp_run = make_run_button(tr("COMPARE DEALS"), cmp);
     connect(cmp_run, &QPushButton::clicked, this, [this, cmp_text]() {
-        status_label_->setText("Comparing Deals...");
+        status_label_->setText(tr("Comparing Deals..."));
         auto doc = QJsonDocument::fromJson(cmp_text->toPlainText().toUtf8());
         QJsonObject params;
         params["deals"] = doc.array();
@@ -73,7 +73,7 @@ QWidget* MAModulePanel::build_comparison_panel() {
     });
     cmp_vl->addWidget(cmp_run);
     cmp_vl->addStretch();
-    sub_tabs_->addTab(cmp, "Compare");
+    add_sub_tab(cmp, QT_TR_NOOP("Compare"));
 
     // ── Rank ──
     auto* rank = new QWidget(this);
@@ -89,17 +89,17 @@ QWidget* MAModulePanel::build_comparison_panel() {
                                      .arg(ui::fonts::DATA_FAMILY)
                                      .arg(ui::fonts::SMALL));
     combo_inputs_["rank_criteria"] = rank_criteria;
-    rank_vl->addWidget(build_input_row("Rank By", rank_criteria, rank));
+    rank_vl->addWidget(build_input_row(tr("Rank By"), rank_criteria, rank));
 
     auto* rank_text = new QTextEdit(rank);
-    rank_text->setPlaceholderText("Same JSON array format as Compare tab...");
+    rank_text->setPlaceholderText(tr("Same JSON array format as Compare tab..."));
     rank_text->setMaximumHeight(120);
     rank_text->setStyleSheet(cmp_text->styleSheet());
     rank_vl->addWidget(rank_text);
 
-    auto* rank_run = make_run_button("RANK DEALS", rank);
+    auto* rank_run = make_run_button(tr("RANK DEALS"), rank);
     connect(rank_run, &QPushButton::clicked, this, [this, rank_text]() {
-        status_label_->setText("Ranking Deals...");
+        status_label_->setText(tr("Ranking Deals..."));
         auto doc = QJsonDocument::fromJson(rank_text->toPlainText().toUtf8());
         QJsonObject params;
         params["deals"] = doc.array();
@@ -108,7 +108,7 @@ QWidget* MAModulePanel::build_comparison_panel() {
     });
     rank_vl->addWidget(rank_run);
     rank_vl->addStretch();
-    sub_tabs_->addTab(rank, "Rank");
+    add_sub_tab(rank, QT_TR_NOOP("Rank"));
 
     // ── Benchmark ──
     auto* bench = new QWidget(this);
@@ -118,17 +118,17 @@ QWidget* MAModulePanel::build_comparison_panel() {
 
     auto* bench_premium = make_double_spin(0, 200, 30, 1, "%", bench);
     double_inputs_["bench_premium"] = bench_premium;
-    bench_vl->addWidget(build_input_row("Target Premium %", bench_premium, bench));
+    bench_vl->addWidget(build_input_row(tr("Target Premium %"), bench_premium, bench));
 
     auto* bench_text = new QTextEdit(bench);
-    bench_text->setPlaceholderText("Comparable deals JSON array...");
+    bench_text->setPlaceholderText(tr("Comparable deals JSON array..."));
     bench_text->setMaximumHeight(120);
     bench_text->setStyleSheet(cmp_text->styleSheet());
     bench_vl->addWidget(bench_text);
 
-    auto* bench_run = make_run_button("BENCHMARK PREMIUM", bench);
+    auto* bench_run = make_run_button(tr("BENCHMARK PREMIUM"), bench);
     connect(bench_run, &QPushButton::clicked, this, [this, bench_text]() {
-        status_label_->setText("Benchmarking Premium...");
+        status_label_->setText(tr("Benchmarking Premium..."));
         auto doc = QJsonDocument::fromJson(bench_text->toPlainText().toUtf8());
         QJsonObject params;
         params["target_premium"] = double_inputs_["bench_premium"]->value() / 100.0;
@@ -137,7 +137,7 @@ QWidget* MAModulePanel::build_comparison_panel() {
     });
     bench_vl->addWidget(bench_run);
     bench_vl->addStretch();
-    sub_tabs_->addTab(bench, "Benchmark");
+    add_sub_tab(bench, QT_TR_NOOP("Benchmark"));
 
     // ── Payment Structure ──
     auto* pay = new QWidget(this);
@@ -146,14 +146,14 @@ QWidget* MAModulePanel::build_comparison_panel() {
     pay_vl->setSpacing(8);
 
     auto* pay_text = new QTextEdit(pay);
-    pay_text->setPlaceholderText("Deals JSON with cash_pct and stock_pct fields...");
+    pay_text->setPlaceholderText(tr("Deals JSON with cash_pct and stock_pct fields..."));
     pay_text->setMaximumHeight(120);
     pay_text->setStyleSheet(cmp_text->styleSheet());
     pay_vl->addWidget(pay_text);
 
-    auto* pay_run = make_run_button("ANALYZE PAYMENT STRUCTURES", pay);
+    auto* pay_run = make_run_button(tr("ANALYZE PAYMENT STRUCTURES"), pay);
     connect(pay_run, &QPushButton::clicked, this, [this, pay_text]() {
-        status_label_->setText("Analyzing Payment Structures...");
+        status_label_->setText(tr("Analyzing Payment Structures..."));
         auto doc = QJsonDocument::fromJson(pay_text->toPlainText().toUtf8());
         QJsonObject params;
         params["deals"] = doc.array();
@@ -161,7 +161,7 @@ QWidget* MAModulePanel::build_comparison_panel() {
     });
     pay_vl->addWidget(pay_run);
     pay_vl->addStretch();
-    sub_tabs_->addTab(pay, "Payment");
+    add_sub_tab(pay, QT_TR_NOOP("Payment"));
 
     // ── Industry ──
     auto* ind = new QWidget(this);
@@ -170,14 +170,14 @@ QWidget* MAModulePanel::build_comparison_panel() {
     ind_vl->setSpacing(8);
 
     auto* ind_text = new QTextEdit(ind);
-    ind_text->setPlaceholderText("Deals JSON with industry field...");
+    ind_text->setPlaceholderText(tr("Deals JSON with industry field..."));
     ind_text->setMaximumHeight(120);
     ind_text->setStyleSheet(cmp_text->styleSheet());
     ind_vl->addWidget(ind_text);
 
-    auto* ind_run = make_run_button("ANALYZE BY INDUSTRY", ind);
+    auto* ind_run = make_run_button(tr("ANALYZE BY INDUSTRY"), ind);
     connect(ind_run, &QPushButton::clicked, this, [this, ind_text]() {
-        status_label_->setText("Analyzing Industry Deals...");
+        status_label_->setText(tr("Analyzing Industry Deals..."));
         auto doc = QJsonDocument::fromJson(ind_text->toPlainText().toUtf8());
         QJsonObject params;
         params["deals"] = doc.array();
@@ -185,7 +185,7 @@ QWidget* MAModulePanel::build_comparison_panel() {
     });
     ind_vl->addWidget(ind_run);
     ind_vl->addStretch();
-    sub_tabs_->addTab(ind, "Industry");
+    add_sub_tab(ind, QT_TR_NOOP("Industry"));
 
     vl->addWidget(sub_tabs_);
 

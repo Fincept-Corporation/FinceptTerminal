@@ -10,6 +10,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QListWidgetItem>
 #include <QScrollArea>
 #include <QVBoxLayout>
 
@@ -35,7 +36,7 @@ bool matches_query(const ComponentMeta& m, const QString& query) {
 } // namespace
 
 ComponentBrowserDialog::ComponentBrowserDialog(QWidget* parent) : QDialog(parent) {
-    setWindowTitle("Component Browser");
+    setWindowTitle(tr("Component Browser"));
     setModal(true);
     resize(960, 640);
     setStyleSheet("QDialog{background:#0f172a;} QLabel{color:#e5e7eb;}");
@@ -56,14 +57,14 @@ void ComponentBrowserDialog::build_ui() {
     hl->setContentsMargins(16, 8, 16, 8);
     hl->setSpacing(12);
 
-    auto* title = new QLabel("COMPONENT BROWSER", header);
-    title->setStyleSheet("color:#d97706;font-size:13px;font-weight:700;letter-spacing:2px;");
-    hl->addWidget(title);
+    title_label_ = new QLabel(tr("COMPONENT BROWSER"), header);
+    title_label_->setStyleSheet("color:#d97706;font-size:13px;font-weight:700;letter-spacing:2px;");
+    hl->addWidget(title_label_);
 
     hl->addSpacing(24);
 
     search_ = new QLineEdit(header);
-    search_->setPlaceholderText("Search components…");
+    search_->setPlaceholderText(tr("Search components…"));
     search_->setClearButtonEnabled(true);
     search_->setStyleSheet(
         "QLineEdit{background:#0b1220;border:1px solid #374151;border-radius:3px;"
@@ -93,9 +94,15 @@ void ComponentBrowserDialog::build_ui() {
         "QListWidget::item{padding:8px 14px;border:none;}"
         "QListWidget::item:selected{background:#1f2937;color:#d97706;border-left:3px solid #d97706;}"
         "QListWidget::item:hover{background:#111827;}");
-    category_list_->addItem("All");
-    for (const QString& c : ComponentCatalog::instance().categories())
-        category_list_->addItem(c);
+    // Row 0 is the "All" sentinel: translated display text, empty UserRole.
+    // Other rows store the real (non-translated) category id in UserRole so
+    // filtering stays stable regardless of the active locale.
+    auto* all_item = new QListWidgetItem(tr("All"), category_list_);
+    all_item->setData(Qt::UserRole, QString());
+    for (const QString& c : ComponentCatalog::instance().categories()) {
+        auto* item = new QListWidgetItem(c, category_list_);
+        item->setData(Qt::UserRole, c);
+    }
     category_list_->setCurrentRow(0);
     connect(category_list_, &QListWidget::currentRowChanged, this,
             &ComponentBrowserDialog::on_category_changed);
@@ -129,7 +136,8 @@ void ComponentBrowserDialog::rebuild_cards() {
     int row = 0, col = 0;
     int shown = 0;
     for (const ComponentMeta& m : all) {
-        if (active_category_ != "All" && m.category != active_category_)
+        // Empty active_category_ means "All" — show every category.
+        if (!active_category_.isEmpty() && m.category != active_category_)
             continue;
         if (!matches_query(m, search_query_))
             continue;
@@ -158,7 +166,8 @@ void ComponentBrowserDialog::rebuild_cards() {
     }
     grid_layout_->setRowStretch(row + 1, 1);
 
-    count_label_->setText(QString("%1 component%2").arg(shown).arg(shown == 1 ? "" : "s"));
+    // %n drives Qt's locale-aware plural handling (singular/plural per language).
+    count_label_->setText(tr("%n component(s)", "", shown));
 }
 
 void ComponentBrowserDialog::on_search_changed(const QString& query) {
@@ -169,7 +178,27 @@ void ComponentBrowserDialog::on_search_changed(const QString& query) {
 void ComponentBrowserDialog::on_category_changed(int row) {
     if (row < 0)
         return;
-    active_category_ = category_list_->item(row)->text();
+    // Read the stable category id from UserRole, not the (translatable) text.
+    active_category_ = category_list_->item(row)->data(Qt::UserRole).toString();
+    rebuild_cards();
+}
+
+void ComponentBrowserDialog::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QDialog::changeEvent(event);
+}
+
+void ComponentBrowserDialog::retranslateUi() {
+    setWindowTitle(tr("Component Browser"));
+    if (title_label_) title_label_->setText(tr("COMPONENT BROWSER"));
+    if (search_)      search_->setPlaceholderText(tr("Search components…"));
+    // Row 0 is the "All" sentinel — only its display text is translatable.
+    // Category-id rows carry data values (their UserRole id) and are left as-is.
+    if (category_list_ && category_list_->count() > 0)
+        category_list_->item(0)->setText(tr("All"));
+    // The count label embeds the live result count — rebuild_cards() re-applies
+    // it with the active translator.
     rebuild_cards();
 }
 

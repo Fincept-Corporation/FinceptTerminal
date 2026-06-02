@@ -37,7 +37,7 @@ void BacktestingScreen::on_provider_changed(int index) {
     // Clear stale strategies and show loading state
     strategies_.clear();
     strategy_category_combo_->clear();
-    strategy_category_combo_->addItem("Loading...");
+    strategy_category_combo_->addItem(tr("Loading..."));
     strategy_combo_->clear();
 
     const auto& slug = providers_[index].slug;
@@ -464,19 +464,19 @@ void BacktestingScreen::on_run() {
     // Validate command is supported by current provider
     if (!provider_info.commands.contains(command_id)) {
         display_error(
-            QString("Command '%1' is not supported by provider '%2'").arg(command_id, provider_info.display_name));
+            tr("Command '%1' is not supported by provider '%2'").arg(command_id, provider_info.display_name));
         return;
     }
 
     // Validate symbols not empty
     if (symbols_edit_->text().trimmed().isEmpty()) {
-        display_error("Please enter at least one symbol (e.g. SPY, AAPL)");
+        display_error(tr("Please enter at least one symbol (e.g. SPY, AAPL)"));
         return;
     }
 
     is_running_ = true;
     run_button_->setEnabled(false);
-    set_status_state("EXECUTING...", ui::colors::WARNING, "rgba(217,119,6,0.08)");
+    set_status_state(tr("EXECUTING..."), ui::colors::WARNING, "rgba(217,119,6,0.08)");
 
     auto args = gather_args();
 

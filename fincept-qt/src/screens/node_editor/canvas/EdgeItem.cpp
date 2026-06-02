@@ -114,7 +114,7 @@ void EdgeItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
                                "QMenu::item { padding: 4px 20px; }"
                                "QMenu::item:selected { background: %4; color: %5; }")
                            .arg(tm.bg_raised, tm.text_primary, tm.border_dim, tm.negative, tm.text_primary));
-    auto* del = menu.addAction("Delete Connection");
+    auto* del = menu.addAction(tr("Delete Connection"));
     if (menu.exec(event->screenPos()) == del)
         emit delete_requested(id_);
     event->accept();

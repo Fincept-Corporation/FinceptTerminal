@@ -19,6 +19,7 @@
 #include "services/options/OptionChainTypes.h"
 
 #include <QChartView>
+#include <QEvent>
 
 class QBarSet;
 class QHorizontalBarSeries;
@@ -39,7 +40,12 @@ class MultiStrikeOIChart : public QChartView {
     /// Window of strikes shown around ATM (default 10 → ±10 strikes).
     void set_strike_window(int n) { strike_window_ = n > 0 ? n : 10; }
 
+  protected:
+    void changeEvent(QEvent* event) override;
+
   private:
+    void retranslateUi();
+
     QChart* chart_ = nullptr;
     QHorizontalBarSeries* ce_series_ = nullptr;
     QHorizontalBarSeries* pe_series_ = nullptr;
