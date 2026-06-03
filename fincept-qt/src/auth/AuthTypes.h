@@ -253,6 +253,17 @@ struct SessionData {
         return obj;
     }
 
+    // Session JSON with secrets stripped — this is what may be persisted to the
+    // UNENCRYPTED settings table. The api_key and session_token live ONLY in
+    // SecureStorage (AES-256-GCM, machine-bound key). Persisting them in clear
+    // would defeat encryption-at-rest (CR-08).
+    QJsonObject to_persisted_json() const {
+        QJsonObject obj = to_json();
+        obj.remove("api_key");
+        obj.remove("session_token");
+        return obj;
+    }
+
     static SessionData from_json(const QJsonObject& obj) {
         SessionData s;
         s.authenticated = obj["authenticated"].toBool();

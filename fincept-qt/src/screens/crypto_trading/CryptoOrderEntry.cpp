@@ -452,7 +452,8 @@ void CryptoOrderEntry::set_buy_side(bool is_buy) {
     buy_tab_->setProperty("active", is_buy);
     sell_tab_->setProperty("active", !is_buy);
 
-    submit_btn_->setText(is_buy ? tr("BUY  %1").arg(current_symbol_) : tr("SELL  %1").arg(current_symbol_));
+    if (!submit_busy_)
+        submit_btn_->setText(is_buy ? tr("BUY  %1").arg(current_symbol_) : tr("SELL  %1").arg(current_symbol_));
     submit_btn_->setObjectName(is_buy ? "cryptoBuySubmit" : "cryptoSellSubmit");
 
     repolish(buy_tab_);
@@ -508,7 +509,8 @@ void CryptoOrderEntry::set_mode(bool is_paper) {
 
 void CryptoOrderEntry::set_symbol(const QString& symbol) {
     current_symbol_ = symbol;
-    submit_btn_->setText(is_buy_side_ ? tr("BUY  %1").arg(symbol) : tr("SELL  %1").arg(symbol));
+    if (!submit_busy_)
+        submit_btn_->setText(is_buy_side_ ? tr("BUY  %1").arg(symbol) : tr("SELL  %1").arg(symbol));
 
     // Update unit suffix labels (base on qty, quote on price/stop) by looking
     // up the children we tagged with the ftRoleUnit dynamic property.
@@ -525,7 +527,28 @@ void CryptoOrderEntry::set_symbol(const QString& symbol) {
     update_cost_preview();
 }
 
+void CryptoOrderEntry::set_submit_busy(bool busy) {
+    submit_busy_ = busy;
+    if (!submit_btn_)
+        return;
+    submit_btn_->setEnabled(!busy);
+    if (busy) {
+        submit_btn_->setText(tr("SENDING…"));
+    } else {
+        submit_btn_->setText(is_buy_side_ ? tr("BUY  %1").arg(current_symbol_)
+                                          : tr("SELL  %1").arg(current_symbol_));
+    }
+}
+
 void CryptoOrderEntry::on_submit() {
+    // In-flight guard: a live order POST is dispatched to a worker thread and
+    // the receiver returns immediately, so without this a double-click or a
+    // held Ctrl+Enter would fire a second real exchange order. set_submit_busy
+    // disables the button, but the keyboard-shortcut / scripted path can still
+    // re-enter the slot, so gate here too.
+    if (submit_busy_)
+        return;
+
     const QString side = is_buy_side_ ? "buy" : "sell";
     static const char* type_map[] = {"market", "limit", "stop", "stop_limit"};
     const QString order_type = type_map[active_type_];
@@ -719,8 +742,9 @@ void CryptoOrderEntry::retranslateUi() {
 
     // Submit button + tooltip + subtitle
     if (submit_btn_) {
-        submit_btn_->setText(is_buy_side_ ? tr("BUY  %1").arg(current_symbol_)
-                                          : tr("SELL  %1").arg(current_symbol_));
+        if (!submit_busy_)
+            submit_btn_->setText(is_buy_side_ ? tr("BUY  %1").arg(current_symbol_)
+                                              : tr("SELL  %1").arg(current_symbol_));
         submit_btn_->setToolTip(tr("Submit order  (⌘/Ctrl+Enter)"));
     }
 

@@ -18,6 +18,14 @@ class AuthManager : public QObject {
     bool is_authenticated() const { return session_.authenticated; }
     bool is_loading() const { return is_loading_; }
 
+    /// Resolve the Fincept api_key for LLM/service callers WITHOUT touching the
+    /// plaintext SQLite settings table. Prefers the live in-memory session;
+    /// falls back to the encrypted SecureStorage copy (which load_session also
+    /// restores into the session at startup). Returns empty if no key is known.
+    /// This is the single supported resolver — callers must NOT read the legacy
+    /// plaintext "fincept_api_key" settings row.
+    QString fincept_api_key() const;
+
     // Auth flows
     void login(const QString& email, const QString& password, bool force_login = false);
     void signup(const QString& username, const QString& email, const QString& password, const QString& phone,
@@ -70,6 +78,9 @@ class AuthManager : public QObject {
     void save_session();
     void load_session();
     void clear_session();
+    // One-shot: move secrets out of the legacy plaintext settings rows into
+    // SecureStorage, then purge the cleartext copies (CR-08). Idempotent.
+    void migrate_legacy_plaintext_credentials();
     void validate_saved_session();
     void fetch_user_profile(std::function<void()> on_done = {});
     void fetch_user_subscription(std::function<void()> on_done = {});

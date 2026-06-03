@@ -64,14 +64,11 @@ void LlmService::ensure_config() const {
     // those re-resolve every call so a login that happens after first ensure_config() doesn't 401 forever.
     if (config_loaded_) {
         if (provider_ == "fincept") {
-            const auto& sess = fincept::auth::AuthManager::instance().session();
-            if (!sess.api_key.isEmpty()) {
-                api_key_ = sess.api_key;
-            } else {
-                auto stored = SettingsRepository::instance().get("fincept_api_key");
-                if (stored.is_ok() && !stored.value().isEmpty())
-                    api_key_ = stored.value();
-            }
+            // Resolve via AuthManager (session → SecureStorage). Never the
+            // legacy plaintext settings row (CR-08).
+            const QString key = fincept::auth::AuthManager::instance().fincept_api_key();
+            if (!key.isEmpty())
+                api_key_ = key;
         }
         return;
     }
@@ -113,16 +110,12 @@ void LlmService::ensure_config() const {
         LOG_INFO(kLlmSvcTag, "No LLM provider configured — using Fincept default");
     }
 
-    // Fincept key always comes from the live AuthManager session; SettingsRepository fallback is the legacy path.
+    // Fincept key resolves via AuthManager (live session → encrypted
+    // SecureStorage). The legacy plaintext settings row is no longer read (CR-08).
     if (provider_ == "fincept") {
-        const auto& sess = fincept::auth::AuthManager::instance().session();
-        if (!sess.api_key.isEmpty()) {
-            api_key_ = sess.api_key;
-        } else {
-            auto stored_key = SettingsRepository::instance().get("fincept_api_key");
-            if (stored_key.is_ok() && !stored_key.value().isEmpty())
-                api_key_ = stored_key.value();
-        }
+        const QString key = fincept::auth::AuthManager::instance().fincept_api_key();
+        if (!key.isEmpty())
+            api_key_ = key;
     }
 
     auto gs = LlmConfigRepository::instance().get_global_settings();

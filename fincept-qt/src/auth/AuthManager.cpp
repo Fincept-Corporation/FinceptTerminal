@@ -67,19 +67,31 @@ static void clear_tokens() {
 // ── Session persistence (SQLite via SettingsRepository) ──────────────────────
 
 void AuthManager::save_session() {
-    QJsonDocument doc(session_.to_json());
+    // CR-08: persist ONLY non-secret session fields to the unencrypted settings
+    // table. The api_key and session_token are stored exclusively in
+    // SecureStorage (AES-256-GCM) so a stolen fincept.db can't yield credentials.
+    QJsonDocument doc(session_.to_persisted_json());
     QString json = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
     auto r = fincept::SettingsRepository::instance().set("fincept_session", json, "auth");
     if (r.is_err()) {
         LOG_ERROR("Auth", "Failed to save session: " + QString::fromStdString(r.error()));
     }
 
-    // Persist api_key to OS-native encrypted storage (DPAPI / Keychain) as the
-    // durable credential. SQLite session JSON is the fallback.
+    // Secrets → OS-native encrypted storage (DPAPI / Keychain) only.
     if (!session_.api_key.isEmpty()) {
         auto sr = fincept::SecureStorage::instance().store("api_key", session_.api_key);
         if (sr.is_err())
-            LOG_WARN("Auth", "SecureStorage: failed to persist api_key — using SQLite fallback");
+            LOG_ERROR("Auth", "SecureStorage: failed to persist api_key — credential not saved");
+    } else {
+        fincept::SecureStorage::instance().remove("api_key");
+    }
+
+    if (!session_.session_token.isEmpty()) {
+        auto st = fincept::SecureStorage::instance().store("session_token", session_.session_token);
+        if (st.is_err())
+            LOG_ERROR("Auth", "SecureStorage: failed to persist session_token");
+    } else {
+        fincept::SecureStorage::instance().remove("session_token");
     }
 }
 
@@ -91,8 +103,14 @@ void AuthManager::load_session() {
             session_ = SessionData::from_json(doc.object());
     }
 
-    // Try to recover api_key from SecureStorage (DPAPI / Keychain) — this is the
-    // most reliable source since it survives SQLite corruption and DB migrations.
+    // CR-08 one-shot migration: existing installs have api_key + session_token
+    // written in clear inside the legacy "fincept_session" blob (and a separate
+    // plaintext "fincept_api_key" row). If the loaded session still carries
+    // secrets, move them into SecureStorage and purge the plaintext copies.
+    migrate_legacy_plaintext_credentials();
+
+    // Recover secrets from SecureStorage (DPAPI / Keychain) — the only durable,
+    // encrypted source. Survives SQLite corruption and DB migrations.
     auto secure_key = fincept::SecureStorage::instance().retrieve("api_key");
     if (secure_key.is_ok() && !secure_key.value().isEmpty()) {
         if (session_.api_key.isEmpty() || session_.api_key != secure_key.value()) {
@@ -101,8 +119,59 @@ void AuthManager::load_session() {
         }
     }
 
+    auto secure_token = fincept::SecureStorage::instance().retrieve("session_token");
+    if (secure_token.is_ok() && !secure_token.value().isEmpty()) {
+        session_.session_token = secure_token.value();
+    }
+
     // Never trust saved authenticated flag — must be re-validated
     session_.authenticated = false;
+}
+
+void AuthManager::migrate_legacy_plaintext_credentials() {
+    auto& settings = fincept::SettingsRepository::instance();
+    auto& secure = fincept::SecureStorage::instance();
+    bool migrated = false;
+
+    // 1. Secrets that came in via the legacy plaintext "fincept_session" blob.
+    if (!session_.api_key.isEmpty()) {
+        secure.store("api_key", session_.api_key);
+        migrated = true;
+    }
+    if (!session_.session_token.isEmpty()) {
+        secure.store("session_token", session_.session_token);
+        migrated = true;
+    }
+
+    // 2. The standalone plaintext "fincept_api_key" row written by older builds.
+    auto legacy_key = settings.get("fincept_api_key");
+    if (legacy_key.is_ok() && !legacy_key.value().isEmpty()) {
+        if (session_.api_key.isEmpty())
+            session_.api_key = legacy_key.value();
+        secure.store("api_key", legacy_key.value());
+        migrated = true;
+    }
+
+    if (migrated) {
+        // Rewrite fincept_session without secrets and drop the plaintext key row
+        // so the cleartext copies no longer exist on disk for this install.
+        QJsonDocument doc(session_.to_persisted_json());
+        settings.set("fincept_session",
+                     QString::fromUtf8(doc.toJson(QJsonDocument::Compact)), "auth");
+        settings.remove("fincept_api_key");
+        LOG_INFO("Auth", "Migrated legacy plaintext credentials into SecureStorage and purged settings rows");
+    }
+}
+
+QString AuthManager::fincept_api_key() const {
+    // Single supported resolver. Prefer the live in-memory session; fall back to
+    // the encrypted SecureStorage copy. Never reads the legacy plaintext row.
+    if (!session_.api_key.isEmpty())
+        return session_.api_key;
+    auto secure_key = fincept::SecureStorage::instance().retrieve("api_key");
+    if (secure_key.is_ok())
+        return secure_key.value();
+    return {};
 }
 
 void AuthManager::clear_session() {
@@ -111,6 +180,7 @@ void AuthManager::clear_session() {
     fincept::SettingsRepository::instance().remove("fincept_session");
     fincept::SettingsRepository::instance().remove("fincept_api_key");
     fincept::SecureStorage::instance().remove("api_key");
+    fincept::SecureStorage::instance().remove("session_token");
 
     // PIN intentionally NOT cleared here. The PIN is a local-device credential,
     // independent of the backend session. Wiping it on every logout means a
@@ -501,8 +571,11 @@ void AuthManager::auto_configure_fincept_llm() {
     if (session_.api_key.isEmpty())
         return;
 
-    // Always store API key in settings — LlmService resolves it at runtime
-    fincept::SettingsRepository::instance().set("fincept_api_key", session_.api_key, "auth");
+    // CR-08: do NOT persist the api_key in the plaintext settings table. The
+    // key already lives in the in-memory session and in SecureStorage (written
+    // by save_session). LlmService and friends resolve it via
+    // AuthManager::fincept_api_key(). Defensively purge any stale plaintext row.
+    fincept::SettingsRepository::instance().remove("fincept_api_key");
 
     // Only create the fincept provider row if it doesn't already exist.
     // This prevents overwriting the user's model/settings choice on every

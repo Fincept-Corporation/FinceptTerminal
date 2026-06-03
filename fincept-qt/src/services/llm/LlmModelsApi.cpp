@@ -2,6 +2,7 @@
 
 #include "services/llm/LlmService.h"
 
+#include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
 #include "storage/repositories/SettingsRepository.h"
 
@@ -86,13 +87,11 @@ QMap<QString, QString> LlmService::get_models_headers(const QString& provider, c
     } else if (p == "ollama") {
         // No auth.
     } else if (p == "fincept") {
-        // Same fallback as ensure_config.
+        // Same fallback as ensure_config — resolve via AuthManager
+        // (session → SecureStorage), never the plaintext settings row (CR-08).
         QString resolved_key = api_key;
-        if (resolved_key.isEmpty()) {
-            auto stored = SettingsRepository::instance().get("fincept_api_key");
-            if (stored.is_ok() && !stored.value().isEmpty())
-                resolved_key = stored.value();
-        }
+        if (resolved_key.isEmpty())
+            resolved_key = fincept::auth::AuthManager::instance().fincept_api_key();
         if (!resolved_key.isEmpty())
             h["X-API-Key"] = resolved_key;
     } else {

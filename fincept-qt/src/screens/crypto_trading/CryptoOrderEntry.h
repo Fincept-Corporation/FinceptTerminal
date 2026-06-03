@@ -24,6 +24,14 @@ class CryptoOrderEntry : public QWidget {
     void set_futures_mode(bool is_futures); // show/hide leverage + margin controls
     bool reduce_only() const;               // reduce-only flag (perp/futures only)
 
+    // In-flight guard for live order submission. While an order POST is in
+    // flight the submit button is disabled and relabelled "SENDING…" so a
+    // double-click / held Ctrl+Enter can't fire a second real exchange order.
+    // Re-enabling on the main thread when the async call completes restores the
+    // normal BUY/SELL label.
+    void set_submit_busy(bool busy);
+    bool submit_busy() const { return submit_busy_; }
+
   signals:
     void order_submitted(const QString& side, const QString& order_type, double quantity, double price,
                          double stop_price, double sl_price, double tp_price);
@@ -117,6 +125,7 @@ class CryptoOrderEntry : public QWidget {
     bool is_paper_ = true;
     bool is_buy_side_ = true;
     bool is_futures_ = false;
+    bool submit_busy_ = false; // true while a live order POST is in flight
     QString current_symbol_ = "BTC/USDT";
 };
 

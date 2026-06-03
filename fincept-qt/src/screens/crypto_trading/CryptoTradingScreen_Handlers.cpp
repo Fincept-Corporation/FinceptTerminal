@@ -254,23 +254,43 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
             }
             refresh_portfolio();
         } else {
+            // In-flight guard: place_exchange_order is dispatched to a worker and
+            // we return to the GUI thread immediately, so the submit button must
+            // be disabled for the lifetime of the POST — otherwise a double-click
+            // or held Ctrl+Enter fires a second real exchange order (CR-07).
+            order_entry_->set_submit_busy(true);
+
             // Read the reduce-only flag on the UI thread before dispatching.
             const bool reduce_only = order_entry_->reduce_only();
             QPointer<CryptoTradingScreen> self = this;
-            (void)QtConcurrent::run([self, side, order_type, qty, price, stop_price, sl, tp, reduce_only]() {
-                if (!self)
-                    return;
+            QPointer<crypto::CryptoOrderEntry> oe = order_entry_;
+            (void)QtConcurrent::run([self, oe, side, order_type, qty, price, stop_price, sl, tp, reduce_only]() {
                 // stop_price drives Stop / Stop-Limit triggers; sl/tp attach native
                 // bracket legs; reduce_only is honoured on perps. The daemon maps
                 // these to ccxt unified params (triggerPrice / stopLoss / takeProfit).
-                ExchangeService::instance().place_exchange_order(self->selected_symbol_, side, order_type, qty, price,
-                                                                 stop_price, sl, tp, reduce_only);
+                // Re-enable the button on completion regardless of success/throw so
+                // the user is never stuck on a permanently disabled SENDING… button.
+                try {
+                    if (self) {
+                        ExchangeService::instance().place_exchange_order(self->selected_symbol_, side, order_type, qty,
+                                                                         price, stop_price, sl, tp, reduce_only);
+                    }
+                } catch (const std::exception& e) {
+                    LOG_ERROR(TAG, QString("Live order failed: %1").arg(e.what()));
+                } catch (...) {
+                    LOG_ERROR(TAG, "Live order failed: unknown exception");
+                }
+                // order_entry_ is a child of the screen, so if self is alive the
+                // order-entry widget is too. Posting onto self is sufficient.
+                if (!self)
+                    return;
                 QMetaObject::invokeMethod(
                     self,
-                    [self]() {
-                        if (!self)
-                            return;
-                        self->refresh_live_data();
+                    [self, oe]() {
+                        if (oe)
+                            oe->set_submit_busy(false);
+                        if (self)
+                            self->refresh_live_data();
                     },
                     Qt::QueuedConnection);
             });

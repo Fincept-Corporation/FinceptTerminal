@@ -3138,19 +3138,77 @@ add_custom_command(TARGET FinceptTerminal POST_BUILD
 )
 
 # Bundle yt-dlp for dashboard YouTube playback on all platforms.
-# Override path with: -DFINCEPT_YTDLP_EXE=/abs/path/to/yt-dlp[.exe]
-set(FINCEPT_YTDLP_EXE "" CACHE FILEPATH "Path to yt-dlp executable to bundle with FinceptTerminal")
-# Default OFF so builds on CI / macOS / Linux succeed without yt-dlp pre-installed.
-# Set ON only for official release builds where yt-dlp must be present.
-option(FINCEPT_REQUIRE_BUNDLED_YTDLP "Fail configure if yt-dlp is missing" OFF)
+#
+# Sourcing strategy (in priority order):
+#   1. -DFINCEPT_YTDLP_EXE=/abs/path/to/yt-dlp[.exe]  — explicit override (air-gapped builds)
+#   2. Auto-download the pinned release from GitHub at configure time, verified by SHA-256.
+#
+# The download is the default so a clean checkout on any platform self-provisions
+# yt-dlp with zero machine setup. The pinned version + hashes make it reproducible
+# and tamper-evident. Bump FINCEPT_YTDLP_VERSION + the three hashes together when
+# upgrading (hashes come from the release's SHA2-256SUMS file).
+set(FINCEPT_YTDLP_EXE "" CACHE FILEPATH "Path to yt-dlp executable to bundle (overrides auto-download)")
+set(FINCEPT_YTDLP_VERSION "2026.03.17" CACHE STRING "Pinned yt-dlp release tag to download")
+option(FINCEPT_DOWNLOAD_YTDLP "Auto-download yt-dlp at configure time if no override is set" ON)
+# Default OFF so a transient network failure doesn't hard-block local dev builds.
+# Set ON for official release builds so a missing yt-dlp fails the build loudly.
+option(FINCEPT_REQUIRE_BUNDLED_YTDLP "Fail configure if yt-dlp can't be provisioned" OFF)
+
+# Per-platform release asset name + SHA-256 for the pinned version. Update all
+# three hashes whenever FINCEPT_YTDLP_VERSION changes.
+if(WIN32)
+    set(FINCEPT_YTDLP_ASSET  "yt-dlp.exe")
+    set(FINCEPT_YTDLP_SHA256 "3db811b366b2da47337d2fcfdfe5bbd9a258dad3f350c54974f005df115a1545")
+elseif(APPLE)
+    set(FINCEPT_YTDLP_ASSET  "yt-dlp_macos")
+    set(FINCEPT_YTDLP_SHA256 "e80c47b3ce712acee51d5e3d4eace2d181b44d38f1942c3a32e3c7ff53cd9ed5")
+else()
+    set(FINCEPT_YTDLP_ASSET  "yt-dlp_linux")
+    set(FINCEPT_YTDLP_SHA256 "c2b0189f581fe4a2ddd41954f1bcb7d327db04b07ed0dea97e4f1b3e09b5dd8e")
+endif()
 
 set(FINCEPT_YTDLP_TO_BUNDLE "")
-if(FINCEPT_YTDLP_EXE)
+if(FINCEPT_YTDLP_EXE AND EXISTS "${FINCEPT_YTDLP_EXE}")
+    # 1. Explicit override.
     set(FINCEPT_YTDLP_TO_BUNDLE "${FINCEPT_YTDLP_EXE}")
-else()
-    find_program(FINCEPT_YTDLP_AUTO_EXE NAMES yt-dlp yt-dlp.exe)
-    if(FINCEPT_YTDLP_AUTO_EXE)
-        set(FINCEPT_YTDLP_TO_BUNDLE "${FINCEPT_YTDLP_AUTO_EXE}")
+    message(STATUS "yt-dlp: using override ${FINCEPT_YTDLP_EXE}")
+elseif(FINCEPT_DOWNLOAD_YTDLP)
+    # 2. Auto-download the pinned, hash-verified release into the build tree.
+    set(FINCEPT_YTDLP_DL_DIR  "${CMAKE_BINARY_DIR}/yt-dlp")
+    set(FINCEPT_YTDLP_DL_FILE "${FINCEPT_YTDLP_DL_DIR}/${FINCEPT_YTDLP_ASSET}")
+    set(FINCEPT_YTDLP_URL
+        "https://github.com/yt-dlp/yt-dlp/releases/download/${FINCEPT_YTDLP_VERSION}/${FINCEPT_YTDLP_ASSET}")
+
+    # Re-verify any existing download; a hash mismatch (partial/corrupt/tampered)
+    # forces a fresh fetch.
+    set(_ytdlp_need_download TRUE)
+    if(EXISTS "${FINCEPT_YTDLP_DL_FILE}")
+        file(SHA256 "${FINCEPT_YTDLP_DL_FILE}" _ytdlp_existing_hash)
+        if(_ytdlp_existing_hash STREQUAL "${FINCEPT_YTDLP_SHA256}")
+            set(_ytdlp_need_download FALSE)
+        endif()
+    endif()
+
+    if(_ytdlp_need_download)
+        message(STATUS "yt-dlp: downloading ${FINCEPT_YTDLP_VERSION} (${FINCEPT_YTDLP_ASSET})...")
+        file(DOWNLOAD
+            "${FINCEPT_YTDLP_URL}"
+            "${FINCEPT_YTDLP_DL_FILE}"
+            EXPECTED_HASH "SHA256=${FINCEPT_YTDLP_SHA256}"
+            SHOW_PROGRESS
+            STATUS _ytdlp_dl_status
+            TLS_VERIFY ON)
+        list(GET _ytdlp_dl_status 0 _ytdlp_dl_code)
+        if(NOT _ytdlp_dl_code EQUAL 0)
+            list(GET _ytdlp_dl_status 1 _ytdlp_dl_msg)
+            # Drop the partial file so a retry doesn't see a bad cache.
+            file(REMOVE "${FINCEPT_YTDLP_DL_FILE}")
+            message(WARNING "yt-dlp download failed (${_ytdlp_dl_msg}). Video playback will be unavailable.")
+        endif()
+    endif()
+
+    if(EXISTS "${FINCEPT_YTDLP_DL_FILE}")
+        set(FINCEPT_YTDLP_TO_BUNDLE "${FINCEPT_YTDLP_DL_FILE}")
     endif()
 endif()
 
@@ -3176,7 +3234,9 @@ if(FINCEPT_YTDLP_TO_BUNDLE AND EXISTS "${FINCEPT_YTDLP_TO_BUNDLE}")
     endif()
 else()
     set(FINCEPT_YTDLP_MISSING_MSG
-        "yt-dlp not found. Set FINCEPT_YTDLP_EXE or install yt-dlp on build machine. "
+        "yt-dlp could not be provisioned. Auto-download is "
+        "${FINCEPT_DOWNLOAD_YTDLP} for version ${FINCEPT_YTDLP_VERSION}; set "
+        "-DFINCEPT_YTDLP_EXE=/path/to/yt-dlp to supply it manually (e.g. air-gapped builds). "
         "Bundling is required so end users need no setup."
     )
     if(FINCEPT_REQUIRE_BUNDLED_YTDLP)
