@@ -1,6 +1,8 @@
 // src/ui/widgets/algo/BacktestReportPanel.cpp
 #include "ui/widgets/algo/BacktestReportPanel.h"
 
+#include "core/currency/Currency.h"
+
 #include <QChart>
 #include <QChartView>
 #include <QColor>
@@ -106,8 +108,8 @@ void BacktestReportPanel::retranslateUi() {
     if (heatmap_title_) heatmap_title_->setText(tr("MONTHLY RETURNS %"));
 
     if (trades_) {
-        const QStringList headers = {tr("#"),     tr("Entry"), tr("Exit"), tr("Entry $"),
-                                     tr("Exit $"), tr("Qty"),   tr("P&L"),  tr("P&L %"),
+        const QStringList headers = {tr("#"),     tr("Entry"), tr("Exit"), tr("Entry %1").arg(cur::symbol()),
+                                     tr("Exit %1").arg(cur::symbol()), tr("Qty"),   tr("P&L"),  tr("P&L %"),
                                      tr("Bars"),   tr("Reason")};
         trades_->setHorizontalHeaderLabels(headers);
     }
@@ -281,8 +283,8 @@ void BacktestReportPanel::populate_heatmap(const QJsonObject& payload) {
 QWidget* BacktestReportPanel::build_trades() {
     trades_ = new QTableWidget(this);
     trades_->setObjectName(QStringLiteral("backtestTradeTable"));
-    const QStringList headers = {tr("#"),     tr("Entry"), tr("Exit"), tr("Entry $"),
-                                 tr("Exit $"), tr("Qty"),   tr("P&L"),  tr("P&L %"),
+    const QStringList headers = {tr("#"),     tr("Entry"), tr("Exit"), tr("Entry %1").arg(cur::symbol()),
+                                 tr("Exit %1").arg(cur::symbol()), tr("Qty"),   tr("P&L"),  tr("P&L %"),
                                  tr("Bars"),   tr("Reason")};
     trades_->setColumnCount(headers.size());
     trades_->setHorizontalHeaderLabels(headers);
@@ -304,7 +306,7 @@ void BacktestReportPanel::set_result(const QJsonObject& payload) {
     kpi_val_["total_return"]->setText(QStringLiteral("%1%2%")
                                           .arg(tr_pct >= 0 ? "+" : "").arg(tr_pct, 0, 'f', 2));
     kpi_val_["total_return"]->setStyleSheet(QStringLiteral("color:%1;").arg(tr_pct >= 0 ? kPos : kNeg));
-    kpi_sub_["total_return"]->setText(tr("Final $%1").arg(d("final_value"), 0, 'f', 0));
+    kpi_sub_["total_return"]->setText(tr("Final %1%2").arg(cur::symbol()).arg(d("final_value"), 0, 'f', 0));
 
     const double sharpe = d("sharpe_ratio");
     kpi_val_["sharpe"]->setText(QString::number(sharpe, 'f', 2));

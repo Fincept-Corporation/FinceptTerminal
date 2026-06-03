@@ -453,7 +453,10 @@ void PortfolioFFNView::update_overview() {
             }
         double daily_vol = vn > 0 ? vol / vn : 0.0;
         double ann_vol = daily_vol * std::sqrt(252.0);
-        double sharpe = ann_vol > 0.01 ? (pnl_pct - 4.0) / ann_vol : 0.0;
+        // Rough Sharpe estimate in percent units; mirrors PortfolioService's
+        // kDefaultRiskFreeRate (0.04 → 4%) — keep in sync if that default changes.
+        constexpr double kRoughRfRatePct = 4.0;
+        double sharpe = ann_vol > 0.01 ? (pnl_pct - kRoughRfRatePct) / ann_vol : 0.0;
 
         rows = {
             {tr("Total Return (unrealized)"), pct_str(pnl_pct / 100.0), "--",

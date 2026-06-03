@@ -1,23 +1,24 @@
 #pragma once
-// Action Center Screen — semi-auto order approval UI (Phase 3 §2).
+// PendingOrdersPanel — queued-order approval popover (replaces the standalone
+// Action Center dock tab). Renders the orders queued by ActionCenter from the
+// headless paths (AI/workflow/broadcast/basket) and lets the user Approve /
+// Reject them (per-row and in bulk). Shown as a frameless Qt::Popup anchored to
+// the status-bar PendingOrdersBadge.
 //
-// Renders the pending/approved/rejected orders queued by ActionCenter and lets
-// the user Approve / Reject them (per-row and in bulk). A per-account Auto ↔
-// Semi-Auto mode toggle controls whether new orders are queued. The screen is
-// a pure view (P6): it reads from and calls ActionCenter (the service); it
-// never spawns Python, makes HTTP calls, or owns business logic.
+// The per-account Auto ↔ Semi-Auto mode toggle now lives in Account Management,
+// not here. This is a pure view (P6): it reads from and calls ActionCenter;
+// it never spawns Python, makes HTTP calls, or owns business logic.
 //
 // Live updates: subscribes to ActionCenter signals (pending_order_created,
-// order_approved, order_rejected, stats_updated) to refresh the table and
-// stats bar without polling — no QTimer is needed (D3).
+// order_approved, order_rejected, stats_updated) in the constructor and
+// refreshes without polling (D3).
 
 #include "trading/ActionCenter.h"
 
 #include <QComboBox>
 #include <QEvent>
-#include <QHideEvent>
 #include <QLabel>
-#include <QShowEvent>
+#include <QPoint>
 #include <QString>
 #include <QTableWidget>
 #include <QWidget>
@@ -26,14 +27,15 @@ class QPushButton;
 
 namespace fincept::screens {
 
-class ActionCenterScreen : public QWidget {
+class PendingOrdersPanel : public QWidget {
     Q_OBJECT
   public:
-    explicit ActionCenterScreen(QWidget* parent = nullptr);
+    explicit PendingOrdersPanel(QWidget* parent = nullptr);
+
+    // Reload + show the popover with its bottom-right corner at `global_anchor`.
+    void popup_at(const QPoint& global_anchor);
 
   protected:
-    void showEvent(QShowEvent* e) override;
-    void hideEvent(QHideEvent* e) override;
     void changeEvent(QEvent* event) override;
 
   private:
@@ -58,10 +60,8 @@ class ActionCenterScreen : public QWidget {
     QLabel* title_label_ = nullptr;
     QLabel* account_caption_ = nullptr;
     QLabel* show_caption_ = nullptr;
-    QLabel* mode_caption_ = nullptr;
     QComboBox* account_combo_ = nullptr;
     QComboBox* status_filter_ = nullptr;
-    QComboBox* mode_combo_ = nullptr;
 
     QLabel* stat_pending_cap_ = nullptr;
     QLabel* stat_approved_cap_ = nullptr;
@@ -79,8 +79,6 @@ class ActionCenterScreen : public QWidget {
 
     QPushButton* approve_all_btn_ = nullptr;
     QPushButton* reject_all_btn_ = nullptr;
-
-    bool wired_ = false; // guard so we connect ActionCenter signals once
 };
 
 } // namespace fincept::screens

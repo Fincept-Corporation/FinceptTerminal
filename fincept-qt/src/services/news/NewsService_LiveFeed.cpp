@@ -7,6 +7,7 @@
 
 #include "services/news/NewsService.h"
 
+#include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
 #include "storage/cache/CacheManager.h"
@@ -130,7 +131,10 @@ void NewsService::connect_live_feed(const QString& ws_url) {
         LOG_INFO("NewsService", "Live article: " + article.headline.left(50));
     });
 
-    QString url = ws_url.isEmpty() ? "wss://api.fincept.in/ws/news" : ws_url;
+    QString ws_base = fincept::AppConfig::instance().api_base_url();
+    ws_base.replace(QStringLiteral("https://"), QStringLiteral("wss://"));
+    ws_base.replace(QStringLiteral("http://"), QStringLiteral("ws://"));
+    QString url = ws_url.isEmpty() ? (ws_base + QStringLiteral("/ws/news")) : ws_url;
     live_ws_->open(QUrl(url));
 }
 

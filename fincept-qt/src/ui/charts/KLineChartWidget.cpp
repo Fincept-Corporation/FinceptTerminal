@@ -1,12 +1,14 @@
 #include "ui/charts/KLineChartWidget.h"
 
 #ifdef HAS_QT_WEBENGINE
+#include <QWebEngineProfile>
+#include <QWebEngineSettings>
 #include <QWebEngineView>
 #include <QWebEnginePage>
-#include <QWebEngineSettings>
 #endif
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
@@ -54,6 +56,10 @@ void KLineChartWidget::ensure_web_view() {
     web_view_ = new QWebEngineView(this);
     web_view_->setObjectName("klineWebView");
 
+    // The bundled chart html/js is local and changes across releases — never
+    // serve a stale cached copy, or edits silently fail to take effect.
+    web_view_->page()->profile()->setHttpCacheType(QWebEngineProfile::NoCache);
+
     auto* settings = web_view_->page()->settings();
     settings->setAttribute(QWebEngineSettings::JavascriptEnabled, true);
     settings->setAttribute(QWebEngineSettings::LocalContentCanAccessFileUrls, true);
@@ -64,7 +70,9 @@ void KLineChartWidget::ensure_web_view() {
 
     const QString html_path = QCoreApplication::applicationDirPath()
                               + QStringLiteral("/resources/charts/klinechart.html");
-    web_view_->load(QUrl::fromLocalFile(html_path));
+    QUrl url = QUrl::fromLocalFile(html_path);
+    url.setQuery(QStringLiteral("v=%1").arg(QDateTime::currentMSecsSinceEpoch())); // cache-bust
+    web_view_->load(url);
 
     layout()->addWidget(web_view_);
 #endif
@@ -145,6 +153,16 @@ void KLineChartWidget::remove_indicator(const QString& name, const QString& pane
         run_js(QStringLiteral("window.removeIndicator('%1')").arg(name));
     else
         run_js(QStringLiteral("window.removeIndicator('%1','%2')").arg(name, pane_id));
+}
+
+void KLineChartWidget::set_position_line(double price, const QString& label, const QString& color_hex) {
+    run_js(QStringLiteral("window.setPositionLine(%1,'%2','%3')")
+               .arg(price, 0, 'f', 6)
+               .arg(label, color_hex));
+}
+
+void KLineChartWidget::clear_position_line() {
+    run_js(QStringLiteral("window.clearPositionLine()"));
 }
 
 void KLineChartWidget::clear() {

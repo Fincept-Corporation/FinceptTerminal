@@ -7,6 +7,7 @@
 
 #include <QEvent>
 #include <QLabel>
+#include <QList>
 #include <QMap>
 #include <QTabWidget>
 #include <QTableWidget>
@@ -29,6 +30,13 @@ class EquityBottomPanel : public QWidget {
     // Live broker data
     void set_positions(const QVector<trading::BrokerPosition>& positions);
     void set_holdings(const QVector<trading::BrokerHolding>& holdings);
+
+    // Live quote → in-place LTP / P&L refresh for the open-positions table.
+    // Fed by the SAME DataHub quote stream that drives the top ticker bar, so the
+    // position row and the header always show identical, real-time prices.
+    // Works in both live (BrokerPosition) and paper (PtPosition) modes.
+    void update_quote(const QString& symbol, const trading::BrokerQuote& quote);
+
     void set_orders(const QVector<trading::BrokerOrderInfo>& orders);
     void set_funds(const trading::BrokerFunds& funds);
     void set_calendar(const QVector<trading::MarketCalendarDay>& days);
@@ -42,6 +50,10 @@ class EquityBottomPanel : public QWidget {
 
     void set_account_id(const QString& account_id);
 
+    // Collapse the sheet down to just its tab-bar header (and back).
+    void toggle_collapsed();
+    bool is_collapsed() const { return collapsed_; }
+
   signals:
     void cancel_order_requested(const QString& order_id);
     void modify_order_requested(const QString& order_id, double new_qty, double new_price);
@@ -54,6 +66,7 @@ class EquityBottomPanel : public QWidget {
 
   private:
     void retranslateUi();
+    void apply_collapsed();
     void setup_positions_tab();
     void setup_holdings_tab();
     void setup_orders_tab();
@@ -67,6 +80,12 @@ class EquityBottomPanel : public QWidget {
 
     QTabWidget* tabs_ = nullptr;
 
+    // Collapsible bottom-sheet state
+    class QToolButton* collapse_btn_ = nullptr; // ▾/▴ toggle in the tab-bar corner
+    QWidget* tab_content_ = nullptr;            // QTabWidget's page stack; hidden when collapsed
+    bool collapsed_ = false;
+    QList<int> saved_split_sizes_;              // parent splitter sizes to restore on expand
+
     // Tab indices (cached for retranslateUi tab text)
     int positions_tab_idx_ = -1;
     int holdings_tab_idx_ = -1;
@@ -78,6 +97,10 @@ class EquityBottomPanel : public QWidget {
     int calendar_tab_idx_ = -1;
 
     QTableWidget* positions_table_ = nullptr;
+    // Backing data for the positions table, kept row-aligned with it so live
+    // quotes can patch LTP / P&L / P&L% in place (no full rebuild, no flicker).
+    QVector<trading::BrokerPosition> last_positions_;     // live mode
+    QVector<trading::PtPosition> last_paper_positions_;   // paper mode
     QTableWidget* holdings_table_ = nullptr;
     QLabel* holdings_invested_label_ = nullptr;
     QLabel* holdings_current_label_ = nullptr;

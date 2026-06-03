@@ -172,8 +172,14 @@ QWidget* EquityResearchScreen::build_title_bar() {
         QJsonArray symbols;
         symbols.append(current_symbol_);
         config["symbols"] = symbols;
+        // Run a basic backtest of this symbol automatically on arrival
+        // (default provider/command/strategy + preconfigured settings).
+        config["autoRun"] = true;
         services::backtest::BacktestingService::instance().set_pending_portfolio_config(config);
-        EventBus::instance().publish("nav.switch_screen", {{"screen_id", QString("backtesting")}});
+        // exclusive=true → replace the current view with the Backtesting screen
+        // instead of auto-tiling it into a split grid slot alongside this one.
+        EventBus::instance().publish("nav.switch_screen",
+                                     {{"screen_id", QString("backtesting")}, {"exclusive", true}});
     });
     hl->addWidget(backtest_btn);
 

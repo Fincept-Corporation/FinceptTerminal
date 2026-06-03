@@ -85,7 +85,7 @@
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">ACIK</translation>
+        <translation>AÇIK</translation>
     </message>
 </context>
 <context>
@@ -168,15 +168,15 @@
     <name>GovDataProviderPanel</name>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">CSV Dışa Aktar</translation>
+        <translation>CSV Dışa Aktar</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">CSV Dosyaları (*.csv)</translation>
+        <translation>CSV Dosyaları (*.csv)</translation>
     </message>
     <message>
         <source>Export failed</source>
-        <translation type="unfinished">Dışa aktarma başarısız</translation>
+        <translation>Dışa aktarma başarısız</translation>
     </message>
     <message>
         <source>Unable to open file for writing.</source>
@@ -187,11 +187,11 @@
     <name>MAModulePanel</name>
     <message>
         <source>YES</source>
-        <translation type="unfinished">EVET</translation>
+        <translation>EVET</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">HAYIR</translation>
+        <translation>HAYIR</translation>
     </message>
     <message>
         <source>Metric</source>
@@ -262,7 +262,7 @@
     </message>
     <message>
         <source>PORTFOLIO</source>
-        <translation type="unfinished">PORTFÖY</translation>
+        <translation>PORTFÖY</translation>
     </message>
     <message>
         <source>GENERAL</source>
@@ -518,7 +518,7 @@
     </message>
     <message>
         <source>AI</source>
-        <translation type="unfinished">AI</translation>
+        <translation>AI</translation>
     </message>
     <message>
         <source>Copy</source>
@@ -600,7 +600,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">İptal</translation>
+        <translation>İptal</translation>
     </message>
     <message>
         <source>Update Connection</source>
@@ -791,7 +791,7 @@ Zorunlu alanların (URL, host veya API key) doldurulduğundan emin olun.</transl
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NOTR</translation>
+        <translation>NÖTR</translation>
     </message>
     <message>
         <source>VOLATILE</source>
@@ -887,7 +887,7 @@ Uzun sohbetler için AI Chat sekmesini kullanın.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
     <message>
         <source>Listening — speak now</source>
@@ -1094,7 +1094,7 @@ Uzun sohbetler için AI Chat sekmesini kullanın.</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">MCP Sunucuları</translation>
+        <translation>MCP Sunucuları</translation>
     </message>
     <message>
         <source>Excel</source>
@@ -1109,7 +1109,7 @@ Uzun sohbetler için AI Chat sekmesini kullanın.</translation>
     <name>fincept::MonitorMapWidget</name>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">MEVCUT</translation>
+        <translation>MEVCUT</translation>
     </message>
 </context>
 <context>
@@ -1254,7 +1254,7 @@ Uzun sohbetler için AI Chat sekmesini kullanın.</translation>
     </message>
     <message>
         <source>Refresh</source>
-        <translation type="unfinished">Yenile</translation>
+        <translation>Yenile</translation>
     </message>
     <message>
         <source>Refresh task list</source>
@@ -1278,7 +1278,7 @@ Uzun sohbetler için AI Chat sekmesini kullanın.</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">İptal</translation>
+        <translation>İptal</translation>
     </message>
     <message>
         <source>Cancel task</source>
@@ -1286,7 +1286,7 @@ Uzun sohbetler için AI Chat sekmesini kullanın.</translation>
     </message>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">MCP SUNUCULARI</translation>
+        <translation>MCP SUNUCULARI</translation>
     </message>
     <message>
         <source>Model Context Protocol tool servers.</source>
@@ -1372,7 +1372,7 @@ Uzun sohbetler için AI Chat sekmesini kullanın.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Tür</translation>
+        <translation>Tür</translation>
     </message>
     <message>
         <source>Memory type:</source>
@@ -1460,7 +1460,7 @@ Sonuç:
     </message>
     <message>
         <source>Name:</source>
-        <translation type="unfinished">Ad:</translation>
+        <translation>Ad:</translation>
     </message>
     <message>
         <source>Transport</source>
@@ -1540,7 +1540,7 @@ Sonuç:
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Sembol</translation>
+        <translation>Sembol</translation>
     </message>
     <message>
         <source>Symbol:</source>
@@ -1677,7 +1677,7 @@ Piyasalar, hisse senetleri, portföy, makro içgörüler.</translation>
     </message>
     <message>
         <source>%1 credits</source>
-        <translation type="unfinished">%1 kredi</translation>
+        <translation>%1 kredi</translation>
     </message>
     <message>
         <source>0 credits</source>
@@ -1806,7 +1806,7 @@ Piyasalar, hisse senetleri, portföy, makro içgörüler.</translation>
     </message>
     <message>
         <source>Export Failed</source>
-        <translation type="unfinished">Dışa Aktarma Başarısız</translation>
+        <translation>Dışa Aktarma Başarısız</translation>
     </message>
     <message>
         <source>Could not write file.</source>
@@ -1952,7 +1952,7 @@ Piyasalar, hisse senetleri, portföy, makro içgörüler.</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">HAZIR</translation>
+        <translation>HAZIR</translation>
     </message>
 </context>
 <context>
@@ -1967,7 +1967,7 @@ Piyasalar, hisse senetleri, portföy, makro içgörüler.</translation>
     </message>
     <message>
         <source>Check for Updates</source>
-        <translation type="unfinished">Güncellemeleri Denetle</translation>
+        <translation>Güncellemeleri Denetle</translation>
     </message>
     <message>
         <source>Checking…</source>
@@ -2039,7 +2039,7 @@ Piyasalar, hisse senetleri, portföy, makro içgörüler.</translation>
     </message>
     <message>
         <source>RESOURCES</source>
-        <translation type="unfinished">KAYNAKLAR</translation>
+        <translation>KAYNAKLAR</translation>
     </message>
     <message>
         <source>GitHub Repository</source>
@@ -2079,7 +2079,7 @@ Piyasalar, hisse senetleri, portföy, makro içgörüler.</translation>
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">GÜVENLİK</translation>
+        <translation>GÜVENLİK</translation>
     </message>
     <message>
         <source>LEGAL</source>
@@ -2114,7 +2114,7 @@ Piyasalar, hisse senetleri, portföy, makro içgörüler.</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tumu</translation>
+        <translation>Tümü</translation>
     </message>
     <message>
         <source>Mode:</source>
@@ -2142,11 +2142,11 @@ Piyasalar, hisse senetleri, portföy, makro içgörüler.</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>AL</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SAT</translation>
     </message>
     <message>
         <source>APPROVE ALL</source>
@@ -2166,11 +2166,11 @@ Piyasalar, hisse senetleri, portföy, makro içgörüler.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Tür</translation>
+        <translation>Tür</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Sembol</translation>
+        <translation>Sembol</translation>
     </message>
     <message>
         <source>Side</source>
@@ -2178,7 +2178,7 @@ Piyasalar, hisse senetleri, portföy, makro içgörüler.</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Adet</translation>
     </message>
     <message>
         <source>Price Type</source>
@@ -2289,11 +2289,11 @@ Piyasalar, hisse senetleri, portföy, makro içgörüler.</translation>
     </message>
     <message>
         <source>AMOUNT</source>
-        <translation type="unfinished">TUTAR</translation>
+        <translation>TUTAR</translation>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">DURUM</translation>
+        <translation>DURUM</translation>
     </message>
     <message>
         <source>SIGNATURE</source>
@@ -2401,7 +2401,7 @@ ADB verileri ücretsizdir — API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>ADD</source>
-        <translation type="unfinished">EKLE</translation>
+        <translation>EKLE</translation>
     </message>
     <message>
         <source>No results found</source>
@@ -2467,11 +2467,11 @@ ADB verileri ücretsizdir — API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>%1 AVAILABLE</source>
-        <translation type="unfinished">%1 KULLANILABILIR</translation>
+        <translation>%1 KULLANILABİLİR</translation>
     </message>
     <message>
         <source>Search widgets...</source>
-        <translation type="unfinished">Widget ara...</translation>
+        <translation>Widget ara...</translation>
     </message>
     <message>
         <source>CANCEL</source>
@@ -2479,7 +2479,7 @@ ADB verileri ücretsizdir — API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tumu</translation>
+        <translation>Tümü</translation>
     </message>
 </context>
 <context>
@@ -2566,11 +2566,11 @@ ADB verileri ücretsizdir — API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>REBALANCE</source>
-        <translation type="unfinished">YENİDEN DENGELE</translation>
+        <translation>YENİDEN DENGELE</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">RİSK</translation>
+        <translation>RİSK</translation>
     </message>
     <message>
         <source>How can I help you?</source>
@@ -2604,7 +2604,7 @@ Yukarıdan bir aracı seçin veya kararı sisteme bırakmak için Otomatik Yönl
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
     <message>
         <source>Response received (%1ms)</source>
@@ -2774,7 +2774,7 @@ Yukarıdan bir aracı seçin veya kararı sisteme bırakmak için Otomatik Yönl
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tumu</translation>
+        <translation>Tümü</translation>
     </message>
     <message>
         <source>Running</source>
@@ -2798,7 +2798,7 @@ Yukarıdan bir aracı seçin veya kararı sisteme bırakmak için Otomatik Yönl
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">YENİLE</translation>
+        <translation>YENİLE</translation>
     </message>
     <message>
         <source>Select a task to view details</source>
@@ -2842,7 +2842,7 @@ Yukarıdan bir aracı seçin veya kararı sisteme bırakmak için Otomatik Yönl
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">SİL</translation>
+        <translation>SİL</translation>
     </message>
     <message>
         <source>(no plan persisted)</source>
@@ -2973,7 +2973,7 @@ Yukarıdan bir aracı seçin veya kararı sisteme bırakmak için Otomatik Yönl
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">YENİLE</translation>
+        <translation>YENİLE</translation>
     </message>
     <message>
         <source>JSON EDITOR</source>
@@ -3005,11 +3005,11 @@ Yukarıdan bir aracı seçin veya kararı sisteme bırakmak için Otomatik Yönl
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">ARAÇLAR</translation>
+        <translation>ARAÇLAR</translation>
     </message>
     <message>
         <source>FEATURES</source>
-        <translation type="unfinished">ÖZELLİKLER</translation>
+        <translation>ÖZELLİKLER</translation>
     </message>
     <message>
         <source>Reasoning</source>
@@ -3041,7 +3041,7 @@ Yukarıdan bir aracı seçin veya kararı sisteme bırakmak için Otomatik Yönl
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">SİL</translation>
+        <translation>SİL</translation>
     </message>
     <message>
         <source>APPLY JSON</source>
@@ -3069,7 +3069,7 @@ Yukarıdan bir aracı seçin veya kararı sisteme bırakmak için Otomatik Yönl
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
     <message>
         <source>Routed → %1 (intent: %2, confidence: %3%)</source>
@@ -3186,7 +3186,7 @@ Sohbetler otomatik olarak kaydedilir.</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Piyasalar</translation>
+        <translation>Piyasalar</translation>
     </message>
     <message>
         <source>Show me today's top market movers</source>
@@ -3194,7 +3194,7 @@ Sohbetler otomatik olarak kaydedilir.</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">Haberler</translation>
+        <translation>Haberler</translation>
     </message>
     <message>
         <source>Summarize the latest financial news</source>
@@ -3202,7 +3202,7 @@ Sohbetler otomatik olarak kaydedilir.</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portföy</translation>
+        <translation>Portföy</translation>
     </message>
     <message>
         <source>Analyze my portfolio performance</source>
@@ -3218,7 +3218,7 @@ Sohbetler otomatik olarak kaydedilir.</translation>
     </message>
     <message>
         <source>Economics</source>
-        <translation type="unfinished">Ekonomi</translation>
+        <translation>Ekonomi</translation>
     </message>
     <message>
         <source>Current GDP and inflation data</source>
@@ -3226,7 +3226,7 @@ Sohbetler otomatik olarak kaydedilir.</translation>
     </message>
     <message>
         <source>Research</source>
-        <translation type="unfinished">Araştırma</translation>
+        <translation>Araştırma</translation>
     </message>
     <message>
         <source>Tech sector market trends</source>
@@ -3286,7 +3286,7 @@ Sohbetler otomatik olarak kaydedilir.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
     <message>
         <source>(empty response — model returned no content)</source>
@@ -3396,7 +3396,7 @@ yukarıdan bir veri kaynağı seçin</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>START</source>
@@ -3424,7 +3424,7 @@ yukarıdan bir veri kaynağı seçin</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">YENİLE</translation>
+        <translation>YENİLE</translation>
     </message>
     <message>
         <source>AKSHARE DATA</source>
@@ -3523,11 +3523,11 @@ yukarıdan bir veri kaynağı seçin</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>AL</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SAT</translation>
     </message>
     <message>
         <source>Entry Side:</source>
@@ -3673,7 +3673,7 @@ yukarıdan bir veri kaynağı seçin</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">HATA</translation>
+        <translation>HATA</translation>
     </message>
     <message>
         <source>ANALYZING...</source>
@@ -3696,121 +3696,121 @@ yukarıdan bir veri kaynağı seçin</translation>
     <name>fincept::screens::AnalyticsSectorsView</name>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">GENEL BAKIŞ</translation>
+        <translation>GENEL BAKIŞ</translation>
     </message>
     <message>
         <source>CORRELATION</source>
-        <translation type="unfinished">KORELASYON</translation>
+        <translation>KORELASYON</translation>
     </message>
     <message>
         <source>SECTORS</source>
-        <translation type="unfinished">SEKTÖRLER</translation>
+        <translation>SEKTÖRLER</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">POZİSYONLAR</translation>
+        <translation>POZİSYONLAR</translation>
     </message>
     <message>
         <source>MARKET VALUE</source>
-        <translation type="unfinished">PİYASA DEĞERİ</translation>
+        <translation>PİYASA DEĞERİ</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>SECTOR ALLOCATION</source>
-        <translation type="unfinished">SEKTÖR DAĞILIMI</translation>
+        <translation>SEKTÖR DAĞILIMI</translation>
     </message>
     <message>
         <source>SECTOR BREAKDOWN</source>
-        <translation type="unfinished">SEKTÖR DÖKÜMÜ</translation>
+        <translation>SEKTÖR DÖKÜMÜ</translation>
     </message>
     <message>
         <source>SECTOR</source>
-        <translation type="unfinished">SEKTÖR</translation>
+        <translation>SEKTÖR</translation>
     </message>
     <message>
         <source>POS</source>
-        <translation type="unfinished">POS</translation>
+        <translation>POZ</translation>
     </message>
     <message>
         <source>MKT VAL</source>
-        <translation type="unfinished">MKT VAL</translation>
+        <translation>PİY DĞR</translation>
     </message>
     <message>
         <source>WT</source>
-        <translation type="unfinished">WT</translation>
+        <translation>AĞ</translation>
     </message>
     <message>
         <source>P&amp;L%</source>
-        <translation type="unfinished">P&amp;L%</translation>
+        <translation>P&amp;L%</translation>
     </message>
     <message>
         <source>HOLDINGS CORRELATION MATRIX</source>
-        <translation type="unfinished">VARLIK KORELASYON MATRİSİ</translation>
+        <translation>VARLIK KORELASYON MATRİSİ</translation>
     </message>
     <message>
         <source>%1
 sectors</source>
-        <translation type="unfinished">%1
+        <translation>%1
 sektör</translation>
     </message>
     <message>
         <source>+%1 more</source>
-        <translation type="unfinished">+%1 daha</translation>
+        <translation>+%1 daha</translation>
     </message>
     <message>
         <source>LARGEST</source>
-        <translation type="unfinished">EN BÜYÜK</translation>
+        <translation>EN BÜYÜK</translation>
     </message>
     <message>
         <source>SMALLEST</source>
-        <translation type="unfinished">EN KÜÇÜK</translation>
+        <translation>EN KÜÇÜK</translation>
     </message>
     <message>
         <source>BEST</source>
-        <translation type="unfinished">EN İYİ</translation>
+        <translation>EN İYİ</translation>
     </message>
     <message>
         <source>WORST</source>
-        <translation type="unfinished">EN KÖTÜ</translation>
+        <translation>EN KÖTÜ</translation>
     </message>
     <message>
         <source>%1 positions</source>
-        <translation type="unfinished">%1 pozisyon</translation>
+        <translation>%1 pozisyon</translation>
     </message>
     <message>
         <source>HHI CONCENTRATION</source>
-        <translation type="unfinished">HHI YOĞUNLAŞMASI</translation>
+        <translation>HHI YOĞUNLAŞMASI</translation>
     </message>
     <message>
         <source>Herfindahl index across sectors (lower = more diversified)</source>
-        <translation type="unfinished">Sektörler arası Herfindahl endeksi (düşük = daha çeşitlendirilmiş)</translation>
+        <translation>Sektörler arası Herfindahl endeksi (düşük = daha çeşitlendirilmiş)</translation>
     </message>
     <message>
         <source>TOP-3 CONCENTRATION</source>
-        <translation type="unfinished">İLK 3 YOĞUNLAŞMA</translation>
+        <translation>İLK 3 YOĞUNLAŞMA</translation>
     </message>
     <message>
         <source>Weight of the three largest sectors (%1)</source>
-        <translation type="unfinished">En büyük üç sektörün ağırlığı (%1)</translation>
+        <translation>En büyük üç sektörün ağırlığı (%1)</translation>
     </message>
     <message>
         <source>Diversified</source>
-        <translation type="unfinished">Çeşitlendirilmiş</translation>
+        <translation>Çeşitlendirilmiş</translation>
     </message>
     <message>
         <source>Balanced</source>
-        <translation type="unfinished">Dengeli</translation>
+        <translation>Dengeli</translation>
     </message>
     <message>
         <source>Concentrated</source>
-        <translation type="unfinished">Yoğunlaşmış</translation>
+        <translation>Yoğunlaşmış</translation>
     </message>
     <message>
         <source>Need 2+ holdings for correlation analysis</source>
-        <translation type="unfinished">Korelasyon analizi için 2+ varlık gerekli</translation>
+        <translation>Korelasyon analizi için 2+ varlık gerekli</translation>
     </message>
     <message>
         <source>Top-10 holdings by weight. Pearson correlation of daily returns over the trailing 30 trading days (from real price history).</source>
@@ -3908,7 +3908,7 @@ sektör</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>e.g. 000001</source>
@@ -3928,7 +3928,7 @@ sektör</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">YENİLE</translation>
+        <translation>YENİLE</translation>
     </message>
     <message>
         <source>ASIA MARKETS</source>
@@ -4007,7 +4007,7 @@ sektör</translation>
     </message>
     <message>
         <source>STRATEGY</source>
-        <translation type="unfinished">STRATEJİ</translation>
+        <translation>STRATEJİ</translation>
     </message>
     <message>
         <source>CATEGORY</source>
@@ -4015,7 +4015,7 @@ sektör</translation>
     </message>
     <message>
         <source>PARAMETERS</source>
-        <translation type="unfinished">PARAMETRELER</translation>
+        <translation>PARAMETRELER</translation>
     </message>
     <message>
         <source>RESULTS</source>
@@ -4041,7 +4041,7 @@ Komutlar: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">ÖZET</translation>
+        <translation>ÖZET</translation>
     </message>
     <message>
         <source>EQUITY CURVE</source>
@@ -4049,7 +4049,7 @@ Komutlar: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">METRİKLER</translation>
+        <translation>METRİKLER</translation>
     </message>
     <message>
         <source>DETAILS</source>
@@ -4125,11 +4125,11 @@ Komutlar: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>BENCHMARK</source>
-        <translation type="unfinished">KARŞILAŞTIRMA ÖLÇÜTÜ</translation>
+        <translation>KARŞILAŞTIRMA ÖLÇÜTÜ</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>None</source>
@@ -4149,7 +4149,7 @@ Komutlar: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">HAZIR</translation>
+        <translation>HAZIR</translation>
     </message>
     <message>
         <source>Export Backtest Results</source>
@@ -4189,7 +4189,7 @@ Komutlar: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>METHOD</source>
-        <translation type="unfinished">YÖNTEM</translation>
+        <translation>YÖNTEM</translation>
     </message>
     <message>
         <source>MAX ITERATIONS</source>
@@ -4341,7 +4341,7 @@ Komutlar: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>ANALYSIS TYPE</source>
-        <translation type="unfinished">ANALİZ TÜRÜ</translation>
+        <translation>ANALİZ TÜRÜ</translation>
     </message>
     <message>
         <source>ROLLING WINDOW</source>
@@ -4349,7 +4349,7 @@ Komutlar: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>METRIC</source>
-        <translation type="unfinished">METRİK</translation>
+        <translation>METRİK</translation>
     </message>
     <message>
         <source>SIGNAL GENERATORS</source>
@@ -4425,7 +4425,7 @@ Komutlar: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TÜR</translation>
+        <translation>TÜR</translation>
     </message>
     <message>
         <source>CONDITION</source>
@@ -4485,7 +4485,7 @@ Komutlar: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">HATA</translation>
+        <translation>HATA</translation>
     </message>
 </context>
 <context>
@@ -4622,7 +4622,7 @@ BIS verileri ücretsizdir — API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">ÜLKE</translation>
+        <translation>ÜLKE</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -4713,7 +4713,7 @@ BLS_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TÜR</translation>
+        <translation>TÜR</translation>
     </message>
     <message>
         <source>UP</source>
@@ -4729,7 +4729,7 @@ BLS_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>OUTPUT</source>
-        <translation type="unfinished">ÇIKTI</translation>
+        <translation>ÇIKTI</translation>
     </message>
     <message>
         <source>OUTPUT [collapsed]</source>
@@ -4941,11 +4941,11 @@ CFTC verileri ücretsizdir — API key gerekmez</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">ACIK</translation>
+        <translation>AÇIK</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">KAYDET</translation>
+        <translation>KAYDET</translation>
     </message>
     <message>
         <source>+ CELL</source>
@@ -4973,7 +4973,7 @@ CFTC verileri ücretsizdir — API key gerekmez</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">HAZIR</translation>
+        <translation>HAZIR</translation>
     </message>
     <message>
         <source>Ctrl+Enter: RUN  |  Shift+Enter: RUN &amp; NEXT  |  Tab: 4 SPACES  |  Ctrl+S: SAVE</source>
@@ -5185,7 +5185,7 @@ Bu, tüm varlıkları ve işlemleri kaldıracaktır.</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">SİL</translation>
+        <translation>SİL</translation>
     </message>
 </context>
 <context>
@@ -5208,7 +5208,7 @@ Bu, tüm varlıkları ve işlemleri kaldıracaktır.</translation>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Tarih</translation>
+        <translation>Tarih</translation>
     </message>
     <message>
         <source>Lat</source>
@@ -5224,7 +5224,7 @@ Bu, tüm varlıkları ve işlemleri kaldıracaktır.</translation>
     </message>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">GENEL BAKIŞ</translation>
+        <translation>GENEL BAKIŞ</translation>
     </message>
     <message>
         <source>EVENTS</source>
@@ -5262,7 +5262,7 @@ Bu, tüm varlıkları ve işlemleri kaldıracaktır.</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">ÜLKE</translation>
+        <translation>ÜLKE</translation>
     </message>
     <message>
         <source>CITY</source>
@@ -5270,7 +5270,7 @@ Bu, tüm varlıkları ve işlemleri kaldıracaktır.</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">TARİH</translation>
+        <translation>TARİH</translation>
     </message>
     <message>
         <source>SOURCE</source>
@@ -5297,7 +5297,7 @@ Bu, tüm varlıkları ve işlemleri kaldıracaktır.</translation>
     </message>
     <message>
         <source>CONTACT US</source>
-        <translation type="unfinished">BİZE ULAŞIN</translation>
+        <translation>BİZE ULAŞIN</translation>
     </message>
     <message>
         <source>Get in touch with our team</source>
@@ -5345,7 +5345,7 @@ Bu, tüm varlıkları ve işlemleri kaldıracaktır.</translation>
     </message>
     <message>
         <source>QUICK ACTIONS</source>
-        <translation type="unfinished">HIZLI İŞLEMLER</translation>
+        <translation>HIZLI İŞLEMLER</translation>
     </message>
     <message>
         <source>Send Email</source>
@@ -5424,7 +5424,7 @@ Bu, tüm varlıkları ve işlemleri kaldıracaktır.</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">SİL</translation>
+        <translation>SİL</translation>
     </message>
     <message>
         <source>SKIP</source>
@@ -5559,7 +5559,7 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
     <message>
         <source>Failed</source>
@@ -5619,7 +5619,7 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">ARAÇLAR</translation>
+        <translation>ARAÇLAR</translation>
     </message>
     <message>
         <source>TERMINAL TOOLS</source>
@@ -5627,11 +5627,11 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>FEATURES</source>
-        <translation type="unfinished">ÖZELLİKLER</translation>
+        <translation>ÖZELLİKLER</translation>
     </message>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">MCP SUNUCULARI</translation>
+        <translation>MCP SUNUCULARI</translation>
     </message>
     <message>
         <source>e.g. My Equity Analyst</source>
@@ -5731,7 +5731,7 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Tür</translation>
+        <translation>Tür</translation>
     </message>
     <message>
         <source>URLs (one per line)</source>
@@ -5942,7 +5942,7 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>SETTINGS</source>
-        <translation type="unfinished">AYARLAR</translation>
+        <translation>AYARLAR</translation>
     </message>
     <message>
         <source>STAKE</source>
@@ -5950,7 +5950,7 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">PİYASALAR</translation>
+        <translation>PİYASALAR</translation>
     </message>
     <message>
         <source>ROADMAP</source>
@@ -5966,11 +5966,11 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">HAZIR</translation>
+        <translation>HAZIR</translation>
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">GÜVENLİK</translation>
+        <translation>GÜVENLİK</translation>
     </message>
     <message>
         <source>● CONNECTED</source>
@@ -6013,140 +6013,140 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">CANLI</translation>
+        <translation>CANLI</translation>
     </message>
     <message>
         <source>OFFLINE</source>
-        <translation type="unfinished">COVRIMDISI</translation>
+        <translation>ÇEVRİMDIŞI</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::CustomIndexView</name>
     <message>
         <source>CREATE INDEX</source>
-        <translation type="unfinished">ENDEKS OLUŞTUR</translation>
+        <translation>ENDEKS OLUŞTUR</translation>
     </message>
     <message>
         <source>MY INDICES</source>
-        <translation type="unfinished">ENDEKSLERİM</translation>
+        <translation>ENDEKSLERİM</translation>
     </message>
     <message>
         <source>PERFORMANCE</source>
-        <translation type="unfinished">PERFORMANS</translation>
+        <translation>PERFORMANS</translation>
     </message>
     <message>
         <source>CREATE CUSTOM INDEX</source>
-        <translation type="unfinished">ÖZEL ENDEKS OLUŞTUR</translation>
+        <translation>ÖZEL ENDEKS OLUŞTUR</translation>
     </message>
     <message>
         <source>My Custom Index</source>
-        <translation type="unfinished">Özel Endeksim</translation>
+        <translation>Özel Endeksim</translation>
     </message>
     <message>
         <source>NAME:</source>
-        <translation type="unfinished">AD:</translation>
+        <translation>AD:</translation>
     </message>
     <message>
         <source>METHOD:</source>
-        <translation type="unfinished">YÖNTEM:</translation>
+        <translation>YÖNTEM:</translation>
     </message>
     <message>
         <source>BASE:</source>
-        <translation type="unfinished">TABAN:</translation>
+        <translation>TABAN:</translation>
     </message>
     <message>
         <source>CONSTITUENTS (from portfolio holdings)</source>
-        <translation type="unfinished">BİLEŞENLER (portföy varlıklarından)</translation>
+        <translation>BİLEŞENLER (portföy varlıklarından)</translation>
     </message>
     <message>
         <source>INCLUDE</source>
-        <translation type="unfinished">DAHİL ET</translation>
+        <translation>DAHİL ET</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">FİYAT</translation>
+        <translation>FİYAT</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">AĞIRLIK</translation>
+        <translation>AĞIRLIK</translation>
     </message>
     <message>
         <source>MKT VALUE</source>
-        <translation type="unfinished">MKT DEĞER</translation>
+        <translation>PİY DEĞER</translation>
     </message>
     <message>
         <source>MY CUSTOM INDICES</source>
-        <translation type="unfinished">ÖZEL ENDEKSLERİM</translation>
+        <translation>ÖZEL ENDEKSLERİM</translation>
     </message>
     <message>
         <source>DELETE SELECTED</source>
-        <translation type="unfinished">SEÇİLİ OLANI SİL</translation>
+        <translation>SEÇİLİ OLANI SİL</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">AD</translation>
+        <translation>AD</translation>
     </message>
     <message>
         <source>METHOD</source>
-        <translation type="unfinished">YÖNTEM</translation>
+        <translation>YÖNTEM</translation>
     </message>
     <message>
         <source>BASE</source>
-        <translation type="unfinished">TABAN</translation>
+        <translation>TABAN</translation>
     </message>
     <message>
         <source>CURRENT VALUE</source>
-        <translation type="unfinished">MEVCUT DEĞER</translation>
+        <translation>MEVCUT DEĞER</translation>
     </message>
     <message>
         <source>CHANGE</source>
-        <translation type="unfinished">DEĞİŞİM</translation>
+        <translation>DEĞİŞİM</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">OLUŞTURULDU</translation>
+        <translation>OLUŞTURULDU</translation>
     </message>
     <message>
         <source>No custom indices created yet.
 Go to CREATE INDEX tab to build one from your portfolio.</source>
-        <translation type="unfinished">Henüz özel endeks oluşturulmadı.
+        <translation>Henüz özel endeks oluşturulmadı.
 Portföyünüzden bir tane oluşturmak için ENDEKS OLUŞTUR sekmesine gidin.</translation>
     </message>
     <message>
         <source>INDEX PERFORMANCE</source>
-        <translation type="unfinished">ENDEKS PERFORMANSI</translation>
+        <translation>ENDEKS PERFORMANSI</translation>
     </message>
     <message>
         <source>Select an index from MY INDICES to see its performance.</source>
-        <translation type="unfinished">Performansını görmek için ENDEKSLERİM'den bir endeks seçin.</translation>
+        <translation>Performansını görmek için ENDEKSLERİM'den bir endeks seçin.</translation>
     </message>
     <message>
         <source>Base value must be positive.</source>
-        <translation type="unfinished">Taban değer pozitif olmalıdır.</translation>
+        <translation>Taban değer pozitif olmalıdır.</translation>
     </message>
     <message>
         <source>Select at least one constituent.</source>
-        <translation type="unfinished">En az bir bileşen seçin.</translation>
+        <translation>En az bir bileşen seçin.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
     <message>
         <source>Index '%1' created successfully.</source>
-        <translation type="unfinished">'%1' endeksi başarıyla oluşturuldu.</translation>
+        <translation>'%1' endeksi başarıyla oluşturuldu.</translation>
     </message>
     <message>
         <source>PERFORMANCE — %1  (no data)</source>
-        <translation type="unfinished">PERFORMANS — %1  (veri yok)</translation>
+        <translation>PERFORMANS — %1  (veri yok)</translation>
     </message>
     <message>
         <source>PERFORMANCE — %1</source>
-        <translation type="unfinished">PERFORMANS — %1</translation>
+        <translation>PERFORMANS — %1</translation>
     </message>
 </context>
 <context>
@@ -6172,7 +6172,7 @@ Portföyünüzden bir tane oluşturmak için ENDEKS OLUŞTUR sekmesine gidin.</t
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">DURUM</translation>
+        <translation>DURUM</translation>
     </message>
     <message>
         <source>No data — select a series</source>
@@ -6191,7 +6191,7 @@ Portföyünüzden bir tane oluşturmak için ENDEKS OLUŞTUR sekmesine gidin.</t
     </message>
     <message>
         <source>COMPARE</source>
-        <translation type="unfinished">KARŞILAŞTIR</translation>
+        <translation>KARŞILAŞTIR</translation>
     </message>
     <message>
         <source>CHART:</source>
@@ -6233,11 +6233,11 @@ Başlamak için sol paneldeki  + YUVA EKLE  öğesine tıklayın</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">YENİLE</translation>
+        <translation>YENİLE</translation>
     </message>
     <message>
         <source>EXPORT CSV</source>
-        <translation type="unfinished">CSV DIŞA AKTAR</translation>
+        <translation>CSV DIŞA AKTAR</translation>
     </message>
     <message>
         <source>SLOT %1</source>
@@ -6281,11 +6281,11 @@ Başlamak için sol paneldeki  + YUVA EKLE  öğesine tıklayın</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">CSV Dışa Aktar</translation>
+        <translation>CSV Dışa Aktar</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">CSV Dosyaları (*.csv)</translation>
+        <translation>CSV Dosyaları (*.csv)</translation>
     </message>
     <message>
         <source>Failed to open file: %1</source>
@@ -6424,7 +6424,7 @@ Başlamak için sol paneldeki  + YUVA EKLE  öğesine tıklayın</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">YUKLENIYOR...</translation>
+        <translation>YÜKLENİYOR...</translation>
     </message>
 </context>
 <context>
@@ -6557,7 +6557,7 @@ Başlamak için sol paneldeki  + YUVA EKLE  öğesine tıklayın</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">YENİLE</translation>
+        <translation>YENİLE</translation>
     </message>
     <message>
         <source>Force-refresh all live data on the dashboard</source>
@@ -6569,7 +6569,7 @@ Başlamak için sol paneldeki  + YUVA EKLE  öğesine tıklayın</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">KAYDET</translation>
+        <translation>KAYDET</translation>
     </message>
     <message>
         <source>RESET</source>
@@ -6612,7 +6612,7 @@ Başlamak için sol paneldeki  + YUVA EKLE  öğesine tıklayın</translation>
     </message>
     <message>
         <source>CREATE</source>
-        <translation type="unfinished">OLUŞTUR</translation>
+        <translation>OLUŞTUR</translation>
     </message>
     <message>
         <source>API CONFIG</source>
@@ -6676,7 +6676,7 @@ Başlamak için sol paneldeki  + YUVA EKLE  öğesine tıklayın</translation>
     </message>
     <message>
         <source>SYSTEM</source>
-        <translation type="unfinished">SİSTEM</translation>
+        <translation>SİSTEM</translation>
     </message>
     <message>
         <source>MAPPING ENGINE</source>
@@ -6688,7 +6688,7 @@ Başlamak için sol paneldeki  + YUVA EKLE  öğesine tıklayın</translation>
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">GÜVENLİK</translation>
+        <translation>GÜVENLİK</translation>
     </message>
     <message>
         <source>CURRENT MAPPING</source>
@@ -6776,7 +6776,7 @@ Başlamak için sol paneldeki  + YUVA EKLE  öğesine tıklayın</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Tür</translation>
+        <translation>Tür</translation>
     </message>
     <message>
         <source>Required</source>
@@ -6846,7 +6846,7 @@ Hassas veriler asla düz metin olarak saklanmaz.</translation>
     </message>
     <message>
         <source>RUN TEST</source>
-        <translation type="unfinished">TESTİ ÇALIŞTIR</translation>
+        <translation>TESTİ ÇALIŞTIR</translation>
     </message>
     <message>
         <source>Test results will appear here...</source>
@@ -6866,7 +6866,7 @@ Hassas veriler asla düz metin olarak saklanmaz.</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">SİL</translation>
+        <translation>SİL</translation>
     </message>
     <message>
         <source>+ NEW MAPPING</source>
@@ -7087,7 +7087,7 @@ ETİKETLER: %12</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOPLAM</translation>
+        <translation>TOPLAM</translation>
     </message>
     <message>
         <source>ACTIVE</source>
@@ -7111,7 +7111,7 @@ ETİKETLER: %12</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TÜR</translation>
+        <translation>TÜR</translation>
     </message>
     <message>
         <source>CATEGORY</source>
@@ -7166,7 +7166,7 @@ Bu işlem geri alınamaz. Bunları tam Veri Kaynakları ekranından yeniden ekle
     <name>fincept::screens::DeploymentDashboard</name>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>LTP</source>
@@ -7174,7 +7174,7 @@ Bu işlem geri alınamaz. Bunları tam Veri Kaynakları ekranından yeniden ekle
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">KAZANMA ORANI</translation>
+        <translation>KAZANMA ORANI</translation>
     </message>
     <message>
         <source>POSITION</source>
@@ -7226,7 +7226,7 @@ Bu işlem geri alınamaz. Bunları tam Veri Kaynakları ekranından yeniden ekle
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">YENİLE</translation>
+        <translation>YENİLE</translation>
     </message>
     <message>
         <source>STOP ALL</source>
@@ -7489,7 +7489,7 @@ Bu işlem geri alınamaz. Bunları tam Veri Kaynakları ekranından yeniden ekle
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">HATA</translation>
+        <translation>HATA</translation>
     </message>
     <message>
         <source>DIRTY PRICE</source>
@@ -7643,19 +7643,19 @@ Bu işlem geri alınamaz. Bunları tam Veri Kaynakları ekranından yeniden ekle
     </message>
     <message>
         <source>Dashboard</source>
-        <translation type="unfinished">Pano</translation>
+        <translation>Pano</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Piyasalar</translation>
+        <translation>Piyasalar</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">Haberler</translation>
+        <translation>Haberler</translation>
     </message>
     <message>
         <source>Watchlist</source>
-        <translation type="unfinished">İzleme Listesi</translation>
+        <translation>İzleme Listesi</translation>
     </message>
     <message>
         <source>TRADING</source>
@@ -7663,7 +7663,7 @@ Bu işlem geri alınamaz. Bunları tam Veri Kaynakları ekranından yeniden ekle
     </message>
     <message>
         <source>Crypto Trading</source>
-        <translation type="unfinished">Kripto İşlemleri</translation>
+        <translation>Kripto İşlemleri</translation>
     </message>
     <message>
         <source>Paper Trading</source>
@@ -7671,11 +7671,11 @@ Bu işlem geri alınamaz. Bunları tam Veri Kaynakları ekranından yeniden ekle
     </message>
     <message>
         <source>Algo Trading</source>
-        <translation type="unfinished">Algoritmik İşlem</translation>
+        <translation>Algoritmik İşlem</translation>
     </message>
     <message>
         <source>Backtesting</source>
-        <translation type="unfinished">Geri Test</translation>
+        <translation>Geriye Dönük Test</translation>
     </message>
     <message>
         <source>RESEARCH &amp; ANALYTICS</source>
@@ -7683,23 +7683,23 @@ Bu işlem geri alınamaz. Bunları tam Veri Kaynakları ekranından yeniden ekle
     </message>
     <message>
         <source>Equity Research</source>
-        <translation type="unfinished">Hisse Araştırması</translation>
+        <translation>Hisse Araştırması</translation>
     </message>
     <message>
         <source>Surface Analytics</source>
-        <translation type="unfinished">Yüzey Analizi</translation>
+        <translation>Yüzey Analizi</translation>
     </message>
     <message>
         <source>Derivatives</source>
-        <translation type="unfinished">Türev Ürünler</translation>
+        <translation>Türev Ürünler</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portföy</translation>
+        <translation>Portföy</translation>
     </message>
     <message>
         <source>M&amp;A Analytics</source>
-        <translation type="unfinished">M&amp;A Analizi</translation>
+        <translation>M&amp;A Analizi</translation>
     </message>
     <message>
         <source>AI &amp; QUANTITATIVE</source>
@@ -7707,7 +7707,7 @@ Bu işlem geri alınamaz. Bunları tam Veri Kaynakları ekranından yeniden ekle
     </message>
     <message>
         <source>AI Quant Lab</source>
-        <translation type="unfinished">YZ Quant Laboratuvarı</translation>
+        <translation>AI Quant Laboratuvarı</translation>
     </message>
     <message>
         <source>QuantLib Suite</source>
@@ -7715,7 +7715,7 @@ Bu işlem geri alınamaz. Bunları tam Veri Kaynakları ekranından yeniden ekle
     </message>
     <message>
         <source>AI Chat</source>
-        <translation type="unfinished">YZ Sohbet</translation>
+        <translation>AI Sohbet</translation>
     </message>
     <message>
         <source>Agent Studio</source>
@@ -7723,11 +7723,11 @@ Bu işlem geri alınamaz. Bunları tam Veri Kaynakları ekranından yeniden ekle
     </message>
     <message>
         <source>Alpha Arena</source>
-        <translation type="unfinished">Alpha Arena</translation>
+        <translation>Alpha Arena</translation>
     </message>
     <message>
         <source>DATA SOURCES</source>
-        <translation type="unfinished">VERİ KAYNAKLARI</translation>
+        <translation>VERİ KAYNAKLARI</translation>
     </message>
     <message>
         <source>DBnomics</source>
@@ -7735,11 +7735,11 @@ Bu işlem geri alınamaz. Bunları tam Veri Kaynakları ekranından yeniden ekle
     </message>
     <message>
         <source>Economics</source>
-        <translation type="unfinished">Ekonomi</translation>
+        <translation>Ekonomi</translation>
     </message>
     <message>
         <source>AkShare Data</source>
-        <translation type="unfinished">AkShare Verileri</translation>
+        <translation>AkShare Verileri</translation>
     </message>
     <message>
         <source>Government Data</source>
@@ -7751,35 +7751,35 @@ Bu işlem geri alınamaz. Bunları tam Veri Kaynakları ekranından yeniden ekle
     </message>
     <message>
         <source>Geopolitics</source>
-        <translation type="unfinished">Jeopolitik</translation>
+        <translation>Jeopolitik</translation>
     </message>
     <message>
         <source>Maritime</source>
-        <translation type="unfinished">Denizcilik</translation>
+        <translation>Denizcilik</translation>
     </message>
     <message>
         <source>Prediction Markets</source>
-        <translation type="unfinished">Tahmin Piyasaları</translation>
+        <translation>Tahmin Piyasaları</translation>
     </message>
     <message>
         <source>Alt Investments</source>
-        <translation type="unfinished">Alt. Yatırımlar</translation>
+        <translation>Alt. Yatırımlar</translation>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">ARAÇLAR</translation>
+        <translation>ARAÇLAR</translation>
     </message>
     <message>
         <source>Report Builder</source>
-        <translation type="unfinished">Rapor Oluşturucu</translation>
+        <translation>Rapor Oluşturucu</translation>
     </message>
     <message>
         <source>Node Editor</source>
-        <translation type="unfinished">Düğüm Düzenleyicisi</translation>
+        <translation>Düğüm Düzenleyicisi</translation>
     </message>
     <message>
         <source>Code Editor</source>
-        <translation type="unfinished">Kod Düzenleyicisi</translation>
+        <translation>Kod Düzenleyicisi</translation>
     </message>
     <message>
         <source>Excel</source>
@@ -7787,15 +7787,15 @@ Bu işlem geri alınamaz. Bunları tam Veri Kaynakları ekranından yeniden ekle
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Notlar</translation>
+        <translation>Notlar</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">MCP Sunucuları</translation>
+        <translation>MCP Sunucuları</translation>
     </message>
     <message>
         <source>Data Mapping</source>
-        <translation type="unfinished">Veri Eşleme</translation>
+        <translation>Veri Eşleme</translation>
     </message>
     <message>
         <source>ACCOUNT</source>
@@ -7803,11 +7803,11 @@ Bu işlem geri alınamaz. Bunları tam Veri Kaynakları ekranından yeniden ekle
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">Ayarlar</translation>
+        <translation>Ayarlar</translation>
     </message>
     <message>
         <source>Profile</source>
-        <translation type="unfinished">Profil</translation>
+        <translation>Profil</translation>
     </message>
     <message>
         <source>DOCUMENTATION</source>
@@ -8079,7 +8079,7 @@ Ekran Görüntüsü (Ctrl+P) — Dosyaya yakala</translation>
     </message>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">GENEL BAKIŞ</translation>
+        <translation>GENEL BAKIŞ</translation>
     </message>
     <message>
         <source>The Dashboard is your primary workspace. It features a draggable widget grid where you can arrange market widgets, a scrolling ticker bar showing live prices, a market pulse panel with sector performance, and a status bar showing connection state.</source>
@@ -8157,7 +8157,7 @@ Ekran Görüntüsü (Ctrl+P) — Dosyaya yakala</translation>
     </message>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">PİYASALAR</translation>
+        <translation>PİYASALAR</translation>
     </message>
     <message>
         <source>Global and regional market overview with auto-refresh</source>
@@ -8693,7 +8693,7 @@ PRO: Özel fiyatlama modelleri, volatilite yüzeyi kalibrasyonu, Greeks korunmas
     </message>
     <message>
         <source>PORTFOLIO</source>
-        <translation type="unfinished">PORTFÖY</translation>
+        <translation>PORTFÖY</translation>
     </message>
     <message>
         <source>Multi-portfolio management with analytics and AI agent</source>
@@ -8957,7 +8957,7 @@ PRO: Çoklu ajan iş akışları, MCP sunucu entegrasyonu, otomatik araştırma 
     </message>
     <message>
         <source>AGENT STUDIO</source>
-        <translation type="unfinished">AJAN STÜDYOSU</translation>
+        <translation>AJAN STÜDYOSU</translation>
     </message>
     <message>
         <source>Configure and manage AI agents, teams, and workflows</source>
@@ -9111,7 +9111,7 @@ PRO: DBnomics verilerini kantitatif makro işlem modellerine entegre edin</trans
     </message>
     <message>
         <source>ECONOMICS</source>
-        <translation type="unfinished">EKONOMİ</translation>
+        <translation>EKONOMİ</translation>
     </message>
     <message>
         <source>Macroeconomic data and analysis tools</source>
@@ -9601,7 +9601,7 @@ PRO: Canlı veri akışlarıyla otomatik model güncellemeleri</translation>
     </message>
     <message>
         <source>NOTES</source>
-        <translation type="unfinished">NOTLAR</translation>
+        <translation>NOTLAR</translation>
     </message>
     <message>
         <source>Persistent note-taking for research and trade journals</source>
@@ -9645,7 +9645,7 @@ PRO: Notların pozisyonlara bağlandığı entegre araştırma akışı</transla
     </message>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">MCP SUNUCULARI</translation>
+        <translation>MCP SUNUCULARI</translation>
     </message>
     <message>
         <source>Model Context Protocol server management</source>
@@ -9733,7 +9733,7 @@ PRO: Doğrulamalı karmaşık çoklu kaynak veri hatları</translation>
     </message>
     <message>
         <source>SETTINGS</source>
-        <translation type="unfinished">AYARLAR</translation>
+        <translation>AYARLAR</translation>
     </message>
     <message>
         <source>Application configuration and preferences</source>
@@ -9865,7 +9865,7 @@ Kaynak: EconDB — makroekonomik veriler, API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">ÜLKE</translation>
+        <translation>ÜLKE</translation>
     </message>
     <message>
         <source>Fetching EconDB: %1 — %2…</source>
@@ -9892,7 +9892,7 @@ Kaynak: EconDB — makroekonomik veriler, API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>CHANGE</source>
-        <translation type="unfinished">DEĞİŞİM</translation>
+        <translation>DEĞİŞİM</translation>
     </message>
     <message>
         <source>MIN</source>
@@ -9920,7 +9920,7 @@ Kaynak: EconDB — makroekonomik veriler, API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
     <message>
         <source>No data returned for this selection</source>
@@ -9932,11 +9932,11 @@ Kaynak: EconDB — makroekonomik veriler, API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">CSV Dışa Aktar</translation>
+        <translation>CSV Dışa Aktar</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">CSV Dosyaları (*.csv)</translation>
+        <translation>CSV Dosyaları (*.csv)</translation>
     </message>
 </context>
 <context>
@@ -9961,7 +9961,7 @@ Kaynak: Forex Factory — küresel ekonomik takvim (API anahtarı gerekmez)</tra
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">TARİH</translation>
+        <translation>TARİH</translation>
     </message>
     <message>
         <source>IMPACT</source>
@@ -9999,103 +9999,103 @@ Kaynak: Forex Factory — küresel ekonomik takvim (API anahtarı gerekmez)</tra
     <name>fincept::screens::EconomicsView</name>
     <message>
         <source>PORTFOLIO ECONOMICS OVERVIEW</source>
-        <translation type="unfinished">PORTFÖY EKONOMİ GENEL BAKIŞI</translation>
+        <translation>PORTFÖY EKONOMİ GENEL BAKIŞI</translation>
     </message>
     <message>
         <source>Per-holding contribution to portfolio value, P&amp;L, and risk</source>
-        <translation type="unfinished">Varlık bazında portföy değerine, P&amp;L'ye ve riske katkı</translation>
+        <translation>Varlık bazında portföy değerine, P&amp;L'ye ve riske katkı</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>SECTOR</source>
-        <translation type="unfinished">SEKTÖR</translation>
+        <translation>SEKTÖR</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">AĞIRLIK</translation>
+        <translation>AĞIRLIK</translation>
     </message>
     <message>
         <source>COST BASIS</source>
-        <translation type="unfinished">MALİYET ESASI</translation>
+        <translation>MALİYET ESASI</translation>
     </message>
     <message>
         <source>MARKET VALUE</source>
-        <translation type="unfinished">PİYASA DEĞERİ</translation>
+        <translation>PİYASA DEĞERİ</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">P&amp;L %</translation>
+        <translation>P&amp;L %</translation>
     </message>
     <message>
         <source>PORTFOLIO FACTOR SENSITIVITY</source>
-        <translation type="unfinished">PORTFÖY FAKTÖR HASSASİYETİ</translation>
+        <translation>PORTFÖY FAKTÖR HASSASİYETİ</translation>
     </message>
     <message>
         <source>Estimated portfolio impact from macro factor shocks, weighted by holdings</source>
-        <translation type="unfinished">Makro faktör şoklarından tahmini portföy etkisi, varlıklara göre ağırlıklandırılmış</translation>
+        <translation>Makro faktör şoklarından tahmini portföy etkisi, varlıklara göre ağırlıklandırılmış</translation>
     </message>
     <message>
         <source>FACTOR SHOCK</source>
-        <translation type="unfinished">FAKTÖR ŞOKU</translation>
+        <translation>FAKTÖR ŞOKU</translation>
     </message>
     <message>
         <source>SENSITIVITY</source>
-        <translation type="unfinished">HASSASİYET</translation>
+        <translation>HASSASİYET</translation>
     </message>
     <message>
         <source>DIRECTION</source>
-        <translation type="unfinished">YÖN</translation>
+        <translation>YÖN</translation>
     </message>
     <message>
         <source>ESTIMATED IMPACT</source>
-        <translation type="unfinished">TAHMİNİ ETKİ</translation>
+        <translation>TAHMİNİ ETKİ</translation>
     </message>
     <message>
         <source>Positive</source>
-        <translation type="unfinished">Pozitif</translation>
+        <translation>Pozitif</translation>
     </message>
     <message>
         <source>Negative</source>
-        <translation type="unfinished">Negatif</translation>
+        <translation>Negatif</translation>
     </message>
     <message>
         <source>Interest Rates (+1%)</source>
-        <translation type="unfinished">Faiz Oranları (+%1)</translation>
+        <translation>Faiz Oranları (+%1)</translation>
     </message>
     <message>
         <source>GDP Growth (+1%)</source>
-        <translation type="unfinished">GSYİH Büyümesi (+%1)</translation>
+        <translation>GSYİH Büyümesi (+%1)</translation>
     </message>
     <message>
         <source>Inflation / CPI (+1%)</source>
-        <translation type="unfinished">Enflasyon / TÜFE (+%1)</translation>
+        <translation>Enflasyon / TÜFE (+%1)</translation>
     </message>
     <message>
         <source>USD Strength (+1%)</source>
-        <translation type="unfinished">USD Gücü (+%1)</translation>
+        <translation>USD Gücü (+%1)</translation>
     </message>
     <message>
         <source>Oil Price (+10%)</source>
-        <translation type="unfinished">Petrol Fiyatı (+%10)</translation>
+        <translation>Petrol Fiyatı (+%10)</translation>
     </message>
     <message>
         <source>Consumer Spending (+1%)</source>
-        <translation type="unfinished">Tüketici Harcaması (+%1)</translation>
+        <translation>Tüketici Harcaması (+%1)</translation>
     </message>
     <message>
         <source>Credit Spreads (+50bps)</source>
-        <translation type="unfinished">Kredi Spreadleri (+50bps)</translation>
+        <translation>Kredi Spreadleri (+50bps)</translation>
     </message>
     <message>
         <source>Unemployment (+1%)</source>
-        <translation type="unfinished">İşsizlik (+%1)</translation>
+        <translation>İşsizlik (+%1)</translation>
     </message>
     <message>
         <source>CURRENT MACRO CONDITIONS  (LIVE · FRED)</source>
@@ -10125,7 +10125,7 @@ It is stored encrypted and shared with all FRED-backed features.</source>
     </message>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">MEVCUT</translation>
+        <translation>MEVCUT</translation>
     </message>
     <message>
         <source>AS OF</source>
@@ -10148,7 +10148,7 @@ It is stored encrypted and shared with all FRED-backed features.</source>
     <name>fincept::screens::EditTransactionDialog</name>
     <message>
         <source>Edit Transaction</source>
-        <translation type="unfinished">İşlemi Düzenle</translation>
+        <translation>İşlemi Düzenle</translation>
     </message>
     <message>
         <source>EDIT %1 — %2</source>
@@ -10180,7 +10180,7 @@ It is stored encrypted and shared with all FRED-backed features.</source>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">KAYDET</translation>
+        <translation>KAYDET</translation>
     </message>
 </context>
 <context>
@@ -10328,7 +10328,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BETA</translation>
+        <translation>BETA</translation>
     </message>
     <message>
         <source>SHORT RATIO</source>
@@ -10355,7 +10355,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>EXPORT CSV</source>
-        <translation type="unfinished">CSV DIŞA AKTAR</translation>
+        <translation>CSV DIŞA AKTAR</translation>
     </message>
     <message>
         <source>Metric</source>
@@ -10371,7 +10371,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>N/A</source>
-        <translation type="unfinished">YOK</translation>
+        <translation>YOK</translation>
     </message>
     <message>
         <source>Revenue</source>
@@ -10658,7 +10658,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">YENİLE</translation>
+        <translation>YENİLE</translation>
     </message>
     <message>
         <source>Search for a symbol to load news.</source>
@@ -10693,15 +10693,15 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">ACIK</translation>
+        <translation>AÇIK</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">YÜKSEK</translation>
+        <translation>YÜKSEK</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">DÜŞÜK</translation>
+        <translation>DÜŞÜK</translation>
     </message>
     <message>
         <source>PREV CLOSE</source>
@@ -10709,7 +10709,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">HACİM</translation>
+        <translation>HACİM</translation>
     </message>
     <message>
         <source>VALUATION</source>
@@ -10741,7 +10741,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BETA</translation>
+        <translation>BETA</translation>
     </message>
     <message>
         <source>SHARE STATS</source>
@@ -10865,7 +10865,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>N/A</source>
-        <translation type="unfinished">YOK</translation>
+        <translation>YOK</translation>
     </message>
     <message>
         <source>STRONG BUY</source>
@@ -10873,7 +10873,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>AL</translation>
     </message>
     <message>
         <source>HOLD</source>
@@ -10881,7 +10881,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SAT</translation>
     </message>
     <message>
         <source>STRONG SELL</source>
@@ -10924,11 +10924,11 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">FİYAT</translation>
+        <translation>FİYAT</translation>
     </message>
     <message>
         <source>P/E</source>
@@ -10984,7 +10984,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BETA</translation>
+        <translation>BETA</translation>
     </message>
 </context>
 <context>
@@ -11043,7 +11043,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">Haberler</translation>
+        <translation>Haberler</translation>
     </message>
     <message>
         <source>Sentiment</source>
@@ -11051,7 +11051,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">GERİYE DÖNÜK TEST</translation>
+        <translation>GERİYE DÖNÜK TEST</translation>
     </message>
 </context>
 <context>
@@ -11070,7 +11070,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">YENİLE</translation>
+        <translation>YENİLE</translation>
     </message>
     <message>
         <source>Refreshing market sentiment…</source>
@@ -11090,7 +11090,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">ÖZET</translation>
+        <translation>ÖZET</translation>
     </message>
     <message>
         <source>AVERAGE BUZZ</source>
@@ -11181,11 +11181,11 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>LAST</source>
-        <translation type="unfinished">SON</translation>
+        <translation>SON</translation>
     </message>
     <message>
         <source>N/A</source>
-        <translation type="unfinished">YOK</translation>
+        <translation>YOK</translation>
     </message>
     <message>
         <source>No data returned for %1</source>
@@ -11200,11 +11200,11 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>AL</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SAT</translation>
     </message>
     <message>
         <source>STRONG SELL</source>
@@ -11212,7 +11212,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NOTR</translation>
+        <translation>NÖTR</translation>
     </message>
     <message>
         <source>Deeply oversold — potential reversal zone</source>
@@ -11532,7 +11532,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">DEĞER</translation>
+        <translation>DEĞER</translation>
     </message>
     <message>
         <source>SIGNAL</source>
@@ -11563,7 +11563,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">CANLI</translation>
+        <translation>CANLI</translation>
     </message>
     <message>
         <source>⚠ TOKEN EXPIRED — click ACCOUNTS</source>
@@ -11675,11 +11675,11 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>Name:</source>
-        <translation type="unfinished">Ad:</translation>
+        <translation>Ad:</translation>
     </message>
     <message>
         <source>Currency:</source>
-        <translation type="unfinished">Para Birimi:</translation>
+        <translation>Para Birimi:</translation>
     </message>
     <message>
         <source>Loading portfolios...</source>
@@ -11723,7 +11723,7 @@ EIA_API_KEY ortam değişkenini ayarlayın.
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">İÇE AKTAR</translation>
+        <translation>İÇE AKTAR</translation>
     </message>
     <message>
         <source>(no portfolios yet)</source>
@@ -11749,6 +11749,18 @@ EIA_API_KEY ortam değişkenini ayarlayın.
         <source>Imported %1 holdings.</source>
         <translation>%1 varlık içe aktarıldı.</translation>
     </message>
+    <message>
+        <source>Failed to queue strategy</source>
+        <translation>Strateji sıraya alınamadı</translation>
+    </message>
+    <message>
+        <source>Order cancelled</source>
+        <translation>Emir iptal edildi</translation>
+    </message>
+    <message>
+        <source>Strategy queued for approval (%1 legs)</source>
+        <translation>Strateji onay için sıraya alındı (%1 bacak)</translation>
+    </message>
 </context>
 <context>
     <name>fincept::screens::EurostatPanel</name>
@@ -11764,7 +11776,7 @@ Kaynak: Eurostat — AB istatistik ofisi</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">ÜLKE</translation>
+        <translation>ÜLKE</translation>
     </message>
     <message>
         <source>Fetching Eurostat: %1 — %2…</source>
@@ -11783,7 +11795,7 @@ Kaynak: Eurostat — AB istatistik ofisi</translation>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">İÇE AKTAR</translation>
+        <translation>İÇE AKTAR</translation>
     </message>
     <message>
         <source>Import XLSX/CSV file</source>
@@ -11823,7 +11835,7 @@ Kaynak: Eurostat — AB istatistik ofisi</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">SİL</translation>
+        <translation>SİL</translation>
     </message>
     <message>
         <source>Delete current sheet</source>
@@ -11871,20 +11883,20 @@ CSV dışa aktarma yine de araç çubuğundan kullanılabilir.</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">CSV Dışa Aktar</translation>
+        <translation>CSV Dışa Aktar</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">CSV Dosyaları (*.csv)</translation>
+        <translation>CSV Dosyaları (*.csv)</translation>
     </message>
     <message>
         <source>Export failed</source>
-        <translation type="unfinished">Dışa aktarma başarısız</translation>
+        <translation>Dışa aktarma başarısız</translation>
     </message>
     <message>
         <source>Could not open file for writing:
 %1</source>
-        <translation type="unfinished">Dosya yazma için açılamadı:
+        <translation>Dosya yazma için açılamadı:
 %1</translation>
     </message>
     <message>
@@ -11959,7 +11971,7 @@ API key gerekmez</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">YENİLE</translation>
+        <translation>YENİLE</translation>
     </message>
     <message>
         <source>UPLOAD FILES</source>
@@ -11971,7 +11983,7 @@ API key gerekmez</translation>
     </message>
     <message>
         <source>DELETE SELECTED</source>
-        <translation type="unfinished">SEÇİLİ OLANI SİL</translation>
+        <translation>SEÇİLİ OLANI SİL</translation>
     </message>
     <message>
         <source>CLEAR SELECTION</source>
@@ -12089,7 +12101,7 @@ dosyalar otomatik olarak kaydedilir. Yukarıdaki düğmeyi kullanarak dosyaları
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">KAYDET</translation>
+        <translation>KAYDET</translation>
     </message>
     <message>
         <source>DEL</source>
@@ -12121,7 +12133,7 @@ dosyalar otomatik olarak kaydedilir. Yukarıdaki düğmeyi kullanarak dosyaları
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Tür</translation>
+        <translation>Tür</translation>
     </message>
 </context>
 <context>
@@ -12468,7 +12480,7 @@ API key gerekmez</translation>
     </message>
     <message>
         <source>EDIT PROFILE</source>
-        <translation type="unfinished">PROFİLİ DÜZENLE</translation>
+        <translation>PROFİLİ DÜZENLE</translation>
     </message>
     <message>
         <source>DISPLAY NAME</source>
@@ -12519,7 +12531,7 @@ API key gerekmez</translation>
     </message>
     <message>
         <source>TODAY</source>
-        <translation type="unfinished">BUGÜN</translation>
+        <translation>BUGÜN</translation>
     </message>
     <message>
         <source>  ▲  TRENDING POSTS</source>
@@ -12756,7 +12768,7 @@ fred.stlouisfed.org/docs/api/api_key.html</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">ÜLKE</translation>
+        <translation>ÜLKE</translation>
     </message>
     <message>
         <source>CITY</source>
@@ -12816,11 +12828,11 @@ fred.stlouisfed.org/docs/api/api_key.html</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">HAZIR</translation>
+        <translation>HAZIR</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">YUKLENIYOR...</translation>
+        <translation>YÜKLENİYOR...</translation>
     </message>
     <message>
         <source>%1 MAPPED / %2 LOADED</source>
@@ -12840,7 +12852,7 @@ API'deki toplam: %3</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">HATA</translation>
+        <translation>HATA</translation>
     </message>
 </context>
 <context>
@@ -12874,7 +12886,7 @@ Hiçbir kaynak için API anahtarı gerekmez</translation>
     <name>fincept::screens::GovDataAustraliaPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← GERİ</translation>
+        <translation>← GERİ</translation>
     </message>
     <message>
         <source>AGENCIES</source>
@@ -12902,15 +12914,15 @@ Hiçbir kaynak için API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">AD</translation>
+        <translation>AD</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">AÇIKLAMA</translation>
+        <translation>AÇIKLAMA</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">OLUŞTURULDU</translation>
+        <translation>OLUŞTURULDU</translation>
     </message>
     <message>
         <source>TITLE</source>
@@ -12926,7 +12938,7 @@ Hiçbir kaynak için API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>RESOURCES</source>
-        <translation type="unfinished">KAYNAKLAR</translation>
+        <translation>KAYNAKLAR</translation>
     </message>
     <message>
         <source>MODIFIED</source>
@@ -12942,7 +12954,7 @@ Hiçbir kaynak için API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">ACIK</translation>
+        <translation>AÇIK</translation>
     </message>
     <message>
         <source>Loading Australian Government agencies…</source>
@@ -13018,14 +13030,14 @@ Hiçbir kaynak için API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataCongressPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← GERİ</translation>
+        <translation>← GERİ</translation>
     </message>
     <message>
         <source>BILLS</source>
@@ -13033,7 +13045,7 @@ Hiçbir kaynak için API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">ÖZET</translation>
+        <translation>ÖZET</translation>
     </message>
     <message>
         <source>FETCH</source>
@@ -13049,7 +13061,7 @@ Hiçbir kaynak için API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TÜR</translation>
+        <translation>TÜR</translation>
     </message>
     <message>
         <source>All Types</source>
@@ -13101,7 +13113,7 @@ Hiçbir kaynak için API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">TARİH</translation>
+        <translation>TARİH</translation>
     </message>
     <message>
         <source>BILL TYPE</source>
@@ -13141,14 +13153,14 @@ Hiçbir kaynak için API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataFrancePanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← GERİ</translation>
+        <translation>← GERİ</translation>
     </message>
     <message>
         <source>DATA SERVICES</source>
@@ -13184,7 +13196,7 @@ Hiçbir kaynak için API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">AD</translation>
+        <translation>AD</translation>
     </message>
     <message>
         <source>VIEWS</source>
@@ -13196,7 +13208,7 @@ Hiçbir kaynak için API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">OLUŞTURULDU</translation>
+        <translation>OLUŞTURULDU</translation>
     </message>
     <message>
         <source>TITLE</source>
@@ -13220,7 +13232,7 @@ Hiçbir kaynak için API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>CODE</source>
-        <translation type="unfinished">KOD</translation>
+        <translation>KOD</translation>
     </message>
     <message>
         <source>POSTAL</source>
@@ -13240,7 +13252,7 @@ Hiçbir kaynak için API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TÜR</translation>
+        <translation>TÜR</translation>
     </message>
     <message>
         <source>Loading data services from data.gouv.fr…</source>
@@ -13316,14 +13328,14 @@ Hiçbir kaynak için API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataHKPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← GERİ</translation>
+        <translation>← GERİ</translation>
     </message>
     <message>
         <source>CATEGORIES</source>
@@ -13355,7 +13367,7 @@ Hiçbir kaynak için API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>RESOURCES</source>
-        <translation type="unfinished">KAYNAKLAR</translation>
+        <translation>KAYNAKLAR</translation>
     </message>
     <message>
         <source>MODIFIED</source>
@@ -13363,7 +13375,7 @@ Hiçbir kaynak için API anahtarı gerekmez</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">AD</translation>
+        <translation>AD</translation>
     </message>
     <message>
         <source>FORMAT</source>
@@ -13455,7 +13467,7 @@ Yukarıdaki arama kutusunu kullanarak ada göre aramayı deneyin.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
 </context>
 <context>
@@ -13498,7 +13510,7 @@ Yukarıdaki arama kutusunu kullanarak ada göre aramayı deneyin.</translation>
     </message>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← GERİ</translation>
+        <translation>← GERİ</translation>
     </message>
     <message>
         <source>DATASETS</source>
@@ -13534,7 +13546,7 @@ Yukarıdaki arama kutusunu kullanarak ada göre aramayı deneyin.</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">AD</translation>
+        <translation>AD</translation>
     </message>
     <message>
         <source>FORMAT</source>
@@ -13546,7 +13558,7 @@ Yukarıdaki arama kutusunu kullanarak ada göre aramayı deneyin.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">ACIK</translation>
+        <translation>AÇIK</translation>
     </message>
     <message>
         <source>Loading %1…</source>
@@ -13606,15 +13618,15 @@ Yukarıdaki arama kutusunu kullanarak ada göre aramayı deneyin.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">CSV Dışa Aktar</translation>
+        <translation>CSV Dışa Aktar</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">CSV Dosyaları (*.csv)</translation>
+        <translation>CSV Dosyaları (*.csv)</translation>
     </message>
     <message>
         <source>✗ FAILED</source>
@@ -13663,7 +13675,7 @@ Seçici, evrensel sağlayıcının kapsadığı tüm CKAN portallarını göster
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">HAZIR</translation>
+        <translation>HAZIR</translation>
     </message>
 </context>
 <context>
@@ -13682,7 +13694,7 @@ Seçici, evrensel sağlayıcının kapsadığı tüm CKAN portallarını göster
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">ÖZET</translation>
+        <translation>ÖZET</translation>
     </message>
     <message>
         <source>FETCH</source>
@@ -13702,11 +13714,11 @@ Seçici, evrensel sağlayıcının kapsadığı tüm CKAN portallarını göster
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TÜR</translation>
+        <translation>TÜR</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tumu</translation>
+        <translation>Tümü</translation>
     </message>
     <message>
         <source>Bills</source>
@@ -13714,7 +13726,7 @@ Seçici, evrensel sağlayıcının kapsadığı tüm CKAN portallarını göster
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Notlar</translation>
+        <translation>Notlar</translation>
     </message>
     <message>
         <source>Bonds</source>
@@ -13826,14 +13838,14 @@ Seçici, evrensel sağlayıcının kapsadığı tüm CKAN portallarını göster
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataUKPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← GERİ</translation>
+        <translation>← GERİ</translation>
     </message>
     <message>
         <source>PUBLISHERS</source>
@@ -13861,7 +13873,7 @@ Seçici, evrensel sağlayıcının kapsadığı tüm CKAN portallarını göster
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">AD</translation>
+        <translation>AD</translation>
     </message>
     <message>
         <source>TITLE</source>
@@ -13889,7 +13901,7 @@ Seçici, evrensel sağlayıcının kapsadığı tüm CKAN portallarını göster
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">ACIK</translation>
+        <translation>AÇIK</translation>
     </message>
     <message>
         <source>Loading UK Government publishers…</source>
@@ -13961,7 +13973,7 @@ Seçici, evrensel sağlayıcının kapsadığı tüm CKAN portallarını göster
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
 </context>
 <context>
@@ -14004,7 +14016,7 @@ Seçici, evrensel sağlayıcının kapsadığı tüm CKAN portallarını göster
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Tarih</translation>
+        <translation>Tarih</translation>
     </message>
     <message>
         <source>Resources</source>
@@ -14055,7 +14067,7 @@ Seçici, evrensel sağlayıcının kapsadığı tüm CKAN portallarını göster
     </message>
     <message>
         <source>QUICK ACTIONS</source>
-        <translation type="unfinished">HIZLI İŞLEMLER</translation>
+        <translation>HIZLI İŞLEMLER</translation>
     </message>
     <message>
         <source>Common tasks you can do right now</source>
@@ -14274,7 +14286,7 @@ Seçici, evrensel sağlayıcının kapsadığı tüm CKAN portallarını göster
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOPLAM</translation>
+        <translation>TOPLAM</translation>
     </message>
     <message>
         <source>$FNCPT PRICE</source>
@@ -14321,11 +14333,11 @@ Seçici, evrensel sağlayıcının kapsadığı tüm CKAN portallarını göster
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">YENİLE</translation>
+        <translation>YENİLE</translation>
     </message>
     <message>
         <source>COPIED</source>
-        <translation type="unfinished">KOPYALANDI</translation>
+        <translation>KOPYALANDI</translation>
     </message>
     <message>
         <source>Solana wallet</source>
@@ -14357,11 +14369,11 @@ Seçici, evrensel sağlayıcının kapsadığı tüm CKAN portallarını göster
     </message>
     <message>
         <source>CONNECTED</source>
-        <translation type="unfinished">BAGLI</translation>
+        <translation>BAĞLI</translation>
     </message>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">VARLIKLAR</translation>
+        <translation>VARLIKLAR</translation>
     </message>
     <message>
         <source>POLL</source>
@@ -14424,7 +14436,7 @@ Tüm ülkeler: ALL</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">ÜLKE</translation>
+        <translation>ÜLKE</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -14463,7 +14475,7 @@ Tüm ülkeler: ALL</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">ÜLKE</translation>
+        <translation>ÜLKE</translation>
     </message>
     <message>
         <source>Select an indicator</source>
@@ -14579,11 +14591,11 @@ Artık GÖZAT düğmesini kullanarak içe aktarabilirsiniz.</translation>
     </message>
     <message>
         <source>Apply</source>
-        <translation type="unfinished">Uygula</translation>
+        <translation>Uygula</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">İptal</translation>
+        <translation>İptal</translation>
     </message>
     <message>
         <source>Warning: already used by "%1"</source>
@@ -14633,7 +14645,7 @@ Artık GÖZAT düğmesini kullanarak içe aktarabilirsiniz.</translation>
     </message>
     <message>
         <source>New Window</source>
-        <translation type="unfinished">Yeni Pencere</translation>
+        <translation>Yeni Pencere</translation>
     </message>
     <message>
         <source>Open Saved Layout…</source>
@@ -14704,7 +14716,7 @@ Artık GÖZAT düğmesini kullanarak içe aktarabilirsiniz.</translation>
     </message>
     <message>
         <source>Remove</source>
-        <translation type="unfinished">Kaldır</translation>
+        <translation>Kaldır</translation>
     </message>
     <message>
         <source>Provider Configuration</source>
@@ -14814,7 +14826,7 @@ Aralık 1-200. Uzun iş akışları için (örn. çok bölümlü raporları dold
     </message>
     <message>
         <source>API KEY</source>
-        <translation type="unfinished">API ANAHTARI</translation>
+        <translation>API ANAHTARI</translation>
     </message>
     <message>
         <source>BASE URL (custom endpoint)</source>
@@ -15296,7 +15308,7 @@ e-posta ve parolanızla tekrar giriş yapmalısınız.</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">HAZIR</translation>
+        <translation>HAZIR</translation>
     </message>
     <message>
         <source>CORPORATE FINANCE TOOLKIT</source>
@@ -16454,7 +16466,7 @@ e-posta ve parolanızla tekrar giriş yapmalısınız.</translation>
     <name>fincept::screens::MaritimeScreen</name>
     <message>
         <source>READY</source>
-        <translation type="unfinished">HAZIR</translation>
+        <translation>HAZIR</translation>
     </message>
     <message>
         <source>FINCEPT MARITIME INTELLIGENCE</source>
@@ -16610,7 +16622,7 @@ e-posta ve parolanızla tekrar giriş yapmalısınız.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Tür</translation>
+        <translation>Tür</translation>
     </message>
     <message>
         <source>▾ ADVANCED: RAW BBOX</source>
@@ -16780,11 +16792,11 @@ e-posta ve parolanızla tekrar giriş yapmalısınız.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">HATA</translation>
+        <translation>HATA</translation>
     </message>
     <message>
         <source>No ports found.</source>
@@ -16869,11 +16881,11 @@ e-posta ve parolanızla tekrar giriş yapmalısınız.</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">AD</translation>
+        <translation>AD</translation>
     </message>
     <message>
         <source>LAST</source>
-        <translation type="unfinished">SON</translation>
+        <translation>SON</translation>
     </message>
     <message>
         <source>CHG</source>
@@ -16881,15 +16893,15 @@ e-posta ve parolanızla tekrar giriş yapmalısınız.</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>DĞŞ%</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">YÜKSEK</translation>
+        <translation>YÜKSEK</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">DÜŞÜK</translation>
+        <translation>DÜŞÜK</translation>
     </message>
     <message>
         <source>VOL</source>
@@ -16905,7 +16917,7 @@ e-posta ve parolanızla tekrar giriş yapmalısınız.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">ACIK</translation>
+        <translation>AÇIK</translation>
     </message>
     <message>
         <source>TICKER</source>
@@ -17173,7 +17185,7 @@ e-posta ve parolanızla tekrar giriş yapmalısınız.</translation>
     <name>fincept::screens::McpServersScreen</name>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">MCP SUNUCULARI</translation>
+        <translation>MCP SUNUCULARI</translation>
     </message>
     <message>
         <source>MARKETPLACE</source>
@@ -17185,7 +17197,7 @@ e-posta ve parolanızla tekrar giriş yapmalısınız.</translation>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">ARAÇLAR</translation>
+        <translation>ARAÇLAR</translation>
     </message>
     <message>
         <source>Search...</source>
@@ -17241,7 +17253,7 @@ e-posta ve parolanızla tekrar giriş yapmalısınız.</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">AÇIKLAMA</translation>
+        <translation>AÇIKLAMA</translation>
     </message>
     <message>
         <source>No servers match the current filter.</source>
@@ -17257,7 +17269,7 @@ e-posta ve parolanızla tekrar giriş yapmalısınız.</translation>
     </message>
     <message>
         <source>ADD</source>
-        <translation type="unfinished">EKLE</translation>
+        <translation>EKLE</translation>
     </message>
     <message>
         <source>● RUNNING</source>
@@ -17416,7 +17428,7 @@ Eklemek için PAZAR YERİ'ni kullanın veya aşağıdaki ÖZEL MCP SUNUCUSU EKLE
     </message>
     <message>
         <source>Tools</source>
-        <translation type="unfinished">Araçlar</translation>
+        <translation>Araçlar</translation>
     </message>
     <message>
         <source>%1 internal tools active</source>
@@ -17432,7 +17444,7 @@ Eklemek için PAZAR YERİ'ni kullanın veya aşağıdaki ÖZEL MCP SUNUCUSU EKLE
     </message>
     <message>
         <source>Remove</source>
-        <translation type="unfinished">Kaldır</translation>
+        <translation>Kaldır</translation>
     </message>
     <message>
         <source>Select a server to view details.</source>
@@ -17605,7 +17617,7 @@ Eklemek için '+ Ekle'ye tıklayın.</translation>
     <name>fincept::screens::NewsCommandBar</name>
     <message>
         <source>Auto-refresh interval</source>
-        <translation type="unfinished">Otomatik yenileme aralığı</translation>
+        <translation>Otomatik yenileme aralığı</translation>
     </message>
     <message>
         <source>MANUAL</source>
@@ -17681,7 +17693,7 @@ Eklemek için '+ Ekle'ye tıklayın.</translation>
     </message>
     <message>
         <source>AI</source>
-        <translation type="unfinished">AI</translation>
+        <translation>AI</translation>
     </message>
     <message>
         <source>SRC</source>
@@ -17689,7 +17701,7 @@ Eklemek için '+ Ekle'ye tıklayın.</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">YENİLE</translation>
+        <translation>YENİLE</translation>
     </message>
     <message>
         <source>0 WATCHES</source>
@@ -17697,7 +17709,7 @@ Eklemek için '+ Ekle'ye tıklayın.</translation>
     </message>
     <message>
         <source>OFFLINE</source>
-        <translation type="unfinished">COVRIMDISI</translation>
+        <translation>ÇEVRİMDIŞI</translation>
     </message>
     <message>
         <source>...</source>
@@ -17740,7 +17752,7 @@ Eklemek için '+ Ekle'ye tıklayın.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">ACIK</translation>
+        <translation>AÇIK</translation>
     </message>
     <message>
         <source>COPY URL</source>
@@ -17756,7 +17768,7 @@ Eklemek için '+ Ekle'ye tıklayın.</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">KAYDET</translation>
+        <translation>KAYDET</translation>
     </message>
     <message>
         <source>Save article to File Manager</source>
@@ -17776,7 +17788,7 @@ Eklemek için '+ Ekle'ye tıklayın.</translation>
     </message>
     <message>
         <source>COPIED</source>
-        <translation type="unfinished">KOPYALANDI</translation>
+        <translation>KOPYALANDI</translation>
     </message>
     <message>
         <source>ANALYZING...</source>
@@ -17792,7 +17804,7 @@ Eklemek için '+ Ekle'ye tıklayın.</translation>
     </message>
     <message>
         <source>AI ANALYSIS</source>
-        <translation type="unfinished">AI ANALİZİ</translation>
+        <translation>AI ANALİZİ</translation>
     </message>
     <message>
         <source>KEY POINTS</source>
@@ -18075,11 +18087,11 @@ Eklemek için '+ Ekle'ye tıklayın.</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">SİL</translation>
+        <translation>SİL</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">KAYDET</translation>
+        <translation>KAYDET</translation>
     </message>
     <message>
         <source>CANCEL</source>
@@ -18281,7 +18293,7 @@ Eklemek için '+ Ekle'ye tıklayın.</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">ÜLKE</translation>
+        <translation>ÜLKE</translation>
     </message>
     <message>
         <source>FREQ</source>
@@ -18414,7 +18426,7 @@ Kaynak: Our World in Data (ourworldindata.org) — API key gerekmez
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">ÜLKE</translation>
+        <translation>ÜLKE</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -18441,67 +18453,67 @@ Kaynak: Our World in Data (ourworldindata.org) — API key gerekmez
     <name>fincept::screens::PerformanceRiskView</name>
     <message>
         <source>NAV PERFORMANCE (FROM SNAPSHOTS)</source>
-        <translation type="unfinished">NAV PERFORMANSI (ANLIK GÖRÜNTÜLERDEN)</translation>
+        <translation>NAV PERFORMANSI (ANLIK GÖRÜNTÜLERDEN)</translation>
     </message>
     <message>
         <source>  RISK METRICS</source>
-        <translation type="unfinished">  RİSK METRİKLERİ</translation>
+        <translation>  RİSK METRİKLERİ</translation>
     </message>
     <message>
         <source>SHARPE RATIO</source>
-        <translation type="unfinished">SHARPE ORANI</translation>
+        <translation>SHARPE ORANI</translation>
     </message>
     <message>
         <source>Risk-adjusted return (annualised)</source>
-        <translation type="unfinished">Riske göre düzeltilmiş getiri (yıllıklandırılmış)</translation>
+        <translation>Riske göre düzeltilmiş getiri (yıllıklandırılmış)</translation>
     </message>
     <message>
         <source>SORTINO RATIO</source>
-        <translation type="unfinished">SORTINO ORANI</translation>
+        <translation>SORTINO ORANI</translation>
     </message>
     <message>
         <source>Downside risk-adjusted return</source>
-        <translation type="unfinished">Aşağı yönlü riske göre düzeltilmiş getiri</translation>
+        <translation>Aşağı yönlü riske göre düzeltilmiş getiri</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BETA</translation>
+        <translation>BETA</translation>
     </message>
     <message>
         <source>Sensitivity vs SPY (snapshot regression)</source>
-        <translation type="unfinished">SPY'a karşı hassasiyet (anlık görüntü regresyonu)</translation>
+        <translation>SPY'a karşı hassasiyet (anlık görüntü regresyonu)</translation>
     </message>
     <message>
         <source>ALPHA</source>
-        <translation type="unfinished">ALFA</translation>
+        <translation>ALFA</translation>
     </message>
     <message>
         <source>VOLATILITY</source>
-        <translation type="unfinished">VOLATİLİTE</translation>
+        <translation>VOLATİLİTE</translation>
     </message>
     <message>
         <source>Annualised from daily returns</source>
-        <translation type="unfinished">Günlük getirilerden yıllıklandırılmış</translation>
+        <translation>Günlük getirilerden yıllıklandırılmış</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">MAKS DÜŞÜŞ</translation>
+        <translation>MAKS DÜŞÜŞ</translation>
     </message>
     <message>
         <source>Peak-to-trough from snapshots</source>
-        <translation type="unfinished">Anlık görüntülerden zirve-dip</translation>
+        <translation>Anlık görüntülerden zirve-dip</translation>
     </message>
     <message>
         <source>VALUE AT RISK (95%)</source>
-        <translation type="unfinished">RİSKE MARUZ DEĞER (%95)</translation>
+        <translation>RİSKE MARUZ DEĞER (%95)</translation>
     </message>
     <message>
         <source>CONDITIONAL VaR</source>
-        <translation type="unfinished">KOŞULLU VaR</translation>
+        <translation>KOŞULLU VaR</translation>
     </message>
     <message>
         <source>Expected shortfall (95%)</source>
-        <translation type="unfinished">Beklenen eksiklik (%95)</translation>
+        <translation>Beklenen kayıp (%95)</translation>
     </message>
     <message>
         <source>Jensen's alpha vs benchmark (CAPM)</source>
@@ -18517,7 +18529,7 @@ Kaynak: Our World in Data (ourworldindata.org) — API key gerekmez
     </message>
     <message>
         <source>N/A</source>
-        <translation type="unfinished">YOK</translation>
+        <translation>YOK</translation>
     </message>
 </context>
 <context>
@@ -18656,7 +18668,7 @@ Kaynak: Our World in Data (ourworldindata.org) — API key gerekmez
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Tür</translation>
+        <translation>Tür</translation>
     </message>
     <message>
         <source>Status</source>
@@ -18664,7 +18676,7 @@ Kaynak: Our World in Data (ourworldindata.org) — API key gerekmez
     </message>
     <message>
         <source>+ ADD</source>
-        <translation type="unfinished">+ EKLE</translation>
+        <translation>+ EKLE</translation>
     </message>
     <message>
         <source>- REMOVE</source>
@@ -18683,87 +18695,87 @@ Kaynak: Our World in Data (ourworldindata.org) — API key gerekmez
     <name>fincept::screens::PlanningView</name>
     <message>
         <source>RETIREMENT</source>
-        <translation type="unfinished">EMEKLİLİK</translation>
+        <translation>EMEKLİLİK</translation>
     </message>
     <message>
         <source>GOALS</source>
-        <translation type="unfinished">HEDEFLER</translation>
+        <translation>HEDEFLER</translation>
     </message>
     <message>
         <source>SAVINGS</source>
-        <translation type="unfinished">TASARRUFLAR</translation>
+        <translation>TASARRUFLAR</translation>
     </message>
     <message>
         <source>RETIREMENT CALCULATOR</source>
-        <translation type="unfinished">EMEKLİLİK HESAPLAYICI</translation>
+        <translation>EMEKLİLİK HESAPLAYICI</translation>
     </message>
     <message>
         <source>Current Age:</source>
-        <translation type="unfinished">Mevcut Yaş:</translation>
+        <translation>Mevcut Yaş:</translation>
     </message>
     <message>
         <source>Retire Age:</source>
-        <translation type="unfinished">Emeklilik Yaşı:</translation>
+        <translation>Emeklilik Yaşı:</translation>
     </message>
     <message>
         <source>Annual Expense:</source>
-        <translation type="unfinished">Yıllık Gider:</translation>
+        <translation>Yıllık Gider:</translation>
     </message>
     <message>
         <source>Monthly Savings:</source>
-        <translation type="unfinished">Aylık Tasarruf:</translation>
+        <translation>Aylık Tasarruf:</translation>
     </message>
     <message>
         <source>Exp. Return:</source>
-        <translation type="unfinished">Beklenen Getiri:</translation>
+        <translation>Beklenen Getiri:</translation>
     </message>
     <message>
         <source>Inflation:</source>
-        <translation type="unfinished">Enflasyon:</translation>
+        <translation>Enflasyon:</translation>
     </message>
     <message>
         <source>Withdrawal Rate:</source>
-        <translation type="unfinished">Çekim Oranı:</translation>
+        <translation>Çekim Oranı:</translation>
     </message>
     <message>
         <source>CALCULATE</source>
-        <translation type="unfinished">HESAPLA</translation>
+        <translation>HESAPLA</translation>
     </message>
     <message>
         <source>PROJECTION RESULTS</source>
-        <translation type="unfinished">TAHMİN SONUÇLARI</translation>
+        <translation>TAHMİN SONUÇLARI</translation>
     </message>
     <message>
         <source>YEARS TO RETIREMENT</source>
-        <translation type="unfinished">EMEKLİLİĞE KALAN YIL</translation>
+        <translation>EMEKLİLİĞE KALAN YIL</translation>
     </message>
     <message>
         <source>TARGET NEST EGG</source>
-        <translation type="unfinished">HEDEF BİRİKİM</translation>
+        <translation>HEDEF BİRİKİM</translation>
     </message>
     <message>
         <source>PROJECTED VALUE</source>
-        <translation type="unfinished">TAHMİNİ DEĞER</translation>
+        <translation>TAHMİNİ DEĞER</translation>
     </message>
     <message>
         <source>SURPLUS / GAP</source>
-        <translation type="unfinished">FAZLA / AÇIK</translation>
+        <translation>FAZLA / AÇIK</translation>
     </message>
     <message>
         <source>GOAL-BASED PLANNING</source>
-        <translation type="unfinished">HEDEF BAZLI PLANLAMA</translation>
+        <translation>HEDEF BAZLI PLANLAMA</translation>
     </message>
     <message>
         <source>SAVINGS RATE ANALYSIS</source>
-        <translation type="unfinished">TASARRUF ORANI ANALİZİ</translation>
+        <translation>TASARRUF ORANI ANALİZİ</translation>
     </message>
     <message>
         <source>✓ On track! Your projected retirement fund of %1 %2 exceeds your target of %1 %3 by %1 %4.</source>
-        <translation type="unfinished">✓ Yolunda! Tahmini emeklilik fonunuz %1 %2, hedefiniz %1 %3'ü %1 %4 aşıyor.</translation>
+        <translation>✓ Yolunda! Tahmini emeklilik fonunuz %1 %2, hedefiniz %1 %3'ü %1 %4 aşıyor.</translation>
     </message>
     <message>
         <source>⚠ Shortfall of %1 %2. Consider increasing monthly savings by %1 %3 to close the gap.</source>
-        <translation type="unfinished">⚠ %1 %2 eksik. Açığı kapatmak için aylık tasarrufu %1 %3 artırmayı düşünün.</translation>
+        <translation>⚠ %1 %2 açık. Açığı kapatmak için aylık tasarrufu %1 %3 artırmayı düşünün.</translation>
     </message>
     <message>
         <source>⚙  OPTIMIZE PORTFOLIO FOR THIS GOAL</source>
@@ -19705,155 +19717,155 @@ Ayarlar → LLM Yapılandırması'nı açın, API anahtarı olan bir sağlayıc�
     <name>fincept::screens::PortfolioOptimizationView</name>
     <message>
         <source>OPTIMIZE</source>
-        <translation type="unfinished">OPTİMİZE ET</translation>
+        <translation>OPTİMİZE ET</translation>
     </message>
     <message>
         <source>FRONTIER</source>
-        <translation type="unfinished">SINIR</translation>
+        <translation>SINIR</translation>
     </message>
     <message>
         <source>ALLOCATION</source>
-        <translation type="unfinished">DAĞILIM</translation>
+        <translation>DAĞILIM</translation>
     </message>
     <message>
         <source>STRATEGIES</source>
-        <translation type="unfinished">STRATEJİLER</translation>
+        <translation>STRATEJİLER</translation>
     </message>
     <message>
         <source>COMPARE</source>
-        <translation type="unfinished">KARŞILAŞTIR</translation>
+        <translation>KARŞILAŞTIR</translation>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">GERİYE DÖNÜK TEST</translation>
+        <translation>GERİYE DÖNÜK TEST</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">RİSK</translation>
+        <translation>RİSK</translation>
     </message>
     <message>
         <source>STRESS</source>
-        <translation type="unfinished">STRES</translation>
+        <translation>STRES</translation>
     </message>
     <message>
         <source>B-L MODEL</source>
-        <translation type="unfinished">B-L MODELİ</translation>
+        <translation>B-L MODELİ</translation>
     </message>
     <message>
         <source>METHOD:</source>
-        <translation type="unfinished">YÖNTEM:</translation>
+        <translation>YÖNTEM:</translation>
     </message>
     <message>
         <source>RETURNS:</source>
-        <translation type="unfinished">GETİRİLER:</translation>
+        <translation>GETİRİLER:</translation>
     </message>
     <message>
         <source>RISK MODEL:</source>
-        <translation type="unfinished">RİSK MODELİ:</translation>
+        <translation>RİSK MODELİ:</translation>
     </message>
     <message>
         <source>▶ RUN OPTIMIZATION</source>
-        <translation type="unfinished">▶ OPTİMİZASYONU ÇALIŞTIR</translation>
+        <translation>▶ OPTİMİZASYONU ÇALIŞTIR</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>CURRENT WT%</source>
-        <translation type="unfinished">MEVCUT WT%</translation>
+        <translation>MEVCUT AĞ%</translation>
     </message>
     <message>
         <source>OPTIMAL WT%</source>
-        <translation type="unfinished">OPTİMAL WT%</translation>
+        <translation>OPTİMAL AĞ%</translation>
     </message>
     <message>
         <source>CHANGE</source>
-        <translation type="unfinished">DEĞİŞİM</translation>
+        <translation>DEĞİŞİM</translation>
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">EYLEM</translation>
+        <translation>EYLEM</translation>
     </message>
     <message>
         <source>EFFICIENT FRONTIER</source>
-        <translation type="unfinished">ETKİN SINIR</translation>
+        <translation>ETKİN SINIR</translation>
     </message>
     <message>
         <source>Run optimization on the OPTIMIZE tab to generate the efficient frontier.</source>
-        <translation type="unfinished">Etkin sınırı oluşturmak için OPTİMİZE ET sekmesinde optimizasyon çalıştırın.</translation>
+        <translation>Etkin sınırı oluşturmak için OPTİMİZE ET sekmesinde optimizasyon çalıştırın.</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">AĞIRLIK</translation>
+        <translation>AĞIRLIK</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">DEĞER</translation>
+        <translation>DEĞER</translation>
     </message>
     <message>
         <source>VS EQUAL WT</source>
-        <translation type="unfinished">EŞİT WT'YE KARŞI</translation>
+        <translation>EŞİT AĞ'A KARŞI</translation>
     </message>
     <message>
         <source>STRATEGY COMPARISON  (populated after optimization)</source>
-        <translation type="unfinished">STRATEJİ KARŞILAŞTIRMASI  (optimizasyondan sonra doldurulur)</translation>
+        <translation>STRATEJİ KARŞILAŞTIRMASI  (optimizasyondan sonra doldurulur)</translation>
     </message>
     <message>
         <source>Run optimization on the OPTIMIZE tab.
 All 5 strategies will be compared automatically.</source>
-        <translation type="unfinished">OPTİMİZE ET sekmesinde optimizasyon çalıştırın.
+        <translation>OPTİMİZE ET sekmesinde optimizasyon çalıştırın.
 Tüm 5 strateji otomatik olarak karşılaştırılacaktır.</translation>
     </message>
     <message>
         <source>STRATEGY</source>
-        <translation type="unfinished">STRATEJİ</translation>
+        <translation>STRATEJİ</translation>
     </message>
     <message>
         <source>EXP. RETURN</source>
-        <translation type="unfinished">BEKLENEN GETİRİ</translation>
+        <translation>BEKLENEN GETİRİ</translation>
     </message>
     <message>
         <source>VOLATILITY</source>
-        <translation type="unfinished">VOLATİLİTE</translation>
+        <translation>VOLATİLİTE</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">SHARPE</translation>
+        <translation>SHARPE</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">AÇIKLAMA</translation>
+        <translation>AÇIKLAMA</translation>
     </message>
     <message>
         <source>WEIGHT COMPARISON  (all methods, per symbol)</source>
-        <translation type="unfinished">AĞIRLIK KARŞILAŞTIRMASI  (tüm yöntemler, sembol başına)</translation>
+        <translation>AĞIRLIK KARŞILAŞTIRMASI  (tüm yöntemler, sembol başına)</translation>
     </message>
     <message>
         <source>Run optimization on the OPTIMIZE tab to populate this comparison.</source>
-        <translation type="unfinished">Bu karşılaştırmayı doldurmak için OPTİMİZE ET sekmesinde optimizasyon çalıştırın.</translation>
+        <translation>Bu karşılaştırmayı doldurmak için OPTİMİZE ET sekmesinde optimizasyon çalıştırın.</translation>
     </message>
     <message>
         <source>BACKTEST RESULTS</source>
-        <translation type="unfinished">GERİYE DÖNÜK TEST SONUÇLARI</translation>
+        <translation>GERİYE DÖNÜK TEST SONUÇLARI</translation>
     </message>
     <message>
         <source>Run an optimization first, then backtest the optimal weights
 against historical data to evaluate out-of-sample performance.</source>
-        <translation type="unfinished">Önce bir optimizasyon çalıştırın, ardından örneklem dışı performansı
+        <translation>Önce bir optimizasyon çalıştırın, ardından örneklem dışı performansı
 değerlendirmek için optimal ağırlıkları tarihsel verilere karşı test edin.</translation>
     </message>
     <message>
         <source>RISK DECOMPOSITION</source>
-        <translation type="unfinished">RİSK AYRIŞTIRMASI</translation>
+        <translation>RİSK AYRIŞTIRMASI</translation>
     </message>
     <message>
         <source>BLACK-LITTERMAN MODEL</source>
-        <translation type="unfinished">BLACK-LITTERMAN MODELİ</translation>
+        <translation>BLACK-LITTERMAN MODELİ</translation>
     </message>
     <message>
         <source>Running optimization…</source>
-        <translation type="unfinished">Optimizasyon çalışıyor…</translation>
+        <translation>Optimizasyon çalışıyor…</translation>
     </message>
     <message>
         <source>BACKTEST PORTFOLIO</source>
@@ -19883,7 +19895,7 @@ geriye dönük testi çalıştırın veya tam Backtesting terminalini açın.</t
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">HAZIR</translation>
+        <translation>HAZIR</translation>
     </message>
     <message>
         <source>BACK</source>
@@ -19905,7 +19917,7 @@ Kovaryans matrisinden hesaplamak için OPTIMIZE sekmesinde optimizasyonu çalı�
     </message>
     <message>
         <source>RISK CONTRIB</source>
-        <translation type="unfinished">RİSK KATKISI</translation>
+        <translation>RİSK KATKISI</translation>
     </message>
     <message>
         <source>STRESS SCENARIOS</source>
@@ -19919,7 +19931,7 @@ Her senaryonun tahmini etkisini görmek için bir portföy seçin.</translation>
     </message>
     <message>
         <source>SCENARIO</source>
-        <translation type="unfinished">SENARYO</translation>
+        <translation>SENARYO</translation>
     </message>
     <message>
         <source>IMPACT</source>
@@ -20476,7 +20488,7 @@ Beklenen biçim:
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">GÜVENLİK</translation>
+        <translation>GÜVENLİK</translation>
     </message>
     <message>
         <source>Protect accounts, detect fraud, enforce terms of service, and ensure platform integrity</source>
@@ -20584,7 +20596,7 @@ Beklenen biçim:
     </message>
     <message>
         <source>CONTACT US</source>
-        <translation type="unfinished">BİZE ULAŞIN</translation>
+        <translation>BİZE ULAŞIN</translation>
     </message>
     <message>
         <source>Privacy Officer: support@fincept.in</source>
@@ -20596,11 +20608,11 @@ Beklenen biçim:
     </message>
     <message>
         <source>Terms of Service</source>
-        <translation type="unfinished">Hizmet Şartları</translation>
+        <translation>Hizmet Şartları</translation>
     </message>
     <message>
         <source>Contact Us</source>
-        <translation type="unfinished">Bize Ulaşın</translation>
+        <translation>Bize Ulaşın</translation>
     </message>
 </context>
 <context>
@@ -20995,7 +21007,7 @@ bir bileşen seçin</translation>
     </message>
     <message>
         <source>Rows:</source>
-        <translation type="unfinished">Satırlar:</translation>
+        <translation>Satırlar:</translation>
     </message>
     <message>
         <source>Cols:</source>
@@ -21202,11 +21214,11 @@ otomatik oluşturulur.</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tumu</translation>
+        <translation>Tümü</translation>
     </message>
     <message>
         <source>Trading</source>
-        <translation type="unfinished">İşlem</translation>
+        <translation>İşlem</translation>
     </message>
     <message>
         <source>Analytics</source>
@@ -21214,7 +21226,7 @@ otomatik oluşturulur.</translation>
     </message>
     <message>
         <source>Refresh</source>
-        <translation type="unfinished">Yenile</translation>
+        <translation>Yenile</translation>
     </message>
     <message>
         <source>Install Missing</source>
@@ -21266,7 +21278,7 @@ otomatik oluşturulur.</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">TAMAM</translation>
+        <translation>TAMAM</translation>
     </message>
     <message>
         <source>Install</source>
@@ -21391,11 +21403,11 @@ Beklenen biçim: {"key": value, ...}
     </message>
     <message>
         <source>(empty response)</source>
-        <translation type="unfinished">(boş yanıt)</translation>
+        <translation>(boş yanıt)</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">TAMAM</translation>
+        <translation>TAMAM</translation>
     </message>
     <message>
         <source>Field</source>
@@ -21564,15 +21576,15 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>YES</source>
-        <translation type="unfinished">EVET</translation>
+        <translation>EVET</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">HAYIR</translation>
+        <translation>HAYIR</translation>
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">EYLEM</translation>
+        <translation>EYLEM</translation>
     </message>
     <message>
         <source>CLASS</source>
@@ -21644,7 +21656,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Fiyat</translation>
+        <translation>Fiyat</translation>
     </message>
     <message>
         <source>Quantity</source>
@@ -21792,7 +21804,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">OLUŞTURULDU</translation>
+        <translation>OLUŞTURULDU</translation>
     </message>
     <message>
         <source>Schedule created</source>
@@ -21864,7 +21876,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">DURUM</translation>
+        <translation>DURUM</translation>
     </message>
     <message>
         <source>STAGES</source>
@@ -21968,11 +21980,11 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>SKEWNESS</source>
-        <translation type="unfinished">ÇARPIKLIK</translation>
+        <translation>ÇARPIKLIK</translation>
     </message>
     <message>
         <source>KURTOSIS</source>
-        <translation type="unfinished">BASIKLIK</translation>
+        <translation>BASIKLIK</translation>
     </message>
     <message>
         <source>p-VALUE</source>
@@ -21984,7 +21996,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Tarih</translation>
+        <translation>Tarih</translation>
     </message>
     <message>
         <source>IC</source>
@@ -22024,7 +22036,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>Win Rate</source>
-        <translation type="unfinished">Kazanma Oranı</translation>
+        <translation>Kazanma Oranı</translation>
     </message>
     <message>
         <source>L/S Sharpe=%1  spread=%2%</source>
@@ -22032,15 +22044,15 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>VOLATILITY</source>
-        <translation type="unfinished">VOLATİLİTE</translation>
+        <translation>VOLATİLİTE</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">MAKS DÜŞÜŞ</translation>
+        <translation>MAKS DÜŞÜŞ</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BETA</translation>
+        <translation>BETA</translation>
     </message>
     <message>
         <source>TRACKING ERROR</source>
@@ -22148,7 +22160,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">SHARPE</translation>
+        <translation>SHARPE</translation>
     </message>
     <message>
         <source>MAX DD</source>
@@ -22168,7 +22180,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">KAZANMA ORANI</translation>
+        <translation>KAZANMA ORANI</translation>
     </message>
     <message>
         <source>BEST DAY</source>
@@ -22180,7 +22192,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>ALPHA</source>
-        <translation type="unfinished">ALFA</translation>
+        <translation>ALFA</translation>
     </message>
     <message>
         <source>Annual %1%  Sharpe %2  MaxDD %3%</source>
@@ -22192,11 +22204,11 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TÜR</translation>
+        <translation>TÜR</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">AÇIKLAMA</translation>
+        <translation>AÇIKLAMA</translation>
     </message>
     <message>
         <source>↓ see below</source>
@@ -22204,7 +22216,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>EXP. RETURN</source>
-        <translation type="unfinished">BEKLENEN GETİRİ</translation>
+        <translation>BEKLENEN GETİRİ</translation>
     </message>
     <message>
         <source>EXP. VOL</source>
@@ -22220,7 +22232,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>REBALANCE</source>
-        <translation type="unfinished">YENİDEN DENGELE</translation>
+        <translation>YENİDEN DENGELE</translation>
     </message>
     <message>
         <source>ASSETS</source>
@@ -22244,7 +22256,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>BENCHMARK</source>
-        <translation type="unfinished">KARŞILAŞTIRMA ÖLÇÜTÜ</translation>
+        <translation>KARŞILAŞTIRMA ÖLÇÜTÜ</translation>
     </message>
     <message>
         <source>ACTIVE SHARE</source>
@@ -22406,11 +22418,11 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>BACKTEST RESULTS</source>
-        <translation type="unfinished">GERİYE DÖNÜK TEST SONUÇLARI</translation>
+        <translation>GERİYE DÖNÜK TEST SONUÇLARI</translation>
     </message>
     <message>
         <source>TOTAL RETURN</source>
-        <translation type="unfinished">TOPLAM GETİRİ</translation>
+        <translation>TOPLAM GETİRİ</translation>
     </message>
     <message>
         <source>%1 final</source>
@@ -22422,7 +22434,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>SHARPE RATIO</source>
-        <translation type="unfinished">SHARPE ORANI</translation>
+        <translation>SHARPE ORANI</translation>
     </message>
     <message>
         <source>Excellent</source>
@@ -22450,7 +22462,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portföy</translation>
+        <translation>Portföy</translation>
     </message>
     <message>
         <source>EQUITY CURVE</source>
@@ -22630,7 +22642,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>DIRECTION</source>
-        <translation type="unfinished">YÖN</translation>
+        <translation>YÖN</translation>
     </message>
     <message>
         <source>SLOPE</source>
@@ -22872,7 +22884,7 @@ e.g. "Build a quantitative equity strategy for mid-cap US stocks"</source>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tumu</translation>
+        <translation>Tümü</translation>
     </message>
     <message>
         <source>running</source>
@@ -22892,7 +22904,7 @@ e.g. "Build a quantitative equity strategy for mid-cap US stocks"</source>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">YENİLE</translation>
+        <translation>YENİLE</translation>
     </message>
     <message>
         <source>Task ID...</source>
@@ -22916,7 +22928,7 @@ e.g. "Build a quantitative equity strategy for mid-cap US stocks"</source>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Tür</translation>
+        <translation>Tür</translation>
     </message>
     <message>
         <source>Status</source>
@@ -23500,7 +23512,7 @@ e.g. "Build a quantitative equity strategy for mid-cap US stocks"</source>
     </message>
     <message>
         <source>Volatility</source>
-        <translation type="unfinished">Volatilite</translation>
+        <translation>Volatilite</translation>
     </message>
     <message>
         <source>Option Type</source>
@@ -23828,7 +23840,7 @@ e.g. "Build a quantitative equity strategy for mid-cap US stocks"</source>
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Notlar</translation>
+        <translation>Notlar</translation>
     </message>
     <message>
         <source>Parametric (Variance-Covariance)</source>
@@ -23972,7 +23984,7 @@ e.g. "Build a quantitative equity strategy for mid-cap US stocks"</source>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>e.g. BTC/USDT, ETH/USDT</source>
@@ -24632,7 +24644,7 @@ e.g. "Build a quantitative equity strategy for mid-cap US stocks"</source>
     </message>
     <message>
         <source>EFFICIENT FRONTIER</source>
-        <translation type="unfinished">ETKİN SINIR</translation>
+        <translation>ETKİN SINIR</translation>
     </message>
     <message>
         <source>Eff. Frontier</source>
@@ -24924,7 +24936,7 @@ Geçen Süre:    %6</translation>
     </message>
     <message>
         <source>N/A</source>
-        <translation type="unfinished">YOK</translation>
+        <translation>YOK</translation>
     </message>
     <message>
         <source>Discovered Factors: %1  |  Best IC: %2
@@ -25098,7 +25110,7 @@ pydantic-ai MCP: %2
     </message>
     <message>
         <source>Complete</source>
-        <translation type="unfinished">Tamamlandı</translation>
+        <translation>Tamamlandı</translation>
     </message>
     <message>
         <source>
@@ -26466,11 +26478,11 @@ Karar HER İKİ testin uyuşmasını gerektirir.</translation>
     </message>
     <message>
         <source>First</source>
-        <translation type="unfinished">Ad</translation>
+        <translation>Ad</translation>
     </message>
     <message>
         <source>Last</source>
-        <translation type="unfinished">Soyad</translation>
+        <translation>Soyad</translation>
     </message>
     <message>
         <source>FORECAST BY STEP</source>
@@ -26598,7 +26610,7 @@ Karar HER İKİ testin uyuşmasını gerektirir.</translation>
     </message>
     <message>
         <source>METHOD</source>
-        <translation type="unfinished">YÖNTEM</translation>
+        <translation>YÖNTEM</translation>
     </message>
     <message>
         <source>TRAIN</source>
@@ -26622,7 +26634,7 @@ Karar HER İKİ testin uyuşmasını gerektirir.</translation>
     </message>
     <message>
         <source>FEATURES</source>
-        <translation type="unfinished">ÖZELLİKLER</translation>
+        <translation>ÖZELLİKLER</translation>
     </message>
     <message>
         <source>TRAIN / TEST</source>
@@ -26862,7 +26874,7 @@ Karar HER İKİ testin uyuşmasını gerektirir.</translation>
     </message>
     <message>
         <source>DISTRIBUTION</source>
-        <translation type="unfinished">DAĞILIM</translation>
+        <translation>DAĞILIM</translation>
     </message>
     <message>
         <source>POP MEAN</source>
@@ -27470,7 +27482,7 @@ Karar HER İKİ testin uyuşmasını gerektirir.</translation>
     </message>
     <message>
         <source>REGISTERED</source>
-        <translation type="unfinished">KAYITLI</translation>
+        <translation>KAYITLI</translation>
     </message>
     <message>
         <source>Trained</source>
@@ -27666,7 +27678,7 @@ Karar HER İKİ testin uyuşmasını gerektirir.</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">TAMAM</translation>
+        <translation>TAMAM</translation>
     </message>
     <message>
         <source>Online model created</source>
@@ -27698,7 +27710,7 @@ Karar HER İKİ testin uyuşmasını gerektirir.</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">HATA</translation>
+        <translation>HATA</translation>
     </message>
     <message>
         <source>ABS ERROR</source>
@@ -27858,7 +27870,7 @@ Karar HER İKİ testin uyuşmasını gerektirir.</translation>
     </message>
     <message>
         <source>WARNING</source>
-        <translation type="unfinished">UYARI</translation>
+        <translation>UYARI</translation>
     </message>
     <message>
         <source>PRESENT</source>
@@ -27882,7 +27894,7 @@ Karar HER İKİ testin uyuşmasını gerektirir.</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Sembol</translation>
+        <translation>Sembol</translation>
     </message>
     <message>
         <source>%1 instrument(s)  market=%2</source>
@@ -27898,7 +27910,7 @@ Karar HER İKİ testin uyuşmasını gerektirir.</translation>
     </message>
     <message>
         <source>LAST</source>
-        <translation type="unfinished">SON</translation>
+        <translation>SON</translation>
     </message>
     <message>
         <source>%1 trading day(s)</source>
@@ -27910,7 +27922,7 @@ Karar HER İKİ testin uyuşmasını gerektirir.</translation>
     </message>
     <message>
         <source>EMPTY</source>
-        <translation type="unfinished">BOS</translation>
+        <translation>BOŞ</translation>
     </message>
     <message>
         <source>LOADED</source>
@@ -27922,7 +27934,7 @@ Karar HER İKİ testin uyuşmasını gerektirir.</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOPLAM</translation>
+        <translation>TOPLAM</translation>
     </message>
     <message>
         <source>TYPES</source>
@@ -27938,11 +27950,11 @@ Karar HER İKİ testin uyuşmasını gerektirir.</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">HAZIR</translation>
+        <translation>HAZIR</translation>
     </message>
     <message>
         <source>VERSION</source>
-        <translation type="unfinished">SÜRÜM</translation>
+        <translation>SÜRÜM</translation>
     </message>
     <message>
         <source>HANDLERS</source>
@@ -27950,7 +27962,7 @@ Karar HER İKİ testin uyuşmasını gerektirir.</translation>
     </message>
     <message>
         <source>STRATEGIES</source>
-        <translation type="unfinished">STRATEJİLER</translation>
+        <translation>STRATEJİLER</translation>
     </message>
     <message>
         <source>MODELS AVAIL</source>
@@ -28006,7 +28018,7 @@ Karar HER İKİ testin uyuşmasını gerektirir.</translation>
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">METRİKLER</translation>
+        <translation>METRİKLER</translation>
     </message>
     <message>
         <source>Trained: %1</source>
@@ -28161,325 +28173,325 @@ Karar HER İKİ testin uyuşmasını gerektirir.</translation>
     <name>fincept::screens::QuantStatsView</name>
     <message>
         <source>QUANTSTATS ANALYSIS</source>
-        <translation type="unfinished">QUANTSTATS ANALİZİ</translation>
+        <translation>QUANTSTATS ANALİZİ</translation>
     </message>
     <message>
         <source>▶ RUN QUANTSTATS</source>
-        <translation type="unfinished">▶ QUANTSTATS'I ÇALIŞTIR</translation>
+        <translation>▶ QUANTSTATS'I ÇALIŞTIR</translation>
     </message>
     <message>
         <source>KEY PERFORMANCE INDICATORS</source>
-        <translation type="unfinished">TEMEL PERFORMANS GÖSTERGELERİ</translation>
+        <translation>TEMEL PERFORMANS GÖSTERGELERİ</translation>
     </message>
     <message>
         <source>METRIC</source>
-        <translation type="unfinished">METRİK</translation>
+        <translation>METRİK</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">DEĞER</translation>
+        <translation>DEĞER</translation>
     </message>
     <message>
         <source>BENCHMARK</source>
-        <translation type="unfinished">KARŞILAŞTIRMA ÖLÇÜTÜ</translation>
+        <translation>KARŞILAŞTIRMA ÖLÇÜTÜ</translation>
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">METRİKLER</translation>
+        <translation>METRİKLER</translation>
     </message>
     <message>
         <source>Run QuantStats Analysis for return distribution</source>
-        <translation type="unfinished">Getiri dağılımı için QuantStats Analizi çalıştırın</translation>
+        <translation>Getiri dağılımı için QuantStats Analizi çalıştırın</translation>
     </message>
     <message>
         <source>RETURNS</source>
-        <translation type="unfinished">GETİRİLER</translation>
+        <translation>GETİRİLER</translation>
     </message>
     <message>
         <source>Run QuantStats Analysis for drawdown metrics</source>
-        <translation type="unfinished">Düşüş metrikleri için QuantStats Analizi çalıştırın</translation>
+        <translation>Düşüş metrikleri için QuantStats Analizi çalıştırın</translation>
     </message>
     <message>
         <source>DRAWDOWN</source>
-        <translation type="unfinished">DÜŞÜŞ</translation>
+        <translation>DÜŞÜŞ</translation>
     </message>
     <message>
         <source>Run QuantStats Analysis for rolling metrics</source>
-        <translation type="unfinished">Hareketli metrikler için QuantStats Analizi çalıştırın</translation>
+        <translation>Hareketli metrikler için QuantStats Analizi çalıştırın</translation>
     </message>
     <message>
         <source>ROLLING</source>
-        <translation type="unfinished">HAREKETLİ</translation>
+        <translation>HAREKETLİ</translation>
     </message>
     <message>
         <source>MONTE CARLO SIMULATION</source>
-        <translation type="unfinished">MONTE CARLO SİMÜLASYONU</translation>
+        <translation>MONTE CARLO SİMÜLASYONU</translation>
     </message>
     <message>
         <source>Simulate 1,000 portfolio return paths using GBM to estimate probability
 distributions of future returns, drawdowns, and terminal wealth.</source>
-        <translation type="unfinished">Gelecekteki getirilerin, düşüşlerin ve nihai servetin olasılık dağılımlarını
+        <translation>Gelecekteki getirilerin, düşüşlerin ve nihai servetin olasılık dağılımlarını
 tahmin etmek için GBM kullanarak 1.000 portföy getiri yolu simüle edin.</translation>
     </message>
     <message>
         <source>▶ RUN MONTE CARLO (1000 paths)</source>
-        <translation type="unfinished">▶ MONTE CARLO'YU ÇALIŞTIR (1000 yol)</translation>
+        <translation>▶ MONTE CARLO'YU ÇALIŞTIR (1000 yol)</translation>
     </message>
     <message>
         <source>Press RUN MONTE CARLO to simulate 1,000 return paths</source>
-        <translation type="unfinished">1.000 getiri yolunu simüle etmek için MONTE CARLO'YU ÇALIŞTIR'a basın</translation>
+        <translation>1.000 getiri yolunu simüle etmek için MONTE CARLO'YU ÇALIŞTIR'a basın</translation>
     </message>
     <message>
         <source>MONTE CARLO</source>
-        <translation type="unfinished">MONTE CARLO</translation>
+        <translation>MONTE CARLO</translation>
     </message>
     <message>
         <source>PERFORMANCE</source>
-        <translation type="unfinished">PERFORMANS</translation>
+        <translation>PERFORMANS</translation>
     </message>
     <message>
         <source>Total Return</source>
-        <translation type="unfinished">Toplam Getiri</translation>
+        <translation>Toplam Getiri</translation>
     </message>
     <message>
         <source>Annualized Return</source>
-        <translation type="unfinished">Yıllıklandırılmış Getiri</translation>
+        <translation>Yıllıklandırılmış Getiri</translation>
     </message>
     <message>
         <source>Trading Days</source>
-        <translation type="unfinished">İşlem Günleri</translation>
+        <translation>İşlem Günleri</translation>
     </message>
     <message>
         <source>Best Day</source>
-        <translation type="unfinished">En İyi Gün</translation>
+        <translation>En İyi Gün</translation>
     </message>
     <message>
         <source>Worst Day</source>
-        <translation type="unfinished">En Kötü Gün</translation>
+        <translation>En Kötü Gün</translation>
     </message>
     <message>
         <source>Avg Daily Return</source>
-        <translation type="unfinished">Ort. Günlük Getiri</translation>
+        <translation>Ort. Günlük Getiri</translation>
     </message>
     <message>
         <source>Unrealized P&amp;L %</source>
-        <translation type="unfinished">Gerçekleşmemiş P&amp;L %</translation>
+        <translation>Gerçekleşmemiş P&amp;L %</translation>
     </message>
     <message>
         <source>Day Change %</source>
-        <translation type="unfinished">Günlük Değişim %</translation>
+        <translation>Günlük Değişim %</translation>
     </message>
     <message>
         <source>Total Positions</source>
-        <translation type="unfinished">Toplam Pozisyon</translation>
+        <translation>Toplam Pozisyon</translation>
     </message>
     <message>
         <source>Gainers</source>
-        <translation type="unfinished">Kazananlar</translation>
+        <translation>Kazananlar</translation>
     </message>
     <message>
         <source>Losers</source>
-        <translation type="unfinished">Kaybedenler</translation>
+        <translation>Kaybedenler</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">RİSK</translation>
+        <translation>RİSK</translation>
     </message>
     <message>
         <source>Annualized Volatility</source>
-        <translation type="unfinished">Yıllıklandırılmış Volatilite</translation>
+        <translation>Yıllıklandırılmış Volatilite</translation>
     </message>
     <message>
         <source>Max Drawdown</source>
-        <translation type="unfinished">Maks Düşüş</translation>
+        <translation>Maks Düşüş</translation>
     </message>
     <message>
         <source>VaR 95% (Daily)</source>
-        <translation type="unfinished">VaR %95 (Günlük)</translation>
+        <translation>VaR %95 (Günlük)</translation>
     </message>
     <message>
         <source>CVaR 95% (Daily)</source>
-        <translation type="unfinished">CVaR %95 (Günlük)</translation>
+        <translation>CVaR %95 (Günlük)</translation>
     </message>
     <message>
         <source>Downside Deviation</source>
-        <translation type="unfinished">Aşağı Yönlü Sapma</translation>
+        <translation>Aşağı Yönlü Sapma</translation>
     </message>
     <message>
         <source>RATIOS</source>
-        <translation type="unfinished">ORANLAR</translation>
+        <translation>ORANLAR</translation>
     </message>
     <message>
         <source>Sharpe Ratio</source>
-        <translation type="unfinished">Sharpe Oranı</translation>
+        <translation>Sharpe Oranı</translation>
     </message>
     <message>
         <source>Sortino Ratio</source>
-        <translation type="unfinished">Sortino Oranı</translation>
+        <translation>Sortino Oranı</translation>
     </message>
     <message>
         <source>Calmar Ratio</source>
-        <translation type="unfinished">Calmar Oranı</translation>
+        <translation>Calmar Oranı</translation>
     </message>
     <message>
         <source>Profit Factor</source>
-        <translation type="unfinished">Kâr Faktörü</translation>
+        <translation>Kâr Faktörü</translation>
     </message>
     <message>
         <source>DISTRIBUTION</source>
-        <translation type="unfinished">DAĞILIM</translation>
+        <translation>DAĞILIM</translation>
     </message>
     <message>
         <source>Skewness</source>
-        <translation type="unfinished">Çarpıklık</translation>
+        <translation>Çarpıklık</translation>
     </message>
     <message>
         <source>Kurtosis</source>
-        <translation type="unfinished">Basıklık</translation>
+        <translation>Basıklık</translation>
     </message>
     <message>
         <source>Win Rate</source>
-        <translation type="unfinished">Kazanma Oranı</translation>
+        <translation>Kazanma Oranı</translation>
     </message>
     <message>
         <source>Win Days</source>
-        <translation type="unfinished">Kazanma Günleri</translation>
+        <translation>Kazanma Günleri</translation>
     </message>
     <message>
         <source>Loss Days</source>
-        <translation type="unfinished">Kayıp Günleri</translation>
+        <translation>Kayıp Günleri</translation>
     </message>
     <message>
         <source>Avg Win</source>
-        <translation type="unfinished">Ort. Kazanç</translation>
+        <translation>Ort. Kazanç</translation>
     </message>
     <message>
         <source>Avg Loss</source>
-        <translation type="unfinished">Ort. Kayıp</translation>
+        <translation>Ort. Kayıp</translation>
     </message>
     <message>
         <source>Run QuantStats for full metrics →</source>
-        <translation type="unfinished">Tüm metrikler için QuantStats çalıştırın →</translation>
+        <translation>Tüm metrikler için QuantStats çalıştırın →</translation>
     </message>
     <message>
         <source>RETURN DISTRIBUTION</source>
-        <translation type="unfinished">GETİRİ DAĞILIMI</translation>
+        <translation>GETİRİ DAĞILIMI</translation>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">KAZANMA ORANI</translation>
+        <translation>KAZANMA ORANI</translation>
     </message>
     <message>
         <source>LOSS RATE</source>
-        <translation type="unfinished">KAYIP ORANI</translation>
+        <translation>KAYIP ORANI</translation>
     </message>
     <message>
         <source>WIN DAYS</source>
-        <translation type="unfinished">KAZANMA GÜNLERİ</translation>
+        <translation>KAZANMA GÜNLERİ</translation>
     </message>
     <message>
         <source>LOSS DAYS</source>
-        <translation type="unfinished">KAYIP GÜNLERİ</translation>
+        <translation>KAYIP GÜNLERİ</translation>
     </message>
     <message>
         <source>AVG WIN</source>
-        <translation type="unfinished">ORT. KAZANÇ</translation>
+        <translation>ORT. KAZANÇ</translation>
     </message>
     <message>
         <source>AVG LOSS</source>
-        <translation type="unfinished">ORT. KAYIP</translation>
+        <translation>ORT. KAYIP</translation>
     </message>
     <message>
         <source>SKEWNESS</source>
-        <translation type="unfinished">ÇARPIKLIK</translation>
+        <translation>ÇARPIKLIK</translation>
     </message>
     <message>
         <source>KURTOSIS</source>
-        <translation type="unfinished">BASIKLIK</translation>
+        <translation>BASIKLIK</translation>
     </message>
     <message>
         <source>DRAWDOWN &amp; RISK METRICS</source>
-        <translation type="unfinished">DÜŞÜŞ VE RİSK METRİKLERİ</translation>
+        <translation>DÜŞÜŞ VE RİSK METRİKLERİ</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">MAKS DÜŞÜŞ</translation>
+        <translation>MAKS DÜŞÜŞ</translation>
     </message>
     <message>
         <source>RISK METRIC</source>
-        <translation type="unfinished">RİSK METRİĞİ</translation>
+        <translation>RİSK METRİĞİ</translation>
     </message>
     <message>
         <source>RISK-ADJUSTED RATIOS &amp; WIN/LOSS BREAKDOWN</source>
-        <translation type="unfinished">RİSKE GÖRE DÜZELTİLMİŞ ORANLAR VE KAZANÇ/KAYIP DÖKÜMÜ</translation>
+        <translation>RİSKE GÖRE DÜZELTİLMİŞ ORANLAR VE KAZANÇ/KAYIP DÖKÜMÜ</translation>
     </message>
     <message>
         <source>RATIO</source>
-        <translation type="unfinished">ORAN</translation>
+        <translation>ORAN</translation>
     </message>
     <message>
         <source>WIN / LOSS BREAKDOWN</source>
-        <translation type="unfinished">KAZANÇ / KAYIP DÖKÜMÜ</translation>
+        <translation>KAZANÇ / KAYIP DÖKÜMÜ</translation>
     </message>
     <message>
         <source>Avg Win/Day</source>
-        <translation type="unfinished">Ort. Kazanç/Gün</translation>
+        <translation>Ort. Kazanç/Gün</translation>
     </message>
     <message>
         <source>Avg Loss/Day</source>
-        <translation type="unfinished">Ort. Kayıp/Gün</translation>
+        <translation>Ort. Kayıp/Gün</translation>
     </message>
     <message>
         <source>MEDIAN RETURN</source>
-        <translation type="unfinished">MEDYAN GETİRİ</translation>
+        <translation>MEDYAN GETİRİ</translation>
     </message>
     <message>
         <source>5TH PERCENTILE</source>
-        <translation type="unfinished">5. YÜZDELİK</translation>
+        <translation>5. YÜZDELİK</translation>
     </message>
     <message>
         <source>95TH PERCENTILE</source>
-        <translation type="unfinished">95. YÜZDELİK</translation>
+        <translation>95. YÜZDELİK</translation>
     </message>
     <message>
         <source>PROB OF LOSS</source>
-        <translation type="unfinished">KAYIP OLASILIĞI</translation>
+        <translation>KAYIP OLASILIĞI</translation>
     </message>
     <message>
         <source>EXP MAX DRAWDOWN</source>
-        <translation type="unfinished">BEKLENEN MAKS DÜŞÜŞ</translation>
+        <translation>BEKLENEN MAKS DÜŞÜŞ</translation>
     </message>
     <message>
         <source>Cumulative Return (%)</source>
-        <translation type="unfinished">Kümülatif Getiri (%)</translation>
+        <translation>Kümülatif Getiri (%)</translation>
     </message>
     <message>
         <source>Showing %1 of 1000 simulated paths over 252 trading days (GBM). Bright line = median path.</source>
-        <translation type="unfinished">252 işlem günü üzerinden simüle edilen 1000 yoldan %1 gösteriliyor (GBM). Parlak çizgi = medyan yol.</translation>
+        <translation>252 işlem günü üzerinden simüle edilen 1000 yoldan %1 gösteriliyor (GBM). Parlak çizgi = medyan yol.</translation>
     </message>
     <message>
         <source>Fetching 1-year price history...</source>
-        <translation type="unfinished">1 yıllık fiyat geçmişi alınıyor...</translation>
+        <translation>1 yıllık fiyat geçmişi alınıyor...</translation>
     </message>
     <message>
         <source>QuantStats: %1</source>
-        <translation type="unfinished">QuantStats: %1</translation>
+        <translation>QuantStats: %1</translation>
     </message>
     <message>
         <source>Complete</source>
-        <translation type="unfinished">Tamamlandı</translation>
+        <translation>Tamamlandı</translation>
     </message>
     <message>
         <source>Running 1000 simulation paths...</source>
-        <translation type="unfinished">1000 simülasyon yolu çalıştırılıyor...</translation>
+        <translation>1000 simülasyon yolu çalıştırılıyor...</translation>
     </message>
     <message>
         <source>Monte Carlo: %1</source>
-        <translation type="unfinished">Monte Carlo: %1</translation>
+        <translation>Monte Carlo: %1</translation>
     </message>
     <message>
         <source>Complete — %1 paths simulated</source>
-        <translation type="unfinished">Tamamlandı — %1 yol simüle edildi</translation>
+        <translation>Tamamlandı — %1 yol simüle edildi</translation>
     </message>
 </context>
 <context>
@@ -28657,7 +28669,7 @@ tahmin etmek için GBM kullanarak 1.000 portföy getiri yolu simüle edin.</tran
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">HAZIR</translation>
+        <translation>HAZIR</translation>
     </message>
     <message>
         <source>FINCEPT TERMINAL</source>
@@ -28713,11 +28725,11 @@ tahmin etmek için GBM kullanarak 1.000 portföy getiri yolu simüle edin.</tran
     </message>
     <message>
         <source>Complete</source>
-        <translation type="unfinished">Tamamlandı</translation>
+        <translation>Tamamlandı</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
     <message>
         <source>NODE</source>
@@ -28741,7 +28753,7 @@ tahmin etmek için GBM kullanarak 1.000 portföy getiri yolu simüle edin.</tran
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Fiyat</translation>
+        <translation>Fiyat</translation>
     </message>
     <message>
         <source>P/E</source>
@@ -28827,7 +28839,7 @@ tahmin etmek için GBM kullanarak 1.000 portföy getiri yolu simüle edin.</tran
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Kaydet</translation>
+        <translation>Kaydet</translation>
     </message>
     <message>
         <source>Export PDF</source>
@@ -29144,127 +29156,127 @@ tahmin etmek için GBM kullanarak 1.000 portföy getiri yolu simüle edin.</tran
     <name>fincept::screens::ReportsView</name>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">ÖZET</translation>
+        <translation>ÖZET</translation>
     </message>
     <message>
         <source>TRANSACTION HISTORY</source>
-        <translation type="unfinished">İŞLEM GEÇMİŞİ</translation>
+        <translation>İŞLEM GEÇMİŞİ</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">TARİH</translation>
+        <translation>TARİH</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TÜR</translation>
+        <translation>TÜR</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>ADET</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">FİYAT</translation>
+        <translation>FİYAT</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOPLAM</translation>
+        <translation>TOPLAM</translation>
     </message>
     <message>
         <source>NOTES</source>
-        <translation type="unfinished">NOTLAR</translation>
+        <translation>NOTLAR</translation>
     </message>
     <message>
         <source>TRANSACTIONS</source>
-        <translation type="unfinished">İŞLEMLER</translation>
+        <translation>İŞLEMLER</translation>
     </message>
     <message>
         <source>PERFORMANCE ATTRIBUTION</source>
-        <translation type="unfinished">PERFORMANS ATFİ</translation>
+        <translation>PERFORMANS ATFI</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">AĞIRLIK</translation>
+        <translation>AĞIRLIK</translation>
     </message>
     <message>
         <source>RETURN</source>
-        <translation type="unfinished">GETİRİ</translation>
+        <translation>GETİRİ</translation>
     </message>
     <message>
         <source>CONTRIBUTION</source>
-        <translation type="unfinished">KATKI</translation>
+        <translation>KATKI</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">DURUM</translation>
+        <translation>DURUM</translation>
     </message>
     <message>
         <source>ATTRIBUTION</source>
-        <translation type="unfinished">ATIF</translation>
+        <translation>ATIF</translation>
     </message>
     <message>
         <source>PORTFOLIO SUMMARY REPORT</source>
-        <translation type="unfinished">PORTFÖY ÖZET RAPORU</translation>
+        <translation>PORTFÖY ÖZET RAPORU</translation>
     </message>
     <message>
         <source>PORTFOLIO</source>
-        <translation type="unfinished">PORTFÖY</translation>
+        <translation>PORTFÖY</translation>
     </message>
     <message>
         <source>TOTAL VALUE</source>
-        <translation type="unfinished">TOPLAM DEĞER</translation>
+        <translation>TOPLAM DEĞER</translation>
     </message>
     <message>
         <source>COST BASIS</source>
-        <translation type="unfinished">MALİYET ESASI</translation>
+        <translation>MALİYET ESASI</translation>
     </message>
     <message>
         <source>UNREALIZED P&amp;L</source>
-        <translation type="unfinished">GERÇEKLEŞMEMİŞ P&amp;L</translation>
+        <translation>GERÇEKLEŞMEMİŞ P&amp;L</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">POZİSYONLAR</translation>
+        <translation>POZİSYONLAR</translation>
     </message>
     <message>
         <source>GAINERS</source>
-        <translation type="unfinished">KAZANANLAR</translation>
+        <translation>KAZANANLAR</translation>
     </message>
     <message>
         <source>LOSERS</source>
-        <translation type="unfinished">KAYBEDENLER</translation>
+        <translation>KAYBEDENLER</translation>
     </message>
     <message>
         <source>HOLDINGS BREAKDOWN</source>
-        <translation type="unfinished">VARLIK DÖKÜMÜ</translation>
+        <translation>VARLIK DÖKÜMÜ</translation>
     </message>
     <message>
         <source>AVG COST</source>
-        <translation type="unfinished">ORT. MALİYET</translation>
+        <translation>ORT. MALİYET</translation>
     </message>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">MEVCUT</translation>
+        <translation>MEVCUT</translation>
     </message>
     <message>
         <source>OUTPERFORM</source>
-        <translation type="unfinished">ÜSTÜN PERFORMANS</translation>
+        <translation>ÜSTÜN PERFORMANS</translation>
     </message>
     <message>
         <source>UNDERPERFORM</source>
-        <translation type="unfinished">DÜŞÜK PERFORMANS</translation>
+        <translation>DÜŞÜK PERFORMANS</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NOTR</translation>
+        <translation>NÖTR</translation>
     </message>
 </context>
 <context>
@@ -29342,135 +29354,135 @@ tahmin etmek için GBM kullanarak 1.000 portföy getiri yolu simüle edin.</tran
     </message>
     <message>
         <source>RISK OVERVIEW</source>
-        <translation type="unfinished">RİSK GENEL BAKIŞI</translation>
+        <translation>RİSK GENEL BAKIŞI</translation>
     </message>
     <message>
         <source>PORTFOLIO STRESS TESTING</source>
-        <translation type="unfinished">PORTFÖY STRES TESTİ</translation>
+        <translation>PORTFÖY STRES TESTİ</translation>
     </message>
     <message>
         <source>Estimated impact of historical and hypothetical market scenarios</source>
-        <translation type="unfinished">Tarihsel ve hipotetik piyasa senaryolarının tahmini etkisi</translation>
+        <translation>Tarihsel ve hipotetik piyasa senaryolarının tahmini etkisi</translation>
     </message>
     <message>
         <source>SCENARIO</source>
-        <translation type="unfinished">SENARYO</translation>
+        <translation>SENARYO</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">AÇIKLAMA</translation>
+        <translation>AÇIKLAMA</translation>
     </message>
     <message>
         <source>EQUITY SHOCK</source>
-        <translation type="unfinished">HİSSE SENEDİ ŞOKU</translation>
+        <translation>HİSSE SENEDİ ŞOKU</translation>
     </message>
     <message>
         <source>PORTFOLIO IMPACT</source>
-        <translation type="unfinished">PORTFÖY ETKİSİ</translation>
+        <translation>PORTFÖY ETKİSİ</translation>
     </message>
     <message>
         <source>LOSS</source>
-        <translation type="unfinished">KAYIP</translation>
+        <translation>KAYIP</translation>
     </message>
     <message>
         <source>STRESS TEST</source>
-        <translation type="unfinished">STRES TESTİ</translation>
+        <translation>STRES TESTİ</translation>
     </message>
     <message>
         <source>RISK CONTRIBUTION BY HOLDING</source>
-        <translation type="unfinished">VARLIK BAZINDA RİSK KATKISI</translation>
+        <translation>VARLIK BAZINDA RİSK KATKISI</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">AĞIRLIK</translation>
+        <translation>AĞIRLIK</translation>
     </message>
     <message>
         <source>VOL PROXY</source>
-        <translation type="unfinished">VOL VEKİLİ</translation>
+        <translation>VOL VEKİLİ</translation>
     </message>
     <message>
         <source>RISK CONTRIB</source>
-        <translation type="unfinished">RİSK KATKISI</translation>
+        <translation>RİSK KATKISI</translation>
     </message>
     <message>
         <source>VAR CONTRIB</source>
-        <translation type="unfinished">VAR KATKISI</translation>
+        <translation>VAR KATKISI</translation>
     </message>
     <message>
         <source>CONCENTRATION</source>
-        <translation type="unfinished">YOĞUNLAŞMA</translation>
+        <translation>YOĞUNLAŞMA</translation>
     </message>
     <message>
         <source>RISK CONTRIBUTION</source>
-        <translation type="unfinished">RİSK KATKISI</translation>
+        <translation>RİSK KATKISI</translation>
     </message>
     <message>
         <source>PORTFOLIO RISK OVERVIEW</source>
-        <translation type="unfinished">PORTFÖY RİSK GENEL BAKIŞI</translation>
+        <translation>PORTFÖY RİSK GENEL BAKIŞI</translation>
     </message>
     <message>
         <source>PORTFOLIO VALUE</source>
-        <translation type="unfinished">PORTFÖY DEĞERİ</translation>
+        <translation>PORTFÖY DEĞERİ</translation>
     </message>
     <message>
         <source>Total market value</source>
-        <translation type="unfinished">Toplam piyasa değeri</translation>
+        <translation>Toplam piyasa değeri</translation>
     </message>
     <message>
         <source>ANNUALIZED VOLATILITY</source>
-        <translation type="unfinished">YILLIKLANDIRILMIŞ VOLATİLİTE</translation>
+        <translation>YILLIKLANDIRILMIŞ VOLATİLİTE</translation>
     </message>
     <message>
         <source>Based on day-change proxy</source>
-        <translation type="unfinished">Günlük değişim vekiline dayalı</translation>
+        <translation>Günlük değişim vekiline dayalı</translation>
     </message>
     <message>
         <source>VALUE AT RISK (95%)</source>
-        <translation type="unfinished">RİSKE MARUZ DEĞER (%95)</translation>
+        <translation>RİSKE MARUZ DEĞER (%95)</translation>
     </message>
     <message>
         <source>1-day parametric</source>
-        <translation type="unfinished">1 günlük parametrik</translation>
+        <translation>1 günlük parametrik</translation>
     </message>
     <message>
         <source>CONDITIONAL VaR</source>
-        <translation type="unfinished">KOŞULLU VaR</translation>
+        <translation>KOŞULLU VaR</translation>
     </message>
     <message>
         <source>Expected shortfall</source>
-        <translation type="unfinished">Beklenen eksiklik</translation>
+        <translation>Beklenen kayıp</translation>
     </message>
     <message>
         <source>TOP HOLDING CONC.</source>
-        <translation type="unfinished">EN BÜYÜK VARLIK YOĞ.</translation>
+        <translation>EN BÜYÜK VARLIK YOĞ.</translation>
     </message>
     <message>
         <source>Largest position</source>
-        <translation type="unfinished">En büyük pozisyon</translation>
+        <translation>En büyük pozisyon</translation>
     </message>
     <message>
         <source>TOP 3 CONCENTRATION</source>
-        <translation type="unfinished">İLK 3 YOĞUNLAŞMA</translation>
+        <translation>İLK 3 YOĞUNLAŞMA</translation>
     </message>
     <message>
         <source>Sum of top 3</source>
-        <translation type="unfinished">İlk 3'ün toplamı</translation>
+        <translation>İlk 3'ün toplamı</translation>
     </message>
     <message>
         <source>TOP 5 CONCENTRATION</source>
-        <translation type="unfinished">İLK 5 YOĞUNLAŞMA</translation>
+        <translation>İLK 5 YOĞUNLAŞMA</translation>
     </message>
     <message>
         <source>Sum of top 5</source>
-        <translation type="unfinished">İlk 5'in toplamı</translation>
+        <translation>İlk 5'in toplamı</translation>
     </message>
     <message>
         <source>DIVERSIFICATION</source>
-        <translation type="unfinished">ÇEŞİTLENDİRME</translation>
+        <translation>ÇEŞİTLENDİRME</translation>
     </message>
     <message numerus="yes">
         <source>%n holdings</source>
@@ -29480,23 +29492,23 @@ tahmin etmek için GBM kullanarak 1.000 portföy getiri yolu simüle edin.</tran
     </message>
     <message>
         <source>Well diversified</source>
-        <translation type="unfinished">İyi çeşitlendirilmiş</translation>
+        <translation>İyi çeşitlendirilmiş</translation>
     </message>
     <message>
         <source>Consider adding more</source>
-        <translation type="unfinished">Daha fazla eklemeyi düşünün</translation>
+        <translation>Daha fazla eklemeyi düşünün</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">YÜKSEK</translation>
+        <translation>YÜKSEK</translation>
     </message>
     <message>
         <source>MEDIUM</source>
-        <translation type="unfinished">ORTA</translation>
+        <translation>ORTA</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">DÜŞÜK</translation>
+        <translation>DÜŞÜK</translation>
     </message>
 </context>
 <context>
@@ -29559,11 +29571,11 @@ tahmin etmek için GBM kullanarak 1.000 portföy getiri yolu simüle edin.</tran
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">İptal</translation>
+        <translation>İptal</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Kaydet</translation>
+        <translation>Kaydet</translation>
     </message>
     <message>
         <source>✗ Enter a valid URL first.</source>
@@ -29662,7 +29674,7 @@ Besleme yine de kaydedilsin mi?</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Tür</translation>
+        <translation>Tür</translation>
     </message>
     <message>
         <source>Source</source>
@@ -29885,7 +29897,7 @@ Besleme yine de kaydedilsin mi?</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>SIGNAL</source>
@@ -29925,7 +29937,7 @@ Besleme yine de kaydedilsin mi?</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NOTR</translation>
+        <translation>NÖTR</translation>
     </message>
     <message>
         <source>Error [%1]: %2</source>
@@ -29952,7 +29964,7 @@ Besleme yine de kaydedilsin mi?</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">KAYDET</translation>
+        <translation>KAYDET</translation>
     </message>
 </context>
 <context>
@@ -30150,7 +30162,7 @@ Besleme yine de kaydedilsin mi?</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SAT</translation>
     </message>
 </context>
 <context>
@@ -30176,7 +30188,7 @@ Besleme yine de kaydedilsin mi?</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">KAYDET</translation>
+        <translation>KAYDET</translation>
     </message>
     <message>
         <source>CLEAR</source>
@@ -30504,7 +30516,7 @@ API anahtarı gerekmez — güvenilirlik için veriler vector ID ile alınır</t
     </message>
     <message>
         <source>Refresh</source>
-        <translation type="unfinished">Yenile</translation>
+        <translation>Yenile</translation>
     </message>
     <message>
         <source>DISK USAGE</source>
@@ -30528,7 +30540,7 @@ API anahtarı gerekmez — güvenilirlik için veriler vector ID ile alınır</t
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOPLAM</translation>
+        <translation>TOPLAM</translation>
     </message>
     <message>
         <source>Cache Entries</source>
@@ -30548,7 +30560,7 @@ API anahtarı gerekmez — güvenilirlik için veriler vector ID ile alınır</t
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">EYLEM</translation>
+        <translation>EYLEM</translation>
     </message>
     <message>
         <source>CLR</source>
@@ -30680,7 +30692,7 @@ Devam edilsin mi?</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
     <message>
         <source>OK — %1 row(s) affected</source>
@@ -30730,7 +30742,7 @@ Veriler bir sonraki erişimde yeniden alınacak.</translation>
     </message>
     <message>
         <source>DELETE ALL</source>
-        <translation type="unfinished">HEPSİNİ SİL</translation>
+        <translation>HEPSİNİ SİL</translation>
     </message>
     <message>
         <source>WARNING: This will permanently delete ALL data:
@@ -30787,7 +30799,7 @@ Kesinlikle emin misiniz?</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Kaydet</translation>
+        <translation>Kaydet</translation>
     </message>
     <message>
         <source>Backtest</source>
@@ -30799,7 +30811,7 @@ Kesinlikle emin misiniz?</translation>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">GERİYE DÖNÜK TEST</translation>
+        <translation>GERİYE DÖNÜK TEST</translation>
     </message>
     <message>
         <source>Capital</source>
@@ -30914,7 +30926,7 @@ Kesinlikle emin misiniz?</translation>
     </message>
     <message>
         <source>Page %1 of %2</source>
-        <translation type="unfinished">Sayfa %1 / %2</translation>
+        <translation>Sayfa %1 / %2</translation>
     </message>
     <message>
         <source>NEXT ▶</source>
@@ -30926,7 +30938,7 @@ Kesinlikle emin misiniz?</translation>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">GERİYE DÖNÜK TEST</translation>
+        <translation>GERİYE DÖNÜK TEST</translation>
     </message>
     <message>
         <source>DEPLOY</source>
@@ -30934,7 +30946,7 @@ Kesinlikle emin misiniz?</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">SİL</translation>
+        <translation>SİL</translation>
     </message>
     <message>
         <source>Page %1 of %2  ·  %3 strategies</source>
@@ -30958,7 +30970,7 @@ Kesinlikle emin misiniz?</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Sembol</translation>
+        <translation>Sembol</translation>
     </message>
     <message>
         <source>Start</source>
@@ -31081,7 +31093,7 @@ Kesinlikle emin misiniz?</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">İptal</translation>
+        <translation>İptal</translation>
     </message>
     <message>
         <source>Submit Ticket →</source>
@@ -31207,7 +31219,7 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">ACIK</translation>
+        <translation>AÇIK</translation>
     </message>
     <message>
         <source>IN PROGRESS</source>
@@ -31219,7 +31231,7 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     </message>
     <message>
         <source>CLOSED</source>
-        <translation type="unfinished">KAPALI</translation>
+        <translation>KAPALI</translation>
     </message>
     <message>
         <source>PENDING</source>
@@ -31227,7 +31239,7 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     </message>
     <message>
         <source>Support</source>
-        <translation type="unfinished">Destek</translation>
+        <translation>Destek</translation>
     </message>
     <message>
         <source>Tickets</source>
@@ -31271,7 +31283,7 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     </message>
     <message>
         <source>Total</source>
-        <translation type="unfinished">Toplam</translation>
+        <translation>Toplam</translation>
     </message>
     <message>
         <source>Done</source>
@@ -31310,11 +31322,11 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     </message>
     <message>
         <source>AGENTS</source>
-        <translation type="unfinished">AJANLAR</translation>
+        <translation>AJANLAR</translation>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">ARAÇLAR</translation>
+        <translation>ARAÇLAR</translation>
     </message>
     <message>
         <source>LLMS</source>
@@ -31334,7 +31346,7 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     </message>
     <message>
         <source>AVAILABLE TOOLS</source>
-        <translation type="unfinished">MEVCUT ARAÇLAR</translation>
+        <translation>MEVCUT ARAÇLAR</translation>
     </message>
     <message>
         <source>Loading tools...</source>
@@ -31445,7 +31457,7 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
     <message>
         <source>Default (Global)</source>
@@ -31476,19 +31488,19 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     <name>fincept::screens::TemplatePicker</name>
     <message>
         <source>Choose Dashboard Template</source>
-        <translation type="unfinished">Pano sablonu sec</translation>
+        <translation>Pano Şablonu Seç</translation>
     </message>
     <message>
         <source>CHOOSE TEMPLATE</source>
-        <translation type="unfinished">SABLON SEC</translation>
+        <translation>ŞABLON SEÇ</translation>
     </message>
     <message>
         <source>Select a template to reset your dashboard. Current layout will be replaced.</source>
-        <translation type="unfinished">Panoyu sifirlamak icin bir sablon secin. Mevcut duzen degistirilecek.</translation>
+        <translation>Panoyu sıfırlamak için bir şablon seçin. Mevcut düzen değiştirilecek.</translation>
     </message>
     <message>
         <source>APPLY</source>
-        <translation type="unfinished">UYGULA</translation>
+        <translation>UYGULA</translation>
     </message>
     <message>
         <source>CANCEL</source>
@@ -31611,11 +31623,11 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     </message>
     <message>
         <source>Privacy Policy</source>
-        <translation type="unfinished">Gizlilik Politikası</translation>
+        <translation>Gizlilik Politikası</translation>
     </message>
     <message>
         <source>Contact Us</source>
-        <translation type="unfinished">Bize Ulaşın</translation>
+        <translation>Bize Ulaşın</translation>
     </message>
 </context>
 <context>
@@ -31649,7 +31661,7 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     </message>
     <message>
         <source>COPIED!</source>
-        <translation type="unfinished">KOPYALANDI!</translation>
+        <translation>KOPYALANDI!</translation>
     </message>
     <message>
         <source>ASSIGN TO</source>
@@ -31713,7 +31725,7 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">AÇIKLAMA</translation>
+        <translation>AÇIKLAMA</translation>
     </message>
     <message>
         <source>Click a tool to see details...</source>
@@ -31721,7 +31733,7 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     </message>
     <message>
         <source>PARAMETERS</source>
-        <translation type="unfinished">PARAMETRELER</translation>
+        <translation>PARAMETRELER</translation>
     </message>
     <message>
         <source>USED BY</source>
@@ -31800,7 +31812,7 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     </message>
     <message>
         <source>ANALYSIS TYPE</source>
-        <translation type="unfinished">ANALİZ TÜRÜ</translation>
+        <translation>ANALİZ TÜRÜ</translation>
     </message>
     <message>
         <source>Analyzes efficiency gains, consumer benefits, growth effects, and adjustment costs of international trade.</source>
@@ -32016,11 +32028,11 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     </message>
     <message>
         <source>YES</source>
-        <translation type="unfinished">EVET</translation>
+        <translation>EVET</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">HAYIR</translation>
+        <translation>HAYIR</translation>
     </message>
     <message>
         <source>Metric</source>
@@ -32103,7 +32115,7 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">Ayarlar</translation>
+        <translation>Ayarlar</translation>
     </message>
     <message>
         <source>Export</source>
@@ -32111,7 +32123,7 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Notlar</translation>
+        <translation>Notlar</translation>
     </message>
 </context>
 <context>
@@ -32259,7 +32271,7 @@ Anahtar alın: tradingeconomics.com/api</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">ÜLKE</translation>
+        <translation>ÜLKE</translation>
     </message>
     <message>
         <source>Fetching Trading Economics: %1…</source>
@@ -32331,7 +32343,7 @@ Anahtar alın: tradingeconomics.com/api</translation>
     <name>fincept::screens::UnescoPanel</name>
     <message>
         <source>THEME</source>
-        <translation type="unfinished">TEMA</translation>
+        <translation>TEMA</translation>
     </message>
     <message>
         <source>Education</source>
@@ -32371,7 +32383,7 @@ UNESCO UIS verileri ücretsizdir — API anahtarı gerekmez
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">ÜLKE</translation>
+        <translation>ÜLKE</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -32580,7 +32592,7 @@ Farklı bir ülke kodu deneyin veya göstergenin mevcut olduğunu kontrol edin</
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Kaydet</translation>
+        <translation>Kaydet</translation>
     </message>
     <message>
         <source>Test Deepgram key</source>
@@ -32794,7 +32806,7 @@ Farklı bir ülke kodu deneyin veya göstergenin mevcut olduğunu kontrol edin</
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">GERİYE DÖNÜK TEST</translation>
+        <translation>GERİYE DÖNÜK TEST</translation>
     </message>
 </context>
 <context>
@@ -32805,7 +32817,7 @@ Farklı bir ülke kodu deneyin veya göstergenin mevcut olduğunu kontrol edin</
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Piyasalar</translation>
+        <translation>Piyasalar</translation>
     </message>
     <message>
         <source>Major global indices — SPY, QQQ, DIA, IWM</source>
@@ -32861,11 +32873,11 @@ Farklı bir ülke kodu deneyin veya göstergenin mevcut olduğunu kontrol edin</
     </message>
     <message>
         <source>News Feed</source>
-        <translation type="unfinished">Haber Akışı</translation>
+        <translation>Haber Akışı</translation>
     </message>
     <message>
         <source>Research</source>
-        <translation type="unfinished">Araştırma</translation>
+        <translation>Araştırma</translation>
     </message>
     <message>
         <source>Latest financial news headlines</source>
@@ -32897,11 +32909,11 @@ Farklı bir ülke kodu deneyin veya göstergenin mevcut olduğunu kontrol edin</
     </message>
     <message>
         <source>Watchlist</source>
-        <translation type="unfinished">İzleme Listesi</translation>
+        <translation>İzleme Listesi</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portföy</translation>
+        <translation>Portföy</translation>
     </message>
     <message>
         <source>Your saved symbols with live prices</source>
@@ -32937,7 +32949,7 @@ Farklı bir ülke kodu deneyin veya göstergenin mevcut olduğunu kontrol edin</
     </message>
     <message>
         <source>Trading</source>
-        <translation type="unfinished">İşlem</translation>
+        <translation>İşlem</translation>
     </message>
     <message>
         <source>Fast order entry for crypto and equities</source>
@@ -32989,7 +33001,7 @@ Farklı bir ülke kodu deneyin veya göstergenin mevcut olduğunu kontrol edin</
     </message>
     <message>
         <source>Tools</source>
-        <translation type="unfinished">Araçlar</translation>
+        <translation>Araçlar</translation>
     </message>
     <message>
         <source>Financial TV — major networks and custom streams</source>
@@ -33073,7 +33085,7 @@ Farklı bir ülke kodu deneyin veya göstergenin mevcut olduğunu kontrol edin</
     </message>
     <message>
         <source>Geopolitics</source>
-        <translation type="unfinished">Jeopolitik</translation>
+        <translation>Jeopolitik</translation>
     </message>
     <message>
         <source>Live conflict / political events — subscribes to geopolitics:events</source>
@@ -33089,7 +33101,7 @@ Farklı bir ülke kodu deneyin veya göstergenin mevcut olduğunu kontrol edin</
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Notlar</translation>
+        <translation>Notlar</translation>
     </message>
     <message>
         <source>Recent / favorite financial notes — click to open Notes screen</source>
@@ -33144,7 +33156,7 @@ Farklı bir ülke kodu deneyin veya göstergenin mevcut olduğunu kontrol edin</
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>EXECUTION LOG</source>
@@ -33152,7 +33164,7 @@ Farklı bir ülke kodu deneyin veya göstergenin mevcut olduğunu kontrol edin</
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
     <message>
         <source>Select a workflow to configure and run.</source>
@@ -33225,7 +33237,7 @@ Kaynak: World Bank — Sağlık &amp; Kalkınma göstergeleri</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">ÜLKE</translation>
+        <translation>ÜLKE</translation>
     </message>
     <message>
         <source>Fetching WB Health: %1 — %2…</source>
@@ -33240,7 +33252,7 @@ Kaynak: World Bank — Sağlık &amp; Kalkınma göstergeleri</translation>
     <name>fincept::screens::WorldBankPanel</name>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">ÜLKE</translation>
+        <translation>ÜLKE</translation>
     </message>
     <message>
         <source>Filter countries…</source>
@@ -33408,7 +33420,7 @@ Ayrıca WTO_API_KEY'in doğru ayarlandığını doğrulayın</translation>
     <name>fincept::screens::alpha_arena::AlphaArenaScreen</name>
     <message>
         <source>Alpha Arena</source>
-        <translation type="unfinished">Alpha Arena</translation>
+        <translation>Alpha Arena</translation>
     </message>
     <message>
         <source>Halt</source>
@@ -33498,7 +33510,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <source>APPLY</source>
-        <translation type="unfinished">UYGULA</translation>
+        <translation>UYGULA</translation>
     </message>
     <message>
         <source>New competition</source>
@@ -33558,7 +33570,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <source>CREATE</source>
-        <translation type="unfinished">OLUŞTUR</translation>
+        <translation>OLUŞTUR</translation>
     </message>
     <message>
         <source>START</source>
@@ -33570,7 +33582,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">POZİSYONLAR</translation>
+        <translation>POZİSYONLAR</translation>
     </message>
     <message>
         <source>HITL</source>
@@ -33578,7 +33590,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">RİSK</translation>
+        <translation>RİSK</translation>
     </message>
     <message>
         <source>AUDIT</source>
@@ -33593,7 +33605,7 @@ Bu geri alınamaz.</translation>
     <name>fincept::screens::alpha_arena::AuditPanel</name>
     <message>
         <source>AUDIT LOG</source>
-        <translation type="unfinished">DENETİM GÜNLÜĞÜ</translation>
+        <translation>DENETİM GÜNLÜĞÜ</translation>
     </message>
 </context>
 <context>
@@ -33631,11 +33643,11 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <source>RETURN</source>
-        <translation type="unfinished">GETİRİ</translation>
+        <translation>GETİRİ</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">SHARPE</translation>
+        <translation>SHARPE</translation>
     </message>
     <message>
         <source>MAX DD</source>
@@ -33678,7 +33690,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">İptal</translation>
+        <translation>İptal</translation>
     </message>
     <message>
         <source>ENABLE LIVE MODE</source>
@@ -33713,7 +33725,7 @@ Bu geri alınamaz.</translation>
     <name>fincept::screens::alpha_arena::ModelChatPanel</name>
     <message>
         <source>AGENT</source>
-        <translation type="unfinished">AJAN</translation>
+        <translation>AJAN</translation>
     </message>
     <message>
         <source>Tick %1 — %2</source>
@@ -33752,7 +33764,7 @@ Ayrıştırma hatası: %3</translation>
     </message>
     <message>
         <source>AGENT</source>
-        <translation type="unfinished">AJAN</translation>
+        <translation>AJAN</translation>
     </message>
     <message>
         <source>COIN</source>
@@ -33760,7 +33772,7 @@ Ayrıştırma hatası: %3</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>ADET</translation>
     </message>
     <message>
         <source>ENTRY</source>
@@ -33795,7 +33807,7 @@ Ayrıştırma hatası: %3</translation>
     </message>
     <message>
         <source>AGENT</source>
-        <translation type="unfinished">AJAN</translation>
+        <translation>AJAN</translation>
     </message>
     <message>
         <source>STATE</source>
@@ -33830,7 +33842,7 @@ Ayrıştırma hatası: %3</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">POZİSYONLAR</translation>
+        <translation>POZİSYONLAR</translation>
     </message>
     <message>
         <source>ORDERS</source>
@@ -33858,7 +33870,7 @@ Ayrıştırma hatası: %3</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Sembol</translation>
+        <translation>Sembol</translation>
     </message>
     <message>
         <source>Side</source>
@@ -33866,7 +33878,7 @@ Ayrıştırma hatası: %3</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Adet</translation>
     </message>
     <message>
         <source>Entry</source>
@@ -33878,7 +33890,7 @@ Ayrıştırma hatası: %3</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>Lev</source>
@@ -33886,11 +33898,11 @@ Ayrıştırma hatası: %3</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Tür</translation>
+        <translation>Tür</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Fiyat</translation>
+        <translation>Fiyat</translation>
     </message>
     <message>
         <source>Status</source>
@@ -33984,7 +33996,7 @@ Doldurmak için CANLI modda bir API anahtarı bağlayın.</translation>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">KAZANMA ORANI</translation>
+        <translation>KAZANMA ORANI</translation>
     </message>
     <message>
         <source>TOTAL TRADES</source>
@@ -34052,7 +34064,7 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>API KEY</source>
-        <translation type="unfinished">API ANAHTARI</translation>
+        <translation>API ANAHTARI</translation>
     </message>
     <message>
         <source>Enter API key</source>
@@ -34114,6 +34126,26 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
         <source>CODE: %1</source>
         <translation>KOD: %1</translation>
     </message>
+    <message>
+        <source>Enter private key</source>
+        <translation>Özel anahtarı girin</translation>
+    </message>
+    <message>
+        <source>Enter wallet address (0x…)</source>
+        <translation>Cüzdan adresini girin (0x…)</translation>
+    </message>
+    <message>
+        <source>PRIVATE KEY</source>
+        <translation>ÖZEL ANAHTAR</translation>
+    </message>
+    <message>
+        <source>WALLET ADDRESS</source>
+        <translation>CÜZDAN ADRESİ</translation>
+    </message>
+    <message>
+        <source>Wallet address and private key are required</source>
+        <translation>Cüzdan adresi ve özel anahtar gereklidir</translation>
+    </message>
 </context>
 <context>
     <name>fincept::screens::crypto::CryptoDepthChart</name>
@@ -34158,7 +34190,7 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>ADET</translation>
     </message>
     <message>
         <source>ASK</source>
@@ -34174,7 +34206,7 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">EYLEM</translation>
+        <translation>EYLEM</translation>
     </message>
     <message>
         <source>IMBALANCE</source>
@@ -34198,15 +34230,15 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>AL</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SAT</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NOTR</translation>
+        <translation>NÖTR</translation>
     </message>
     <message>
         <source>BUY PRESSURE</source>
@@ -34221,7 +34253,7 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     <name>fincept::screens::crypto::CryptoOrderEntry</name>
     <message>
         <source>ORDER ENTRY</source>
-        <translation type="unfinished">EMİR GİRİŞİ</translation>
+        <translation>EMİR GİRİŞİ</translation>
     </message>
     <message>
         <source>PAPER</source>
@@ -34241,11 +34273,11 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>AL</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SAT</translation>
     </message>
     <message>
         <source>MARKET</source>
@@ -34285,7 +34317,7 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOPLAM</translation>
+        <translation>TOPLAM</translation>
     </message>
     <message>
         <source>YOU RECEIVE</source>
@@ -34353,7 +34385,7 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">CANLI</translation>
+        <translation>CANLI</translation>
     </message>
     <message>
         <source>⚠ Enter a valid quantity</source>
@@ -34391,11 +34423,11 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Sembol</translation>
+        <translation>Sembol</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Fiyat</translation>
+        <translation>Fiyat</translation>
     </message>
     <message>
         <source>%</source>
@@ -34406,7 +34438,7 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     <name>fincept::screens::datasources::DataSourcesScreen</name>
     <message>
         <source>DATA SOURCES</source>
-        <translation type="unfinished">VERİ KAYNAKLARI</translation>
+        <translation>VERİ KAYNAKLARI</translation>
     </message>
     <message>
         <source>%1 CONNECTORS</source>
@@ -34418,7 +34450,7 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">İÇE AKTAR</translation>
+        <translation>İÇE AKTAR</translation>
     </message>
     <message>
         <source>EXPORT</source>
@@ -34434,7 +34466,7 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>CONFIGURED</source>
-        <translation type="unfinished">YAPILANDIRILDI</translation>
+        <translation>YAPILANDIRILDI</translation>
     </message>
     <message>
         <source>ACTIVE</source>
@@ -34446,11 +34478,11 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>BROWSE</source>
-        <translation type="unfinished">GÖZAT</translation>
+        <translation>GÖZAT</translation>
     </message>
     <message>
         <source>CONNECTIONS</source>
-        <translation type="unfinished">BAĞLANTILAR</translation>
+        <translation>BAĞLANTILAR</translation>
     </message>
     <message>
         <source>CATEGORY</source>
@@ -34474,11 +34506,11 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TÜR</translation>
+        <translation>TÜR</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOPLAM</translation>
+        <translation>TOPLAM</translation>
     </message>
     <message>
         <source>INSPECTOR</source>
@@ -34526,7 +34558,7 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>+ ADD</source>
-        <translation type="unfinished">+ EKLE</translation>
+        <translation>+ EKLE</translation>
     </message>
     <message>
         <source>filter connections...</source>
@@ -34534,11 +34566,11 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>ENABLE ALL</source>
-        <translation type="unfinished">HEPSİNİ ETKİNLEŞTİR</translation>
+        <translation>HEPSİNİ ETKİNLEŞTİR</translation>
     </message>
     <message>
         <source>DISABLE ALL</source>
-        <translation type="unfinished">HEPSİNİ DEVRE DIŞI BIRAK</translation>
+        <translation>HEPSİNİ DEVRE DIŞI BIRAK</translation>
     </message>
     <message>
         <source>DELETE SEL</source>
@@ -34546,7 +34578,7 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">AD</translation>
+        <translation>AD</translation>
     </message>
     <message>
         <source>PROVIDER</source>
@@ -34554,7 +34586,7 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">DURUM</translation>
+        <translation>DURUM</translation>
     </message>
     <message>
         <source>TAGS</source>
@@ -34626,11 +34658,11 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">ACIK</translation>
+        <translation>AÇIK</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">TAMAM</translation>
+        <translation>TAMAM</translation>
     </message>
     <message>
         <source>ERR</source>
@@ -34752,7 +34784,7 @@ Anahtarlar yerel olarak şifreli güvenli depolamada saklanır.</translation>
     </message>
     <message>
         <source>+ ADD</source>
-        <translation type="unfinished">+ EKLE</translation>
+        <translation>+ EKLE</translation>
     </message>
     <message>
         <source>REMOVE</source>
@@ -34806,7 +34838,7 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Hata: %1</translation>
+        <translation>Hata: %1</translation>
     </message>
     <message>
         <source>Connected as %1</source>
@@ -34842,7 +34874,7 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>API KEY</source>
-        <translation type="unfinished">API ANAHTARI</translation>
+        <translation>API ANAHTARI</translation>
     </message>
     <message>
         <source>Enter API Key...</source>
@@ -34874,7 +34906,7 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>PASSWORD</source>
-        <translation type="unfinished">PAROLA</translation>
+        <translation>PAROLA</translation>
     </message>
     <message>
         <source>Zerodha login password</source>
@@ -35114,7 +35146,7 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>ACCOUNT TYPE</source>
-        <translation type="unfinished">HESAP TÜRÜ</translation>
+        <translation>HESAP TÜRÜ</translation>
     </message>
     <message>
         <source>Demo</source>
@@ -35136,6 +35168,18 @@ Bu işlem geri alınamaz.</translation>
         <source>Connected</source>
         <translation>Bağlandı</translation>
     </message>
+    <message>
+        <source>Auto — execute immediately</source>
+        <translation>Otomatik — hemen gerçekleştir</translation>
+    </message>
+    <message>
+        <source>Order Approval:</source>
+        <translation>Emir Onayı:</translation>
+    </message>
+    <message>
+        <source>Semi-Auto — require approval</source>
+        <translation>Yarı Otomatik — onay gerektir</translation>
+    </message>
 </context>
 <context>
     <name>fincept::screens::equity::BroadcastOrderDialog</name>
@@ -35149,11 +35193,11 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>AL</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SAT</translation>
     </message>
     <message>
         <source>Select All</source>
@@ -35201,18 +35245,26 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>DONE</source>
-        <translation type="unfinished">TAMAM</translation>
+        <translation>TAMAM</translation>
+    </message>
+    <message>
+        <source>%1 order(s) queued for approval</source>
+        <translation>%1 emir onay için sıraya alındı</translation>
+    </message>
+    <message>
+        <source>Placing %1 order(s); %2 queued for approval...</source>
+        <translation>%1 emir veriliyor; %2 onay için sıraya alındı...</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::equity::EquityBottomPanel</name>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">POZİSYONLAR</translation>
+        <translation>POZİSYONLAR</translation>
     </message>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">VARLIKLAR</translation>
+        <translation>VARLIKLAR</translation>
     </message>
     <message>
         <source>ORDERS</source>
@@ -35240,7 +35292,7 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Sembol</translation>
+        <translation>Sembol</translation>
     </message>
     <message>
         <source>Opened</source>
@@ -35252,7 +35304,7 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Adet</translation>
     </message>
     <message>
         <source>Avg Price</source>
@@ -35264,11 +35316,11 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">P&amp;L %</translation>
+        <translation>P&amp;L %</translation>
     </message>
     <message>
         <source>Invested</source>
@@ -35284,11 +35336,11 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Tür</translation>
+        <translation>Tür</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Fiyat</translation>
+        <translation>Fiyat</translation>
     </message>
     <message>
         <source>Status</source>
@@ -35304,7 +35356,7 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Tarih</translation>
+        <translation>Tarih</translation>
     </message>
     <message>
         <source>Size</source>
@@ -35356,7 +35408,7 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">MEVCUT</translation>
+        <translation>MEVCUT</translation>
     </message>
     <message>
         <source>TOTAL P&amp;L</source>
@@ -35388,7 +35440,7 @@ Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>Win Rate</source>
-        <translation type="unfinished">Kazanma Oranı</translation>
+        <translation>Kazanma Oranı</translation>
     </message>
     <message>
         <source>Total Trades</source>
@@ -35440,7 +35492,7 @@ Emin misiniz?</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>ADET</translation>
     </message>
     <message>
         <source>LIMIT PRICE</source>
@@ -35456,7 +35508,7 @@ Emin misiniz?</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">ACIK</translation>
+        <translation>AÇIK</translation>
     </message>
     <message>
         <source>CLOSE</source>
@@ -35510,11 +35562,11 @@ Emin misiniz?</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">FİYAT</translation>
+        <translation>FİYAT</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>ADET</translation>
     </message>
     <message>
         <source>ORDERS</source>
@@ -35525,7 +35577,7 @@ Emin misiniz?</translation>
     <name>fincept::screens::equity::EquityOrderEntry</name>
     <message>
         <source>ORDER ENTRY</source>
-        <translation type="unfinished">EMİR GİRİŞİ</translation>
+        <translation>EMİR GİRİŞİ</translation>
     </message>
     <message>
         <source>PAPER</source>
@@ -35533,11 +35585,11 @@ Emin misiniz?</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>AL</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SAT</translation>
     </message>
     <message>
         <source>MKT</source>
@@ -35581,11 +35633,11 @@ Emin misiniz?</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>ADET</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">FİYAT</translation>
+        <translation>FİYAT</translation>
     </message>
     <message>
         <source>Limit price</source>
@@ -35625,7 +35677,7 @@ Emin misiniz?</translation>
     </message>
     <message>
         <source>STRATEGY</source>
-        <translation type="unfinished">STRATEJİ</translation>
+        <translation>STRATEJİ</translation>
     </message>
     <message>
         <source>None</source>
@@ -35729,7 +35781,7 @@ Emin misiniz?</translation>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">CANLI</translation>
+        <translation>CANLI</translation>
     </message>
     <message>
         <source>Est: %1%2</source>
@@ -35764,7 +35816,7 @@ Emin misiniz?</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>LTP</source>
@@ -35772,7 +35824,7 @@ Emin misiniz?</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>DĞŞ%</translation>
     </message>
 </context>
 <context>
@@ -35822,7 +35874,7 @@ Emin misiniz?</translation>
     <name>fincept::screens::fno::BuilderSubTab</name>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">KAYDET</translation>
+        <translation>KAYDET</translation>
     </message>
     <message>
         <source>LOAD</source>
@@ -36013,11 +36065,11 @@ Emin misiniz?</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">YENİLE</translation>
+        <translation>YENİLE</translation>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Tarih</translation>
+        <translation>Tarih</translation>
     </message>
     <message>
         <source>FII Buy</source>
@@ -36064,7 +36116,7 @@ Emin misiniz?</translation>
     <name>fincept::screens::fno::FnoHeaderBar</name>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">YENİLE</translation>
+        <translation>YENİLE</translation>
     </message>
     <message>
         <source>Broker:</source>
@@ -36197,11 +36249,11 @@ Emin misiniz?</translation>
     <name>fincept::screens::fno::LegEditorModel</name>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>AL</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SAT</translation>
     </message>
     <message>
         <source>On</source>
@@ -36213,7 +36265,7 @@ Emin misiniz?</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Tür</translation>
+        <translation>Tür</translation>
     </message>
     <message>
         <source>Strike</source>
@@ -36241,7 +36293,7 @@ Emin misiniz?</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
 </context>
 <context>
@@ -36270,7 +36322,7 @@ Emin misiniz?</translation>
     <name>fincept::screens::fno::MultiStraddleSubTab</name>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Tür</translation>
+        <translation>Tür</translation>
     </message>
     <message>
         <source>Anchor</source>
@@ -36278,7 +36330,7 @@ Emin misiniz?</translation>
     </message>
     <message>
         <source>ADD</source>
-        <translation type="unfinished">EKLE</translation>
+        <translation>EKLE</translation>
     </message>
     <message>
         <source>Double-click an entry to remove it.</source>
@@ -36409,7 +36461,7 @@ Emin misiniz?</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Sembol</translation>
+        <translation>Sembol</translation>
     </message>
     <message>
         <source>B/S</source>
@@ -36417,11 +36469,11 @@ Emin misiniz?</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Adet</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Tür</translation>
+        <translation>Tür</translation>
     </message>
     <message>
         <source>Entry</source>
@@ -36453,11 +36505,11 @@ Emin misiniz?</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>AL</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SAT</translation>
     </message>
     <message>
         <source>Broker %1 not registered</source>
@@ -36612,7 +36664,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">CANLI</translation>
+        <translation>CANLI</translation>
     </message>
     <message>
         <source>LOCKED</source>
@@ -36628,7 +36680,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">AĞIRLIK</translation>
+        <translation>AĞIRLIK</translation>
     </message>
     <message>
         <source>YIELD (LIFETIME)</source>
@@ -36636,7 +36688,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOPLAM</translation>
+        <translation>TOPLAM</translation>
     </message>
     <message>
         <source>DEMO</source>
@@ -36671,7 +36723,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">CANLI</translation>
+        <translation>CANLI</translation>
     </message>
     <message>
         <source>THIS EPOCH</source>
@@ -36805,7 +36857,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">FİYAT</translation>
+        <translation>FİYAT</translation>
     </message>
     <message>
         <source>USD VALUE</source>
@@ -36896,7 +36948,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>AMOUNT</source>
-        <translation type="unfinished">TUTAR</translation>
+        <translation>TUTAR</translation>
     </message>
     <message>
         <source>TOKEN</source>
@@ -36932,7 +36984,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">AĞIRLIK</translation>
+        <translation>AĞIRLIK</translation>
     </message>
     <message>
         <source>EST. YIELD</source>
@@ -36955,11 +37007,11 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>YES</source>
-        <translation type="unfinished">EVET</translation>
+        <translation>EVET</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">HAYIR</translation>
+        <translation>HAYIR</translation>
     </message>
     <message>
         <source>24h VOL</source>
@@ -36979,7 +37031,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">PİYASALAR</translation>
+        <translation>PİYASALAR</translation>
     </message>
     <message>
         <source>DEMO</source>
@@ -36987,7 +37039,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">HATA</translation>
+        <translation>HATA</translation>
     </message>
     <message>
         <source>● LIVE</source>
@@ -37010,7 +37062,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">CANLI</translation>
+        <translation>CANLI</translation>
     </message>
     <message>
         <source>DEMO</source>
@@ -37199,7 +37251,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">CANLI</translation>
+        <translation>CANLI</translation>
     </message>
     <message>
         <source>USDC RESERVES</source>
@@ -37234,7 +37286,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TÜR</translation>
+        <translation>TÜR</translation>
     </message>
     <message>
         <source>SIDE</source>
@@ -37242,7 +37294,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">FİYAT</translation>
+        <translation>FİYAT</translation>
     </message>
     <message>
         <source>SIZE</source>
@@ -37253,7 +37305,7 @@ Hedef K/Z: %3</translation>
     <name>fincept::screens::polymarket::PolymarketBrowsePanel</name>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">PİYASALAR</translation>
+        <translation>PİYASALAR</translation>
     </message>
     <message>
         <source>MARKETS  %1</source>
@@ -37265,7 +37317,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">YUKLENIYOR...</translation>
+        <translation>YÜKLENİYOR...</translation>
     </message>
 </context>
 <context>
@@ -37288,7 +37340,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">HACİM</translation>
+        <translation>HACİM</translation>
     </message>
     <message>
         <source>LIQUIDITY</source>
@@ -37296,7 +37348,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">TARİH</translation>
+        <translation>TARİH</translation>
     </message>
     <message>
         <source>↻</source>
@@ -37304,7 +37356,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>Refresh</source>
-        <translation type="unfinished">Yenile</translation>
+        <translation>Yenile</translation>
     </message>
     <message>
         <source>ALL SERIES</source>
@@ -37343,7 +37395,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">GENEL BAKIŞ</translation>
+        <translation>GENEL BAKIŞ</translation>
     </message>
     <message>
         <source>ORDER BOOK</source>
@@ -37379,7 +37431,7 @@ Hedef K/Z: %3</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">HACİM</translation>
+        <translation>HACİM</translation>
     </message>
     <message>
         <source>LIQUIDITY</source>
@@ -37425,11 +37477,11 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>AL</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SAT</translation>
     </message>
     <message>
         <source>OUTCOME</source>
@@ -37516,11 +37568,11 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>PNL</source>
-        <translation type="unfinished">PNL</translation>
+        <translation>PNL</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">HACİM</translation>
+        <translation>HACİM</translation>
     </message>
     <message>
         <source>TRADES</source>
@@ -37569,7 +37621,7 @@ bir hesap bağlayın</translation>
     <name>fincept::screens::polymarket::PolymarketOrderBook</name>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">FİYAT</translation>
+        <translation>FİYAT</translation>
     </message>
     <message>
         <source>SIZE</source>
@@ -37577,7 +37629,7 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOPLAM</translation>
+        <translation>TOPLAM</translation>
     </message>
     <message>
         <source>SPREAD %1</source>
@@ -37694,7 +37746,7 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Kaydet</translation>
+        <translation>Kaydet</translation>
     </message>
     <message>
         <source>Test Connection</source>
@@ -37860,19 +37912,19 @@ bir hesap bağlayın</translation>
     <name>fincept::screens::widgets::BaseWidget</name>
     <message>
         <source>Configure widget</source>
-        <translation type="unfinished">Widget'i yapilandir</translation>
+        <translation>Widget'i yapılandır</translation>
     </message>
     <message>
         <source>Refresh widget data</source>
-        <translation type="unfinished">Widget verilerini yenile</translation>
+        <translation>Widget verilerini yenile</translation>
     </message>
     <message>
         <source>Close widget</source>
-        <translation type="unfinished">Widget'i kapat</translation>
+        <translation>Widget'i kapat</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">YUKLENIYOR...</translation>
+        <translation>YÜKLENİYOR...</translation>
     </message>
     <message>
         <source>No data yet — click refresh to retry</source>
@@ -37883,15 +37935,15 @@ bir hesap bağlayın</translation>
     <name>fincept::screens::widgets::BrokerHoldingsWidget</name>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">VARLIKLAR</translation>
+        <translation>VARLIKLAR</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Sembol</translation>
+        <translation>Sembol</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Adet</translation>
     </message>
     <message>
         <source>Avg</source>
@@ -37903,7 +37955,7 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">P&amp;L %</translation>
+        <translation>P&amp;L %</translation>
     </message>
     <message>
         <source>No active account — click gear to configure</source>
@@ -37964,7 +38016,7 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Sembol</translation>
+        <translation>Sembol</translation>
     </message>
 </context>
 <context>
@@ -37983,7 +38035,7 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">TARİH</translation>
+        <translation>TARİH</translation>
     </message>
     <message>
         <source>REF</source>
@@ -38023,7 +38075,7 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">YÜKSEK</translation>
+        <translation>YÜKSEK</translation>
     </message>
     <message>
         <source>MED</source>
@@ -38031,7 +38083,7 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">DÜŞÜK</translation>
+        <translation>DÜŞÜK</translation>
     </message>
 </context>
 <context>
@@ -38108,7 +38160,7 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>Total</source>
-        <translation type="unfinished">Toplam</translation>
+        <translation>Toplam</translation>
     </message>
     <message>
         <source>Collateral</source>
@@ -38205,7 +38257,7 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">YUKLENIYOR...</translation>
+        <translation>YÜKLENİYOR...</translation>
     </message>
     <message>
         <source>-- BULL</source>
@@ -38237,7 +38289,7 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NOTR</translation>
+        <translation>NÖTR</translation>
     </message>
     <message>
         <source>BEARISH</source>
@@ -38294,7 +38346,7 @@ bir hesap bağlayın</translation>
     <name>fincept::screens::widgets::NotesWidget</name>
     <message>
         <source>NOTES</source>
-        <translation type="unfinished">NOTLAR</translation>
+        <translation>NOTLAR</translation>
     </message>
     <message>
         <source>NOTES — FAVORITES</source>
@@ -38349,11 +38401,11 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Sembol</translation>
+        <translation>Sembol</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Adet</translation>
     </message>
     <message>
         <source>Avg</source>
@@ -38365,7 +38417,7 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>No active account — click gear to configure</source>
@@ -38388,7 +38440,7 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Sembol</translation>
+        <translation>Sembol</translation>
     </message>
     <message>
         <source>Side</source>
@@ -38396,11 +38448,11 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Adet</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Fiyat</translation>
+        <translation>Fiyat</translation>
     </message>
     <message>
         <source>Status</source>
@@ -38475,7 +38527,7 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>TODAY</source>
-        <translation type="unfinished">BUGÜN</translation>
+        <translation>BUGÜN</translation>
     </message>
 </context>
 <context>
@@ -38498,7 +38550,7 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Piyasalar</translation>
+        <translation>Piyasalar</translation>
     </message>
 </context>
 <context>
@@ -38509,7 +38561,7 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>TOTAL VALUE</source>
-        <translation type="unfinished">TOPLAM DEĞER</translation>
+        <translation>TOPLAM DEĞER</translation>
     </message>
     <message>
         <source>DAY P&amp;L</source>
@@ -38521,7 +38573,7 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">VARLIKLAR</translation>
+        <translation>VARLIKLAR</translation>
     </message>
     <message>
         <source>SYM</source>
@@ -38533,15 +38585,15 @@ bir hesap bağlayın</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">FİYAT</translation>
+        <translation>FİYAT</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">DEĞER</translation>
+        <translation>DEĞER</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>No portfolios yet.
@@ -38565,7 +38617,7 @@ Portföy sekmesinden pozisyon ekleyin.</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portföy</translation>
+        <translation>Portföy</translation>
     </message>
 </context>
 <context>
@@ -38592,11 +38644,11 @@ Portföy sekmesinden pozisyon ekleyin.</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>AL</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SAT</translation>
     </message>
     <message>
         <source>SHORT</source>
@@ -38616,11 +38668,11 @@ Portföy sekmesinden pozisyon ekleyin.</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>ADET</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">FİYAT</translation>
+        <translation>FİYAT</translation>
     </message>
     <message>
         <source>market</source>
@@ -38685,11 +38737,11 @@ Emir işlem motoruna gönderildi.</translation>
     <name>fincept::screens::widgets::QuoteTableWidget</name>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">FİYAT</translation>
+        <translation>FİYAT</translation>
     </message>
     <message>
         <source>CHG</source>
@@ -38697,7 +38749,23 @@ Emir işlem motoruna gönderildi.</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>DĞŞ%</translation>
+    </message>
+    <message>
+        <source>COMMODITIES</source>
+        <translation>EMTİALAR</translation>
+    </message>
+    <message>
+        <source>CRYPTOCURRENCY</source>
+        <translation>KRİPTO PARA</translation>
+    </message>
+    <message>
+        <source>FOREX - MAJOR PAIRS</source>
+        <translation>FOREX - ANA PARİTELER</translation>
+    </message>
+    <message>
+        <source>GLOBAL INDICES</source>
+        <translation>KÜRESEL ENDEKSLER</translation>
     </message>
 </context>
 <context>
@@ -38759,7 +38827,7 @@ Emir işlem motoruna gönderildi.</translation>
     </message>
     <message>
         <source>EXTREME FEAR</source>
-        <translation type="unfinished">ASIRI KORKU</translation>
+        <translation>AŞIRI KORKU</translation>
     </message>
 </context>
 <context>
@@ -38794,23 +38862,23 @@ Emir işlem motoruna gönderildi.</translation>
     </message>
     <message>
         <source>%1 symbols</source>
-        <translation type="unfinished">%1 sembol</translation>
+        <translation>%1 sembol</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">FİYAT</translation>
+        <translation>FİYAT</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>DĞŞ%</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">HACİM</translation>
+        <translation>HACİM</translation>
     </message>
     <message>
         <source>FILTER:</source>
@@ -38899,7 +38967,7 @@ Emir işlem motoruna gönderildi.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">ACIK</translation>
+        <translation>AÇIK</translation>
     </message>
     <message>
         <source>PREV CLOSE</source>
@@ -38907,15 +38975,15 @@ Emir işlem motoruna gönderildi.</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">YÜKSEK</translation>
+        <translation>YÜKSEK</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">DÜŞÜK</translation>
+        <translation>DÜŞÜK</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">HACİM</translation>
+        <translation>HACİM</translation>
     </message>
 </context>
 <context>
@@ -38934,7 +39002,7 @@ Emir işlem motoruna gönderildi.</translation>
     </message>
     <message>
         <source>Positions</source>
-        <translation type="unfinished">Pozisyonlar</translation>
+        <translation>Pozisyonlar</translation>
     </message>
     <message>
         <source>No active account — click gear to configure</source>
@@ -38953,27 +39021,27 @@ Emir işlem motoruna gönderildi.</translation>
     <name>fincept::screens::widgets::TopMoversWidget</name>
     <message>
         <source>TOP MOVERS</source>
-        <translation type="unfinished">EN ÇOK HAREKET EDENLER</translation>
+        <translation>EN ÇOK HAREKET EDENLER</translation>
     </message>
     <message>
         <source>GAINERS</source>
-        <translation type="unfinished">KAZANANLAR</translation>
+        <translation>KAZANANLAR</translation>
     </message>
     <message>
         <source>LOSERS</source>
-        <translation type="unfinished">KAYBEDENLER</translation>
+        <translation>KAYBEDENLER</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">FİYAT</translation>
+        <translation>FİYAT</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>DĞŞ%</translation>
     </message>
 </context>
 <context>
@@ -38988,7 +39056,7 @@ Emir işlem motoruna gönderildi.</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Fiyat</translation>
+        <translation>Fiyat</translation>
     </message>
     <message>
         <source>Size</source>
@@ -39092,7 +39160,7 @@ Satır içi oynatma için Qt6 Multimedia ile derleyin.</translation>
     </message>
     <message>
         <source>SYMBOLS:</source>
-        <translation type="unfinished">SEMBOLLER:</translation>
+        <translation>SEMBOLLER:</translation>
     </message>
     <message>
         <source>GO</source>
@@ -39100,11 +39168,11 @@ Satır içi oynatma için Qt6 Multimedia ile derleyin.</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SEMBOL</translation>
+        <translation>SEMBOL</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">FİYAT</translation>
+        <translation>FİYAT</translation>
     </message>
     <message>
         <source>CHG</source>
@@ -39112,7 +39180,7 @@ Satır içi oynatma için Qt6 Multimedia ile derleyin.</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>DĞŞ%</translation>
     </message>
 </context>
 <context>
@@ -39255,11 +39323,11 @@ X-API-Key: xyz</translation>
     <name>fincept::surface::SurfaceAnalyticsScreen</name>
     <message>
         <source>IMPORT CSV</source>
-        <translation type="unfinished">CSV İÇE AKTAR</translation>
+        <translation>CSV İÇE AKTAR</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">YENİLE</translation>
+        <translation>YENİLE</translation>
     </message>
     <message>
         <source>3D</source>
@@ -39279,7 +39347,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">CSV Dosyaları (*.csv)</translation>
+        <translation>CSV Dosyaları (*.csv)</translation>
     </message>
     <message>
         <source>No Databento API key configured</source>
@@ -39402,7 +39470,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">METRİKLER</translation>
+        <translation>METRİKLER</translation>
     </message>
     <message>
         <source>count</source>
@@ -39453,7 +39521,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>EXPORT CSV</source>
-        <translation type="unfinished">CSV DIŞA AKTAR</translation>
+        <translation>CSV DIŞA AKTAR</translation>
     </message>
     <message>
         <source>LINEAGE</source>
@@ -39513,7 +39581,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">CSV Dışa Aktar</translation>
+        <translation>CSV Dışa Aktar</translation>
     </message>
     <message>
         <source>CSV files (*.csv)</source>
@@ -39524,66 +39592,66 @@ X-API-Key: xyz</translation>
     <name>fincept::surface::SurfaceLineWidget</name>
     <message>
         <source>No data</source>
-        <translation type="unfinished">Veri yok</translation>
+        <translation>Veri yok</translation>
     </message>
 </context>
 <context>
     <name>fincept::ui::CommandBar</name>
     <message>
         <source>Dashboard</source>
-        <translation type="unfinished">Pano</translation>
+        <translation>Pano</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Piyasalar</translation>
+        <translation>Piyasalar</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">Haberler</translation>
+        <translation>Haberler</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portföy</translation>
+        <translation>Portföy</translation>
     </message>
     <message>
         <source>Backtesting</source>
-        <translation type="unfinished">Geri Test</translation>
+        <translation>Geriye Dönük Test</translation>
     </message>
     <message>
         <source>Watchlist</source>
-        <translation type="unfinished">İzleme Listesi</translation>
+        <translation>İzleme Listesi</translation>
     </message>
     <message>
         <source>Crypto Trading</source>
-        <translation type="unfinished">Kripto İşlemleri</translation>
+        <translation>Kripto İşlemleri</translation>
     </message>
     <message>
         <source>AI Chat</source>
-        <translation type="unfinished">YZ Sohbet</translation>
+        <translation>AI Sohbet</translation>
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Notlar</translation>
+        <translation>Notlar</translation>
     </message>
     <message>
         <source>Profile</source>
-        <translation type="unfinished">Profil</translation>
+        <translation>Profil</translation>
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">Ayarlar</translation>
+        <translation>Ayarlar</translation>
     </message>
     <message>
         <source>Forum</source>
-        <translation type="unfinished">Forum</translation>
+        <translation>Forum</translation>
     </message>
     <message>
         <source>Equity Trading</source>
-        <translation type="unfinished">Hisse İşlemleri</translation>
+        <translation>Hisse İşlemleri</translation>
     </message>
     <message>
         <source>Algo Trading</source>
-        <translation type="unfinished">Algoritmik İşlem</translation>
+        <translation>Algoritmik İşlem</translation>
     </message>
     <message>
         <source>Action Center</source>
@@ -39591,15 +39659,15 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Alpha Arena</source>
-        <translation type="unfinished">Alpha Arena</translation>
+        <translation>Alpha Arena</translation>
     </message>
     <message>
         <source>Prediction Markets</source>
-        <translation type="unfinished">Tahmin Piyasaları</translation>
+        <translation>Tahmin Piyasaları</translation>
     </message>
     <message>
         <source>Derivatives</source>
-        <translation type="unfinished">Türev Ürünler</translation>
+        <translation>Türev Ürünler</translation>
     </message>
     <message>
         <source>F&amp;O</source>
@@ -39607,7 +39675,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Equity Research</source>
-        <translation type="unfinished">Hisse Araştırması</translation>
+        <translation>Hisse Araştırması</translation>
     </message>
     <message>
         <source>Screener</source>
@@ -39615,23 +39683,23 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>M&amp;A Analytics</source>
-        <translation type="unfinished">M&amp;A Analizi</translation>
+        <translation>M&amp;A Analizi</translation>
     </message>
     <message>
         <source>Alt. Investments</source>
-        <translation type="unfinished">Alt. Yatırımlar</translation>
+        <translation>Alt. Yatırımlar</translation>
     </message>
     <message>
         <source>Surface Analytics</source>
-        <translation type="unfinished">Yüzey Analizi</translation>
+        <translation>Yüzey Analizi</translation>
     </message>
     <message>
         <source>Economics</source>
-        <translation type="unfinished">Ekonomi</translation>
+        <translation>Ekonomi</translation>
     </message>
     <message>
         <source>GOVT Data</source>
-        <translation type="unfinished">Devlet Verileri</translation>
+        <translation>Devlet Verileri</translation>
     </message>
     <message>
         <source>DBnomics</source>
@@ -39639,27 +39707,27 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>AKShare Data</source>
-        <translation type="unfinished">AKShare Verileri</translation>
+        <translation>AKShare Verileri</translation>
     </message>
     <message>
         <source>Asia Markets</source>
-        <translation type="unfinished">Asya Piyasaları</translation>
+        <translation>Asya Piyasaları</translation>
     </message>
     <message>
         <source>Geopolitics</source>
-        <translation type="unfinished">Jeopolitik</translation>
+        <translation>Jeopolitik</translation>
     </message>
     <message>
         <source>Maritime</source>
-        <translation type="unfinished">Denizcilik</translation>
+        <translation>Denizcilik</translation>
     </message>
     <message>
         <source>Relationship Map</source>
-        <translation type="unfinished">İlişki Haritası</translation>
+        <translation>İlişki Haritası</translation>
     </message>
     <message>
         <source>AI Quant Lab</source>
-        <translation type="unfinished">YZ Quant Laboratuvarı</translation>
+        <translation>AI Quant Laboratuvarı</translation>
     </message>
     <message>
         <source>QuantLib</source>
@@ -39667,19 +39735,19 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Agent Config</source>
-        <translation type="unfinished">Ajan Yapılandırması</translation>
+        <translation>Ajan Yapılandırması</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">MCP Sunucuları</translation>
+        <translation>MCP Sunucuları</translation>
     </message>
     <message>
         <source>Node Editor</source>
-        <translation type="unfinished">Düğüm Düzenleyicisi</translation>
+        <translation>Düğüm Düzenleyicisi</translation>
     </message>
     <message>
         <source>Code Editor</source>
-        <translation type="unfinished">Kod Düzenleyicisi</translation>
+        <translation>Kod Düzenleyicisi</translation>
     </message>
     <message>
         <source>Excel</source>
@@ -39687,15 +39755,15 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Report Builder</source>
-        <translation type="unfinished">Rapor Oluşturucu</translation>
+        <translation>Rapor Oluşturucu</translation>
     </message>
     <message>
         <source>Data Sources</source>
-        <translation type="unfinished">Veri Kaynakları</translation>
+        <translation>Veri Kaynakları</translation>
     </message>
     <message>
         <source>Data Mapping</source>
-        <translation type="unfinished">Veri Eşleme</translation>
+        <translation>Veri Eşleme</translation>
     </message>
     <message>
         <source>Trade Visualization</source>
@@ -39703,11 +39771,11 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>About</source>
-        <translation type="unfinished">Hakkında</translation>
+        <translation>Hakkında</translation>
     </message>
     <message>
         <source>Support</source>
-        <translation type="unfinished">Destek</translation>
+        <translation>Destek</translation>
     </message>
     <message>
         <source>Stock</source>
@@ -39751,7 +39819,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Crypto</source>
-        <translation type="unfinished">Kripto</translation>
+        <translation>Kripto</translation>
     </message>
     <message>
         <source>Search cryptocurrencies</source>
@@ -39813,7 +39881,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tumu</translation>
+        <translation>Tümü</translation>
     </message>
     <message numerus="yes">
         <source>%n component(s)</source>
@@ -39879,18 +39947,18 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Layout name:</source>
-        <translation type="unfinished">Düzen adı:</translation>
+        <translation>Düzen adı:</translation>
     </message>
 </context>
 <context>
     <name>fincept::ui::NavigationBar</name>
     <message>
         <source> LIVE</source>
-        <translation type="unfinished"> CANLI</translation>
+        <translation> CANLI</translation>
     </message>
     <message>
         <source>LOGOUT</source>
-        <translation type="unfinished">ÇIKIŞ</translation>
+        <translation>ÇIKIŞ</translation>
     </message>
 </context>
 <context>
@@ -39945,19 +40013,19 @@ X-API-Key: xyz</translation>
     <name>fincept::ui::StatusBadge</name>
     <message>
         <source>CONNECTED</source>
-        <translation type="unfinished">BAGLI</translation>
+        <translation>BAĞLI</translation>
     </message>
     <message>
         <source>OFFLINE</source>
-        <translation type="unfinished">COVRIMDISI</translation>
+        <translation>ÇEVRİMDIŞI</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">YUKLENIYOR...</translation>
+        <translation>YÜKLENİYOR...</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">HAZIR</translation>
+        <translation>HAZIR</translation>
     </message>
 </context>
 <context>
@@ -40335,15 +40403,15 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Alpha Arena</source>
-        <translation type="unfinished">Alpha Arena</translation>
+        <translation>Alpha Arena</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">MCP Sunucuları</translation>
+        <translation>MCP Sunucuları</translation>
     </message>
     <message>
         <source>Data Sources</source>
-        <translation type="unfinished">Veri Kaynakları</translation>
+        <translation>Veri Kaynakları</translation>
     </message>
     <message>
         <source>Excel</source>
@@ -40362,11 +40430,11 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>TOTAL RETURN</source>
-        <translation type="unfinished">TOPLAM GETİRİ</translation>
+        <translation>TOPLAM GETİRİ</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">SHARPE</translation>
+        <translation>SHARPE</translation>
     </message>
     <message>
         <source>SORTINO</source>
@@ -40374,7 +40442,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">MAKS DÜŞÜŞ</translation>
+        <translation>MAKS DÜŞÜŞ</translation>
     </message>
     <message>
         <source>CALMAR</source>
@@ -40382,7 +40450,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">KAZANMA ORANI</translation>
+        <translation>KAZANMA ORANI</translation>
     </message>
     <message>
         <source>PROFIT FACTOR</source>
@@ -40442,15 +40510,15 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Adet</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">P&amp;L %</translation>
+        <translation>P&amp;L %</translation>
     </message>
     <message>
         <source>Bars</source>
@@ -40673,7 +40741,7 @@ X-API-Key: xyz</translation>
     <name>fincept::ui::algo::RiskManagementPanel</name>
     <message>
         <source>RISK MANAGEMENT</source>
-        <translation type="unfinished">RİSK YÖNETİMİ</translation>
+        <translation>RİSK YÖNETİMİ</translation>
     </message>
     <message>
         <source>Stop Loss %</source>
@@ -40724,7 +40792,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">İptal</translation>
+        <translation>İptal</translation>
     </message>
     <message>
         <source>cancelled by user</source>
@@ -40771,7 +40839,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">İptal</translation>
+        <translation>İptal</translation>
     </message>
     <message>
         <source>Browser opened. Approve the transaction in your wallet. The terminal is waiting on a single-use loopback bridge — this dialog will close automatically when the wallet returns the signature.</source>
@@ -40794,7 +40862,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">AÇIKLAMA</translation>
+        <translation>AÇIKLAMA</translation>
     </message>
     <message>
         <source>Describe what this workflow does...</source>
@@ -40840,7 +40908,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>COPY</source>
-        <translation type="unfinished">KOPYALA</translation>
+        <translation>KOPYALA</translation>
     </message>
     <message>
         <source>Copy all results to clipboard</source>
@@ -40848,7 +40916,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>COPIED!</source>
-        <translation type="unfinished">KOPYALANDI!</translation>
+        <translation>KOPYALANDI!</translation>
     </message>
     <message>
         <source>RUNNING…</source>
@@ -41033,7 +41101,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">KAYDET</translation>
+        <translation>KAYDET</translation>
     </message>
     <message>
         <source>Save workflow to database</source>
@@ -41053,7 +41121,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">İÇE AKTAR</translation>
+        <translation>İÇE AKTAR</translation>
     </message>
     <message>
         <source>EXPORT</source>
@@ -41120,15 +41188,15 @@ bir düğüm seçin</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">AD</translation>
+        <translation>AD</translation>
     </message>
     <message>
         <source>PARAMETERS</source>
-        <translation type="unfinished">PARAMETRELER</translation>
+        <translation>PARAMETRELER</translation>
     </message>
     <message>
         <source>SETTINGS</source>
-        <translation type="unfinished">AYARLAR</translation>
+        <translation>AYARLAR</translation>
     </message>
     <message>
         <source>Disabled</source>
@@ -41137,6 +41205,46 @@ bir düğüm seçin</translation>
     <message>
         <source>Continue on Fail</source>
         <translation>Hata Durumunda Devam Et</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::screens::OrderConfirmDialog</name>
+    <message>
+        <source>Confirm Order</source>
+        <translation>Emri Onayla</translation>
+    </message>
+    <message>
+        <source>Est. value</source>
+        <translation>Tahm. değer</translation>
+    </message>
+    <message>
+        <source>Send Order</source>
+        <translation>Emir Gönder</translation>
+    </message>
+    <message>
+        <source>⚠  SEMI-AUTO — review before sending</source>
+        <translation>⚠  YARI OTOMATİK — göndermeden önce inceleyin</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::screens::PendingOrdersBadge</name>
+    <message>
+        <source>Orders awaiting approval — click to review</source>
+        <translation>Onay bekleyen emirler — incelemek için tıklayın</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::screens::PendingOrdersPanel</name>
+    <message>
+        <source>PENDING ORDERS</source>
+        <translation>BEKLEYEN EMİRLER</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::ui::PhoneCodeComboBox</name>
+    <message>
+        <source>Search country…</source>
+        <translation>Ülke ara…</translation>
     </message>
 </context>
 </TS>

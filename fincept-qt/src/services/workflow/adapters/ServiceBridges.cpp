@@ -10,6 +10,7 @@
 #include "services/workflow/NodeRegistry.h"
 #include "services/workflow/RiskManager.h"
 #include "trading/AccountManager.h"
+#include "trading/ActionCenter.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/ExchangeService.h"
 #include "trading/PaperTrading.h"
@@ -44,6 +45,25 @@ using fincept::python::PythonResult;
 using fincept::python::PythonRunner;
 
 namespace fincept::workflow {
+
+// Semi-Auto gate for headless workflow order nodes. When the account is in
+// Semi-Auto mode, queue the (entry) order for manual approval — it surfaces in
+// the status-bar Pending Orders popover — report a "queued" result via cb, and
+// return true so the caller skips immediate placement. Auto mode returns false
+// and the caller places as normal. Only use for entry/add ops; risk-reducing
+// ops (close position, protective stops) must stay immediate.
+static bool gate_or_queue(const QString& account_id, const fincept::trading::UnifiedOrder& order,
+                          const std::function<void(bool, QJsonValue, QString)>& cb) {
+    if (!fincept::trading::ActionCenter::instance().should_queue(account_id, "placeorder"))
+        return false;
+    const QString pid = fincept::trading::ActionCenter::instance().queue_order(
+        account_id, "placeorder", fincept::trading::ActionCenter::serialize_unified_order(order));
+    QJsonObject out;
+    out["status"] = pid.isEmpty() ? "queue_failed" : "queued_for_approval";
+    out["pending_id"] = pid;
+    cb(!pid.isEmpty(), out, pid.isEmpty() ? QString("Failed to queue order for approval") : QString());
+    return true;
+}
 
 // ── Market Data Bridge ─────────────────────────────────────────────────
 
@@ -210,6 +230,9 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 else if (product_str == "margin") order.product_type = ProductType::Margin;
                 else if (product_str == "mtf") order.product_type = ProductType::MTF;
                 else order.product_type = ProductType::Delivery;
+
+                if (gate_or_queue(account_id, order, cb))
+                    return;
 
                 auto response = UnifiedTrading::instance().place_order(account_id, order);
 
@@ -696,6 +719,8 @@ void wire_trading_bridges(NodeRegistry& registry) {
                         else if (product_str == "margin") order.product_type = ProductType::Margin;
                         else order.product_type = ProductType::Delivery;
 
+                        // Risk-reducing op — always immediate, never gated for
+                        // approval (see ActionCenter::immediate_ops).
                         auto response = UnifiedTrading::instance().place_order(account_id, order);
                         QJsonObject out;
                         out["symbol"] = symbol;
@@ -759,6 +784,9 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 order.take_profit = tp;
                 order.product_type = ProductType::BracketOrder;
                 order.validity = "DAY";
+
+                if (gate_or_queue(account_id, order, cb))
+                    return;
 
                 auto response = UnifiedTrading::instance().place_order(account_id, order);
                 QJsonObject out;
@@ -824,6 +852,8 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 else if (product_str == "margin") order.product_type = ProductType::Margin;
                 else order.product_type = ProductType::Delivery;
 
+                // Protective stop — risk-reducing, always immediate, never gated
+                // for approval (see ActionCenter::immediate_ops).
                 auto response = UnifiedTrading::instance().place_order(account_id, order);
                 QJsonObject out;
                 out["order_id"] = response.order_id;
@@ -887,6 +917,24 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 if (account_id.isEmpty()) {
                     cb(false, {}, QString("No account configured for broker: %1").arg(broker));
                     return;
+                }
+
+                // Semi-Auto gate (headless entry): scale-in adds to a position,
+                // so queue the full size for one-shot approval rather than placing
+                // individual tranches. Auto mode falls through to the loop below.
+                {
+                    UnifiedOrder gate_order;
+                    gate_order.symbol = symbol;
+                    gate_order.exchange = exchange;
+                    gate_order.side = (side == "sell") ? OrderSide::Sell : OrderSide::Buy;
+                    gate_order.order_type = OrderType::Market;
+                    gate_order.quantity = per_tranche * tranches + remainder;
+                    gate_order.validity = "DAY";
+                    if (product_str == "intraday") gate_order.product_type = ProductType::Intraday;
+                    else if (product_str == "margin") gate_order.product_type = ProductType::Margin;
+                    else gate_order.product_type = ProductType::Delivery;
+                    if (gate_or_queue(account_id, gate_order, cb))
+                        return;
                 }
 
                 QJsonArray results;

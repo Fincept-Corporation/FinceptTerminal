@@ -5,13 +5,13 @@
 #include "storage/secure/SecureStorage.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/ExchangeDaemonPool.h"
-#include "trading/exchanges/kraken/KrakenWsClient.h"
 
 #include <QThread>
 
 #include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QMutexLocker>
 #include <QPointer>
 #include <QTimer>
@@ -87,6 +87,8 @@ void ExchangeSession::set_credentials(const ExchangeCredentials& creds) {
     const QString k_api = creds_key(exchange_id_, "api_key");
     const QString k_sec = creds_key(exchange_id_, "secret");
     const QString k_pw = creds_key(exchange_id_, "password");
+    const QString k_wallet = creds_key(exchange_id_, "wallet_address");
+    const QString k_pk = creds_key(exchange_id_, "private_key");
 
     auto put_or_remove = [&](const QString& key, const QString& value) {
         if (value.isEmpty()) {
@@ -100,6 +102,8 @@ void ExchangeSession::set_credentials(const ExchangeCredentials& creds) {
     put_or_remove(k_api, creds.api_key);
     put_or_remove(k_sec, creds.secret);
     put_or_remove(k_pw, creds.password);
+    put_or_remove(k_wallet, creds.wallet_address);
+    put_or_remove(k_pk, creds.private_key);
 
     LOG_INFO(kSessionTag, QString("Credentials updated for %1 (persisted=%2)")
                               .arg(exchange_id_, creds.api_key.isEmpty() ? "no" : "yes"));
@@ -121,8 +125,15 @@ void ExchangeSession::load_stored_credentials() {
     const auto r_pw = ss.retrieve(creds_key(exchange_id_, "password"));
     if (r_pw.is_ok() && !r_pw.value().isEmpty())
         next.password = r_pw.value();
+    const auto r_wallet = ss.retrieve(creds_key(exchange_id_, "wallet_address"));
+    if (r_wallet.is_ok() && !r_wallet.value().isEmpty())
+        next.wallet_address = r_wallet.value();
+    const auto r_pk = ss.retrieve(creds_key(exchange_id_, "private_key"));
+    if (r_pk.is_ok() && !r_pk.value().isEmpty())
+        next.private_key = r_pk.value();
 
-    if (next.api_key.isEmpty() && next.secret.isEmpty() && next.password.isEmpty())
+    if (next.api_key.isEmpty() && next.secret.isEmpty() && next.password.isEmpty() &&
+        next.wallet_address.isEmpty() && next.private_key.isEmpty())
         return; // nothing stored — leave session state as-is
 
     {
@@ -182,81 +193,6 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
 
     ws_primary_symbol_ = primary_symbol;
     ws_all_symbols_ = all_symbols;
-
-    // ── Native Kraken path ──────────────────────────────────────────────────
-    // Bypass the Python subprocess entirely for Kraken — use the in-process
-    // QWebSocket-backed KrakenWsClient. Lower latency, no Python dependency.
-    if (exchange_id_ == QLatin1String("kraken")) {
-        // Production architecture: dedicated I/O thread for the native Kraken
-        // WS so socket reads + parsing never block on the main thread (paint
-        // storms, modal dialogs, SQLite contention). All cross-thread signals
-        // are auto-queued by Qt; consumers (this session, the screen) read
-        // them as if they were local emits.
-        //
-        // IMPORTANT ordering:
-        //  1. Construct the client on THIS thread (main) so we can wire up
-        //     signal/slot connections without affinity issues.
-        //  2. Connect signals BEFORE moveToThread so the connections are
-        //     established with the correct sender thread later.
-        //  3. moveToThread → thread_->start() → invokeMethod start().
-        //  4. PythonRunner::run is called from inside KrakenWsClient::start()
-        //     which now runs on the worker thread. PythonRunner is NOT thread-
-        //     safe for run(), so we keep the resolver on the main thread by
-        //     calling start_resolve() here BEFORE moving — when the resolver
-        //     finishes, its callback posts the WS connect onto the worker.
-        kraken_ws_ = new kraken::KrakenWsClient;  // no parent → moveToThread legal
-
-        QObject::connect(kraken_ws_, &kraken::KrakenWsClient::ticker_received, this,
-                         [this](const TickerData& t) {
-                             if (t.symbol.isEmpty() || t.last <= 0.0)
-                                 return;
-                             QMutexLocker lock(&mutex_);
-                             price_cache_[t.symbol] = t;
-                         });
-        QObject::connect(kraken_ws_, &kraken::KrakenWsClient::trade_received, this,
-                         [this](const TradeData& td) {
-                             if (td.price <= 0.0)
-                                 return;
-                             QMutexLocker lock(&mutex_);
-                             auto& cached = price_cache_[td.symbol];
-                             cached.symbol = td.symbol;
-                             cached.last = td.price;
-                             if (cached.bid <= 0.0) cached.bid = td.price;
-                             if (cached.ask <= 0.0) cached.ask = td.price;
-                         });
-        QObject::connect(kraken_ws_, &kraken::KrakenWsClient::connection_changed, this,
-                         [this](bool connected) {
-                             const bool prev = ws_connected_.exchange(connected);
-                             if (connected != prev) {
-                                 LOG_INFO(kSessionTag, QString("[%1] WS status: %2").arg(
-                                              exchange_id_, connected ? "CONNECTED" : "DISCONNECTED"));
-                             }
-                         });
-        QObject::connect(kraken_ws_, &kraken::KrakenWsClient::subscribe_failed, this,
-                         [this](const QString& channel, const QString& symbol, const QString& err) {
-                             LOG_WARN(kSessionTag, QString("[%1] subscribe failed %2/%3: %4")
-                                                       .arg(exchange_id_, channel, symbol, err));
-                         });
-
-        // Spin up the worker thread but DON'T move the client yet — we need
-        // to run the symbol resolver (which calls PythonRunner::run, only safe
-        // on the thread that owns PythonRunner — main). Once resolve completes,
-        // KrakenWsClient::start_after_resolve will moveToThread + invoke
-        // ws_->connect_to on the worker.
-        kraken_ws_thread_ = new QThread;
-        kraken_ws_thread_->setObjectName("KrakenWsIO");
-        QObject::connect(kraken_ws_thread_, &QThread::finished, kraken_ws_,
-                         &QObject::deleteLater);
-        kraken_ws_thread_->start();
-
-        kraken_ws_->set_io_thread(kraken_ws_thread_);
-        kraken_ws_->start(primary_symbol, all_symbols);
-
-        LOG_INFO(kSessionTag, QString("Native Kraken WS started (primary=%1, %2 symbols, "
-                                       "I/O thread=KrakenWsIO)")
-                                  .arg(primary_symbol).arg(all_symbols.size()));
-        return true;
-    }
 
     const QString python_path = python::PythonRunner::instance().python_path();
     QString script_path;
@@ -334,33 +270,10 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
 }
 
 bool ExchangeSession::is_ws_active() const {
-    if (kraken_ws_)
-        return true;  // native client is always "active" once started
     return ws_process_ != nullptr && ws_process_->state() != QProcess::NotRunning;
 }
 
 void ExchangeSession::stop_ws() {
-    // Native Kraken path: shut down the worker thread cleanly.
-    if (kraken_ws_thread_) {
-        // Stop must run on the worker thread (it touches QWebSocket members).
-        // BlockingQueuedConnection is safe here because we're on the main
-        // thread and the worker isn't blocked on us — its event loop drains
-        // the call promptly.
-        if (kraken_ws_) {
-            QMetaObject::invokeMethod(kraken_ws_, [client = kraken_ws_]() {
-                client->stop();
-            }, Qt::BlockingQueuedConnection);
-        }
-        kraken_ws_thread_->quit();
-        kraken_ws_thread_->wait(3000);
-        // QThread::finished → deleteLater on kraken_ws_ already fired.
-        kraken_ws_thread_->deleteLater();
-        kraken_ws_thread_ = nullptr;
-        kraken_ws_ = nullptr;
-        ws_connected_ = false;
-        return;
-    }
-
     if (!ws_process_)
         return;
     auto* proc = ws_process_;
@@ -378,15 +291,39 @@ void ExchangeSession::stop_ws() {
 void ExchangeSession::set_ws_primary_symbol(const QString& symbol) {
     {
         QMutexLocker lock(&mutex_);
+        if (ws_primary_symbol_ == symbol)
+            return;
         ws_primary_symbol_ = symbol;
     }
-    if (kraken_ws_) {
-        // Marshal onto the worker thread.
-        const QString sym_copy = symbol;
-        QMetaObject::invokeMethod(kraken_ws_, [client = kraken_ws_, sym_copy]() {
-            client->set_primary_symbol(sym_copy);
-        }, Qt::QueuedConnection);
+    // Re-point the live stream in place — ws_stream.py switches its
+    // orderbook/trades/ohlc tasks to the new primary (stdin command) without
+    // dropping the watchlist ticker streams. Fall back to a relaunch only if
+    // the process isn't up yet, or this is a broker bridge (no cmd protocol).
+    if (ws_process_ && ws_process_->state() != QProcess::NotRunning &&
+        !session_is_broker_stream(exchange_id_)) {
+        QJsonObject cmd;
+        cmd[QStringLiteral("cmd")] = QStringLiteral("set_primary");
+        cmd[QStringLiteral("symbol")] = symbol;
+        ws_process_->write(QJsonDocument(cmd).toJson(QJsonDocument::Compact) + '\n');
+        return;
     }
+    if (ws_process_) {
+        QStringList syms = ws_all_symbols_;
+        syms.removeAll(symbol);
+        syms.prepend(symbol);
+        start_ws(symbol, syms);
+    }
+}
+
+void ExchangeSession::set_ws_timeframe(const QString& timeframe) {
+    // Re-point only the OHLC stream to a new chart timeframe, in place.
+    if (!ws_process_ || ws_process_->state() == QProcess::NotRunning ||
+        session_is_broker_stream(exchange_id_))
+        return;
+    QJsonObject cmd;
+    cmd[QStringLiteral("cmd")] = QStringLiteral("set_timeframe");
+    cmd[QStringLiteral("timeframe")] = timeframe;
+    ws_process_->write(QJsonDocument(cmd).toJson(QJsonDocument::Compact) + '\n');
 }
 
 QString ExchangeSession::get_ws_primary_symbol() const {

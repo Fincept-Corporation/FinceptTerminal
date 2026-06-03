@@ -974,10 +974,6 @@ set(TRADING_SOURCES
     src/trading/ExchangeSession.cpp
     src/trading/ExchangeSessionManager.cpp
     src/trading/ExchangeDaemonPool.cpp
-    # Native Kraken WebSocket v2 client
-    src/trading/exchanges/kraken/KrakenSymbolMapper.cpp
-    src/trading/exchanges/kraken/KrakenBook.cpp
-    src/trading/exchanges/kraken/KrakenWsClient.cpp
     # Hyperliquid (Alpha Arena live mode — Phase 5c partial)
     src/trading/exchanges/hyperliquid/HyperliquidClient.cpp
     src/trading/exchanges/hyperliquid/Keccak256.cpp
@@ -1138,6 +1134,7 @@ set(SERVICE_SOURCES
     src/services/maritime/GeocodingService.cpp
     src/services/ai_quant_lab/AIQuantLabService.cpp
     src/services/backtesting/BacktestingService.cpp
+    src/services/backtesting/BacktestBrokerData.cpp
     src/services/algo_trading/AlgoTradingService.cpp
     # PortfolioService split; see header comment.
     src/services/portfolio/PortfolioService.cpp
@@ -1488,17 +1485,21 @@ set(SCREEN_SOURCES
     src/screens/equity_trading/EquityTradingScreen.cpp
     src/screens/equity_trading/EquityTradingScreen_Streams.cpp
     src/screens/equity_trading/EquityTradingScreen_Handlers.cpp
+    src/screens/equity_trading/EquityTradingScreen_Watchlists.cpp
     src/screens/equity_trading/EquityTradingScreen_Holdings.cpp
     src/screens/equity_trading/EquityTickerBar.cpp
     src/screens/equity_trading/EquityWatchlist.cpp
     src/screens/equity_trading/EquityChart.cpp
+    src/screens/equity_trading/EquityChartPanel.cpp
     src/screens/equity_trading/EquityOrderEntry.cpp
     src/screens/equity_trading/EquityOrderBook.cpp
     src/screens/equity_trading/EquityBottomPanel.cpp
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
-    # Action Center — semi-auto order approval (Phase 3 §2).
-    src/screens/action_center/ActionCenterScreen.cpp
+    src/screens/equity_trading/OrderConfirmDialog.cpp
+    # Action Center — pending-orders popover + status-bar badge (queued approvals).
+    src/screens/action_center/PendingOrdersPanel.cpp
+    src/screens/action_center/PendingOrdersBadge.cpp
     # DataSourcesScreen split; see DataSourcesScreen.cpp header.
     src/screens/data_sources/DataSourcesScreen.cpp
     src/screens/data_sources/DataSourcesScreen_Layout.cpp
@@ -1942,17 +1943,21 @@ set_source_files_properties(
     src/screens/equity_trading/EquityTradingScreen.cpp
     src/screens/equity_trading/EquityTradingScreen_Streams.cpp
     src/screens/equity_trading/EquityTradingScreen_Handlers.cpp
+    src/screens/equity_trading/EquityTradingScreen_Watchlists.cpp
     src/screens/equity_trading/EquityTradingScreen_Holdings.cpp
     src/screens/equity_trading/EquityTickerBar.cpp
     src/screens/equity_trading/EquityWatchlist.cpp
     src/screens/equity_trading/EquityChart.cpp
+    src/screens/equity_trading/EquityChartPanel.cpp
     src/screens/equity_trading/EquityOrderEntry.cpp
     src/screens/equity_trading/EquityOrderBook.cpp
     src/screens/equity_trading/EquityBottomPanel.cpp
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
-    # Action Center — semi-auto order approval (Phase 3 §2).
-    src/screens/action_center/ActionCenterScreen.cpp
+    src/screens/equity_trading/OrderConfirmDialog.cpp
+    # Action Center — pending-orders popover + status-bar badge (queued approvals).
+    src/screens/action_center/PendingOrdersPanel.cpp
+    src/screens/action_center/PendingOrdersBadge.cpp
     # DataSourcesScreen split; see DataSourcesScreen.cpp header.
     src/screens/data_sources/DataSourcesScreen.cpp
     src/screens/data_sources/DataSourcesScreen_Layout.cpp
@@ -2488,6 +2493,19 @@ set_source_files_properties(
     # Phase 3 storage/core — file-scope kLog / anonymous-namespace helpers
     src/storage/HistoricalDataStore.cpp
     src/core/HealthMonitor.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
+)
+
+# Logging tags: each of these files defines a file-scope `kTag` ("WS",
+# "FwspImporter", "InstanceLock", "OptionGreeksWorker") in an
+# anonymous namespace. Under unity, any two that land in the same batch merge
+# into one TU and clash ("redefinition of 'kTag'"). Keep every free-standing
+# kTag definer out of unity so a batch-grouping shift can't re-trigger it.
+set_source_files_properties(
+    src/network/websocket/WebSocketClient.cpp
+    src/storage/workspace/WorkspaceFwspImporter.cpp
+    src/app/InstanceLock.cpp
+    src/python/OptionGreeksWorker.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 

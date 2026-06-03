@@ -17,6 +17,10 @@
 
 namespace fincept::mcp {
 
+/// Default hard timeout for MCP tool handlers (ms). Single source of truth for
+/// the 30s default referenced by ToolContext, ToolDef, and McpProvider.
+constexpr int kMcpDefaultTimeoutMs = 30000;
+
 // ============================================================================
 // Tool Result — returned by tool handlers
 // ============================================================================
@@ -105,7 +109,7 @@ struct ToolContext {
     /// resolves the promise with a timeout error if the handler hasn't
     /// finished by then. Default: 30s; per-tool override via
     /// ToolDef::default_timeout_ms; per-call override via _meta.timeout_ms.
-    int timeout_ms = 30000;
+    int timeout_ms = kMcpDefaultTimeoutMs;
 
     /// Convenience — true if cancellation hook is set AND signalled.
     bool cancelled() const { return is_cancelled && is_cancelled(); }
@@ -274,7 +278,7 @@ struct ToolDef {
     /// for snappy tools (e.g. registry lookups, paper-trading orders) and
     /// larger for slow ones (e.g. analytics scripts that run a full backtest).
     /// Per-call overrides are merged from `_meta.timeout_ms` (Phase 6).
-    int default_timeout_ms = 30000;
+    int default_timeout_ms = kMcpDefaultTimeoutMs;
 
     // ── Phase 6: Authorization ──────────────────────────────────────────
     /// Required auth level — checked by McpProvider::call_tool before the

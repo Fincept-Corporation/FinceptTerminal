@@ -555,6 +555,19 @@ QVector<QJsonValue> WorkflowExecutor::collect_inputs(const QString& node_id) con
                 if (edge.source_port == "output_2" && route != 2)
                     continue;
             }
+
+            // Loop routing: a "_loop" node (control.loop) splits its two ports —
+            // "output_item" receives the items array, "output_done" the summary.
+            if (obj.contains("_loop")) {
+                if (edge.source_port == "output_item") {
+                    inputs.append(obj.value("items"));
+                    continue;
+                }
+                if (edge.source_port == "output_done") {
+                    inputs.append(obj.value("done"));
+                    continue;
+                }
+            }
         }
 
         inputs.append(output);

@@ -514,15 +514,76 @@ std::optional<Instrument> InstrumentService::find_by_token(quint32 instrument_to
 
 QVector<Instrument> InstrumentService::search(const QString& query, const QString& exchange, const QString& broker_id,
                                               int limit) const {
-    // Delegate to DB for search (cache doesn't hold a text index)
-    return InstrumentRepository::instance().search(query, exchange, broker_id, limit);
+    return search_all(query, exchange, QStringList{broker_id}, limit);
 }
 
 QVector<Instrument> InstrumentService::search_all(const QString& query, const QString& exchange,
                                                   const QStringList& broker_ids, int limit) const {
-    // Delegate to DB — the repository handles the broker_id IN(...) scoping and
-    // active-broker-first ordering.
-    return InstrumentRepository::instance().search_all(query, exchange, broker_ids, limit);
+    const QString q = query.trimmed();
+    if (q.isEmpty() || limit <= 0)
+        return {};
+    const QString exch = exchange.trimmed();
+
+    // Prefer the in-memory cache — it is the hot path, fast (no per-keystroke
+    // SQL), and stays correct even when the on-disk catalog is empty (e.g. a
+    // failed/partial persist). Fall back to the SQLite repository only for
+    // brokers whose cache isn't loaded in this session.
+    auto type_rank = [](InstrumentType t) {
+        switch (t) {
+            case InstrumentType::EQ: return 0;
+            case InstrumentType::INDEX: return 1;
+            case InstrumentType::FUT: return 2;
+            default: return 3;
+        }
+    };
+
+    QVector<Instrument> out;
+    QStringList db_fallback;
+    {
+        QMutexLocker lock(&mutex_);
+        // Broker order: explicit list (first = highest priority) else all cached.
+        QStringList order = broker_ids;
+        order.removeAll(QString());
+        if (order.isEmpty())
+            for (auto it = caches_.cbegin(); it != caches_.cend(); ++it)
+                order << it.key();
+
+        for (const QString& bid : order) {
+            auto cit = caches_.find(bid);
+            if (cit == caches_.end() || !cit->loaded) {
+                db_fallback << bid; // not in memory this session — try the DB below
+                continue;
+            }
+            QVector<Instrument> hits;
+            for (const auto& inst : cit->by_token) {
+                if (!exch.isEmpty() && inst.exchange.compare(exch, Qt::CaseInsensitive) != 0)
+                    continue;
+                if (inst.symbol.contains(q, Qt::CaseInsensitive) ||
+                    inst.brsymbol.contains(q, Qt::CaseInsensitive) ||
+                    inst.name.contains(q, Qt::CaseInsensitive))
+                    hits.append(inst);
+            }
+            // Rank: symbol-prefix matches first, then EQ→INDEX→FUT→other, then A-Z.
+            std::sort(hits.begin(), hits.end(), [&](const Instrument& a, const Instrument& b) {
+                const bool ap = a.symbol.startsWith(q, Qt::CaseInsensitive);
+                const bool bp = b.symbol.startsWith(q, Qt::CaseInsensitive);
+                if (ap != bp) return ap;
+                const int ar = type_rank(a.instrument_type), br = type_rank(b.instrument_type);
+                if (ar != br) return ar < br;
+                return a.symbol < b.symbol;
+            });
+            out += hits;
+            if (out.size() >= limit)
+                break;
+        }
+    }
+
+    if (out.size() < limit && !db_fallback.isEmpty())
+        out += InstrumentRepository::instance().search_all(q, exchange, db_fallback, limit - out.size());
+
+    if (out.size() > limit)
+        out.resize(limit);
+    return out;
 }
 
 // ── F&O / Options chain helpers ─────────────────────────────────────────────

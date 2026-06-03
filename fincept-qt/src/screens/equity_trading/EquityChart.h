@@ -5,6 +5,7 @@
 #include "trading/TradingTypes.h"
 #include "ui/charts/ChartOverlayManager.h"
 
+#include <QColor>
 #include <QEvent>
 #include <QPushButton>
 #include <QVector>
@@ -22,7 +23,7 @@ class QGraphicsEllipseItem;
 class QGraphicsSimpleTextItem;
 class QLabel;
 
-namespace fincept::ui { class IndicatorPicker; }
+namespace fincept::ui { class IndicatorPicker; class HorizontalLineLayer; }
 
 namespace fincept::screens::equity {
 
@@ -35,6 +36,10 @@ public:
 
     void set_candles(const QVector<trading::BrokerCandle>& candles);
     void clear();
+
+    // Draw/clear a dashed horizontal line at an open position's entry price.
+    void set_position_line(double price, const QColor& color, const QString& label);
+    void clear_position_line();
 
     QString current_timeframe() const;
     fincept::ui::ChartOverlayManager* overlay_manager() const { return overlay_mgr_; }
@@ -104,6 +109,7 @@ private:
 
     fincept::ui::ChartOverlayManager* overlay_mgr_ = nullptr;
     fincept::ui::IndicatorPicker* indicator_picker_ = nullptr;
+    fincept::ui::HorizontalLineLayer* pos_line_ = nullptr; // open-position entry line
 
     friend class HoverEquityChartView;
 };

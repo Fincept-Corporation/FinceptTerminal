@@ -326,10 +326,16 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
     QCheckBox* combo_ind3_enabled_ = nullptr;
 
     void apply_portfolio_config(const QJsonObject& config);
+    /// Dispatch a run on the next event-loop tick. Used by the auto-run path so
+    /// freshly-populated strategy combos/params settle before on_run() reads them.
+    void trigger_auto_run();
 
     QJsonArray pending_weights_;
     bool first_show_ = true;
     bool is_running_ = false;
+    // Set when a caller requests an immediate backtest but strategies are still
+    // loading; the get_strategies callback fires the deferred run once ready.
+    bool pending_auto_run_ = false;
 
     // Symbol-group link (None when unlinked).
     SymbolGroup link_group_ = SymbolGroup::None;

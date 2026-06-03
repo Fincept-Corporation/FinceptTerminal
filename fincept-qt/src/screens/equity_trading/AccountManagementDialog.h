@@ -3,6 +3,7 @@
 // Allows adding, removing, renaming, and connecting broker accounts.
 // Replaces the single-account EquityCredentials dialog.
 
+#include "trading/ActionCenter.h"
 #include "trading/BrokerAccount.h"
 #include "trading/BrokerInterface.h"
 
@@ -92,6 +93,12 @@ class AccountManagementDialog : public QDialog {
     QVBoxLayout* fields_layout_ = nullptr;
     QPushButton* connect_btn_ = nullptr;
     QPushButton* rename_btn_ = nullptr;
+
+    // Per-account order-approval mode (Auto / Semi-Auto). Lives in a footer
+    // below the stacked credential pages so it applies to every broker,
+    // including the dedicated Zerodha/Fyers/MT4 forms.
+    QLabel* approval_caption_ = nullptr;
+    QComboBox* approval_mode_combo_ = nullptr;
 
     // Dynamic credential fields (rebuilt per broker profile)
     QVector<QLineEdit*> cred_fields_;

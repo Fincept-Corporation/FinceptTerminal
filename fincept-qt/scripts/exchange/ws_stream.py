@@ -42,6 +42,15 @@ except ImportError:
 _stdout_write = sys.stdout.write
 _stdout_flush  = sys.stdout.flush
 
+# Dedicated executor for the blocking sys.stdin.readline() in the stdin command
+# loop. It is NOT asyncio's default executor on purpose: a readline() parked at
+# SIGTERM time would otherwise make asyncio.run()'s shutdown_default_executor()
+# hang forever joining the worker thread. Keeping it in our own executor leaves the
+# default executor empty (so shutdown is instant); the parked worker is then
+# stepped over by the os._exit() in __main__ instead of being joined.
+from concurrent.futures import ThreadPoolExecutor as _ThreadPoolExecutor
+_stdin_executor = _ThreadPoolExecutor(max_workers=1, thread_name_prefix="stdin-reader")
+
 
 def emit(obj):
     """Write a JSON line to stdout and flush immediately."""
@@ -196,6 +205,8 @@ def safe_ob_limit(exchange_id):
         "binanceusdm":       20,
         "binancecoinm":      20,
         "binanceus":         20,
+        # Bybit WS watch_order_book only accepts 1/50/200/1000 — 50 is a safe default
+        "bybit":             50,
         # OKX uses its own channel selector; None picks 'books' (400 levels)
         "okx":               None,
         "okxus":             None,
@@ -342,6 +353,7 @@ async def watch_ohlcv(exchange, symbol, timeframe="1m"):
                         "type":      "ohlcv",
                         "symbol":    symbol,
                         "timeframe": timeframe,
+                        "interval":  timeframe,
                         "candle": {
                             "timestamp": int(c[0]) if c[0] is not None else 0,
                             "open":   o,
@@ -452,6 +464,183 @@ async def watch_ticker_individual(exchange, symbol):
             await asyncio.sleep(min(errors * 2, 30))
 
 
+# ── Watcher supervision ────────────────────────────────────────────────────────
+
+# A per-symbol/channel watcher loop returns after MAX_CONSECUTIVE_ERRORS consecutive
+# errors. Without supervision that channel is dead for the life of the process even
+# after a transient (~1 min) outage clears. supervise() re-runs the watcher after a
+# capped backoff so streams self-heal, while staying safe against busy-looping:
+# a watcher that dies immediately every time is retried with an increasing delay
+# (up to RESPAWN_MAX_DELAY), and the delay resets once a watcher has run a while.
+
+RESPAWN_BASE_DELAY = 5      # seconds — first respawn backoff
+RESPAWN_MAX_DELAY  = 60     # seconds — cap so we never sleep too long
+RESPAWN_RESET_AFTER = 120   # seconds — a watcher that ran this long resets backoff
+
+
+async def supervise(name, factory):
+    """Run a watcher coroutine forever, respawning it with backoff if it exits.
+
+    `factory` is a zero-arg callable returning a fresh coroutine each time, so we
+    can recreate the awaitable after one finishes (a coroutine cannot be re-awaited).
+    """
+    delay = RESPAWN_BASE_DELAY
+    while True:
+        started = time.monotonic()
+        try:
+            await factory()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            emit({"type": "error", "source": "supervisor", "channel": name,
+                  "message": f"watcher crashed: {e}"})
+        # Watcher returned (gave up after consecutive errors) or crashed.
+        ran_for = time.monotonic() - started
+        if ran_for >= RESPAWN_RESET_AFTER:
+            delay = RESPAWN_BASE_DELAY  # it was healthy for a while — reset backoff
+        emit({"type": "info", "source": "supervisor", "channel": name,
+              "message": f"respawning in {delay}s"})
+        await asyncio.sleep(delay)
+        delay = min(delay * 2, RESPAWN_MAX_DELAY)
+
+
+# ── Primary-symbol task factory ────────────────────────────────────────────────
+
+def make_primary_tasks(exchange, exchange_id, caps, resolved_primary, timeframe, ticker_cache):
+    """Create the supervise()-wrapped watcher tasks for the PRIMARY symbol.
+
+    Returns a list of asyncio.Task. The list is laid out as:
+      [ (ticker_cache and/or orderbook and/or ticker), (ohlcv), (trades) ]
+    so callers can cancel/recreate just the OHLCV task. The OHLCV task (if any)
+    is tagged with task.ws_kind == "ohlcv" so it can be located unambiguously.
+
+    `timeframe` is the OHLCV timeframe (e.g. "1m", "5m") — NOT hardcoded.
+    """
+    tasks = []
+
+    # ── Price / orderbook / ticker-cache ──────────────────────────────────────
+    if caps["watch_ticker"] and caps["watch_orderbook"]:
+        # Run both: OB gives fast mid-price, ticker watcher keeps cache fresh
+        tasks.append(asyncio.create_task(supervise(
+            f"ticker_cache:{resolved_primary}",
+            lambda: watch_ticker_and_cache(exchange, resolved_primary, ticker_cache))))
+        tasks.append(asyncio.create_task(supervise(
+            f"orderbook:{resolved_primary}",
+            lambda: watch_orderbook(exchange, exchange_id, resolved_primary, ticker_cache))))
+    elif caps["watch_orderbook"]:
+        tasks.append(asyncio.create_task(supervise(
+            f"orderbook:{resolved_primary}",
+            lambda: watch_orderbook(exchange, exchange_id, resolved_primary, ticker_cache))))
+    elif caps["watch_ticker"]:
+        tasks.append(asyncio.create_task(supervise(
+            f"ticker:{resolved_primary}",
+            lambda: watch_ticker(exchange, resolved_primary))))
+
+    # ── OHLCV (tagged so it can be recreated alone on a timeframe change) ──────
+    if caps["watch_ohlcv"]:
+        ohlcv_task = asyncio.create_task(supervise(
+            f"ohlcv:{resolved_primary}",
+            lambda: watch_ohlcv(exchange, resolved_primary, timeframe)))
+        ohlcv_task.ws_kind = "ohlcv"
+        tasks.append(ohlcv_task)
+
+    # ── Trades ────────────────────────────────────────────────────────────────
+    if caps["watch_trades"]:
+        tasks.append(asyncio.create_task(supervise(
+            f"trades:{resolved_primary}",
+            lambda: watch_trades_stream(exchange, resolved_primary))))
+
+    return tasks
+
+
+async def _cancel_tasks(tasks):
+    """Cancel the given tasks and await them so no 'pending' warnings remain."""
+    for t in tasks:
+        t.cancel()
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
+async def stdin_command_loop(exchange, exchange_id, caps, ticker_cache, state):
+    """Read newline-delimited JSON commands from stdin and re-point the primary
+    stream WITHOUT restarting the process. Watchlist ticker tasks are untouched.
+
+    Commands (malformed / unknown are ignored safely):
+      {"cmd":"set_primary","symbol":"<unified pair>"}
+      {"cmd":"set_timeframe","timeframe":"<tf>"}
+
+    `state` is a dict carrying mutable shared state:
+      state["primary"]   -> current resolved primary symbol
+      state["timeframe"] -> current OHLCV timeframe
+      state["tasks"]     -> list of current primary asyncio.Task
+
+    Reads run on a DEDICATED single-thread executor (not the default one).
+    sys.stdin.readline() blocks until a line or EOF, so on SIGTERM the worker stays
+    parked — if it lived in asyncio's *default* executor, asyncio.run()'s
+    shutdown_default_executor() would hang forever joining it. Keeping it out of the
+    default executor lets shutdown complete; the parked worker is then stepped over
+    by the os._exit() in __main__ instead of being joined.
+    """
+    loop = asyncio.get_event_loop()
+    while True:
+        line = await loop.run_in_executor(_stdin_executor, sys.stdin.readline)
+        if line == "":
+            break  # EOF — parent closed our stdin
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            cmd = json.loads(line)
+        except Exception:
+            continue  # malformed JSON — ignore
+        if not isinstance(cmd, dict):
+            continue
+
+        action = cmd.get("cmd")
+
+        # ── Re-point the primary symbol ───────────────────────────────────────
+        if action == "set_primary":
+            requested = cmd.get("symbol")
+            if not requested or not isinstance(requested, str):
+                continue
+            try:
+                resolved = resolve_symbol(exchange, requested, exchange_id)
+            except Exception as e:
+                emit({"type": "error", "source": "set_primary", "message": str(e)})
+                continue
+            if not resolved:
+                continue  # no matching market — resolve_symbol already emitted info
+            # Emit the same symbol_map shape the startup path uses so C++ remaps.
+            if resolved != requested:
+                emit({"type": "symbol_map", "map": {resolved: requested}})
+            # Cancel the old primary tasks and spin up fresh ones at current tf.
+            old = state["tasks"]
+            state["tasks"] = make_primary_tasks(
+                exchange, exchange_id, caps, resolved, state["timeframe"], ticker_cache)
+            state["primary"] = resolved
+            await _cancel_tasks(old)
+
+        # ── Change the OHLCV timeframe only ───────────────────────────────────
+        elif action == "set_timeframe":
+            tf = cmd.get("timeframe")
+            if not tf or not isinstance(tf, str):
+                continue
+            state["timeframe"] = tf
+            # Recreate ONLY the ohlcv task; leave orderbook/trades/ticker running.
+            if not caps["watch_ohlcv"]:
+                continue
+            old_ohlcv = [t for t in state["tasks"] if getattr(t, "ws_kind", None) == "ohlcv"]
+            kept = [t for t in state["tasks"] if getattr(t, "ws_kind", None) != "ohlcv"]
+            new_ohlcv = asyncio.create_task(supervise(
+                f"ohlcv:{state['primary']}",
+                lambda: watch_ohlcv(exchange, state["primary"], tf)))
+            new_ohlcv.ws_kind = "ohlcv"
+            state["tasks"] = kept + [new_ohlcv]
+            await _cancel_tasks(old_ohlcv)
+
+        # Unknown command — ignore silently.
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 async def main():
@@ -463,6 +652,23 @@ async def main():
     exchange_id    = sys.argv[1]
     primary_symbol = sys.argv[2]
     all_symbols    = sys.argv[2:]
+
+    # Graceful shutdown on SIGTERM/SIGINT: cancel THIS coroutine so the finally
+    # block below tears every watcher down cleanly (cancel + await) before closing
+    # the exchange. Doing sys.exit() from a signal handler while the event loop is
+    # in select() unwinds the loop mid-flight and makes ccxt.pro's WS read callbacks
+    # dump CancelledError tracebacks to stdout — handling it inside the loop avoids
+    # that entirely. add_signal_handler is POSIX-only; on Windows we fall back to
+    # the plain signal handler installed in __main__.
+    main_task = asyncio.current_task()
+    loop = asyncio.get_event_loop()
+    for sig in (getattr(signal, "SIGTERM", None), getattr(signal, "SIGINT", None)):
+        if sig is None:
+            continue
+        try:
+            loop.add_signal_handler(sig, main_task.cancel)
+        except (NotImplementedError, RuntimeError, ValueError):
+            pass  # not supported on this platform/loop — __main__ handler covers it
 
     try:
         import ccxt.pro as ccxtpro
@@ -557,49 +763,56 @@ async def main():
     # Shared ticker cache — OB watcher reads this to enrich fast mid-price tickers
     ticker_cache = {}
 
+    # Mutable state shared with the stdin command handler so a running stream can
+    # re-point its primary symbol / OHLCV timeframe without restarting the process.
+    state = {
+        "primary":   primary_symbol,
+        "timeframe": "1m",
+        "tasks":     [],   # current PRIMARY tasks (replaced on set_primary/set_timeframe)
+    }
+
+    watchlist_tasks = []
+    stdin_task      = None
+
     try:
-        tasks = []
+        # Each watcher is wrapped in supervise() so a channel that dies after a
+        # transient outage (MAX_CONSECUTIVE_ERRORS) is respawned with backoff
+        # instead of staying dead for the life of the process.
 
-        # ── Primary symbol ────────────────────────────────────────────────────
-        if caps["watch_ticker"] and caps["watch_orderbook"]:
-            # Run both: OB gives fast mid-price, ticker watcher keeps cache fresh
-            tasks.append(asyncio.create_task(
-                watch_ticker_and_cache(exchange, primary_symbol, ticker_cache)))
-            tasks.append(asyncio.create_task(
-                watch_orderbook(exchange, exchange_id, primary_symbol, ticker_cache)))
-        elif caps["watch_orderbook"]:
-            tasks.append(asyncio.create_task(
-                watch_orderbook(exchange, exchange_id, primary_symbol, ticker_cache)))
-        elif caps["watch_ticker"]:
-            tasks.append(asyncio.create_task(
-                watch_ticker(exchange, primary_symbol)))
-
-        if caps["watch_ohlcv"]:
-            tasks.append(asyncio.create_task(
-                watch_ohlcv(exchange, primary_symbol, "1m")))
-
-        if caps["watch_trades"]:
-            tasks.append(asyncio.create_task(
-                watch_trades_stream(exchange, primary_symbol)))
+        # ── Primary symbol (via the shared factory) ───────────────────────────
+        state["tasks"] = make_primary_tasks(
+            exchange, exchange_id, caps, state["primary"], state["timeframe"], ticker_cache)
 
         # ── Watchlist symbols (excluding primary) ─────────────────────────────
+        # These stay connected for the whole life of the process — set_primary /
+        # set_timeframe never touch them.
         other_symbols = [s for s in all_symbols if s != primary_symbol]
         if other_symbols:
             if caps["watch_tickers"]:
-                tasks.append(asyncio.create_task(
-                    watch_tickers_batch(exchange, other_symbols)))
+                watchlist_tasks.append(asyncio.create_task(supervise(
+                    "tickers_batch",
+                    lambda: watch_tickers_batch(exchange, other_symbols))))
             elif caps["watch_ticker"]:
                 for sym in other_symbols:
-                    tasks.append(asyncio.create_task(
-                        watch_ticker_individual(exchange, sym)))
+                    # Bind sym per-iteration via default arg to avoid late-binding closure bug
+                    watchlist_tasks.append(asyncio.create_task(supervise(
+                        f"ticker_individual:{sym}",
+                        lambda s=sym: watch_ticker_individual(exchange, s))))
 
-        if not tasks:
+        if not state["tasks"] and not watchlist_tasks:
             emit({"type": "error",
                   "message": f"Exchange '{exchange_id}' has no usable watch methods"})
             await exchange.close()
             sys.exit(1)
 
-        await asyncio.gather(*tasks)
+        # The stdin loop runs until EOF (parent closes our stdin). Watchlist tasks
+        # run forever via supervise(). Primary tasks live in state["tasks"] and are
+        # swapped out on commands; they are NOT awaited here so cancelling them does
+        # not tear down the process. We await the stdin loop + watchlist tasks; the
+        # process stays alive as long as any of these is running.
+        stdin_task = asyncio.create_task(
+            stdin_command_loop(exchange, exchange_id, caps, ticker_cache, state))
+        await asyncio.gather(stdin_task, *watchlist_tasks)
 
     except asyncio.CancelledError:
         pass
@@ -609,12 +822,22 @@ async def main():
         emit({"type": "error", "message": f"Fatal: {e}"})
         traceback.print_exc(file=sys.stderr)
     finally:
+        # Tear down every still-running task (primary + watchlist + stdin) cleanly
+        # so there are no "Task was destroyed but it is pending" warnings on shutdown.
+        teardown = list(state["tasks"]) + watchlist_tasks
+        if stdin_task is not None:
+            teardown.append(stdin_task)
+        await _cancel_tasks(teardown)
         emit({"type": "status", "connected": False,
               "exchange": exchange_id, "symbols": all_symbols})
         await exchange.close()
 
 
 if __name__ == "__main__":
+    # Fallback SIGTERM handler for platforms where loop.add_signal_handler() is
+    # unavailable (Windows). On POSIX, main() installs an asyncio signal handler
+    # that supersedes this one, giving a clean cancel-and-await shutdown instead of
+    # raising SystemExit from inside the event loop's select().
     try:
         signal.signal(signal.SIGTERM, lambda s, f: sys.exit(0))
     except Exception:
@@ -623,3 +846,10 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         pass
+    # main() shut down cleanly (flushing its final status line as it went). The
+    # stdin reader runs in a default-executor worker thread that may still be parked
+    # in a blocking sys.stdin.readline(); that non-daemon thread would otherwise
+    # block interpreter exit until the parent closes our stdin. os._exit() bypasses
+    # the thread join (and atexit) — safe here because every emit() already flushed.
+    sys.stdout.flush()
+    os._exit(0)

@@ -85,7 +85,7 @@
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">OUVERT</translation>
+        <translation>OUVRIR</translation>
     </message>
 </context>
 <context>
@@ -168,15 +168,15 @@
     <name>GovDataProviderPanel</name>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Exporter CSV</translation>
+        <translation>Exporter CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">Fichiers CSV (*.csv)</translation>
+        <translation>Fichiers CSV (*.csv)</translation>
     </message>
     <message>
         <source>Export failed</source>
-        <translation type="unfinished">Échec de l'exportation</translation>
+        <translation>Échec de l'exportation</translation>
     </message>
     <message>
         <source>Unable to open file for writing.</source>
@@ -187,11 +187,11 @@
     <name>MAModulePanel</name>
     <message>
         <source>YES</source>
-        <translation type="unfinished">OUI</translation>
+        <translation>OUI</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">NON</translation>
+        <translation>NON</translation>
     </message>
     <message>
         <source>Metric</source>
@@ -263,7 +263,7 @@
     </message>
     <message>
         <source>PORTFOLIO</source>
-        <translation type="unfinished">PORTEFEUILLE</translation>
+        <translation>PORTEFEUILLE</translation>
     </message>
     <message>
         <source>GENERAL</source>
@@ -519,7 +519,7 @@
     </message>
     <message>
         <source>AI</source>
-        <translation type="unfinished">AI</translation>
+        <translation>AI</translation>
     </message>
     <message>
         <source>Copy</source>
@@ -602,7 +602,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Annuler</translation>
+        <translation>Annuler</translation>
     </message>
     <message>
         <source>Update Connection</source>
@@ -793,7 +793,7 @@ Assurez-vous que les champs obligatoires (URL, hôte ou API key) sont remplis.</
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NEUTRE</translation>
+        <translation>NEUTRE</translation>
     </message>
     <message>
         <source>VOLATILE</source>
@@ -889,7 +889,7 @@ Pour les conversations longues, utilisez l'onglet AI Chat.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
     <message>
         <source>Listening — speak now</source>
@@ -1096,7 +1096,7 @@ Pour les conversations longues, utilisez l'onglet AI Chat.</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">Serveurs MCP</translation>
+        <translation>Serveurs MCP</translation>
     </message>
     <message>
         <source>Excel</source>
@@ -1111,7 +1111,7 @@ Pour les conversations longues, utilisez l'onglet AI Chat.</translation>
     <name>fincept::MonitorMapWidget</name>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">ACTUEL</translation>
+        <translation>ACTUEL</translation>
     </message>
 </context>
 <context>
@@ -1256,7 +1256,7 @@ Pour les conversations longues, utilisez l'onglet AI Chat.</translation>
     </message>
     <message>
         <source>Refresh</source>
-        <translation type="unfinished">Actualiser</translation>
+        <translation>Actualiser</translation>
     </message>
     <message>
         <source>Refresh task list</source>
@@ -1280,7 +1280,7 @@ Pour les conversations longues, utilisez l'onglet AI Chat.</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Annuler</translation>
+        <translation>Annuler</translation>
     </message>
     <message>
         <source>Cancel task</source>
@@ -1288,7 +1288,7 @@ Pour les conversations longues, utilisez l'onglet AI Chat.</translation>
     </message>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">SERVEURS MCP</translation>
+        <translation>SERVEURS MCP</translation>
     </message>
     <message>
         <source>Model Context Protocol tool servers.</source>
@@ -1374,7 +1374,7 @@ Pour les conversations longues, utilisez l'onglet AI Chat.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Type</translation>
+        <translation>Type</translation>
     </message>
     <message>
         <source>Memory type:</source>
@@ -1462,7 +1462,7 @@ Résultat :
     </message>
     <message>
         <source>Name:</source>
-        <translation type="unfinished">Nom :</translation>
+        <translation>Nom :</translation>
     </message>
     <message>
         <source>Transport</source>
@@ -1542,7 +1542,7 @@ Résultat :
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Symbole</translation>
+        <translation>Symbole</translation>
     </message>
     <message>
         <source>Symbol:</source>
@@ -1679,7 +1679,7 @@ Marchés, actions, portefeuille, analyses macro.</translation>
     </message>
     <message>
         <source>%1 credits</source>
-        <translation type="unfinished">%1 crédits</translation>
+        <translation>%1 crédits</translation>
     </message>
     <message>
         <source>0 credits</source>
@@ -1808,7 +1808,7 @@ Marchés, actions, portefeuille, analyses macro.</translation>
     </message>
     <message>
         <source>Export Failed</source>
-        <translation type="unfinished">Échec de l'Exportation</translation>
+        <translation>Échec de l'Exportation</translation>
     </message>
     <message>
         <source>Could not write file.</source>
@@ -1969,7 +1969,7 @@ Marchés, actions, portefeuille, analyses macro.</translation>
     </message>
     <message>
         <source>Check for Updates</source>
-        <translation type="unfinished">Rechercher des Mises à Jour</translation>
+        <translation>Rechercher des Mises à Jour</translation>
     </message>
     <message>
         <source>Checking…</source>
@@ -2041,7 +2041,7 @@ Marchés, actions, portefeuille, analyses macro.</translation>
     </message>
     <message>
         <source>RESOURCES</source>
-        <translation type="unfinished">RESSOURCES</translation>
+        <translation>RESSOURCES</translation>
     </message>
     <message>
         <source>GitHub Repository</source>
@@ -2077,15 +2077,15 @@ Marchés, actions, portefeuille, analyses macro.</translation>
     </message>
     <message>
         <source>COMMERCIAL</source>
-        <translation type="unfinished">COMMERCIAL</translation>
+        <translation>COMMERCIAL</translation>
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">SÉCURITÉ</translation>
+        <translation>SÉCURITÉ</translation>
     </message>
     <message>
         <source>LEGAL</source>
-        <translation type="unfinished">JURIDIQUE</translation>
+        <translation>JURIDIQUE</translation>
     </message>
 </context>
 <context>
@@ -2116,7 +2116,7 @@ Marchés, actions, portefeuille, analyses macro.</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tous</translation>
+        <translation>Tous</translation>
     </message>
     <message>
         <source>Mode:</source>
@@ -2144,11 +2144,11 @@ Marchés, actions, portefeuille, analyses macro.</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>APPROVE ALL</source>
@@ -2168,11 +2168,11 @@ Marchés, actions, portefeuille, analyses macro.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Type</translation>
+        <translation>Type</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Symbole</translation>
+        <translation>Symbole</translation>
     </message>
     <message>
         <source>Side</source>
@@ -2180,7 +2180,7 @@ Marchés, actions, portefeuille, analyses macro.</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Qty</translation>
     </message>
     <message>
         <source>Price Type</source>
@@ -2279,7 +2279,7 @@ Marchés, actions, portefeuille, analyses macro.</translation>
     </message>
     <message>
         <source>TIMESTAMP</source>
-        <translation type="unfinished">HORODATAGE</translation>
+        <translation>HORODATAGE</translation>
     </message>
     <message>
         <source>EVENT</source>
@@ -2291,11 +2291,11 @@ Marchés, actions, portefeuille, analyses macro.</translation>
     </message>
     <message>
         <source>AMOUNT</source>
-        <translation type="unfinished">MONTANT</translation>
+        <translation>MONTANT</translation>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">STATUT</translation>
+        <translation>STATUT</translation>
     </message>
     <message>
         <source>SIGNATURE</source>
@@ -2399,11 +2399,11 @@ Les données de l'ADB sont gratuites — aucune clé API requise</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>ADD</source>
-        <translation type="unfinished">AJOUTER</translation>
+        <translation>AJOUTER</translation>
     </message>
     <message>
         <source>No results found</source>
@@ -2446,7 +2446,7 @@ Les données de l'ADB sont gratuites — aucune clé API requise</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>RECORD</source>
@@ -2469,19 +2469,19 @@ Les données de l'ADB sont gratuites — aucune clé API requise</translation>
     </message>
     <message>
         <source>%1 AVAILABLE</source>
-        <translation type="unfinished">%1 DISPONIBLE</translation>
+        <translation>%1 DISPONIBLE</translation>
     </message>
     <message>
         <source>Search widgets...</source>
-        <translation type="unfinished">Rechercher des widgets...</translation>
+        <translation>Rechercher des widgets...</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tous</translation>
+        <translation>Tous</translation>
     </message>
 </context>
 <context>
@@ -2568,11 +2568,11 @@ Les données de l'ADB sont gratuites — aucune clé API requise</translation>
     </message>
     <message>
         <source>REBALANCE</source>
-        <translation type="unfinished">RÉÉQUILIBRER</translation>
+        <translation>RÉÉQUILIBRER</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">RISQUE</translation>
+        <translation>RISQUE</translation>
     </message>
     <message>
         <source>How can I help you?</source>
@@ -2606,7 +2606,7 @@ Sélectionnez un agent ci-dessus, ou utilisez le Routage Auto pour laisser le sy
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
     <message>
         <source>Response received (%1ms)</source>
@@ -2776,7 +2776,7 @@ Sélectionnez un agent ci-dessus, ou utilisez le Routage Auto pour laisser le sy
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tous</translation>
+        <translation>Tous</translation>
     </message>
     <message>
         <source>Running</source>
@@ -2800,7 +2800,7 @@ Sélectionnez un agent ci-dessus, ou utilisez le Routage Auto pour laisser le sy
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">ACTUALISER</translation>
+        <translation>ACTUALISER</translation>
     </message>
     <message>
         <source>Select a task to view details</source>
@@ -2832,7 +2832,7 @@ Sélectionnez un agent ci-dessus, ou utilisez le Routage Auto pour laisser le sy
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>SCHEDULE…</source>
@@ -2844,7 +2844,7 @@ Sélectionnez un agent ci-dessus, ou utilisez le Routage Auto pour laisser le sy
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">SUPPRIMER</translation>
+        <translation>SUPPRIMER</translation>
     </message>
     <message>
         <source>(no plan persisted)</source>
@@ -2975,7 +2975,7 @@ Sélectionnez un agent ci-dessus, ou utilisez le Routage Auto pour laisser le sy
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">ACTUALISER</translation>
+        <translation>ACTUALISER</translation>
     </message>
     <message>
         <source>JSON EDITOR</source>
@@ -2991,7 +2991,7 @@ Sélectionnez un agent ci-dessus, ou utilisez le Routage Auto pour laisser le sy
     </message>
     <message>
         <source>LLM PROFILE</source>
-        <translation type="unfinished">PROFIL LLM</translation>
+        <translation>PROFIL LLM</translation>
     </message>
     <message>
         <source>Select which LLM profile this agent uses. Create profiles in Settings &gt; LLM Config &gt; Profiles.</source>
@@ -3007,11 +3007,11 @@ Sélectionnez un agent ci-dessus, ou utilisez le Routage Auto pour laisser le sy
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">OUTILS</translation>
+        <translation>OUTILS</translation>
     </message>
     <message>
         <source>FEATURES</source>
-        <translation type="unfinished">FONCTIONNALITÉS</translation>
+        <translation>FONCTIONNALITÉS</translation>
     </message>
     <message>
         <source>Reasoning</source>
@@ -3043,7 +3043,7 @@ Sélectionnez un agent ci-dessus, ou utilisez le Routage Auto pour laisser le sy
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">SUPPRIMER</translation>
+        <translation>SUPPRIMER</translation>
     </message>
     <message>
         <source>APPLY JSON</source>
@@ -3071,7 +3071,7 @@ Sélectionnez un agent ci-dessus, ou utilisez le Routage Auto pour laisser le sy
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
     <message>
         <source>Routed → %1 (intent: %2, confidence: %3%)</source>
@@ -3188,7 +3188,7 @@ Les conversations sont enregistrées automatiquement.</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Marchés</translation>
+        <translation>Marchés</translation>
     </message>
     <message>
         <source>Show me today's top market movers</source>
@@ -3196,7 +3196,7 @@ Les conversations sont enregistrées automatiquement.</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">Actualités</translation>
+        <translation>Actualités</translation>
     </message>
     <message>
         <source>Summarize the latest financial news</source>
@@ -3204,7 +3204,7 @@ Les conversations sont enregistrées automatiquement.</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portefeuille</translation>
+        <translation>Portefeuille</translation>
     </message>
     <message>
         <source>Analyze my portfolio performance</source>
@@ -3220,7 +3220,7 @@ Les conversations sont enregistrées automatiquement.</translation>
     </message>
     <message>
         <source>Economics</source>
-        <translation type="unfinished">Économie</translation>
+        <translation>Économie</translation>
     </message>
     <message>
         <source>Current GDP and inflation data</source>
@@ -3228,7 +3228,7 @@ Les conversations sont enregistrées automatiquement.</translation>
     </message>
     <message>
         <source>Research</source>
-        <translation type="unfinished">Recherche</translation>
+        <translation>Recherche</translation>
     </message>
     <message>
         <source>Tech sector market trends</source>
@@ -3288,7 +3288,7 @@ Les conversations sont enregistrées automatiquement.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
     <message>
         <source>(empty response — model returned no content)</source>
@@ -3398,7 +3398,7 @@ pour charger les endpoints disponibles</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SYMBOLE</translation>
+        <translation>SYMBOLE</translation>
     </message>
     <message>
         <source>START</source>
@@ -3426,7 +3426,7 @@ pour charger les endpoints disponibles</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">ACTUALISER</translation>
+        <translation>ACTUALISER</translation>
     </message>
     <message>
         <source>AKSHARE DATA</source>
@@ -3525,11 +3525,11 @@ pour charger les endpoints disponibles</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>Entry Side:</source>
@@ -3675,7 +3675,7 @@ pour charger les endpoints disponibles</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">ERREUR</translation>
+        <translation>ERREUR</translation>
     </message>
     <message>
         <source>ANALYZING...</source>
@@ -3698,121 +3698,121 @@ pour charger les endpoints disponibles</translation>
     <name>fincept::screens::AnalyticsSectorsView</name>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">APERÇU</translation>
+        <translation>APERÇU</translation>
     </message>
     <message>
         <source>CORRELATION</source>
-        <translation type="unfinished">CORRÉLATION</translation>
+        <translation>CORRÉLATION</translation>
     </message>
     <message>
         <source>SECTORS</source>
-        <translation type="unfinished">SECTEURS</translation>
+        <translation>SECTEURS</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">POSITIONS</translation>
+        <translation>POSITIONS</translation>
     </message>
     <message>
         <source>MARKET VALUE</source>
-        <translation type="unfinished">VALEUR DE MARCHÉ</translation>
+        <translation>VALEUR DE MARCHÉ</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>SECTOR ALLOCATION</source>
-        <translation type="unfinished">ALLOCATION SECTORIELLE</translation>
+        <translation>ALLOCATION SECTORIELLE</translation>
     </message>
     <message>
         <source>SECTOR BREAKDOWN</source>
-        <translation type="unfinished">RÉPARTITION SECTORIELLE</translation>
+        <translation>RÉPARTITION SECTORIELLE</translation>
     </message>
     <message>
         <source>SECTOR</source>
-        <translation type="unfinished">SECTEUR</translation>
+        <translation>SECTEUR</translation>
     </message>
     <message>
         <source>POS</source>
-        <translation type="unfinished">POS</translation>
+        <translation>POS</translation>
     </message>
     <message>
         <source>MKT VAL</source>
-        <translation type="unfinished">MKT VAL</translation>
+        <translation>MKT VAL</translation>
     </message>
     <message>
         <source>WT</source>
-        <translation type="unfinished">WT</translation>
+        <translation>WT</translation>
     </message>
     <message>
         <source>P&amp;L%</source>
-        <translation type="unfinished">P&amp;L%</translation>
+        <translation>P&amp;L%</translation>
     </message>
     <message>
         <source>HOLDINGS CORRELATION MATRIX</source>
-        <translation type="unfinished">MATRICE DE CORRÉLATION DES TITRES</translation>
+        <translation>MATRICE DE CORRÉLATION DES TITRES</translation>
     </message>
     <message>
         <source>%1
 sectors</source>
-        <translation type="unfinished">%1
+        <translation>%1
 secteurs</translation>
     </message>
     <message>
         <source>+%1 more</source>
-        <translation type="unfinished">+%1 de plus</translation>
+        <translation>+%1 de plus</translation>
     </message>
     <message>
         <source>LARGEST</source>
-        <translation type="unfinished">LE PLUS GRAND</translation>
+        <translation>LE PLUS GRAND</translation>
     </message>
     <message>
         <source>SMALLEST</source>
-        <translation type="unfinished">LE PLUS PETIT</translation>
+        <translation>LE PLUS PETIT</translation>
     </message>
     <message>
         <source>BEST</source>
-        <translation type="unfinished">MEILLEUR</translation>
+        <translation>MEILLEUR</translation>
     </message>
     <message>
         <source>WORST</source>
-        <translation type="unfinished">PIRE</translation>
+        <translation>PIRE</translation>
     </message>
     <message>
         <source>%1 positions</source>
-        <translation type="unfinished">%1 positions</translation>
+        <translation>%1 positions</translation>
     </message>
     <message>
         <source>HHI CONCENTRATION</source>
-        <translation type="unfinished">CONCENTRATION HHI</translation>
+        <translation>CONCENTRATION HHI</translation>
     </message>
     <message>
         <source>Herfindahl index across sectors (lower = more diversified)</source>
-        <translation type="unfinished">Indice Herfindahl par secteur (plus bas = plus diversifié)</translation>
+        <translation>Indice Herfindahl par secteur (plus bas = plus diversifié)</translation>
     </message>
     <message>
         <source>TOP-3 CONCENTRATION</source>
-        <translation type="unfinished">CONCENTRATION TOP 3</translation>
+        <translation>CONCENTRATION TOP 3</translation>
     </message>
     <message>
         <source>Weight of the three largest sectors (%1)</source>
-        <translation type="unfinished">Pondération des trois plus grands secteurs (%1)</translation>
+        <translation>Pondération des trois plus grands secteurs (%1)</translation>
     </message>
     <message>
         <source>Diversified</source>
-        <translation type="unfinished">Diversifié</translation>
+        <translation>Diversifié</translation>
     </message>
     <message>
         <source>Balanced</source>
-        <translation type="unfinished">Équilibré</translation>
+        <translation>Équilibré</translation>
     </message>
     <message>
         <source>Concentrated</source>
-        <translation type="unfinished">Concentré</translation>
+        <translation>Concentré</translation>
     </message>
     <message>
         <source>Need 2+ holdings for correlation analysis</source>
-        <translation type="unfinished">Nécessite au moins 2 titres pour l'analyse de corrélation</translation>
+        <translation>Nécessite au moins 2 titres pour l'analyse de corrélation</translation>
     </message>
     <message>
         <source>Top-10 holdings by weight. Pearson correlation of daily returns over the trailing 30 trading days (from real price history).</source>
@@ -3910,7 +3910,7 @@ secteurs</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SYMBOLE</translation>
+        <translation>SYMBOLE</translation>
     </message>
     <message>
         <source>e.g. 000001</source>
@@ -3930,7 +3930,7 @@ secteurs</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">ACTUALISER</translation>
+        <translation>ACTUALISER</translation>
     </message>
     <message>
         <source>ASIA MARKETS</source>
@@ -4009,7 +4009,7 @@ secteurs</translation>
     </message>
     <message>
         <source>STRATEGY</source>
-        <translation type="unfinished">STRATÉGIE</translation>
+        <translation>STRATÉGIE</translation>
     </message>
     <message>
         <source>CATEGORY</source>
@@ -4017,7 +4017,7 @@ secteurs</translation>
     </message>
     <message>
         <source>PARAMETERS</source>
-        <translation type="unfinished">PARAMÈTRES</translation>
+        <translation>PARAMÈTRES</translation>
     </message>
     <message>
         <source>RESULTS</source>
@@ -4043,7 +4043,7 @@ Commandes : Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, 
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">RÉSUMÉ</translation>
+        <translation>RÉSUMÉ</translation>
     </message>
     <message>
         <source>EQUITY CURVE</source>
@@ -4051,7 +4051,7 @@ Commandes : Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, 
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">MÉTRIQUES</translation>
+        <translation>MÉTRIQUES</translation>
     </message>
     <message>
         <source>DETAILS</source>
@@ -4127,11 +4127,11 @@ Commandes : Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, 
     </message>
     <message>
         <source>BENCHMARK</source>
-        <translation type="unfinished">RÉFÉRENCE</translation>
+        <translation>RÉFÉRENCE</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SYMBOLE</translation>
+        <translation>SYMBOLE</translation>
     </message>
     <message>
         <source>None</source>
@@ -4191,7 +4191,7 @@ Commandes : Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, 
     </message>
     <message>
         <source>METHOD</source>
-        <translation type="unfinished">MÉTHODE</translation>
+        <translation>MÉTHODE</translation>
     </message>
     <message>
         <source>MAX ITERATIONS</source>
@@ -4343,7 +4343,7 @@ Commandes : Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, 
     </message>
     <message>
         <source>ANALYSIS TYPE</source>
-        <translation type="unfinished">TYPE D'ANALYSE</translation>
+        <translation>TYPE D'ANALYSE</translation>
     </message>
     <message>
         <source>ROLLING WINDOW</source>
@@ -4351,7 +4351,7 @@ Commandes : Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, 
     </message>
     <message>
         <source>METRIC</source>
-        <translation type="unfinished">MÉTRIQUE</translation>
+        <translation>MÉTRIQUE</translation>
     </message>
     <message>
         <source>SIGNAL GENERATORS</source>
@@ -4423,11 +4423,11 @@ Commandes : Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, 
     </message>
     <message>
         <source>EXECUTING...</source>
-        <translation type="unfinished">EXÉCUTION...</translation>
+        <translation>EXÉCUTION...</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TYPE</translation>
+        <translation>TYPE</translation>
     </message>
     <message>
         <source>CONDITION</source>
@@ -4487,7 +4487,7 @@ Commandes : Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, 
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">ERREUR</translation>
+        <translation>ERREUR</translation>
     </message>
 </context>
 <context>
@@ -4624,7 +4624,7 @@ Les données BIS sont gratuites — aucune clé API requise</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">PAYS</translation>
+        <translation>PAYS</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -4715,7 +4715,7 @@ Clé gratuite sur : data.bls.gov/registrationEngine/</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TYPE</translation>
+        <translation>TYPE</translation>
     </message>
     <message>
         <source>UP</source>
@@ -4731,7 +4731,7 @@ Clé gratuite sur : data.bls.gov/registrationEngine/</translation>
     </message>
     <message>
         <source>OUTPUT</source>
-        <translation type="unfinished">SORTIE</translation>
+        <translation>SORTIE</translation>
     </message>
     <message>
         <source>OUTPUT [collapsed]</source>
@@ -4943,11 +4943,11 @@ Les données de la CFTC sont gratuites — aucune API key requise</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">OUVERT</translation>
+        <translation>OUVRIR</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">ENREGISTRER</translation>
+        <translation>ENREGISTRER</translation>
     </message>
     <message>
         <source>+ CELL</source>
@@ -5183,11 +5183,11 @@ Cela supprimera toutes les positions et transactions.</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">SUPPRIMER</translation>
+        <translation>SUPPRIMER</translation>
     </message>
 </context>
 <context>
@@ -5210,7 +5210,7 @@ Cela supprimera toutes les positions et transactions.</translation>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Date</translation>
+        <translation>Date</translation>
     </message>
     <message>
         <source>Lat</source>
@@ -5226,7 +5226,7 @@ Cela supprimera toutes les positions et transactions.</translation>
     </message>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">APERÇU</translation>
+        <translation>APERÇU</translation>
     </message>
     <message>
         <source>EVENTS</source>
@@ -5264,7 +5264,7 @@ Cela supprimera toutes les positions et transactions.</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">PAYS</translation>
+        <translation>PAYS</translation>
     </message>
     <message>
         <source>CITY</source>
@@ -5272,7 +5272,7 @@ Cela supprimera toutes les positions et transactions.</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">DATE</translation>
+        <translation>DATE</translation>
     </message>
     <message>
         <source>SOURCE</source>
@@ -5299,7 +5299,7 @@ Cela supprimera toutes les positions et transactions.</translation>
     </message>
     <message>
         <source>CONTACT US</source>
-        <translation type="unfinished">NOUS CONTACTER</translation>
+        <translation>NOUS CONTACTER</translation>
     </message>
     <message>
         <source>Get in touch with our team</source>
@@ -5347,7 +5347,7 @@ Cela supprimera toutes les positions et transactions.</translation>
     </message>
     <message>
         <source>QUICK ACTIONS</source>
-        <translation type="unfinished">ACTIONS RAPIDES</translation>
+        <translation>ACTIONS RAPIDES</translation>
     </message>
     <message>
         <source>Send Email</source>
@@ -5426,7 +5426,7 @@ Cela supprimera toutes les positions et transactions.</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">SUPPRIMER</translation>
+        <translation>SUPPRIMER</translation>
     </message>
     <message>
         <source>SKIP</source>
@@ -5561,7 +5561,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
     <message>
         <source>Failed</source>
@@ -5621,7 +5621,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">OUTILS</translation>
+        <translation>OUTILS</translation>
     </message>
     <message>
         <source>TERMINAL TOOLS</source>
@@ -5629,11 +5629,11 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>FEATURES</source>
-        <translation type="unfinished">FONCTIONNALITÉS</translation>
+        <translation>FONCTIONNALITÉS</translation>
     </message>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">SERVEURS MCP</translation>
+        <translation>SERVEURS MCP</translation>
     </message>
     <message>
         <source>e.g. My Equity Analyst</source>
@@ -5733,7 +5733,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Type</translation>
+        <translation>Type</translation>
     </message>
     <message>
         <source>URLs (one per line)</source>
@@ -5944,7 +5944,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>SETTINGS</source>
-        <translation type="unfinished">PARAMÈTRES</translation>
+        <translation>PARAMÈTRES</translation>
     </message>
     <message>
         <source>STAKE</source>
@@ -5952,7 +5952,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">MARCHÉS</translation>
+        <translation>MARCHÉS</translation>
     </message>
     <message>
         <source>ROADMAP</source>
@@ -5972,7 +5972,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">SÉCURITÉ</translation>
+        <translation>SÉCURITÉ</translation>
     </message>
     <message>
         <source>● CONNECTED</source>
@@ -6015,140 +6015,140 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">EN DIRECT</translation>
+        <translation>EN DIRECT</translation>
     </message>
     <message>
         <source>OFFLINE</source>
-        <translation type="unfinished">HORS LIGNE</translation>
+        <translation>HORS LIGNE</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::CustomIndexView</name>
     <message>
         <source>CREATE INDEX</source>
-        <translation type="unfinished">CRÉER UN INDICE</translation>
+        <translation>CRÉER UN INDICE</translation>
     </message>
     <message>
         <source>MY INDICES</source>
-        <translation type="unfinished">MES INDICES</translation>
+        <translation>MES INDICES</translation>
     </message>
     <message>
         <source>PERFORMANCE</source>
-        <translation type="unfinished">PERFORMANCE</translation>
+        <translation>PERFORMANCE</translation>
     </message>
     <message>
         <source>CREATE CUSTOM INDEX</source>
-        <translation type="unfinished">CRÉER UN INDICE PERSONNALISÉ</translation>
+        <translation>CRÉER UN INDICE PERSONNALISÉ</translation>
     </message>
     <message>
         <source>My Custom Index</source>
-        <translation type="unfinished">Mon Indice Personnalisé</translation>
+        <translation>Mon Indice Personnalisé</translation>
     </message>
     <message>
         <source>NAME:</source>
-        <translation type="unfinished">NOM :</translation>
+        <translation>NOM :</translation>
     </message>
     <message>
         <source>METHOD:</source>
-        <translation type="unfinished">MÉTHODE :</translation>
+        <translation>MÉTHODE :</translation>
     </message>
     <message>
         <source>BASE:</source>
-        <translation type="unfinished">BASE :</translation>
+        <translation>BASE :</translation>
     </message>
     <message>
         <source>CONSTITUENTS (from portfolio holdings)</source>
-        <translation type="unfinished">CONSTITUANTS (à partir des titres du portefeuille)</translation>
+        <translation>CONSTITUANTS (à partir des titres du portefeuille)</translation>
     </message>
     <message>
         <source>INCLUDE</source>
-        <translation type="unfinished">INCLURE</translation>
+        <translation>INCLURE</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SYMBOLE</translation>
+        <translation>SYMBOLE</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">PRIX</translation>
+        <translation>PRIX</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">PONDÉRATION</translation>
+        <translation>PONDÉRATION</translation>
     </message>
     <message>
         <source>MKT VALUE</source>
-        <translation type="unfinished">VALEUR MKT</translation>
+        <translation>VALEUR MKT</translation>
     </message>
     <message>
         <source>MY CUSTOM INDICES</source>
-        <translation type="unfinished">MES INDICES PERSONNALISÉS</translation>
+        <translation>MES INDICES PERSONNALISÉS</translation>
     </message>
     <message>
         <source>DELETE SELECTED</source>
-        <translation type="unfinished">SUPPRIMER LA SÉLECTION</translation>
+        <translation>SUPPRIMER LA SÉLECTION</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NOM</translation>
+        <translation>NOM</translation>
     </message>
     <message>
         <source>METHOD</source>
-        <translation type="unfinished">MÉTHODE</translation>
+        <translation>MÉTHODE</translation>
     </message>
     <message>
         <source>BASE</source>
-        <translation type="unfinished">BASE</translation>
+        <translation>BASE</translation>
     </message>
     <message>
         <source>CURRENT VALUE</source>
-        <translation type="unfinished">VALEUR ACTUELLE</translation>
+        <translation>VALEUR ACTUELLE</translation>
     </message>
     <message>
         <source>CHANGE</source>
-        <translation type="unfinished">VAR.</translation>
+        <translation>VAR.</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">CRÉÉ</translation>
+        <translation>CRÉÉ</translation>
     </message>
     <message>
         <source>No custom indices created yet.
 Go to CREATE INDEX tab to build one from your portfolio.</source>
-        <translation type="unfinished">Aucun indice personnalisé créé.
+        <translation>Aucun indice personnalisé créé.
 Allez à l'onglet CRÉER UN INDICE pour en construire un à partir de votre portefeuille.</translation>
     </message>
     <message>
         <source>INDEX PERFORMANCE</source>
-        <translation type="unfinished">PERFORMANCE DE L'INDICE</translation>
+        <translation>PERFORMANCE DE L'INDICE</translation>
     </message>
     <message>
         <source>Select an index from MY INDICES to see its performance.</source>
-        <translation type="unfinished">Sélectionnez un indice depuis MES INDICES pour voir sa performance.</translation>
+        <translation>Sélectionnez un indice depuis MES INDICES pour voir sa performance.</translation>
     </message>
     <message>
         <source>Base value must be positive.</source>
-        <translation type="unfinished">La valeur de base doit être positive.</translation>
+        <translation>La valeur de base doit être positive.</translation>
     </message>
     <message>
         <source>Select at least one constituent.</source>
-        <translation type="unfinished">Sélectionnez au moins un constituant.</translation>
+        <translation>Sélectionnez au moins un constituant.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
     <message>
         <source>Index '%1' created successfully.</source>
-        <translation type="unfinished">Indice « %1 » créé avec succès.</translation>
+        <translation>Indice « %1 » créé avec succès.</translation>
     </message>
     <message>
         <source>PERFORMANCE — %1  (no data)</source>
-        <translation type="unfinished">PERFORMANCE — %1  (aucune donnée)</translation>
+        <translation>PERFORMANCE — %1  (aucune donnée)</translation>
     </message>
     <message>
         <source>PERFORMANCE — %1</source>
-        <translation type="unfinished">PERFORMANCE — %1</translation>
+        <translation>PERFORMANCE — %1</translation>
     </message>
 </context>
 <context>
@@ -6174,7 +6174,7 @@ Allez à l'onglet CRÉER UN INDICE pour en construire un à partir de votre port
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">STATUT</translation>
+        <translation>STATUT</translation>
     </message>
     <message>
         <source>No data — select a series</source>
@@ -6193,7 +6193,7 @@ Allez à l'onglet CRÉER UN INDICE pour en construire un à partir de votre port
     </message>
     <message>
         <source>COMPARE</source>
-        <translation type="unfinished">COMPARER</translation>
+        <translation>COMPARER</translation>
     </message>
     <message>
         <source>CHART:</source>
@@ -6235,11 +6235,11 @@ Cliquez sur  + AJOUTER UN EMPLACEMENT  dans le panneau de gauche pour commencer<
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">ACTUALISER</translation>
+        <translation>ACTUALISER</translation>
     </message>
     <message>
         <source>EXPORT CSV</source>
-        <translation type="unfinished">EXPORTER CSV</translation>
+        <translation>EXPORTER CSV</translation>
     </message>
     <message>
         <source>SLOT %1</source>
@@ -6267,7 +6267,7 @@ Cliquez sur  + AJOUTER UN EMPLACEMENT  dans le panneau de gauche pour commencer<
     </message>
     <message>
         <source>ERROR [%1]: %2</source>
-        <translation type="unfinished">ERREUR [%1] : %2</translation>
+        <translation>ERREUR [%1] : %2</translation>
     </message>
     <message>
         <source>Fetching providers...</source>
@@ -6283,11 +6283,11 @@ Cliquez sur  + AJOUTER UN EMPLACEMENT  dans le panneau de gauche pour commencer<
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Exporter CSV</translation>
+        <translation>Exporter CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">Fichiers CSV (*.csv)</translation>
+        <translation>Fichiers CSV (*.csv)</translation>
     </message>
     <message>
         <source>Failed to open file: %1</source>
@@ -6323,7 +6323,7 @@ Cliquez sur  + AJOUTER UN EMPLACEMENT  dans le panneau de gauche pour commencer<
     </message>
     <message>
         <source>Cleared</source>
-        <translation type="unfinished">Effacé</translation>
+        <translation>Effacé</translation>
     </message>
     <message>
         <source>No data loaded</source>
@@ -6350,7 +6350,7 @@ Cliquez sur  + AJOUTER UN EMPLACEMENT  dans le panneau de gauche pour commencer<
     </message>
     <message>
         <source>PROVIDERS</source>
-        <translation type="unfinished">FOURNISSEURS</translation>
+        <translation>FOURNISSEURS</translation>
     </message>
     <message>
         <source>DATASETS</source>
@@ -6426,7 +6426,7 @@ Cliquez sur  + AJOUTER UN EMPLACEMENT  dans le panneau de gauche pour commencer<
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">CHARGEMENT...</translation>
+        <translation>CHARGEMENT...</translation>
     </message>
 </context>
 <context>
@@ -6559,7 +6559,7 @@ Cliquez sur  + AJOUTER UN EMPLACEMENT  dans le panneau de gauche pour commencer<
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">ACTUALISER</translation>
+        <translation>ACTUALISER</translation>
     </message>
     <message>
         <source>Force-refresh all live data on the dashboard</source>
@@ -6571,7 +6571,7 @@ Cliquez sur  + AJOUTER UN EMPLACEMENT  dans le panneau de gauche pour commencer<
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">ENREGISTRER</translation>
+        <translation>ENREGISTRER</translation>
     </message>
     <message>
         <source>RESET</source>
@@ -6614,7 +6614,7 @@ Cliquez sur  + AJOUTER UN EMPLACEMENT  dans le panneau de gauche pour commencer<
     </message>
     <message>
         <source>CREATE</source>
-        <translation type="unfinished">CRÉER</translation>
+        <translation>CRÉER</translation>
     </message>
     <message>
         <source>API CONFIG</source>
@@ -6678,7 +6678,7 @@ Cliquez sur  + AJOUTER UN EMPLACEMENT  dans le panneau de gauche pour commencer<
     </message>
     <message>
         <source>SYSTEM</source>
-        <translation type="unfinished">SYSTÈME</translation>
+        <translation>SYSTÈME</translation>
     </message>
     <message>
         <source>MAPPING ENGINE</source>
@@ -6690,7 +6690,7 @@ Cliquez sur  + AJOUTER UN EMPLACEMENT  dans le panneau de gauche pour commencer<
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">SÉCURITÉ</translation>
+        <translation>SÉCURITÉ</translation>
     </message>
     <message>
         <source>CURRENT MAPPING</source>
@@ -6710,7 +6710,7 @@ Cliquez sur  + AJOUTER UN EMPLACEMENT  dans le panneau de gauche pour commencer<
     </message>
     <message>
         <source>ENDPOINT</source>
-        <translation type="unfinished">ENDPOINT</translation>
+        <translation>ENDPOINT</translation>
     </message>
     <message>
         <source>HTTP METHOD</source>
@@ -6778,7 +6778,7 @@ Cliquez sur  + AJOUTER UN EMPLACEMENT  dans le panneau de gauche pour commencer<
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Type</translation>
+        <translation>Type</translation>
     </message>
     <message>
         <source>Required</source>
@@ -6848,7 +6848,7 @@ Les données sensibles ne sont jamais stockées en texte clair.</translation>
     </message>
     <message>
         <source>RUN TEST</source>
-        <translation type="unfinished">EXÉCUTER LE TEST</translation>
+        <translation>EXÉCUTER LE TEST</translation>
     </message>
     <message>
         <source>Test results will appear here...</source>
@@ -6868,7 +6868,7 @@ Les données sensibles ne sont jamais stockées en texte clair.</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">SUPPRIMER</translation>
+        <translation>SUPPRIMER</translation>
     </message>
     <message>
         <source>+ NEW MAPPING</source>
@@ -7113,7 +7113,7 @@ ANALYSEUR : %11
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TYPE</translation>
+        <translation>TYPE</translation>
     </message>
     <message>
         <source>CATEGORY</source>
@@ -7168,7 +7168,7 @@ Cette action est irréversible. Vous pouvez les rajouter depuis l'écran complet
     <name>fincept::screens::DeploymentDashboard</name>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>LTP</source>
@@ -7176,7 +7176,7 @@ Cette action est irréversible. Vous pouvez les rajouter depuis l'écran complet
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">TAUX DE RÉUSSITE</translation>
+        <translation>TAUX DE RÉUSSITE</translation>
     </message>
     <message>
         <source>POSITION</source>
@@ -7228,7 +7228,7 @@ Cette action est irréversible. Vous pouvez les rajouter depuis l'écran complet
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">ACTUALISER</translation>
+        <translation>ACTUALISER</translation>
     </message>
     <message>
         <source>STOP ALL</source>
@@ -7491,7 +7491,7 @@ Cette action est irréversible. Vous pouvez les rajouter depuis l'écran complet
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">ERREUR</translation>
+        <translation>ERREUR</translation>
     </message>
     <message>
         <source>DIRTY PRICE</source>
@@ -7645,19 +7645,19 @@ Cette action est irréversible. Vous pouvez les rajouter depuis l'écran complet
     </message>
     <message>
         <source>Dashboard</source>
-        <translation type="unfinished">Tableau de Bord</translation>
+        <translation>Tableau de Bord</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Marchés</translation>
+        <translation>Marchés</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">Actualités</translation>
+        <translation>Actualités</translation>
     </message>
     <message>
         <source>Watchlist</source>
-        <translation type="unfinished">Liste de Suivi</translation>
+        <translation>Liste de Suivi</translation>
     </message>
     <message>
         <source>TRADING</source>
@@ -7665,7 +7665,7 @@ Cette action est irréversible. Vous pouvez les rajouter depuis l'écran complet
     </message>
     <message>
         <source>Crypto Trading</source>
-        <translation type="unfinished">Trading Crypto</translation>
+        <translation>Trading Crypto</translation>
     </message>
     <message>
         <source>Paper Trading</source>
@@ -7673,11 +7673,11 @@ Cette action est irréversible. Vous pouvez les rajouter depuis l'écran complet
     </message>
     <message>
         <source>Algo Trading</source>
-        <translation type="unfinished">Trading Algorithmique</translation>
+        <translation>Trading Algorithmique</translation>
     </message>
     <message>
         <source>Backtesting</source>
-        <translation type="unfinished">Backtesting</translation>
+        <translation>Backtesting</translation>
     </message>
     <message>
         <source>RESEARCH &amp; ANALYTICS</source>
@@ -7685,23 +7685,23 @@ Cette action est irréversible. Vous pouvez les rajouter depuis l'écran complet
     </message>
     <message>
         <source>Equity Research</source>
-        <translation type="unfinished">Recherche d'Actions</translation>
+        <translation>Recherche d'Actions</translation>
     </message>
     <message>
         <source>Surface Analytics</source>
-        <translation type="unfinished">Analyse de Surface</translation>
+        <translation>Analyse de Surface</translation>
     </message>
     <message>
         <source>Derivatives</source>
-        <translation type="unfinished">Dérivés</translation>
+        <translation>Dérivés</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portefeuille</translation>
+        <translation>Portefeuille</translation>
     </message>
     <message>
         <source>M&amp;A Analytics</source>
-        <translation type="unfinished">Analyse M&amp;A</translation>
+        <translation>Analyse M&amp;A</translation>
     </message>
     <message>
         <source>AI &amp; QUANTITATIVE</source>
@@ -7709,7 +7709,7 @@ Cette action est irréversible. Vous pouvez les rajouter depuis l'écran complet
     </message>
     <message>
         <source>AI Quant Lab</source>
-        <translation type="unfinished">Labo Quant IA</translation>
+        <translation>Labo Quant IA</translation>
     </message>
     <message>
         <source>QuantLib Suite</source>
@@ -7717,7 +7717,7 @@ Cette action est irréversible. Vous pouvez les rajouter depuis l'écran complet
     </message>
     <message>
         <source>AI Chat</source>
-        <translation type="unfinished">Chat IA</translation>
+        <translation>Chat IA</translation>
     </message>
     <message>
         <source>Agent Studio</source>
@@ -7725,11 +7725,11 @@ Cette action est irréversible. Vous pouvez les rajouter depuis l'écran complet
     </message>
     <message>
         <source>Alpha Arena</source>
-        <translation type="unfinished">Alpha Arena</translation>
+        <translation>Alpha Arena</translation>
     </message>
     <message>
         <source>DATA SOURCES</source>
-        <translation type="unfinished">SOURCES DE DONNÉES</translation>
+        <translation>SOURCES DE DONNÉES</translation>
     </message>
     <message>
         <source>DBnomics</source>
@@ -7737,11 +7737,11 @@ Cette action est irréversible. Vous pouvez les rajouter depuis l'écran complet
     </message>
     <message>
         <source>Economics</source>
-        <translation type="unfinished">Économie</translation>
+        <translation>Économie</translation>
     </message>
     <message>
         <source>AkShare Data</source>
-        <translation type="unfinished">Données AkShare</translation>
+        <translation>Données AkShare</translation>
     </message>
     <message>
         <source>Government Data</source>
@@ -7753,35 +7753,35 @@ Cette action est irréversible. Vous pouvez les rajouter depuis l'écran complet
     </message>
     <message>
         <source>Geopolitics</source>
-        <translation type="unfinished">Géopolitique</translation>
+        <translation>Géopolitique</translation>
     </message>
     <message>
         <source>Maritime</source>
-        <translation type="unfinished">Maritime</translation>
+        <translation>Maritime</translation>
     </message>
     <message>
         <source>Prediction Markets</source>
-        <translation type="unfinished">Marchés de Prédiction</translation>
+        <translation>Marchés de Prédiction</translation>
     </message>
     <message>
         <source>Alt Investments</source>
-        <translation type="unfinished">Inv. Alternatifs</translation>
+        <translation>Inv. Alternatifs</translation>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">OUTILS</translation>
+        <translation>OUTILS</translation>
     </message>
     <message>
         <source>Report Builder</source>
-        <translation type="unfinished">Générateur de Rapports</translation>
+        <translation>Générateur de Rapports</translation>
     </message>
     <message>
         <source>Node Editor</source>
-        <translation type="unfinished">Éditeur de Nœuds</translation>
+        <translation>Éditeur de Nœuds</translation>
     </message>
     <message>
         <source>Code Editor</source>
-        <translation type="unfinished">Éditeur de Code</translation>
+        <translation>Éditeur de Code</translation>
     </message>
     <message>
         <source>Excel</source>
@@ -7789,15 +7789,15 @@ Cette action est irréversible. Vous pouvez les rajouter depuis l'écran complet
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Notes</translation>
+        <translation>Notes</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">Serveurs MCP</translation>
+        <translation>Serveurs MCP</translation>
     </message>
     <message>
         <source>Data Mapping</source>
-        <translation type="unfinished">Mappage de Données</translation>
+        <translation>Mappage de Données</translation>
     </message>
     <message>
         <source>ACCOUNT</source>
@@ -7805,11 +7805,11 @@ Cette action est irréversible. Vous pouvez les rajouter depuis l'écran complet
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">Paramètres</translation>
+        <translation>Paramètres</translation>
     </message>
     <message>
         <source>Profile</source>
-        <translation type="unfinished">Profil</translation>
+        <translation>Profil</translation>
     </message>
     <message>
         <source>DOCUMENTATION</source>
@@ -8081,7 +8081,7 @@ Capture d'écran (Ctrl+P) — Capturer dans un fichier</translation>
     </message>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">APERÇU</translation>
+        <translation>APERÇU</translation>
     </message>
     <message>
         <source>The Dashboard is your primary workspace. It features a draggable widget grid where you can arrange market widgets, a scrolling ticker bar showing live prices, a market pulse panel with sector performance, and a status bar showing connection state.</source>
@@ -8159,7 +8159,7 @@ Capture d'écran (Ctrl+P) — Capturer dans un fichier</translation>
     </message>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">MARCHÉS</translation>
+        <translation>MARCHÉS</translation>
     </message>
     <message>
         <source>Global and regional market overview with auto-refresh</source>
@@ -8493,7 +8493,7 @@ PRO : Déployer des portefeuilles multistratégies, optimiser les paramètres, e
     </message>
     <message>
         <source>PROVIDERS</source>
-        <translation type="unfinished">FOURNISSEURS</translation>
+        <translation>FOURNISSEURS</translation>
     </message>
     <message>
         <source>■  Backtrader — Python-based, full-featured backtesting engine
@@ -8695,7 +8695,7 @@ PRO : Modèles de valorisation personnalisés, calibration de la surface de vola
     </message>
     <message>
         <source>PORTFOLIO</source>
-        <translation type="unfinished">PORTEFEUILLE</translation>
+        <translation>PORTEFEUILLE</translation>
     </message>
     <message>
         <source>Multi-portfolio management with analytics and AI agent</source>
@@ -8959,7 +8959,7 @@ PRO : Workflows multi-agents, intégration de serveur MCP, pipelines de recherch
     </message>
     <message>
         <source>AGENT STUDIO</source>
-        <translation type="unfinished">STUDIO AGENT</translation>
+        <translation>STUDIO AGENT</translation>
     </message>
     <message>
         <source>Configure and manage AI agents, teams, and workflows</source>
@@ -9113,7 +9113,7 @@ PRO : Intégrer les données DBnomics dans des modèles quantitatifs de trading 
     </message>
     <message>
         <source>ECONOMICS</source>
-        <translation type="unfinished">ÉCONOMIE</translation>
+        <translation>ÉCONOMIE</translation>
     </message>
     <message>
         <source>Macroeconomic data and analysis tools</source>
@@ -9603,7 +9603,7 @@ PRO : Mises à jour automatiques des modèles avec des flux de données en direc
     </message>
     <message>
         <source>NOTES</source>
-        <translation type="unfinished">NOTES</translation>
+        <translation>NOTES</translation>
     </message>
     <message>
         <source>Persistent note-taking for research and trade journals</source>
@@ -9647,7 +9647,7 @@ PRO : Workflow de recherche intégré avec des notes liées aux positions</trans
     </message>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">SERVEURS MCP</translation>
+        <translation>SERVEURS MCP</translation>
     </message>
     <message>
         <source>Model Context Protocol server management</source>
@@ -9735,7 +9735,7 @@ PRO : Pipelines de données complexes multi-sources avec validation</translation
     </message>
     <message>
         <source>SETTINGS</source>
-        <translation type="unfinished">PARAMÈTRES</translation>
+        <translation>PARAMÈTRES</translation>
     </message>
     <message>
         <source>Application configuration and preferences</source>
@@ -9867,7 +9867,7 @@ Source : EconDB — données macroéconomiques, aucune clé API requise</transla
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">PAYS</translation>
+        <translation>PAYS</translation>
     </message>
     <message>
         <source>Fetching EconDB: %1 — %2…</source>
@@ -9894,7 +9894,7 @@ Source : EconDB — données macroéconomiques, aucune clé API requise</transla
     </message>
     <message>
         <source>CHANGE</source>
-        <translation type="unfinished">VAR.</translation>
+        <translation>VAR.</translation>
     </message>
     <message>
         <source>MIN</source>
@@ -9922,7 +9922,7 @@ Source : EconDB — données macroéconomiques, aucune clé API requise</transla
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
     <message>
         <source>No data returned for this selection</source>
@@ -9934,11 +9934,11 @@ Source : EconDB — données macroéconomiques, aucune clé API requise</transla
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Exporter CSV</translation>
+        <translation>Exporter CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">Fichiers CSV (*.csv)</translation>
+        <translation>Fichiers CSV (*.csv)</translation>
     </message>
 </context>
 <context>
@@ -9963,7 +9963,7 @@ Source : Forex Factory — calendrier économique mondial (aucune clé API requi
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">DATE</translation>
+        <translation>DATE</translation>
     </message>
     <message>
         <source>IMPACT</source>
@@ -10001,103 +10001,103 @@ Source : Forex Factory — calendrier économique mondial (aucune clé API requi
     <name>fincept::screens::EconomicsView</name>
     <message>
         <source>PORTFOLIO ECONOMICS OVERVIEW</source>
-        <translation type="unfinished">APERÇU ÉCONOMIQUE DU PORTEFEUILLE</translation>
+        <translation>APERÇU ÉCONOMIQUE DU PORTEFEUILLE</translation>
     </message>
     <message>
         <source>Per-holding contribution to portfolio value, P&amp;L, and risk</source>
-        <translation type="unfinished">Contribution par titre à la valeur du portefeuille, au P&amp;L et au risque</translation>
+        <translation>Contribution par titre à la valeur du portefeuille, au P&amp;L et au risque</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SYMBOLE</translation>
+        <translation>SYMBOLE</translation>
     </message>
     <message>
         <source>SECTOR</source>
-        <translation type="unfinished">SECTEUR</translation>
+        <translation>SECTEUR</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">PONDÉRATION</translation>
+        <translation>PONDÉRATION</translation>
     </message>
     <message>
         <source>COST BASIS</source>
-        <translation type="unfinished">PRIX DE REVIENT</translation>
+        <translation>PRIX DE REVIENT</translation>
     </message>
     <message>
         <source>MARKET VALUE</source>
-        <translation type="unfinished">VALEUR DE MARCHÉ</translation>
+        <translation>VALEUR DE MARCHÉ</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">P&amp;L %</translation>
+        <translation>P&amp;L %</translation>
     </message>
     <message>
         <source>PORTFOLIO FACTOR SENSITIVITY</source>
-        <translation type="unfinished">SENSIBILITÉ FACTORIELLE DU PORTEFEUILLE</translation>
+        <translation>SENSIBILITÉ FACTORIELLE DU PORTEFEUILLE</translation>
     </message>
     <message>
         <source>Estimated portfolio impact from macro factor shocks, weighted by holdings</source>
-        <translation type="unfinished">Impact estimé sur le portefeuille des chocs macro-factoriels, pondéré par les titres</translation>
+        <translation>Impact estimé sur le portefeuille des chocs macro-factoriels, pondéré par les titres</translation>
     </message>
     <message>
         <source>FACTOR SHOCK</source>
-        <translation type="unfinished">CHOC FACTORIEL</translation>
+        <translation>CHOC FACTORIEL</translation>
     </message>
     <message>
         <source>SENSITIVITY</source>
-        <translation type="unfinished">SENSIBILITÉ</translation>
+        <translation>SENSIBILITÉ</translation>
     </message>
     <message>
         <source>DIRECTION</source>
-        <translation type="unfinished">DIRECTION</translation>
+        <translation>DIRECTION</translation>
     </message>
     <message>
         <source>ESTIMATED IMPACT</source>
-        <translation type="unfinished">IMPACT ESTIMÉ</translation>
+        <translation>IMPACT ESTIMÉ</translation>
     </message>
     <message>
         <source>Positive</source>
-        <translation type="unfinished">Positif</translation>
+        <translation>Positif</translation>
     </message>
     <message>
         <source>Negative</source>
-        <translation type="unfinished">Négatif</translation>
+        <translation>Négatif</translation>
     </message>
     <message>
         <source>Interest Rates (+1%)</source>
-        <translation type="unfinished">Taux d'intérêt (+1 %)</translation>
+        <translation>Taux d'intérêt (+1 %)</translation>
     </message>
     <message>
         <source>GDP Growth (+1%)</source>
-        <translation type="unfinished">Croissance du PIB (+1 %)</translation>
+        <translation>Croissance du PIB (+1 %)</translation>
     </message>
     <message>
         <source>Inflation / CPI (+1%)</source>
-        <translation type="unfinished">Inflation / IPC (+1 %)</translation>
+        <translation>Inflation / IPC (+1 %)</translation>
     </message>
     <message>
         <source>USD Strength (+1%)</source>
-        <translation type="unfinished">Force du USD (+1 %)</translation>
+        <translation>Force du USD (+1 %)</translation>
     </message>
     <message>
         <source>Oil Price (+10%)</source>
-        <translation type="unfinished">Prix du pétrole (+10 %)</translation>
+        <translation>Prix du pétrole (+10 %)</translation>
     </message>
     <message>
         <source>Consumer Spending (+1%)</source>
-        <translation type="unfinished">Dépenses de consommation (+1 %)</translation>
+        <translation>Dépenses de consommation (+1 %)</translation>
     </message>
     <message>
         <source>Credit Spreads (+50bps)</source>
-        <translation type="unfinished">Écarts de crédit (+50 pb)</translation>
+        <translation>Écarts de crédit (+50 pb)</translation>
     </message>
     <message>
         <source>Unemployment (+1%)</source>
-        <translation type="unfinished">Chômage (+1 %)</translation>
+        <translation>Chômage (+1 %)</translation>
     </message>
     <message>
         <source>CURRENT MACRO CONDITIONS  (LIVE · FRED)</source>
@@ -10127,7 +10127,7 @@ Elle est stockée chiffrée et partagée avec toutes les fonctionnalités basée
     </message>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">ACTUEL</translation>
+        <translation>ACTUEL</translation>
     </message>
     <message>
         <source>AS OF</source>
@@ -10150,7 +10150,7 @@ Elle est stockée chiffrée et partagée avec toutes les fonctionnalités basée
     <name>fincept::screens::EditTransactionDialog</name>
     <message>
         <source>Edit Transaction</source>
-        <translation type="unfinished">Modifier la transaction</translation>
+        <translation>Modifier la transaction</translation>
     </message>
     <message>
         <source>EDIT %1 — %2</source>
@@ -10178,11 +10178,11 @@ Elle est stockée chiffrée et partagée avec toutes les fonctionnalités basée
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">ENREGISTRER</translation>
+        <translation>ENREGISTRER</translation>
     </message>
 </context>
 <context>
@@ -10330,7 +10330,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BÊTA</translation>
+        <translation>BÊTA</translation>
     </message>
     <message>
         <source>SHORT RATIO</source>
@@ -10357,7 +10357,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>EXPORT CSV</source>
-        <translation type="unfinished">EXPORTER CSV</translation>
+        <translation>EXPORTER CSV</translation>
     </message>
     <message>
         <source>Metric</source>
@@ -10373,7 +10373,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>N/A</source>
-        <translation type="unfinished">N/D</translation>
+        <translation>N/D</translation>
     </message>
     <message>
         <source>Revenue</source>
@@ -10660,7 +10660,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">ACTUALISER</translation>
+        <translation>ACTUALISER</translation>
     </message>
     <message>
         <source>Search for a symbol to load news.</source>
@@ -10695,15 +10695,15 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">OUVERT</translation>
+        <translation>OUVERTURE</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">HAUT</translation>
+        <translation>HAUT</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">BAS</translation>
+        <translation>BAS</translation>
     </message>
     <message>
         <source>PREV CLOSE</source>
@@ -10711,7 +10711,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">VOLUME</translation>
+        <translation>VOLUME</translation>
     </message>
     <message>
         <source>VALUATION</source>
@@ -10743,7 +10743,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BÊTA</translation>
+        <translation>BÊTA</translation>
     </message>
     <message>
         <source>SHARE STATS</source>
@@ -10867,7 +10867,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>N/A</source>
-        <translation type="unfinished">N/D</translation>
+        <translation>N/D</translation>
     </message>
     <message>
         <source>STRONG BUY</source>
@@ -10875,7 +10875,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>HOLD</source>
@@ -10883,7 +10883,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>STRONG SELL</source>
@@ -10926,11 +10926,11 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SYMBOLE</translation>
+        <translation>SYMBOLE</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">PRIX</translation>
+        <translation>PRIX</translation>
     </message>
     <message>
         <source>P/E</source>
@@ -10986,7 +10986,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BÊTA</translation>
+        <translation>BÊTA</translation>
     </message>
 </context>
 <context>
@@ -11045,7 +11045,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">Actualités</translation>
+        <translation>Actualités</translation>
     </message>
     <message>
         <source>Sentiment</source>
@@ -11053,7 +11053,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">BACKTEST</translation>
+        <translation>BACKTEST</translation>
     </message>
 </context>
 <context>
@@ -11072,7 +11072,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">ACTUALISER</translation>
+        <translation>ACTUALISER</translation>
     </message>
     <message>
         <source>Refreshing market sentiment…</source>
@@ -11092,7 +11092,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">RÉSUMÉ</translation>
+        <translation>RÉSUMÉ</translation>
     </message>
     <message>
         <source>AVERAGE BUZZ</source>
@@ -11183,11 +11183,11 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>LAST</source>
-        <translation type="unfinished">DERNIER</translation>
+        <translation>DERNIER</translation>
     </message>
     <message>
         <source>N/A</source>
-        <translation type="unfinished">N/D</translation>
+        <translation>N/D</translation>
     </message>
     <message>
         <source>No data returned for %1</source>
@@ -11202,11 +11202,11 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>STRONG SELL</source>
@@ -11214,7 +11214,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NEUTRE</translation>
+        <translation>NEUTRE</translation>
     </message>
     <message>
         <source>Deeply oversold — potential reversal zone</source>
@@ -11534,7 +11534,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">VALEUR</translation>
+        <translation>VALEUR</translation>
     </message>
     <message>
         <source>SIGNAL</source>
@@ -11565,7 +11565,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">EN DIRECT</translation>
+        <translation>EN DIRECT</translation>
     </message>
     <message>
         <source>⚠ TOKEN EXPIRED — click ACCOUNTS</source>
@@ -11677,11 +11677,11 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>Name:</source>
-        <translation type="unfinished">Nom :</translation>
+        <translation>Nom :</translation>
     </message>
     <message>
         <source>Currency:</source>
-        <translation type="unfinished">Devise :</translation>
+        <translation>Devise :</translation>
     </message>
     <message>
         <source>Loading portfolios...</source>
@@ -11725,7 +11725,7 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">IMPORTER</translation>
+        <translation>IMPORTER</translation>
     </message>
     <message>
         <source>(no portfolios yet)</source>
@@ -11751,6 +11751,18 @@ Clé gratuite sur : www.eia.gov/opendata/register.php</translation>
         <source>Imported %1 holdings.</source>
         <translation>%1 positions importées.</translation>
     </message>
+    <message>
+        <source>Failed to queue strategy</source>
+        <translation>Échec de la mise en file d'attente de la stratégie</translation>
+    </message>
+    <message>
+        <source>Order cancelled</source>
+        <translation>Ordre annulé</translation>
+    </message>
+    <message>
+        <source>Strategy queued for approval (%1 legs)</source>
+        <translation>Stratégie en file d'attente pour approbation (%1 jambes)</translation>
+    </message>
 </context>
 <context>
     <name>fincept::screens::EurostatPanel</name>
@@ -11766,7 +11778,7 @@ Source : Eurostat — office statistique de l'UE</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">PAYS</translation>
+        <translation>PAYS</translation>
     </message>
     <message>
         <source>Fetching Eurostat: %1 — %2…</source>
@@ -11785,7 +11797,7 @@ Source : Eurostat — office statistique de l'UE</translation>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">IMPORTER</translation>
+        <translation>IMPORTER</translation>
     </message>
     <message>
         <source>Import XLSX/CSV file</source>
@@ -11825,7 +11837,7 @@ Source : Eurostat — office statistique de l'UE</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">SUPPRIMER</translation>
+        <translation>SUPPRIMER</translation>
     </message>
     <message>
         <source>Delete current sheet</source>
@@ -11873,20 +11885,20 @@ L'exportation CSV reste disponible via la barre d'outils.</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Exporter CSV</translation>
+        <translation>Exporter CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">Fichiers CSV (*.csv)</translation>
+        <translation>Fichiers CSV (*.csv)</translation>
     </message>
     <message>
         <source>Export failed</source>
-        <translation type="unfinished">Échec de l'exportation</translation>
+        <translation>Échec de l'exportation</translation>
     </message>
     <message>
         <source>Could not open file for writing:
 %1</source>
-        <translation type="unfinished">Impossible d'ouvrir le fichier en écriture :
+        <translation>Impossible d'ouvrir le fichier en écriture :
 %1</translation>
     </message>
     <message>
@@ -11961,7 +11973,7 @@ Aucune API key requise</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">ACTUALISER</translation>
+        <translation>ACTUALISER</translation>
     </message>
     <message>
         <source>UPLOAD FILES</source>
@@ -11973,7 +11985,7 @@ Aucune API key requise</translation>
     </message>
     <message>
         <source>DELETE SELECTED</source>
-        <translation type="unfinished">SUPPRIMER LA SÉLECTION</translation>
+        <translation>SUPPRIMER LA SÉLECTION</translation>
     </message>
     <message>
         <source>CLEAR SELECTION</source>
@@ -12092,7 +12104,7 @@ depuis n'importe quel écran. Vous pouvez aussi téléverser des fichiers manuel
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">ENREGISTRER</translation>
+        <translation>ENREGISTRER</translation>
     </message>
     <message>
         <source>DEL</source>
@@ -12124,7 +12136,7 @@ depuis n'importe quel écran. Vous pouvez aussi téléverser des fichiers manuel
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Type</translation>
+        <translation>Type</translation>
     </message>
 </context>
 <context>
@@ -12463,7 +12475,7 @@ Aucune API key requise</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>PUBLISH POST</source>
@@ -12471,7 +12483,7 @@ Aucune API key requise</translation>
     </message>
     <message>
         <source>EDIT PROFILE</source>
-        <translation type="unfinished">MODIFIER LE PROFIL</translation>
+        <translation>MODIFIER LE PROFIL</translation>
     </message>
     <message>
         <source>DISPLAY NAME</source>
@@ -12522,7 +12534,7 @@ Aucune API key requise</translation>
     </message>
     <message>
         <source>TODAY</source>
-        <translation type="unfinished">AUJOURD'HUI</translation>
+        <translation>AUJOURD'HUI</translation>
     </message>
     <message>
         <source>  ▲  TRENDING POSTS</source>
@@ -12759,7 +12771,7 @@ fred.stlouisfed.org/docs/api/api_key.html</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">PAYS</translation>
+        <translation>PAYS</translation>
     </message>
     <message>
         <source>CITY</source>
@@ -12823,7 +12835,7 @@ fred.stlouisfed.org/docs/api/api_key.html</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">CHARGEMENT...</translation>
+        <translation>CHARGEMENT...</translation>
     </message>
     <message>
         <source>%1 MAPPED / %2 LOADED</source>
@@ -12843,7 +12855,7 @@ Total dans l'API : %3</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">ERREUR</translation>
+        <translation>ERREUR</translation>
     </message>
 </context>
 <context>
@@ -12877,7 +12889,7 @@ Aucune clé API requise pour aucune source</translation>
     <name>fincept::screens::GovDataAustraliaPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← RETOUR</translation>
+        <translation>← RETOUR</translation>
     </message>
     <message>
         <source>AGENCIES</source>
@@ -12905,15 +12917,15 @@ Aucune clé API requise pour aucune source</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NOM</translation>
+        <translation>NOM</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">DESCRIPTION</translation>
+        <translation>DESCRIPTION</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">CRÉÉ</translation>
+        <translation>CRÉÉ</translation>
     </message>
     <message>
         <source>TITLE</source>
@@ -12929,7 +12941,7 @@ Aucune clé API requise pour aucune source</translation>
     </message>
     <message>
         <source>RESOURCES</source>
-        <translation type="unfinished">RESSOURCES</translation>
+        <translation>RESSOURCES</translation>
     </message>
     <message>
         <source>MODIFIED</source>
@@ -12945,7 +12957,7 @@ Aucune clé API requise pour aucune source</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">OUVERT</translation>
+        <translation>OUVRIR</translation>
     </message>
     <message>
         <source>Loading Australian Government agencies…</source>
@@ -13021,14 +13033,14 @@ Aucune clé API requise pour aucune source</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataCongressPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← RETOUR</translation>
+        <translation>← RETOUR</translation>
     </message>
     <message>
         <source>BILLS</source>
@@ -13036,7 +13048,7 @@ Aucune clé API requise pour aucune source</translation>
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">RÉSUMÉ</translation>
+        <translation>RÉSUMÉ</translation>
     </message>
     <message>
         <source>FETCH</source>
@@ -13052,7 +13064,7 @@ Aucune clé API requise pour aucune source</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TYPE</translation>
+        <translation>TYPE</translation>
     </message>
     <message>
         <source>All Types</source>
@@ -13104,7 +13116,7 @@ Aucune clé API requise pour aucune source</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">DATE</translation>
+        <translation>DATE</translation>
     </message>
     <message>
         <source>BILL TYPE</source>
@@ -13144,14 +13156,14 @@ Aucune clé API requise pour aucune source</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataFrancePanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← RETOUR</translation>
+        <translation>← RETOUR</translation>
     </message>
     <message>
         <source>DATA SERVICES</source>
@@ -13187,7 +13199,7 @@ Aucune clé API requise pour aucune source</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NOM</translation>
+        <translation>NOM</translation>
     </message>
     <message>
         <source>VIEWS</source>
@@ -13199,7 +13211,7 @@ Aucune clé API requise pour aucune source</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">CRÉÉ</translation>
+        <translation>CRÉÉ</translation>
     </message>
     <message>
         <source>TITLE</source>
@@ -13223,7 +13235,7 @@ Aucune clé API requise pour aucune source</translation>
     </message>
     <message>
         <source>CODE</source>
-        <translation type="unfinished">CODE</translation>
+        <translation>CODE</translation>
     </message>
     <message>
         <source>POSTAL</source>
@@ -13243,7 +13255,7 @@ Aucune clé API requise pour aucune source</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TYPE</translation>
+        <translation>TYPE</translation>
     </message>
     <message>
         <source>Loading data services from data.gouv.fr…</source>
@@ -13319,14 +13331,14 @@ Aucune clé API requise pour aucune source</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataHKPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← RETOUR</translation>
+        <translation>← RETOUR</translation>
     </message>
     <message>
         <source>CATEGORIES</source>
@@ -13358,7 +13370,7 @@ Aucune clé API requise pour aucune source</translation>
     </message>
     <message>
         <source>RESOURCES</source>
-        <translation type="unfinished">RESSOURCES</translation>
+        <translation>RESSOURCES</translation>
     </message>
     <message>
         <source>MODIFIED</source>
@@ -13366,7 +13378,7 @@ Aucune clé API requise pour aucune source</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NOM</translation>
+        <translation>NOM</translation>
     </message>
     <message>
         <source>FORMAT</source>
@@ -13458,7 +13470,7 @@ Essayez de rechercher par nom avec la zone de recherche ci-dessus.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
 </context>
 <context>
@@ -13501,7 +13513,7 @@ Essayez de rechercher par nom avec la zone de recherche ci-dessus.</translation>
     </message>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← RETOUR</translation>
+        <translation>← RETOUR</translation>
     </message>
     <message>
         <source>DATASETS</source>
@@ -13537,7 +13549,7 @@ Essayez de rechercher par nom avec la zone de recherche ci-dessus.</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NOM</translation>
+        <translation>NOM</translation>
     </message>
     <message>
         <source>FORMAT</source>
@@ -13549,7 +13561,7 @@ Essayez de rechercher par nom avec la zone de recherche ci-dessus.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">OUVERT</translation>
+        <translation>OUVRIR</translation>
     </message>
     <message>
         <source>Loading %1…</source>
@@ -13609,15 +13621,15 @@ Essayez de rechercher par nom avec la zone de recherche ci-dessus.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Exporter CSV</translation>
+        <translation>Exporter CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">Fichiers CSV (*.csv)</translation>
+        <translation>Fichiers CSV (*.csv)</translation>
     </message>
     <message>
         <source>✗ FAILED</source>
@@ -13685,7 +13697,7 @@ Le sélecteur affiche tous les portails CKAN couverts par le fournisseur univers
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">RÉSUMÉ</translation>
+        <translation>RÉSUMÉ</translation>
     </message>
     <message>
         <source>FETCH</source>
@@ -13705,11 +13717,11 @@ Le sélecteur affiche tous les portails CKAN couverts par le fournisseur univers
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TYPE</translation>
+        <translation>TYPE</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tous</translation>
+        <translation>Tous</translation>
     </message>
     <message>
         <source>Bills</source>
@@ -13717,7 +13729,7 @@ Le sélecteur affiche tous les portails CKAN couverts par le fournisseur univers
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Notes</translation>
+        <translation>Notes</translation>
     </message>
     <message>
         <source>Bonds</source>
@@ -13829,14 +13841,14 @@ Le sélecteur affiche tous les portails CKAN couverts par le fournisseur univers
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataUKPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← RETOUR</translation>
+        <translation>← RETOUR</translation>
     </message>
     <message>
         <source>PUBLISHERS</source>
@@ -13864,7 +13876,7 @@ Le sélecteur affiche tous les portails CKAN couverts par le fournisseur univers
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NOM</translation>
+        <translation>NOM</translation>
     </message>
     <message>
         <source>TITLE</source>
@@ -13892,7 +13904,7 @@ Le sélecteur affiche tous les portails CKAN couverts par le fournisseur univers
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">OUVERT</translation>
+        <translation>OUVRIR</translation>
     </message>
     <message>
         <source>Loading UK Government publishers…</source>
@@ -13964,7 +13976,7 @@ Le sélecteur affiche tous les portails CKAN couverts par le fournisseur univers
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
 </context>
 <context>
@@ -14007,7 +14019,7 @@ Le sélecteur affiche tous les portails CKAN couverts par le fournisseur univers
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Date</translation>
+        <translation>Date</translation>
     </message>
     <message>
         <source>Resources</source>
@@ -14058,7 +14070,7 @@ Le sélecteur affiche tous les portails CKAN couverts par le fournisseur univers
     </message>
     <message>
         <source>QUICK ACTIONS</source>
-        <translation type="unfinished">ACTIONS RAPIDES</translation>
+        <translation>ACTIONS RAPIDES</translation>
     </message>
     <message>
         <source>Common tasks you can do right now</source>
@@ -14277,7 +14289,7 @@ Le sélecteur affiche tous les portails CKAN couverts par le fournisseur univers
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>$FNCPT PRICE</source>
@@ -14324,11 +14336,11 @@ Le sélecteur affiche tous les portails CKAN couverts par le fournisseur univers
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">ACTUALISER</translation>
+        <translation>ACTUALISER</translation>
     </message>
     <message>
         <source>COPIED</source>
-        <translation type="unfinished">COPIÉ</translation>
+        <translation>COPIÉ</translation>
     </message>
     <message>
         <source>Solana wallet</source>
@@ -14360,11 +14372,11 @@ Le sélecteur affiche tous les portails CKAN couverts par le fournisseur univers
     </message>
     <message>
         <source>CONNECTED</source>
-        <translation type="unfinished">CONNECTE</translation>
+        <translation>CONNECTÉ</translation>
     </message>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">TITRES</translation>
+        <translation>TITRES</translation>
     </message>
     <message>
         <source>POLL</source>
@@ -14427,7 +14439,7 @@ Tous les pays : ALL</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">PAYS</translation>
+        <translation>PAYS</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -14466,7 +14478,7 @@ Tous les pays : ALL</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">PAYS</translation>
+        <translation>PAYS</translation>
     </message>
     <message>
         <source>Select an indicator</source>
@@ -14582,11 +14594,11 @@ Vous pouvez maintenant l'importer avec le bouton PARCOURIR.</translation>
     </message>
     <message>
         <source>Apply</source>
-        <translation type="unfinished">Appliquer</translation>
+        <translation>Appliquer</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Annuler</translation>
+        <translation>Annuler</translation>
     </message>
     <message>
         <source>Warning: already used by "%1"</source>
@@ -14636,7 +14648,7 @@ Vous pouvez maintenant l'importer avec le bouton PARCOURIR.</translation>
     </message>
     <message>
         <source>New Window</source>
-        <translation type="unfinished">Nouvelle Fenêtre</translation>
+        <translation>Nouvelle Fenêtre</translation>
     </message>
     <message>
         <source>Open Saved Layout…</source>
@@ -14695,7 +14707,7 @@ Vous pouvez maintenant l'importer avec le bouton PARCOURIR.</translation>
     </message>
     <message>
         <source>PROVIDERS</source>
-        <translation type="unfinished">FOURNISSEURS</translation>
+        <translation>FOURNISSEURS</translation>
     </message>
     <message>
         <source>Providers</source>
@@ -14707,7 +14719,7 @@ Vous pouvez maintenant l'importer avec le bouton PARCOURIR.</translation>
     </message>
     <message>
         <source>Remove</source>
-        <translation type="unfinished">Supprimer</translation>
+        <translation>Supprimer</translation>
     </message>
     <message>
         <source>Provider Configuration</source>
@@ -14817,7 +14829,7 @@ Plage 1-200. Augmentez-le pour les flux de travail longs (p. ex. remplir des rap
     </message>
     <message>
         <source>API KEY</source>
-        <translation type="unfinished">CLÉ API</translation>
+        <translation>CLÉ API</translation>
     </message>
     <message>
         <source>BASE URL (custom endpoint)</source>
@@ -16614,7 +16626,7 @@ pour réinitialiser votre PIN et retrouver l'accès.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Type</translation>
+        <translation>Type</translation>
     </message>
     <message>
         <source>▾ ADVANCED: RAW BBOX</source>
@@ -16785,11 +16797,11 @@ pour réinitialiser votre PIN et retrouver l'accès.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">ERREUR</translation>
+        <translation>ERREUR</translation>
     </message>
     <message>
         <source>No ports found.</source>
@@ -16875,11 +16887,11 @@ pour réinitialiser votre PIN et retrouver l'accès.</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NOM</translation>
+        <translation>NOM</translation>
     </message>
     <message>
         <source>LAST</source>
-        <translation type="unfinished">DERNIER</translation>
+        <translation>DERNIER</translation>
     </message>
     <message>
         <source>CHG</source>
@@ -16887,15 +16899,15 @@ pour réinitialiser votre PIN et retrouver l'accès.</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">HAUT</translation>
+        <translation>HAUT</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">BAS</translation>
+        <translation>BAS</translation>
     </message>
     <message>
         <source>VOL</source>
@@ -16911,7 +16923,7 @@ pour réinitialiser votre PIN et retrouver l'accès.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">OUVERT</translation>
+        <translation>OUVERTURE</translation>
     </message>
     <message>
         <source>TICKER</source>
@@ -17179,7 +17191,7 @@ pour réinitialiser votre PIN et retrouver l'accès.</translation>
     <name>fincept::screens::McpServersScreen</name>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">SERVEURS MCP</translation>
+        <translation>SERVEURS MCP</translation>
     </message>
     <message>
         <source>MARKETPLACE</source>
@@ -17191,7 +17203,7 @@ pour réinitialiser votre PIN et retrouver l'accès.</translation>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">OUTILS</translation>
+        <translation>OUTILS</translation>
     </message>
     <message>
         <source>Search...</source>
@@ -17247,7 +17259,7 @@ pour réinitialiser votre PIN et retrouver l'accès.</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">DESCRIPTION</translation>
+        <translation>DESCRIPTION</translation>
     </message>
     <message>
         <source>No servers match the current filter.</source>
@@ -17263,7 +17275,7 @@ pour réinitialiser votre PIN et retrouver l'accès.</translation>
     </message>
     <message>
         <source>ADD</source>
-        <translation type="unfinished">AJOUTER</translation>
+        <translation>AJOUTER</translation>
     </message>
     <message>
         <source>● RUNNING</source>
@@ -17422,7 +17434,7 @@ Utilisez le MARKETPLACE pour en ajouter un, ou cliquez sur AJOUTER UN SERVEUR MC
     </message>
     <message>
         <source>Tools</source>
-        <translation type="unfinished">Outils</translation>
+        <translation>Outils</translation>
     </message>
     <message>
         <source>%1 internal tools active</source>
@@ -17438,7 +17450,7 @@ Utilisez le MARKETPLACE pour en ajouter un, ou cliquez sur AJOUTER UN SERVEUR MC
     </message>
     <message>
         <source>Remove</source>
-        <translation type="unfinished">Supprimer</translation>
+        <translation>Supprimer</translation>
     </message>
     <message>
         <source>Select a server to view details.</source>
@@ -17611,7 +17623,7 @@ Cliquez sur « + Ajouter » pour en ajouter un.</translation>
     <name>fincept::screens::NewsCommandBar</name>
     <message>
         <source>Auto-refresh interval</source>
-        <translation type="unfinished">Intervalle d'actualisation automatique</translation>
+        <translation>Intervalle d'actualisation automatique</translation>
     </message>
     <message>
         <source>MANUAL</source>
@@ -17687,7 +17699,7 @@ Cliquez sur « + Ajouter » pour en ajouter un.</translation>
     </message>
     <message>
         <source>AI</source>
-        <translation type="unfinished">AI</translation>
+        <translation>AI</translation>
     </message>
     <message>
         <source>SRC</source>
@@ -17695,7 +17707,7 @@ Cliquez sur « + Ajouter » pour en ajouter un.</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">ACTUALISER</translation>
+        <translation>ACTUALISER</translation>
     </message>
     <message>
         <source>0 WATCHES</source>
@@ -17703,7 +17715,7 @@ Cliquez sur « + Ajouter » pour en ajouter un.</translation>
     </message>
     <message>
         <source>OFFLINE</source>
-        <translation type="unfinished">HORS LIGNE</translation>
+        <translation>HORS LIGNE</translation>
     </message>
     <message>
         <source>...</source>
@@ -17746,7 +17758,7 @@ Cliquez sur « + Ajouter » pour en ajouter un.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">OUVERT</translation>
+        <translation>OUVRIR</translation>
     </message>
     <message>
         <source>COPY URL</source>
@@ -17762,7 +17774,7 @@ Cliquez sur « + Ajouter » pour en ajouter un.</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">ENREGISTRER</translation>
+        <translation>ENREGISTRER</translation>
     </message>
     <message>
         <source>Save article to File Manager</source>
@@ -17782,7 +17794,7 @@ Cliquez sur « + Ajouter » pour en ajouter un.</translation>
     </message>
     <message>
         <source>COPIED</source>
-        <translation type="unfinished">COPIÉ</translation>
+        <translation>COPIÉ</translation>
     </message>
     <message>
         <source>ANALYZING...</source>
@@ -17798,7 +17810,7 @@ Cliquez sur « + Ajouter » pour en ajouter un.</translation>
     </message>
     <message>
         <source>AI ANALYSIS</source>
-        <translation type="unfinished">ANALYSE AI</translation>
+        <translation>ANALYSE AI</translation>
     </message>
     <message>
         <source>KEY POINTS</source>
@@ -18081,15 +18093,15 @@ Cliquez sur « + Ajouter » pour en ajouter un.</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">SUPPRIMER</translation>
+        <translation>SUPPRIMER</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">ENREGISTRER</translation>
+        <translation>ENREGISTRER</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>EXPORT</source>
@@ -18287,7 +18299,7 @@ Cliquez sur « + Ajouter » pour en ajouter un.</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">PAYS</translation>
+        <translation>PAYS</translation>
     </message>
     <message>
         <source>FREQ</source>
@@ -18420,7 +18432,7 @@ Exemples de pays : United States, China, Germany, India, Japan, World</translati
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">PAYS</translation>
+        <translation>PAYS</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -18447,67 +18459,67 @@ Exemples de pays : United States, China, Germany, India, Japan, World</translati
     <name>fincept::screens::PerformanceRiskView</name>
     <message>
         <source>NAV PERFORMANCE (FROM SNAPSHOTS)</source>
-        <translation type="unfinished">PERFORMANCE NAV (À PARTIR DES INSTANTANÉS)</translation>
+        <translation>PERFORMANCE NAV (À PARTIR DES INSTANTANÉS)</translation>
     </message>
     <message>
         <source>  RISK METRICS</source>
-        <translation type="unfinished">  MESURES DE RISQUE</translation>
+        <translation>  MESURES DE RISQUE</translation>
     </message>
     <message>
         <source>SHARPE RATIO</source>
-        <translation type="unfinished">RATIO DE SHARPE</translation>
+        <translation>RATIO DE SHARPE</translation>
     </message>
     <message>
         <source>Risk-adjusted return (annualised)</source>
-        <translation type="unfinished">Rendement ajusté au risque (annualisé)</translation>
+        <translation>Rendement ajusté au risque (annualisé)</translation>
     </message>
     <message>
         <source>SORTINO RATIO</source>
-        <translation type="unfinished">RATIO DE SORTINO</translation>
+        <translation>RATIO DE SORTINO</translation>
     </message>
     <message>
         <source>Downside risk-adjusted return</source>
-        <translation type="unfinished">Rendement ajusté au risque baissier</translation>
+        <translation>Rendement ajusté au risque baissier</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BÊTA</translation>
+        <translation>BÊTA</translation>
     </message>
     <message>
         <source>Sensitivity vs SPY (snapshot regression)</source>
-        <translation type="unfinished">Sensibilité vs SPY (régression sur instantanés)</translation>
+        <translation>Sensibilité vs SPY (régression sur instantanés)</translation>
     </message>
     <message>
         <source>ALPHA</source>
-        <translation type="unfinished">ALPHA</translation>
+        <translation>ALPHA</translation>
     </message>
     <message>
         <source>VOLATILITY</source>
-        <translation type="unfinished">VOLATILITÉ</translation>
+        <translation>VOLATILITÉ</translation>
     </message>
     <message>
         <source>Annualised from daily returns</source>
-        <translation type="unfinished">Annualisée à partir des rendements quotidiens</translation>
+        <translation>Annualisée à partir des rendements quotidiens</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">PERTE MAXIMALE</translation>
+        <translation>PERTE MAXIMALE</translation>
     </message>
     <message>
         <source>Peak-to-trough from snapshots</source>
-        <translation type="unfinished">Du pic au creux à partir des instantanés</translation>
+        <translation>Du pic au creux à partir des instantanés</translation>
     </message>
     <message>
         <source>VALUE AT RISK (95%)</source>
-        <translation type="unfinished">VALEUR À RISQUE (95 %)</translation>
+        <translation>VALEUR À RISQUE (95 %)</translation>
     </message>
     <message>
         <source>CONDITIONAL VaR</source>
-        <translation type="unfinished">VaR CONDITIONNELLE</translation>
+        <translation>VaR CONDITIONNELLE</translation>
     </message>
     <message>
         <source>Expected shortfall (95%)</source>
-        <translation type="unfinished">Perte attendue (95 %)</translation>
+        <translation>Perte attendue (95 %)</translation>
     </message>
     <message>
         <source>Jensen's alpha vs benchmark (CAPM)</source>
@@ -18523,7 +18535,7 @@ Exemples de pays : United States, China, Germany, India, Japan, World</translati
     </message>
     <message>
         <source>N/A</source>
-        <translation type="unfinished">N/D</translation>
+        <translation>N/D</translation>
     </message>
 </context>
 <context>
@@ -18662,7 +18674,7 @@ Exemples de pays : United States, China, Germany, India, Japan, World</translati
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Type</translation>
+        <translation>Type</translation>
     </message>
     <message>
         <source>Status</source>
@@ -18670,7 +18682,7 @@ Exemples de pays : United States, China, Germany, India, Japan, World</translati
     </message>
     <message>
         <source>+ ADD</source>
-        <translation type="unfinished">+ AJOUTER</translation>
+        <translation>+ AJOUTER</translation>
     </message>
     <message>
         <source>- REMOVE</source>
@@ -18689,87 +18701,87 @@ Exemples de pays : United States, China, Germany, India, Japan, World</translati
     <name>fincept::screens::PlanningView</name>
     <message>
         <source>RETIREMENT</source>
-        <translation type="unfinished">RETRAITE</translation>
+        <translation>RETRAITE</translation>
     </message>
     <message>
         <source>GOALS</source>
-        <translation type="unfinished">OBJECTIFS</translation>
+        <translation>OBJECTIFS</translation>
     </message>
     <message>
         <source>SAVINGS</source>
-        <translation type="unfinished">ÉPARGNE</translation>
+        <translation>ÉPARGNE</translation>
     </message>
     <message>
         <source>RETIREMENT CALCULATOR</source>
-        <translation type="unfinished">CALCULATEUR DE RETRAITE</translation>
+        <translation>CALCULATEUR DE RETRAITE</translation>
     </message>
     <message>
         <source>Current Age:</source>
-        <translation type="unfinished">Âge actuel :</translation>
+        <translation>Âge actuel :</translation>
     </message>
     <message>
         <source>Retire Age:</source>
-        <translation type="unfinished">Âge de retraite :</translation>
+        <translation>Âge de retraite :</translation>
     </message>
     <message>
         <source>Annual Expense:</source>
-        <translation type="unfinished">Dépenses annuelles :</translation>
+        <translation>Dépenses annuelles :</translation>
     </message>
     <message>
         <source>Monthly Savings:</source>
-        <translation type="unfinished">Épargne mensuelle :</translation>
+        <translation>Épargne mensuelle :</translation>
     </message>
     <message>
         <source>Exp. Return:</source>
-        <translation type="unfinished">Rend. esp. :</translation>
+        <translation>Rend. esp. :</translation>
     </message>
     <message>
         <source>Inflation:</source>
-        <translation type="unfinished">Inflation :</translation>
+        <translation>Inflation :</translation>
     </message>
     <message>
         <source>Withdrawal Rate:</source>
-        <translation type="unfinished">Taux de retrait :</translation>
+        <translation>Taux de retrait :</translation>
     </message>
     <message>
         <source>CALCULATE</source>
-        <translation type="unfinished">CALCULER</translation>
+        <translation>CALCULER</translation>
     </message>
     <message>
         <source>PROJECTION RESULTS</source>
-        <translation type="unfinished">RÉSULTATS DE PROJECTION</translation>
+        <translation>RÉSULTATS DE PROJECTION</translation>
     </message>
     <message>
         <source>YEARS TO RETIREMENT</source>
-        <translation type="unfinished">ANNÉES AVANT LA RETRAITE</translation>
+        <translation>ANNÉES AVANT LA RETRAITE</translation>
     </message>
     <message>
         <source>TARGET NEST EGG</source>
-        <translation type="unfinished">CAGNOTTE CIBLE</translation>
+        <translation>CAGNOTTE CIBLE</translation>
     </message>
     <message>
         <source>PROJECTED VALUE</source>
-        <translation type="unfinished">VALEUR PROJETÉE</translation>
+        <translation>VALEUR PROJETÉE</translation>
     </message>
     <message>
         <source>SURPLUS / GAP</source>
-        <translation type="unfinished">SURPLUS / ÉCART</translation>
+        <translation>SURPLUS / ÉCART</translation>
     </message>
     <message>
         <source>GOAL-BASED PLANNING</source>
-        <translation type="unfinished">PLANIFICATION PAR OBJECTIFS</translation>
+        <translation>PLANIFICATION PAR OBJECTIFS</translation>
     </message>
     <message>
         <source>SAVINGS RATE ANALYSIS</source>
-        <translation type="unfinished">ANALYSE DU TAUX D'ÉPARGNE</translation>
+        <translation>ANALYSE DU TAUX D'ÉPARGNE</translation>
     </message>
     <message>
         <source>✓ On track! Your projected retirement fund of %1 %2 exceeds your target of %1 %3 by %1 %4.</source>
-        <translation type="unfinished">✓ Sur la bonne voie ! Votre fonds de retraite projeté de %1 %2 dépasse votre objectif de %1 %3 de %1 %4.</translation>
+        <translation>✓ Sur la bonne voie ! Votre fonds de retraite projeté de %1 %2 dépasse votre objectif de %1 %3 de %1 %4.</translation>
     </message>
     <message>
         <source>⚠ Shortfall of %1 %2. Consider increasing monthly savings by %1 %3 to close the gap.</source>
-        <translation type="unfinished">⚠ Déficit de %1 %2. Envisagez d'augmenter l'épargne mensuelle de %1 %3 pour combler l'écart.</translation>
+        <translation>⚠ Déficit de %1 %2. Envisagez d'augmenter l'épargne mensuelle de %1 %3 pour combler l'écart.</translation>
     </message>
     <message>
         <source>⚙  OPTIMIZE PORTFOLIO FOR THIS GOAL</source>
@@ -19712,155 +19724,155 @@ Ouvrez Paramètres → Configuration LLM, ajoutez un fournisseur avec une clé A
     <name>fincept::screens::PortfolioOptimizationView</name>
     <message>
         <source>OPTIMIZE</source>
-        <translation type="unfinished">OPTIMISER</translation>
+        <translation>OPTIMISER</translation>
     </message>
     <message>
         <source>FRONTIER</source>
-        <translation type="unfinished">FRONTIÈRE</translation>
+        <translation>FRONTIÈRE</translation>
     </message>
     <message>
         <source>ALLOCATION</source>
-        <translation type="unfinished">ALLOCATION</translation>
+        <translation>ALLOCATION</translation>
     </message>
     <message>
         <source>STRATEGIES</source>
-        <translation type="unfinished">STRATÉGIES</translation>
+        <translation>STRATÉGIES</translation>
     </message>
     <message>
         <source>COMPARE</source>
-        <translation type="unfinished">COMPARER</translation>
+        <translation>COMPARER</translation>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">BACKTEST</translation>
+        <translation>BACKTEST</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">RISQUE</translation>
+        <translation>RISQUE</translation>
     </message>
     <message>
         <source>STRESS</source>
-        <translation type="unfinished">STRESS</translation>
+        <translation>STRESS</translation>
     </message>
     <message>
         <source>B-L MODEL</source>
-        <translation type="unfinished">MODÈLE B-L</translation>
+        <translation>MODÈLE B-L</translation>
     </message>
     <message>
         <source>METHOD:</source>
-        <translation type="unfinished">MÉTHODE :</translation>
+        <translation>MÉTHODE :</translation>
     </message>
     <message>
         <source>RETURNS:</source>
-        <translation type="unfinished">RENDEMENTS :</translation>
+        <translation>RENDEMENTS :</translation>
     </message>
     <message>
         <source>RISK MODEL:</source>
-        <translation type="unfinished">MODÈLE DE RISQUE :</translation>
+        <translation>MODÈLE DE RISQUE :</translation>
     </message>
     <message>
         <source>▶ RUN OPTIMIZATION</source>
-        <translation type="unfinished">▶ LANCER L'OPTIMISATION</translation>
+        <translation>▶ LANCER L'OPTIMISATION</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SYMBOLE</translation>
+        <translation>SYMBOLE</translation>
     </message>
     <message>
         <source>CURRENT WT%</source>
-        <translation type="unfinished">WT% ACTUEL</translation>
+        <translation>WT% ACTUEL</translation>
     </message>
     <message>
         <source>OPTIMAL WT%</source>
-        <translation type="unfinished">WT% OPTIMAL</translation>
+        <translation>WT% OPTIMAL</translation>
     </message>
     <message>
         <source>CHANGE</source>
-        <translation type="unfinished">VAR.</translation>
+        <translation>VAR.</translation>
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">ACTION</translation>
+        <translation>ACTION</translation>
     </message>
     <message>
         <source>EFFICIENT FRONTIER</source>
-        <translation type="unfinished">FRONTIÈRE EFFICIENTE</translation>
+        <translation>FRONTIÈRE EFFICIENTE</translation>
     </message>
     <message>
         <source>Run optimization on the OPTIMIZE tab to generate the efficient frontier.</source>
-        <translation type="unfinished">Lancez l'optimisation sur l'onglet OPTIMISER pour générer la frontière efficiente.</translation>
+        <translation>Lancez l'optimisation sur l'onglet OPTIMISER pour générer la frontière efficiente.</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">PONDÉRATION</translation>
+        <translation>PONDÉRATION</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">VALEUR</translation>
+        <translation>VALEUR</translation>
     </message>
     <message>
         <source>VS EQUAL WT</source>
-        <translation type="unfinished">VS WT ÉGAL</translation>
+        <translation>VS WT ÉGAL</translation>
     </message>
     <message>
         <source>STRATEGY COMPARISON  (populated after optimization)</source>
-        <translation type="unfinished">COMPARAISON DES STRATÉGIES  (remplie après optimisation)</translation>
+        <translation>COMPARAISON DES STRATÉGIES  (remplie après optimisation)</translation>
     </message>
     <message>
         <source>Run optimization on the OPTIMIZE tab.
 All 5 strategies will be compared automatically.</source>
-        <translation type="unfinished">Lancez l'optimisation sur l'onglet OPTIMISER.
+        <translation>Lancez l'optimisation sur l'onglet OPTIMISER.
 Les 5 stratégies seront comparées automatiquement.</translation>
     </message>
     <message>
         <source>STRATEGY</source>
-        <translation type="unfinished">STRATÉGIE</translation>
+        <translation>STRATÉGIE</translation>
     </message>
     <message>
         <source>EXP. RETURN</source>
-        <translation type="unfinished">REND. ESP.</translation>
+        <translation>REND. ESP.</translation>
     </message>
     <message>
         <source>VOLATILITY</source>
-        <translation type="unfinished">VOLATILITÉ</translation>
+        <translation>VOLATILITÉ</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">SHARPE</translation>
+        <translation>SHARPE</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">DESCRIPTION</translation>
+        <translation>DESCRIPTION</translation>
     </message>
     <message>
         <source>WEIGHT COMPARISON  (all methods, per symbol)</source>
-        <translation type="unfinished">COMPARAISON DES PONDÉRATIONS  (toutes méthodes, par symbole)</translation>
+        <translation>COMPARAISON DES PONDÉRATIONS  (toutes méthodes, par symbole)</translation>
     </message>
     <message>
         <source>Run optimization on the OPTIMIZE tab to populate this comparison.</source>
-        <translation type="unfinished">Lancez l'optimisation sur l'onglet OPTIMISER pour remplir cette comparaison.</translation>
+        <translation>Lancez l'optimisation sur l'onglet OPTIMISER pour remplir cette comparaison.</translation>
     </message>
     <message>
         <source>BACKTEST RESULTS</source>
-        <translation type="unfinished">RÉSULTATS DU BACKTEST</translation>
+        <translation>RÉSULTATS DU BACKTEST</translation>
     </message>
     <message>
         <source>Run an optimization first, then backtest the optimal weights
 against historical data to evaluate out-of-sample performance.</source>
-        <translation type="unfinished">Lancez d'abord une optimisation, puis backtestez les pondérations optimales
+        <translation>Lancez d'abord une optimisation, puis backtestez les pondérations optimales
 contre les données historiques pour évaluer la performance hors échantillon.</translation>
     </message>
     <message>
         <source>RISK DECOMPOSITION</source>
-        <translation type="unfinished">DÉCOMPOSITION DU RISQUE</translation>
+        <translation>DÉCOMPOSITION DU RISQUE</translation>
     </message>
     <message>
         <source>BLACK-LITTERMAN MODEL</source>
-        <translation type="unfinished">MODÈLE BLACK-LITTERMAN</translation>
+        <translation>MODÈLE BLACK-LITTERMAN</translation>
     </message>
     <message>
         <source>Running optimization…</source>
-        <translation type="unfinished">Optimisation en cours…</translation>
+        <translation>Optimisation en cours…</translation>
     </message>
     <message>
         <source>BACKTEST PORTFOLIO</source>
@@ -19912,7 +19924,7 @@ Lancez l'optimisation sur l'onglet OPTIMIZE pour la calculer à partir de la mat
     </message>
     <message>
         <source>RISK CONTRIB</source>
-        <translation type="unfinished">CONTRIB. RISQUE</translation>
+        <translation>CONTRIB. RISQUE</translation>
     </message>
     <message>
         <source>STRESS SCENARIOS</source>
@@ -19926,7 +19938,7 @@ Sélectionnez un portefeuille pour voir l'impact estimé par scénario.</transla
     </message>
     <message>
         <source>SCENARIO</source>
-        <translation type="unfinished">SCÉNARIO</translation>
+        <translation>SCÉNARIO</translation>
     </message>
     <message>
         <source>IMPACT</source>
@@ -20483,7 +20495,7 @@ Format attendu :
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">SÉCURITÉ</translation>
+        <translation>SÉCURITÉ</translation>
     </message>
     <message>
         <source>Protect accounts, detect fraud, enforce terms of service, and ensure platform integrity</source>
@@ -20591,7 +20603,7 @@ Format attendu :
     </message>
     <message>
         <source>CONTACT US</source>
-        <translation type="unfinished">NOUS CONTACTER</translation>
+        <translation>NOUS CONTACTER</translation>
     </message>
     <message>
         <source>Privacy Officer: support@fincept.in</source>
@@ -20603,11 +20615,11 @@ Format attendu :
     </message>
     <message>
         <source>Terms of Service</source>
-        <translation type="unfinished">Conditions d'Utilisation</translation>
+        <translation>Conditions d'Utilisation</translation>
     </message>
     <message>
         <source>Contact Us</source>
-        <translation type="unfinished">Nous Contacter</translation>
+        <translation>Nous Contacter</translation>
     </message>
 </context>
 <context>
@@ -21002,7 +21014,7 @@ pour modifier les propriétés</translation>
     </message>
     <message>
         <source>Rows:</source>
-        <translation type="unfinished">Lignes :</translation>
+        <translation>Lignes :</translation>
     </message>
     <message>
         <source>Cols:</source>
@@ -21209,11 +21221,11 @@ des composants de titre.</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tous</translation>
+        <translation>Tous</translation>
     </message>
     <message>
         <source>Trading</source>
-        <translation type="unfinished">Trading</translation>
+        <translation>Trading</translation>
     </message>
     <message>
         <source>Analytics</source>
@@ -21221,7 +21233,7 @@ des composants de titre.</translation>
     </message>
     <message>
         <source>Refresh</source>
-        <translation type="unfinished">Actualiser</translation>
+        <translation>Actualiser</translation>
     </message>
     <message>
         <source>Install Missing</source>
@@ -21273,7 +21285,7 @@ des composants de titre.</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">OK</translation>
+        <translation>OK</translation>
     </message>
     <message>
         <source>Install</source>
@@ -21324,7 +21336,7 @@ des composants de titre.</translation>
     </message>
     <message>
         <source>ENDPOINT</source>
-        <translation type="unfinished">ENDPOINT</translation>
+        <translation>ENDPOINT</translation>
     </message>
     <message>
         <source>REQUEST BODY (JSON)</source>
@@ -21398,11 +21410,11 @@ Exemple : {"spot": 100, "strike": 105, "risk_free_rate": 0.05}</translation>
     </message>
     <message>
         <source>(empty response)</source>
-        <translation type="unfinished">(réponse vide)</translation>
+        <translation>(réponse vide)</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">OK</translation>
+        <translation>OK</translation>
     </message>
     <message>
         <source>Field</source>
@@ -21571,15 +21583,15 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>YES</source>
-        <translation type="unfinished">OUI</translation>
+        <translation>OUI</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">NON</translation>
+        <translation>NON</translation>
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">ACTION</translation>
+        <translation>ACTION</translation>
     </message>
     <message>
         <source>CLASS</source>
@@ -21651,7 +21663,7 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Prix</translation>
+        <translation>Prix</translation>
     </message>
     <message>
         <source>Quantity</source>
@@ -21799,7 +21811,7 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">CRÉÉ</translation>
+        <translation>CRÉÉ</translation>
     </message>
     <message>
         <source>Schedule created</source>
@@ -21871,7 +21883,7 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">STATUT</translation>
+        <translation>STATUT</translation>
     </message>
     <message>
         <source>STAGES</source>
@@ -21975,11 +21987,11 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>SKEWNESS</source>
-        <translation type="unfinished">ASYMÉTRIE</translation>
+        <translation>ASYMÉTRIE</translation>
     </message>
     <message>
         <source>KURTOSIS</source>
-        <translation type="unfinished">KURTOSIS</translation>
+        <translation>KURTOSIS</translation>
     </message>
     <message>
         <source>p-VALUE</source>
@@ -21991,7 +22003,7 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Date</translation>
+        <translation>Date</translation>
     </message>
     <message>
         <source>IC</source>
@@ -22031,7 +22043,7 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>Win Rate</source>
-        <translation type="unfinished">Taux de réussite</translation>
+        <translation>Taux de réussite</translation>
     </message>
     <message>
         <source>L/S Sharpe=%1  spread=%2%</source>
@@ -22039,15 +22051,15 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>VOLATILITY</source>
-        <translation type="unfinished">VOLATILITÉ</translation>
+        <translation>VOLATILITÉ</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">PERTE MAXIMALE</translation>
+        <translation>PERTE MAXIMALE</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BÊTA</translation>
+        <translation>BÊTA</translation>
     </message>
     <message>
         <source>TRACKING ERROR</source>
@@ -22155,7 +22167,7 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">SHARPE</translation>
+        <translation>SHARPE</translation>
     </message>
     <message>
         <source>MAX DD</source>
@@ -22175,7 +22187,7 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">TAUX DE RÉUSSITE</translation>
+        <translation>TAUX DE RÉUSSITE</translation>
     </message>
     <message>
         <source>BEST DAY</source>
@@ -22187,7 +22199,7 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>ALPHA</source>
-        <translation type="unfinished">ALPHA</translation>
+        <translation>ALPHA</translation>
     </message>
     <message>
         <source>Annual %1%  Sharpe %2  MaxDD %3%</source>
@@ -22199,11 +22211,11 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TYPE</translation>
+        <translation>TYPE</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">DESCRIPTION</translation>
+        <translation>DESCRIPTION</translation>
     </message>
     <message>
         <source>↓ see below</source>
@@ -22211,7 +22223,7 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>EXP. RETURN</source>
-        <translation type="unfinished">REND. ESP.</translation>
+        <translation>REND. ESP.</translation>
     </message>
     <message>
         <source>EXP. VOL</source>
@@ -22227,7 +22239,7 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>REBALANCE</source>
-        <translation type="unfinished">RÉÉQUILIBRER</translation>
+        <translation>RÉÉQUILIBRER</translation>
     </message>
     <message>
         <source>ASSETS</source>
@@ -22251,7 +22263,7 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>BENCHMARK</source>
-        <translation type="unfinished">RÉFÉRENCE</translation>
+        <translation>RÉFÉRENCE</translation>
     </message>
     <message>
         <source>ACTIVE SHARE</source>
@@ -22413,11 +22425,11 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>BACKTEST RESULTS</source>
-        <translation type="unfinished">RÉSULTATS DU BACKTEST</translation>
+        <translation>RÉSULTATS DU BACKTEST</translation>
     </message>
     <message>
         <source>TOTAL RETURN</source>
-        <translation type="unfinished">RENDEMENT TOTAL</translation>
+        <translation>RENDEMENT TOTAL</translation>
     </message>
     <message>
         <source>%1 final</source>
@@ -22429,7 +22441,7 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>SHARPE RATIO</source>
-        <translation type="unfinished">RATIO DE SHARPE</translation>
+        <translation>RATIO DE SHARPE</translation>
     </message>
     <message>
         <source>Excellent</source>
@@ -22457,7 +22469,7 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portefeuille</translation>
+        <translation>Portefeuille</translation>
     </message>
     <message>
         <source>EQUITY CURVE</source>
@@ -22637,7 +22649,7 @@ p. ex. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>DIRECTION</source>
-        <translation type="unfinished">DIRECTION</translation>
+        <translation>DIRECTION</translation>
     </message>
     <message>
         <source>SLOPE</source>
@@ -22879,7 +22891,7 @@ par ex. « Construire une stratégie actions quantitative pour les actions amér
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tous</translation>
+        <translation>Tous</translation>
     </message>
     <message>
         <source>running</source>
@@ -22899,7 +22911,7 @@ par ex. « Construire une stratégie actions quantitative pour les actions amér
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">ACTUALISER</translation>
+        <translation>ACTUALISER</translation>
     </message>
     <message>
         <source>Task ID...</source>
@@ -22923,7 +22935,7 @@ par ex. « Construire une stratégie actions quantitative pour les actions amér
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Type</translation>
+        <translation>Type</translation>
     </message>
     <message>
         <source>Status</source>
@@ -23507,7 +23519,7 @@ par ex. « Construire une stratégie actions quantitative pour les actions amér
     </message>
     <message>
         <source>Volatility</source>
-        <translation type="unfinished">Volatilité</translation>
+        <translation>Volatilité</translation>
     </message>
     <message>
         <source>Option Type</source>
@@ -23835,7 +23847,7 @@ par ex. « Construire une stratégie actions quantitative pour les actions amér
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Notes</translation>
+        <translation>Notes</translation>
     </message>
     <message>
         <source>Parametric (Variance-Covariance)</source>
@@ -23979,7 +23991,7 @@ par ex. « Construire une stratégie actions quantitative pour les actions amér
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SYMBOLE</translation>
+        <translation>SYMBOLE</translation>
     </message>
     <message>
         <source>e.g. BTC/USDT, ETH/USDT</source>
@@ -24639,7 +24651,7 @@ par ex. « Construire une stratégie actions quantitative pour les actions amér
     </message>
     <message>
         <source>EFFICIENT FRONTIER</source>
-        <translation type="unfinished">FRONTIÈRE EFFICIENTE</translation>
+        <translation>FRONTIÈRE EFFICIENTE</translation>
     </message>
     <message>
         <source>Eff. Frontier</source>
@@ -24931,7 +24943,7 @@ Meilleur IC :    %5
     </message>
     <message>
         <source>N/A</source>
-        <translation type="unfinished">N/D</translation>
+        <translation>N/D</translation>
     </message>
     <message>
         <source>Discovered Factors: %1  |  Best IC: %2
@@ -25105,7 +25117,7 @@ Ports en cours d'exécution : %3</translation>
     </message>
     <message>
         <source>Complete</source>
-        <translation type="unfinished">Terminé</translation>
+        <translation>Terminé</translation>
     </message>
     <message>
         <source>
@@ -26473,11 +26485,11 @@ Le verdict exige que LES DEUX tests concordent.</translation>
     </message>
     <message>
         <source>First</source>
-        <translation type="unfinished">Prénom</translation>
+        <translation>Prénom</translation>
     </message>
     <message>
         <source>Last</source>
-        <translation type="unfinished">Nom</translation>
+        <translation>Nom</translation>
     </message>
     <message>
         <source>FORECAST BY STEP</source>
@@ -26605,7 +26617,7 @@ Le verdict exige que LES DEUX tests concordent.</translation>
     </message>
     <message>
         <source>METHOD</source>
-        <translation type="unfinished">MÉTHODE</translation>
+        <translation>MÉTHODE</translation>
     </message>
     <message>
         <source>TRAIN</source>
@@ -26629,7 +26641,7 @@ Le verdict exige que LES DEUX tests concordent.</translation>
     </message>
     <message>
         <source>FEATURES</source>
-        <translation type="unfinished">FONCTIONNALITÉS</translation>
+        <translation>FONCTIONNALITÉS</translation>
     </message>
     <message>
         <source>TRAIN / TEST</source>
@@ -26869,7 +26881,7 @@ Le verdict exige que LES DEUX tests concordent.</translation>
     </message>
     <message>
         <source>DISTRIBUTION</source>
-        <translation type="unfinished">DISTRIBUTION</translation>
+        <translation>DISTRIBUTION</translation>
     </message>
     <message>
         <source>POP MEAN</source>
@@ -27477,7 +27489,7 @@ Le verdict exige que LES DEUX tests concordent.</translation>
     </message>
     <message>
         <source>REGISTERED</source>
-        <translation type="unfinished">INSCRIT</translation>
+        <translation>INSCRIT</translation>
     </message>
     <message>
         <source>Trained</source>
@@ -27673,7 +27685,7 @@ Le verdict exige que LES DEUX tests concordent.</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">OK</translation>
+        <translation>OK</translation>
     </message>
     <message>
         <source>Online model created</source>
@@ -27705,7 +27717,7 @@ Le verdict exige que LES DEUX tests concordent.</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">ERREUR</translation>
+        <translation>ERREUR</translation>
     </message>
     <message>
         <source>ABS ERROR</source>
@@ -27865,7 +27877,7 @@ Le verdict exige que LES DEUX tests concordent.</translation>
     </message>
     <message>
         <source>WARNING</source>
-        <translation type="unfinished">AVERTISSEMENT</translation>
+        <translation>AVERTISSEMENT</translation>
     </message>
     <message>
         <source>PRESENT</source>
@@ -27889,7 +27901,7 @@ Le verdict exige que LES DEUX tests concordent.</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Symbole</translation>
+        <translation>Symbole</translation>
     </message>
     <message>
         <source>%1 instrument(s)  market=%2</source>
@@ -27905,7 +27917,7 @@ Le verdict exige que LES DEUX tests concordent.</translation>
     </message>
     <message>
         <source>LAST</source>
-        <translation type="unfinished">DERNIER</translation>
+        <translation>DERNIER</translation>
     </message>
     <message>
         <source>%1 trading day(s)</source>
@@ -27917,7 +27929,7 @@ Le verdict exige que LES DEUX tests concordent.</translation>
     </message>
     <message>
         <source>EMPTY</source>
-        <translation type="unfinished">VIDE</translation>
+        <translation>VIDE</translation>
     </message>
     <message>
         <source>LOADED</source>
@@ -27929,7 +27941,7 @@ Le verdict exige que LES DEUX tests concordent.</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>TYPES</source>
@@ -27949,7 +27961,7 @@ Le verdict exige que LES DEUX tests concordent.</translation>
     </message>
     <message>
         <source>VERSION</source>
-        <translation type="unfinished">VERSION</translation>
+        <translation>VERSION</translation>
     </message>
     <message>
         <source>HANDLERS</source>
@@ -27957,7 +27969,7 @@ Le verdict exige que LES DEUX tests concordent.</translation>
     </message>
     <message>
         <source>STRATEGIES</source>
-        <translation type="unfinished">STRATÉGIES</translation>
+        <translation>STRATÉGIES</translation>
     </message>
     <message>
         <source>MODELS AVAIL</source>
@@ -28013,7 +28025,7 @@ Le verdict exige que LES DEUX tests concordent.</translation>
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">MÉTRIQUES</translation>
+        <translation>MÉTRIQUES</translation>
     </message>
     <message>
         <source>Trained: %1</source>
@@ -28168,325 +28180,325 @@ Le verdict exige que LES DEUX tests concordent.</translation>
     <name>fincept::screens::QuantStatsView</name>
     <message>
         <source>QUANTSTATS ANALYSIS</source>
-        <translation type="unfinished">ANALYSE QUANTSTATS</translation>
+        <translation>ANALYSE QUANTSTATS</translation>
     </message>
     <message>
         <source>▶ RUN QUANTSTATS</source>
-        <translation type="unfinished">▶ LANCER QUANTSTATS</translation>
+        <translation>▶ LANCER QUANTSTATS</translation>
     </message>
     <message>
         <source>KEY PERFORMANCE INDICATORS</source>
-        <translation type="unfinished">INDICATEURS CLÉS DE PERFORMANCE</translation>
+        <translation>INDICATEURS CLÉS DE PERFORMANCE</translation>
     </message>
     <message>
         <source>METRIC</source>
-        <translation type="unfinished">MÉTRIQUE</translation>
+        <translation>MÉTRIQUE</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">VALEUR</translation>
+        <translation>VALEUR</translation>
     </message>
     <message>
         <source>BENCHMARK</source>
-        <translation type="unfinished">RÉFÉRENCE</translation>
+        <translation>RÉFÉRENCE</translation>
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">MÉTRIQUES</translation>
+        <translation>MÉTRIQUES</translation>
     </message>
     <message>
         <source>Run QuantStats Analysis for return distribution</source>
-        <translation type="unfinished">Lancez l'analyse QuantStats pour la distribution des rendements</translation>
+        <translation>Lancez l'analyse QuantStats pour la distribution des rendements</translation>
     </message>
     <message>
         <source>RETURNS</source>
-        <translation type="unfinished">RENDEMENTS</translation>
+        <translation>RENDEMENTS</translation>
     </message>
     <message>
         <source>Run QuantStats Analysis for drawdown metrics</source>
-        <translation type="unfinished">Lancez l'analyse QuantStats pour les mesures de drawdown</translation>
+        <translation>Lancez l'analyse QuantStats pour les mesures de drawdown</translation>
     </message>
     <message>
         <source>DRAWDOWN</source>
-        <translation type="unfinished">DRAWDOWN</translation>
+        <translation>DRAWDOWN</translation>
     </message>
     <message>
         <source>Run QuantStats Analysis for rolling metrics</source>
-        <translation type="unfinished">Lancez l'analyse QuantStats pour les mesures glissantes</translation>
+        <translation>Lancez l'analyse QuantStats pour les mesures glissantes</translation>
     </message>
     <message>
         <source>ROLLING</source>
-        <translation type="unfinished">GLISSANT</translation>
+        <translation>GLISSANT</translation>
     </message>
     <message>
         <source>MONTE CARLO SIMULATION</source>
-        <translation type="unfinished">SIMULATION DE MONTE-CARLO</translation>
+        <translation>SIMULATION DE MONTE-CARLO</translation>
     </message>
     <message>
         <source>Simulate 1,000 portfolio return paths using GBM to estimate probability
 distributions of future returns, drawdowns, and terminal wealth.</source>
-        <translation type="unfinished">Simulez 1 000 trajectoires de rendement du portefeuille avec le GBM pour estimer les distributions
+        <translation>Simulez 1 000 trajectoires de rendement du portefeuille avec le GBM pour estimer les distributions
 de probabilité des rendements futurs, drawdowns et richesse terminale.</translation>
     </message>
     <message>
         <source>▶ RUN MONTE CARLO (1000 paths)</source>
-        <translation type="unfinished">▶ LANCER MONTE-CARLO (1000 trajectoires)</translation>
+        <translation>▶ LANCER MONTE-CARLO (1000 trajectoires)</translation>
     </message>
     <message>
         <source>Press RUN MONTE CARLO to simulate 1,000 return paths</source>
-        <translation type="unfinished">Appuyez sur LANCER MONTE-CARLO pour simuler 1 000 trajectoires de rendement</translation>
+        <translation>Appuyez sur LANCER MONTE-CARLO pour simuler 1 000 trajectoires de rendement</translation>
     </message>
     <message>
         <source>MONTE CARLO</source>
-        <translation type="unfinished">MONTE-CARLO</translation>
+        <translation>MONTE-CARLO</translation>
     </message>
     <message>
         <source>PERFORMANCE</source>
-        <translation type="unfinished">PERFORMANCE</translation>
+        <translation>PERFORMANCE</translation>
     </message>
     <message>
         <source>Total Return</source>
-        <translation type="unfinished">Rendement total</translation>
+        <translation>Rendement total</translation>
     </message>
     <message>
         <source>Annualized Return</source>
-        <translation type="unfinished">Rendement annualisé</translation>
+        <translation>Rendement annualisé</translation>
     </message>
     <message>
         <source>Trading Days</source>
-        <translation type="unfinished">Jours de bourse</translation>
+        <translation>Jours de bourse</translation>
     </message>
     <message>
         <source>Best Day</source>
-        <translation type="unfinished">Meilleur jour</translation>
+        <translation>Meilleur jour</translation>
     </message>
     <message>
         <source>Worst Day</source>
-        <translation type="unfinished">Pire jour</translation>
+        <translation>Pire jour</translation>
     </message>
     <message>
         <source>Avg Daily Return</source>
-        <translation type="unfinished">Rendement quotidien moyen</translation>
+        <translation>Rendement quotidien moyen</translation>
     </message>
     <message>
         <source>Unrealized P&amp;L %</source>
-        <translation type="unfinished">P&amp;L non réalisé %</translation>
+        <translation>P&amp;L non réalisé %</translation>
     </message>
     <message>
         <source>Day Change %</source>
-        <translation type="unfinished">Variation journalière %</translation>
+        <translation>Variation journalière %</translation>
     </message>
     <message>
         <source>Total Positions</source>
-        <translation type="unfinished">Total des positions</translation>
+        <translation>Total des positions</translation>
     </message>
     <message>
         <source>Gainers</source>
-        <translation type="unfinished">Gagnants</translation>
+        <translation>Gagnants</translation>
     </message>
     <message>
         <source>Losers</source>
-        <translation type="unfinished">Perdants</translation>
+        <translation>Perdants</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">RISQUE</translation>
+        <translation>RISQUE</translation>
     </message>
     <message>
         <source>Annualized Volatility</source>
-        <translation type="unfinished">Volatilité annualisée</translation>
+        <translation>Volatilité annualisée</translation>
     </message>
     <message>
         <source>Max Drawdown</source>
-        <translation type="unfinished">Perte maximale</translation>
+        <translation>Perte maximale</translation>
     </message>
     <message>
         <source>VaR 95% (Daily)</source>
-        <translation type="unfinished">VaR 95 % (quotidienne)</translation>
+        <translation>VaR 95 % (quotidienne)</translation>
     </message>
     <message>
         <source>CVaR 95% (Daily)</source>
-        <translation type="unfinished">CVaR 95 % (quotidienne)</translation>
+        <translation>CVaR 95 % (quotidienne)</translation>
     </message>
     <message>
         <source>Downside Deviation</source>
-        <translation type="unfinished">Écart-type baissier</translation>
+        <translation>Écart-type baissier</translation>
     </message>
     <message>
         <source>RATIOS</source>
-        <translation type="unfinished">RATIOS</translation>
+        <translation>RATIOS</translation>
     </message>
     <message>
         <source>Sharpe Ratio</source>
-        <translation type="unfinished">Ratio de Sharpe</translation>
+        <translation>Ratio de Sharpe</translation>
     </message>
     <message>
         <source>Sortino Ratio</source>
-        <translation type="unfinished">Ratio de Sortino</translation>
+        <translation>Ratio de Sortino</translation>
     </message>
     <message>
         <source>Calmar Ratio</source>
-        <translation type="unfinished">Ratio de Calmar</translation>
+        <translation>Ratio de Calmar</translation>
     </message>
     <message>
         <source>Profit Factor</source>
-        <translation type="unfinished">Facteur de profit</translation>
+        <translation>Facteur de profit</translation>
     </message>
     <message>
         <source>DISTRIBUTION</source>
-        <translation type="unfinished">DISTRIBUTION</translation>
+        <translation>DISTRIBUTION</translation>
     </message>
     <message>
         <source>Skewness</source>
-        <translation type="unfinished">Asymétrie</translation>
+        <translation>Asymétrie</translation>
     </message>
     <message>
         <source>Kurtosis</source>
-        <translation type="unfinished">Kurtosis</translation>
+        <translation>Kurtosis</translation>
     </message>
     <message>
         <source>Win Rate</source>
-        <translation type="unfinished">Taux de réussite</translation>
+        <translation>Taux de réussite</translation>
     </message>
     <message>
         <source>Win Days</source>
-        <translation type="unfinished">Jours gagnants</translation>
+        <translation>Jours gagnants</translation>
     </message>
     <message>
         <source>Loss Days</source>
-        <translation type="unfinished">Jours perdants</translation>
+        <translation>Jours perdants</translation>
     </message>
     <message>
         <source>Avg Win</source>
-        <translation type="unfinished">Gain moyen</translation>
+        <translation>Gain moyen</translation>
     </message>
     <message>
         <source>Avg Loss</source>
-        <translation type="unfinished">Perte moyenne</translation>
+        <translation>Perte moyenne</translation>
     </message>
     <message>
         <source>Run QuantStats for full metrics →</source>
-        <translation type="unfinished">Lancez QuantStats pour les mesures complètes →</translation>
+        <translation>Lancez QuantStats pour les mesures complètes →</translation>
     </message>
     <message>
         <source>RETURN DISTRIBUTION</source>
-        <translation type="unfinished">DISTRIBUTION DES RENDEMENTS</translation>
+        <translation>DISTRIBUTION DES RENDEMENTS</translation>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">TAUX DE RÉUSSITE</translation>
+        <translation>TAUX DE RÉUSSITE</translation>
     </message>
     <message>
         <source>LOSS RATE</source>
-        <translation type="unfinished">TAUX DE PERTE</translation>
+        <translation>TAUX DE PERTE</translation>
     </message>
     <message>
         <source>WIN DAYS</source>
-        <translation type="unfinished">JOURS GAGNANTS</translation>
+        <translation>JOURS GAGNANTS</translation>
     </message>
     <message>
         <source>LOSS DAYS</source>
-        <translation type="unfinished">JOURS PERDANTS</translation>
+        <translation>JOURS PERDANTS</translation>
     </message>
     <message>
         <source>AVG WIN</source>
-        <translation type="unfinished">GAIN MOYEN</translation>
+        <translation>GAIN MOYEN</translation>
     </message>
     <message>
         <source>AVG LOSS</source>
-        <translation type="unfinished">PERTE MOYENNE</translation>
+        <translation>PERTE MOYENNE</translation>
     </message>
     <message>
         <source>SKEWNESS</source>
-        <translation type="unfinished">ASYMÉTRIE</translation>
+        <translation>ASYMÉTRIE</translation>
     </message>
     <message>
         <source>KURTOSIS</source>
-        <translation type="unfinished">KURTOSIS</translation>
+        <translation>KURTOSIS</translation>
     </message>
     <message>
         <source>DRAWDOWN &amp; RISK METRICS</source>
-        <translation type="unfinished">DRAWDOWN ET MESURES DE RISQUE</translation>
+        <translation>DRAWDOWN ET MESURES DE RISQUE</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">PERTE MAXIMALE</translation>
+        <translation>PERTE MAXIMALE</translation>
     </message>
     <message>
         <source>RISK METRIC</source>
-        <translation type="unfinished">MESURE DE RISQUE</translation>
+        <translation>MESURE DE RISQUE</translation>
     </message>
     <message>
         <source>RISK-ADJUSTED RATIOS &amp; WIN/LOSS BREAKDOWN</source>
-        <translation type="unfinished">RATIOS AJUSTÉS AU RISQUE ET RÉPARTITION GAIN/PERTE</translation>
+        <translation>RATIOS AJUSTÉS AU RISQUE ET RÉPARTITION GAIN/PERTE</translation>
     </message>
     <message>
         <source>RATIO</source>
-        <translation type="unfinished">RATIO</translation>
+        <translation>RATIO</translation>
     </message>
     <message>
         <source>WIN / LOSS BREAKDOWN</source>
-        <translation type="unfinished">RÉPARTITION GAIN / PERTE</translation>
+        <translation>RÉPARTITION GAIN / PERTE</translation>
     </message>
     <message>
         <source>Avg Win/Day</source>
-        <translation type="unfinished">Gain moyen/jour</translation>
+        <translation>Gain moyen/jour</translation>
     </message>
     <message>
         <source>Avg Loss/Day</source>
-        <translation type="unfinished">Perte moyenne/jour</translation>
+        <translation>Perte moyenne/jour</translation>
     </message>
     <message>
         <source>MEDIAN RETURN</source>
-        <translation type="unfinished">RENDEMENT MÉDIAN</translation>
+        <translation>RENDEMENT MÉDIAN</translation>
     </message>
     <message>
         <source>5TH PERCENTILE</source>
-        <translation type="unfinished">5E PERCENTILE</translation>
+        <translation>5E PERCENTILE</translation>
     </message>
     <message>
         <source>95TH PERCENTILE</source>
-        <translation type="unfinished">95E PERCENTILE</translation>
+        <translation>95E PERCENTILE</translation>
     </message>
     <message>
         <source>PROB OF LOSS</source>
-        <translation type="unfinished">PROB. DE PERTE</translation>
+        <translation>PROB. DE PERTE</translation>
     </message>
     <message>
         <source>EXP MAX DRAWDOWN</source>
-        <translation type="unfinished">PERTE MAX. ESPÉRÉE</translation>
+        <translation>PERTE MAX. ESPÉRÉE</translation>
     </message>
     <message>
         <source>Cumulative Return (%)</source>
-        <translation type="unfinished">Rendement cumulé (%)</translation>
+        <translation>Rendement cumulé (%)</translation>
     </message>
     <message>
         <source>Showing %1 of 1000 simulated paths over 252 trading days (GBM). Bright line = median path.</source>
-        <translation type="unfinished">Affichage de %1 sur 1000 trajectoires simulées sur 252 jours de bourse (GBM). Ligne claire = trajectoire médiane.</translation>
+        <translation>Affichage de %1 sur 1000 trajectoires simulées sur 252 jours de bourse (GBM). Ligne claire = trajectoire médiane.</translation>
     </message>
     <message>
         <source>Fetching 1-year price history...</source>
-        <translation type="unfinished">Récupération de l'historique de prix sur 1 an...</translation>
+        <translation>Récupération de l'historique de prix sur 1 an...</translation>
     </message>
     <message>
         <source>QuantStats: %1</source>
-        <translation type="unfinished">QuantStats : %1</translation>
+        <translation>QuantStats : %1</translation>
     </message>
     <message>
         <source>Complete</source>
-        <translation type="unfinished">Terminé</translation>
+        <translation>Terminé</translation>
     </message>
     <message>
         <source>Running 1000 simulation paths...</source>
-        <translation type="unfinished">Exécution de 1000 trajectoires de simulation...</translation>
+        <translation>Exécution de 1000 trajectoires de simulation...</translation>
     </message>
     <message>
         <source>Monte Carlo: %1</source>
-        <translation type="unfinished">Monte-Carlo : %1</translation>
+        <translation>Monte-Carlo : %1</translation>
     </message>
     <message>
         <source>Complete — %1 paths simulated</source>
-        <translation type="unfinished">Terminé — %1 trajectoires simulées</translation>
+        <translation>Terminé — %1 trajectoires simulées</translation>
     </message>
 </context>
 <context>
@@ -28720,11 +28732,11 @@ de probabilité des rendements futurs, drawdowns et richesse terminale.</transla
     </message>
     <message>
         <source>Complete</source>
-        <translation type="unfinished">Terminé</translation>
+        <translation>Terminé</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
     <message>
         <source>NODE</source>
@@ -28748,7 +28760,7 @@ de probabilité des rendements futurs, drawdowns et richesse terminale.</transla
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Prix</translation>
+        <translation>Prix</translation>
     </message>
     <message>
         <source>P/E</source>
@@ -28834,7 +28846,7 @@ de probabilité des rendements futurs, drawdowns et richesse terminale.</transla
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Enregistrer</translation>
+        <translation>Enregistrer</translation>
     </message>
     <message>
         <source>Export PDF</source>
@@ -29151,127 +29163,127 @@ de probabilité des rendements futurs, drawdowns et richesse terminale.</transla
     <name>fincept::screens::ReportsView</name>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">RÉSUMÉ</translation>
+        <translation>RÉSUMÉ</translation>
     </message>
     <message>
         <source>TRANSACTION HISTORY</source>
-        <translation type="unfinished">HISTORIQUE DES TRANSACTIONS</translation>
+        <translation>HISTORIQUE DES TRANSACTIONS</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">DATE</translation>
+        <translation>DATE</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SYMBOLE</translation>
+        <translation>SYMBOLE</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TYPE</translation>
+        <translation>TYPE</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>QTY</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">PRIX</translation>
+        <translation>PRIX</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>NOTES</source>
-        <translation type="unfinished">NOTES</translation>
+        <translation>NOTES</translation>
     </message>
     <message>
         <source>TRANSACTIONS</source>
-        <translation type="unfinished">TRANSACTIONS</translation>
+        <translation>TRANSACTIONS</translation>
     </message>
     <message>
         <source>PERFORMANCE ATTRIBUTION</source>
-        <translation type="unfinished">ATTRIBUTION DE PERFORMANCE</translation>
+        <translation>ATTRIBUTION DE PERFORMANCE</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">PONDÉRATION</translation>
+        <translation>PONDÉRATION</translation>
     </message>
     <message>
         <source>RETURN</source>
-        <translation type="unfinished">RENDEMENT</translation>
+        <translation>RENDEMENT</translation>
     </message>
     <message>
         <source>CONTRIBUTION</source>
-        <translation type="unfinished">CONTRIBUTION</translation>
+        <translation>CONTRIBUTION</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">STATUT</translation>
+        <translation>STATUT</translation>
     </message>
     <message>
         <source>ATTRIBUTION</source>
-        <translation type="unfinished">ATTRIBUTION</translation>
+        <translation>ATTRIBUTION</translation>
     </message>
     <message>
         <source>PORTFOLIO SUMMARY REPORT</source>
-        <translation type="unfinished">RAPPORT DE SYNTHÈSE DU PORTEFEUILLE</translation>
+        <translation>RAPPORT DE SYNTHÈSE DU PORTEFEUILLE</translation>
     </message>
     <message>
         <source>PORTFOLIO</source>
-        <translation type="unfinished">PORTEFEUILLE</translation>
+        <translation>PORTEFEUILLE</translation>
     </message>
     <message>
         <source>TOTAL VALUE</source>
-        <translation type="unfinished">VALEUR TOTALE</translation>
+        <translation>VALEUR TOTALE</translation>
     </message>
     <message>
         <source>COST BASIS</source>
-        <translation type="unfinished">PRIX DE REVIENT</translation>
+        <translation>PRIX DE REVIENT</translation>
     </message>
     <message>
         <source>UNREALIZED P&amp;L</source>
-        <translation type="unfinished">P&amp;L NON RÉALISÉ</translation>
+        <translation>P&amp;L NON RÉALISÉ</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">POSITIONS</translation>
+        <translation>POSITIONS</translation>
     </message>
     <message>
         <source>GAINERS</source>
-        <translation type="unfinished">GAGNANTS</translation>
+        <translation>GAGNANTS</translation>
     </message>
     <message>
         <source>LOSERS</source>
-        <translation type="unfinished">PERDANTS</translation>
+        <translation>PERDANTS</translation>
     </message>
     <message>
         <source>HOLDINGS BREAKDOWN</source>
-        <translation type="unfinished">RÉPARTITION DES TITRES</translation>
+        <translation>RÉPARTITION DES TITRES</translation>
     </message>
     <message>
         <source>AVG COST</source>
-        <translation type="unfinished">COÛT MOYEN</translation>
+        <translation>COÛT MOYEN</translation>
     </message>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">ACTUEL</translation>
+        <translation>ACTUEL</translation>
     </message>
     <message>
         <source>OUTPERFORM</source>
-        <translation type="unfinished">SURPERFORMER</translation>
+        <translation>SURPERFORMER</translation>
     </message>
     <message>
         <source>UNDERPERFORM</source>
-        <translation type="unfinished">SOUS-PERFORMER</translation>
+        <translation>SOUS-PERFORMER</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NEUTRE</translation>
+        <translation>NEUTRE</translation>
     </message>
 </context>
 <context>
@@ -29349,135 +29361,135 @@ de probabilité des rendements futurs, drawdowns et richesse terminale.</transla
     </message>
     <message>
         <source>RISK OVERVIEW</source>
-        <translation type="unfinished">APERÇU DU RISQUE</translation>
+        <translation>APERÇU DU RISQUE</translation>
     </message>
     <message>
         <source>PORTFOLIO STRESS TESTING</source>
-        <translation type="unfinished">TESTS DE STRESS DU PORTEFEUILLE</translation>
+        <translation>TESTS DE STRESS DU PORTEFEUILLE</translation>
     </message>
     <message>
         <source>Estimated impact of historical and hypothetical market scenarios</source>
-        <translation type="unfinished">Impact estimé des scénarios de marché historiques et hypothétiques</translation>
+        <translation>Impact estimé des scénarios de marché historiques et hypothétiques</translation>
     </message>
     <message>
         <source>SCENARIO</source>
-        <translation type="unfinished">SCÉNARIO</translation>
+        <translation>SCÉNARIO</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">DESCRIPTION</translation>
+        <translation>DESCRIPTION</translation>
     </message>
     <message>
         <source>EQUITY SHOCK</source>
-        <translation type="unfinished">CHOC ACTIONS</translation>
+        <translation>CHOC ACTIONS</translation>
     </message>
     <message>
         <source>PORTFOLIO IMPACT</source>
-        <translation type="unfinished">IMPACT SUR LE PORTEFEUILLE</translation>
+        <translation>IMPACT SUR LE PORTEFEUILLE</translation>
     </message>
     <message>
         <source>LOSS</source>
-        <translation type="unfinished">PERTE</translation>
+        <translation>PERTE</translation>
     </message>
     <message>
         <source>STRESS TEST</source>
-        <translation type="unfinished">TEST DE STRESS</translation>
+        <translation>TEST DE STRESS</translation>
     </message>
     <message>
         <source>RISK CONTRIBUTION BY HOLDING</source>
-        <translation type="unfinished">CONTRIBUTION AU RISQUE PAR TITRE</translation>
+        <translation>CONTRIBUTION AU RISQUE PAR TITRE</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SYMBOLE</translation>
+        <translation>SYMBOLE</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">PONDÉRATION</translation>
+        <translation>PONDÉRATION</translation>
     </message>
     <message>
         <source>VOL PROXY</source>
-        <translation type="unfinished">PROXY VOL</translation>
+        <translation>PROXY VOL</translation>
     </message>
     <message>
         <source>RISK CONTRIB</source>
-        <translation type="unfinished">CONTRIB. RISQUE</translation>
+        <translation>CONTRIB. RISQUE</translation>
     </message>
     <message>
         <source>VAR CONTRIB</source>
-        <translation type="unfinished">CONTRIB. VAR</translation>
+        <translation>CONTRIB. VAR</translation>
     </message>
     <message>
         <source>CONCENTRATION</source>
-        <translation type="unfinished">CONCENTRATION</translation>
+        <translation>CONCENTRATION</translation>
     </message>
     <message>
         <source>RISK CONTRIBUTION</source>
-        <translation type="unfinished">CONTRIBUTION AU RISQUE</translation>
+        <translation>CONTRIBUTION AU RISQUE</translation>
     </message>
     <message>
         <source>PORTFOLIO RISK OVERVIEW</source>
-        <translation type="unfinished">APERÇU DU RISQUE DU PORTEFEUILLE</translation>
+        <translation>APERÇU DU RISQUE DU PORTEFEUILLE</translation>
     </message>
     <message>
         <source>PORTFOLIO VALUE</source>
-        <translation type="unfinished">VALEUR DU PORTEFEUILLE</translation>
+        <translation>VALEUR DU PORTEFEUILLE</translation>
     </message>
     <message>
         <source>Total market value</source>
-        <translation type="unfinished">Valeur de marché totale</translation>
+        <translation>Valeur de marché totale</translation>
     </message>
     <message>
         <source>ANNUALIZED VOLATILITY</source>
-        <translation type="unfinished">VOLATILITÉ ANNUALISÉE</translation>
+        <translation>VOLATILITÉ ANNUALISÉE</translation>
     </message>
     <message>
         <source>Based on day-change proxy</source>
-        <translation type="unfinished">Basé sur le proxy de variation journalière</translation>
+        <translation>Basé sur le proxy de variation journalière</translation>
     </message>
     <message>
         <source>VALUE AT RISK (95%)</source>
-        <translation type="unfinished">VALEUR À RISQUE (95 %)</translation>
+        <translation>VALEUR À RISQUE (95 %)</translation>
     </message>
     <message>
         <source>1-day parametric</source>
-        <translation type="unfinished">Paramétrique 1 jour</translation>
+        <translation>Paramétrique 1 jour</translation>
     </message>
     <message>
         <source>CONDITIONAL VaR</source>
-        <translation type="unfinished">VaR CONDITIONNELLE</translation>
+        <translation>VaR CONDITIONNELLE</translation>
     </message>
     <message>
         <source>Expected shortfall</source>
-        <translation type="unfinished">Perte attendue</translation>
+        <translation>Perte attendue</translation>
     </message>
     <message>
         <source>TOP HOLDING CONC.</source>
-        <translation type="unfinished">CONC. DU PRINCIPAL TITRE</translation>
+        <translation>CONC. DU PRINCIPAL TITRE</translation>
     </message>
     <message>
         <source>Largest position</source>
-        <translation type="unfinished">Plus grande position</translation>
+        <translation>Plus grande position</translation>
     </message>
     <message>
         <source>TOP 3 CONCENTRATION</source>
-        <translation type="unfinished">CONCENTRATION TOP 3</translation>
+        <translation>CONCENTRATION TOP 3</translation>
     </message>
     <message>
         <source>Sum of top 3</source>
-        <translation type="unfinished">Somme des 3 principaux</translation>
+        <translation>Somme des 3 principaux</translation>
     </message>
     <message>
         <source>TOP 5 CONCENTRATION</source>
-        <translation type="unfinished">CONCENTRATION TOP 5</translation>
+        <translation>CONCENTRATION TOP 5</translation>
     </message>
     <message>
         <source>Sum of top 5</source>
-        <translation type="unfinished">Somme des 5 principaux</translation>
+        <translation>Somme des 5 principaux</translation>
     </message>
     <message>
         <source>DIVERSIFICATION</source>
-        <translation type="unfinished">DIVERSIFICATION</translation>
+        <translation>DIVERSIFICATION</translation>
     </message>
     <message numerus="yes">
         <source>%n holdings</source>
@@ -29488,23 +29500,23 @@ de probabilité des rendements futurs, drawdowns et richesse terminale.</transla
     </message>
     <message>
         <source>Well diversified</source>
-        <translation type="unfinished">Bien diversifié</translation>
+        <translation>Bien diversifié</translation>
     </message>
     <message>
         <source>Consider adding more</source>
-        <translation type="unfinished">Envisagez d'en ajouter davantage</translation>
+        <translation>Envisagez d'en ajouter davantage</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">HAUT</translation>
+        <translation>HAUT</translation>
     </message>
     <message>
         <source>MEDIUM</source>
-        <translation type="unfinished">MOYEN</translation>
+        <translation>MOYEN</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">BAS</translation>
+        <translation>BAS</translation>
     </message>
 </context>
 <context>
@@ -29567,11 +29579,11 @@ de probabilité des rendements futurs, drawdowns et richesse terminale.</transla
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Annuler</translation>
+        <translation>Annuler</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Enregistrer</translation>
+        <translation>Enregistrer</translation>
     </message>
     <message>
         <source>✗ Enter a valid URL first.</source>
@@ -29670,7 +29682,7 @@ Enregistrer le flux quand même ?</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Type</translation>
+        <translation>Type</translation>
     </message>
     <message>
         <source>Source</source>
@@ -29746,7 +29758,7 @@ Enregistrer le flux quand même ?</translation>
     </message>
     <message>
         <source>Save failed</source>
-        <translation type="unfinished">Échec de l'enregistrement</translation>
+        <translation>Échec de l'enregistrement</translation>
     </message>
     <message>
         <source>Could not save the feed. See log for details.</source>
@@ -29893,7 +29905,7 @@ Enregistrer le flux quand même ?</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SYMBOLE</translation>
+        <translation>SYMBOLE</translation>
     </message>
     <message>
         <source>SIGNAL</source>
@@ -29933,7 +29945,7 @@ Enregistrer le flux quand même ?</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NEUTRE</translation>
+        <translation>NEUTRE</translation>
     </message>
     <message>
         <source>Error [%1]: %2</source>
@@ -29956,11 +29968,11 @@ Enregistrer le flux quand même ?</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">ENREGISTRER</translation>
+        <translation>ENREGISTRER</translation>
     </message>
 </context>
 <context>
@@ -30154,11 +30166,11 @@ Enregistrer le flux quand même ?</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
 </context>
 <context>
@@ -30184,7 +30196,7 @@ Enregistrer le flux quand même ?</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">ENREGISTRER</translation>
+        <translation>ENREGISTRER</translation>
     </message>
     <message>
         <source>CLEAR</source>
@@ -30512,7 +30524,7 @@ Aucune API key requise — données via des vector IDs pour la fiabilité</trans
     </message>
     <message>
         <source>Refresh</source>
-        <translation type="unfinished">Actualiser</translation>
+        <translation>Actualiser</translation>
     </message>
     <message>
         <source>DISK USAGE</source>
@@ -30536,7 +30548,7 @@ Aucune API key requise — données via des vector IDs pour la fiabilité</trans
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>Cache Entries</source>
@@ -30556,7 +30568,7 @@ Aucune API key requise — données via des vector IDs pour la fiabilité</trans
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">ACTION</translation>
+        <translation>ACTION</translation>
     </message>
     <message>
         <source>CLR</source>
@@ -30688,7 +30700,7 @@ Continuer ?</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
     <message>
         <source>OK — %1 row(s) affected</source>
@@ -30738,7 +30750,7 @@ Les données seront récupérées au prochain accès.</translation>
     </message>
     <message>
         <source>DELETE ALL</source>
-        <translation type="unfinished">TOUT SUPPRIMER</translation>
+        <translation>TOUT SUPPRIMER</translation>
     </message>
     <message>
         <source>WARNING: This will permanently delete ALL data:
@@ -30795,7 +30807,7 @@ Are you absolutely sure?</source>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Enregistrer</translation>
+        <translation>Enregistrer</translation>
     </message>
     <message>
         <source>Backtest</source>
@@ -30807,7 +30819,7 @@ Are you absolutely sure?</source>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">BACKTEST</translation>
+        <translation>BACKTEST</translation>
     </message>
     <message>
         <source>Capital</source>
@@ -30922,7 +30934,7 @@ Are you absolutely sure?</source>
     </message>
     <message>
         <source>Page %1 of %2</source>
-        <translation type="unfinished">Page %1 sur %2</translation>
+        <translation>Page %1 sur %2</translation>
     </message>
     <message>
         <source>NEXT ▶</source>
@@ -30934,7 +30946,7 @@ Are you absolutely sure?</source>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">BACKTEST</translation>
+        <translation>BACKTEST</translation>
     </message>
     <message>
         <source>DEPLOY</source>
@@ -30942,7 +30954,7 @@ Are you absolutely sure?</source>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">SUPPRIMER</translation>
+        <translation>SUPPRIMER</translation>
     </message>
     <message>
         <source>Page %1 of %2  ·  %3 strategies</source>
@@ -30966,7 +30978,7 @@ Are you absolutely sure?</source>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Symbole</translation>
+        <translation>Symbole</translation>
     </message>
     <message>
         <source>Start</source>
@@ -31089,7 +31101,7 @@ Are you absolutely sure?</source>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Annuler</translation>
+        <translation>Annuler</translation>
     </message>
     <message>
         <source>Submit Ticket →</source>
@@ -31145,7 +31157,7 @@ Are you absolutely sure?</source>
     </message>
     <message>
         <source>Type your reply…</source>
-        <translation type="unfinished">Saisissez votre réponse…</translation>
+        <translation>Saisissez votre réponse…</translation>
     </message>
     <message>
         <source>Send Reply →</source>
@@ -31215,7 +31227,7 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">OUVERT</translation>
+        <translation>OUVERT</translation>
     </message>
     <message>
         <source>IN PROGRESS</source>
@@ -31227,7 +31239,7 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
     </message>
     <message>
         <source>CLOSED</source>
-        <translation type="unfinished">FERME</translation>
+        <translation>FERMÉ</translation>
     </message>
     <message>
         <source>PENDING</source>
@@ -31235,7 +31247,7 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
     </message>
     <message>
         <source>Support</source>
-        <translation type="unfinished">Support</translation>
+        <translation>Support</translation>
     </message>
     <message>
         <source>Tickets</source>
@@ -31279,7 +31291,7 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
     </message>
     <message>
         <source>Total</source>
-        <translation type="unfinished">Total</translation>
+        <translation>Total</translation>
     </message>
     <message>
         <source>Done</source>
@@ -31318,11 +31330,11 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
     </message>
     <message>
         <source>AGENTS</source>
-        <translation type="unfinished">AGENTS</translation>
+        <translation>AGENTS</translation>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">OUTILS</translation>
+        <translation>OUTILS</translation>
     </message>
     <message>
         <source>LLMS</source>
@@ -31342,7 +31354,7 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
     </message>
     <message>
         <source>AVAILABLE TOOLS</source>
-        <translation type="unfinished">OUTILS DISPONIBLES</translation>
+        <translation>OUTILS DISPONIBLES</translation>
     </message>
     <message>
         <source>Loading tools...</source>
@@ -31453,7 +31465,7 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
     <message>
         <source>Default (Global)</source>
@@ -31484,23 +31496,23 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
     <name>fincept::screens::TemplatePicker</name>
     <message>
         <source>Choose Dashboard Template</source>
-        <translation type="unfinished">Choisir un modele de tableau de bord</translation>
+        <translation>Choisir un modèle de tableau de bord</translation>
     </message>
     <message>
         <source>CHOOSE TEMPLATE</source>
-        <translation type="unfinished">CHOISIR UN MODELE</translation>
+        <translation>CHOISIR UN MODÈLE</translation>
     </message>
     <message>
         <source>Select a template to reset your dashboard. Current layout will be replaced.</source>
-        <translation type="unfinished">Selectionnez un modele pour reinitialiser le tableau de bord. L'agencement actuel sera remplace.</translation>
+        <translation>Sélectionnez un modèle pour réinitialiser le tableau de bord. L'agencement actuel sera remplacé.</translation>
     </message>
     <message>
         <source>APPLY</source>
-        <translation type="unfinished">APPLIQUER</translation>
+        <translation>APPLIQUER</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
 </context>
 <context>
@@ -31619,11 +31631,11 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
     </message>
     <message>
         <source>Privacy Policy</source>
-        <translation type="unfinished">Politique de Confidentialité</translation>
+        <translation>Politique de Confidentialité</translation>
     </message>
     <message>
         <source>Contact Us</source>
-        <translation type="unfinished">Nous Contacter</translation>
+        <translation>Nous Contacter</translation>
     </message>
 </context>
 <context>
@@ -31721,7 +31733,7 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">DESCRIPTION</translation>
+        <translation>DESCRIPTION</translation>
     </message>
     <message>
         <source>Click a tool to see details...</source>
@@ -31729,7 +31741,7 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
     </message>
     <message>
         <source>PARAMETERS</source>
-        <translation type="unfinished">PARAMÈTRES</translation>
+        <translation>PARAMÈTRES</translation>
     </message>
     <message>
         <source>USED BY</source>
@@ -31808,7 +31820,7 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
     </message>
     <message>
         <source>ANALYSIS TYPE</source>
-        <translation type="unfinished">TYPE D'ANALYSE</translation>
+        <translation>TYPE D'ANALYSE</translation>
     </message>
     <message>
         <source>Analyzes efficiency gains, consumer benefits, growth effects, and adjustment costs of international trade.</source>
@@ -32024,11 +32036,11 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
     </message>
     <message>
         <source>YES</source>
-        <translation type="unfinished">OUI</translation>
+        <translation>OUI</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">NON</translation>
+        <translation>NON</translation>
     </message>
     <message>
         <source>Metric</source>
@@ -32111,7 +32123,7 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">Paramètres</translation>
+        <translation>Paramètres</translation>
     </message>
     <message>
         <source>Export</source>
@@ -32119,7 +32131,7 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Notes</translation>
+        <translation>Notes</translation>
     </message>
 </context>
 <context>
@@ -32267,7 +32279,7 @@ Obtenez une clé sur : tradingeconomics.com/api</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">PAYS</translation>
+        <translation>PAYS</translation>
     </message>
     <message>
         <source>Fetching Trading Economics: %1…</source>
@@ -32339,7 +32351,7 @@ Obtenez une clé sur : tradingeconomics.com/api</translation>
     <name>fincept::screens::UnescoPanel</name>
     <message>
         <source>THEME</source>
-        <translation type="unfinished">THÈME</translation>
+        <translation>THÈME</translation>
     </message>
     <message>
         <source>Education</source>
@@ -32379,7 +32391,7 @@ Utilisez des codes pays ISO à 3 lettres : USA, GBR, IND, CHN, BRA, DEU</transla
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">PAYS</translation>
+        <translation>PAYS</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -32588,7 +32600,7 @@ Essayez un autre code pays ou vérifiez que l'indicateur est disponible</transla
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Enregistrer</translation>
+        <translation>Enregistrer</translation>
     </message>
     <message>
         <source>Test Deepgram key</source>
@@ -32802,7 +32814,7 @@ Essayez un autre code pays ou vérifiez que l'indicateur est disponible</transla
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">BACKTEST</translation>
+        <translation>BACKTEST</translation>
     </message>
 </context>
 <context>
@@ -32813,7 +32825,7 @@ Essayez un autre code pays ou vérifiez que l'indicateur est disponible</transla
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Marchés</translation>
+        <translation>Marchés</translation>
     </message>
     <message>
         <source>Major global indices — SPY, QQQ, DIA, IWM</source>
@@ -32869,11 +32881,11 @@ Essayez un autre code pays ou vérifiez que l'indicateur est disponible</transla
     </message>
     <message>
         <source>News Feed</source>
-        <translation type="unfinished">Fil d'Actualités</translation>
+        <translation>Fil d'Actualités</translation>
     </message>
     <message>
         <source>Research</source>
-        <translation type="unfinished">Recherche</translation>
+        <translation>Recherche</translation>
     </message>
     <message>
         <source>Latest financial news headlines</source>
@@ -32905,11 +32917,11 @@ Essayez un autre code pays ou vérifiez que l'indicateur est disponible</transla
     </message>
     <message>
         <source>Watchlist</source>
-        <translation type="unfinished">Liste de Suivi</translation>
+        <translation>Liste de Suivi</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portefeuille</translation>
+        <translation>Portefeuille</translation>
     </message>
     <message>
         <source>Your saved symbols with live prices</source>
@@ -32945,7 +32957,7 @@ Essayez un autre code pays ou vérifiez que l'indicateur est disponible</transla
     </message>
     <message>
         <source>Trading</source>
-        <translation type="unfinished">Trading</translation>
+        <translation>Trading</translation>
     </message>
     <message>
         <source>Fast order entry for crypto and equities</source>
@@ -32997,7 +33009,7 @@ Essayez un autre code pays ou vérifiez que l'indicateur est disponible</transla
     </message>
     <message>
         <source>Tools</source>
-        <translation type="unfinished">Outils</translation>
+        <translation>Outils</translation>
     </message>
     <message>
         <source>Financial TV — major networks and custom streams</source>
@@ -33081,7 +33093,7 @@ Essayez un autre code pays ou vérifiez que l'indicateur est disponible</transla
     </message>
     <message>
         <source>Geopolitics</source>
-        <translation type="unfinished">Géopolitique</translation>
+        <translation>Géopolitique</translation>
     </message>
     <message>
         <source>Live conflict / political events — subscribes to geopolitics:events</source>
@@ -33097,7 +33109,7 @@ Essayez un autre code pays ou vérifiez que l'indicateur est disponible</transla
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Notes</translation>
+        <translation>Notes</translation>
     </message>
     <message>
         <source>Recent / favorite financial notes — click to open Notes screen</source>
@@ -33233,7 +33245,7 @@ Source : World Bank — indicateurs Santé &amp; Développement</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">PAYS</translation>
+        <translation>PAYS</translation>
     </message>
     <message>
         <source>Fetching WB Health: %1 — %2…</source>
@@ -33248,7 +33260,7 @@ Source : World Bank — indicateurs Santé &amp; Développement</translation>
     <name>fincept::screens::WorldBankPanel</name>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">PAYS</translation>
+        <translation>PAYS</translation>
     </message>
     <message>
         <source>Filter countries…</source>
@@ -33416,7 +33428,7 @@ Vérifiez aussi que WTO_API_KEY est correctement définie</translation>
     <name>fincept::screens::alpha_arena::AlphaArenaScreen</name>
     <message>
         <source>Alpha Arena</source>
-        <translation type="unfinished">Alpha Arena</translation>
+        <translation>Alpha Arena</translation>
     </message>
     <message>
         <source>Halt</source>
@@ -33506,7 +33518,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>APPLY</source>
-        <translation type="unfinished">APPLIQUER</translation>
+        <translation>APPLIQUER</translation>
     </message>
     <message>
         <source>New competition</source>
@@ -33566,7 +33578,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>CREATE</source>
-        <translation type="unfinished">CRÉER</translation>
+        <translation>CRÉER</translation>
     </message>
     <message>
         <source>START</source>
@@ -33578,7 +33590,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">POSITIONS</translation>
+        <translation>POSITIONS</translation>
     </message>
     <message>
         <source>HITL</source>
@@ -33586,7 +33598,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">RISQUE</translation>
+        <translation>RISQUE</translation>
     </message>
     <message>
         <source>AUDIT</source>
@@ -33601,7 +33613,7 @@ Cette action est irréversible.</translation>
     <name>fincept::screens::alpha_arena::AuditPanel</name>
     <message>
         <source>AUDIT LOG</source>
-        <translation type="unfinished">JOURNAL D'AUDIT</translation>
+        <translation>JOURNAL D'AUDIT</translation>
     </message>
 </context>
 <context>
@@ -33639,11 +33651,11 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>RETURN</source>
-        <translation type="unfinished">RENDEMENT</translation>
+        <translation>RENDEMENT</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">SHARPE</translation>
+        <translation>SHARPE</translation>
     </message>
     <message>
         <source>MAX DD</source>
@@ -33686,7 +33698,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Annuler</translation>
+        <translation>Annuler</translation>
     </message>
     <message>
         <source>ENABLE LIVE MODE</source>
@@ -33721,7 +33733,7 @@ Cette action est irréversible.</translation>
     <name>fincept::screens::alpha_arena::ModelChatPanel</name>
     <message>
         <source>AGENT</source>
-        <translation type="unfinished">AGENT</translation>
+        <translation>AGENT</translation>
     </message>
     <message>
         <source>Tick %1 — %2</source>
@@ -33760,7 +33772,7 @@ Erreur d'analyse : %3</translation>
     </message>
     <message>
         <source>AGENT</source>
-        <translation type="unfinished">AGENT</translation>
+        <translation>AGENT</translation>
     </message>
     <message>
         <source>COIN</source>
@@ -33768,7 +33780,7 @@ Erreur d'analyse : %3</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>QTY</translation>
     </message>
     <message>
         <source>ENTRY</source>
@@ -33803,7 +33815,7 @@ Erreur d'analyse : %3</translation>
     </message>
     <message>
         <source>AGENT</source>
-        <translation type="unfinished">AGENT</translation>
+        <translation>AGENT</translation>
     </message>
     <message>
         <source>STATE</source>
@@ -33838,7 +33850,7 @@ Erreur d'analyse : %3</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">POSITIONS</translation>
+        <translation>POSITIONS</translation>
     </message>
     <message>
         <source>ORDERS</source>
@@ -33866,7 +33878,7 @@ Erreur d'analyse : %3</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Symbole</translation>
+        <translation>Symbole</translation>
     </message>
     <message>
         <source>Side</source>
@@ -33874,7 +33886,7 @@ Erreur d'analyse : %3</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Qty</translation>
     </message>
     <message>
         <source>Entry</source>
@@ -33886,7 +33898,7 @@ Erreur d'analyse : %3</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>Lev</source>
@@ -33894,11 +33906,11 @@ Erreur d'analyse : %3</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Type</translation>
+        <translation>Type</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Prix</translation>
+        <translation>Prix</translation>
     </message>
     <message>
         <source>Status</source>
@@ -33992,7 +34004,7 @@ Connectez une clé API en mode EN DIRECT pour remplir les données.</translation
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">TAUX DE RÉUSSITE</translation>
+        <translation>TAUX DE RÉUSSITE</translation>
     </message>
     <message>
         <source>TOTAL TRADES</source>
@@ -34060,7 +34072,7 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>API KEY</source>
-        <translation type="unfinished">CLÉ API</translation>
+        <translation>CLÉ API</translation>
     </message>
     <message>
         <source>Enter API key</source>
@@ -34122,6 +34134,26 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
         <source>CODE: %1</source>
         <translation>CODE : %1</translation>
     </message>
+    <message>
+        <source>Enter private key</source>
+        <translation>Saisir la clé privée</translation>
+    </message>
+    <message>
+        <source>Enter wallet address (0x…)</source>
+        <translation>Saisir l'adresse du portefeuille (0x…)</translation>
+    </message>
+    <message>
+        <source>PRIVATE KEY</source>
+        <translation>CLÉ PRIVÉE</translation>
+    </message>
+    <message>
+        <source>WALLET ADDRESS</source>
+        <translation>ADRESSE DU PORTEFEUILLE</translation>
+    </message>
+    <message>
+        <source>Wallet address and private key are required</source>
+        <translation>L'adresse du portefeuille et la clé privée sont requises</translation>
+    </message>
 </context>
 <context>
     <name>fincept::screens::crypto::CryptoDepthChart</name>
@@ -34166,7 +34198,7 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>QTY</translation>
     </message>
     <message>
         <source>ASK</source>
@@ -34182,7 +34214,7 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">ACTION</translation>
+        <translation>ACTION</translation>
     </message>
     <message>
         <source>IMBALANCE</source>
@@ -34206,15 +34238,15 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NEUTRE</translation>
+        <translation>NEUTRE</translation>
     </message>
     <message>
         <source>BUY PRESSURE</source>
@@ -34229,7 +34261,7 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     <name>fincept::screens::crypto::CryptoOrderEntry</name>
     <message>
         <source>ORDER ENTRY</source>
-        <translation type="unfinished">SAISIE D'ORDRE</translation>
+        <translation>SAISIE D'ORDRE</translation>
     </message>
     <message>
         <source>PAPER</source>
@@ -34249,11 +34281,11 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>MARKET</source>
@@ -34293,7 +34325,7 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>YOU RECEIVE</source>
@@ -34361,7 +34393,7 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">EN DIRECT</translation>
+        <translation>EN DIRECT</translation>
     </message>
     <message>
         <source>⚠ Enter a valid quantity</source>
@@ -34399,11 +34431,11 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Symbole</translation>
+        <translation>Symbole</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Prix</translation>
+        <translation>Prix</translation>
     </message>
     <message>
         <source>%</source>
@@ -34414,7 +34446,7 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     <name>fincept::screens::datasources::DataSourcesScreen</name>
     <message>
         <source>DATA SOURCES</source>
-        <translation type="unfinished">SOURCES DE DONNÉES</translation>
+        <translation>SOURCES DE DONNÉES</translation>
     </message>
     <message>
         <source>%1 CONNECTORS</source>
@@ -34426,7 +34458,7 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">IMPORTER</translation>
+        <translation>IMPORTER</translation>
     </message>
     <message>
         <source>EXPORT</source>
@@ -34442,7 +34474,7 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>CONFIGURED</source>
-        <translation type="unfinished">CONFIGURÉ</translation>
+        <translation>CONFIGURÉ</translation>
     </message>
     <message>
         <source>ACTIVE</source>
@@ -34454,11 +34486,11 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>BROWSE</source>
-        <translation type="unfinished">PARCOURIR</translation>
+        <translation>PARCOURIR</translation>
     </message>
     <message>
         <source>CONNECTIONS</source>
-        <translation type="unfinished">CONNEXIONS</translation>
+        <translation>CONNEXIONS</translation>
     </message>
     <message>
         <source>CATEGORY</source>
@@ -34482,11 +34514,11 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TYPE</translation>
+        <translation>TYPE</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>INSPECTOR</source>
@@ -34534,7 +34566,7 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>+ ADD</source>
-        <translation type="unfinished">+ AJOUTER</translation>
+        <translation>+ AJOUTER</translation>
     </message>
     <message>
         <source>filter connections...</source>
@@ -34542,11 +34574,11 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>ENABLE ALL</source>
-        <translation type="unfinished">TOUT ACTIVER</translation>
+        <translation>TOUT ACTIVER</translation>
     </message>
     <message>
         <source>DISABLE ALL</source>
-        <translation type="unfinished">TOUT DÉSACTIVER</translation>
+        <translation>TOUT DÉSACTIVER</translation>
     </message>
     <message>
         <source>DELETE SEL</source>
@@ -34554,7 +34586,7 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NOM</translation>
+        <translation>NOM</translation>
     </message>
     <message>
         <source>PROVIDER</source>
@@ -34562,7 +34594,7 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">STATUT</translation>
+        <translation>STATUT</translation>
     </message>
     <message>
         <source>TAGS</source>
@@ -34634,11 +34666,11 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">OUVERT</translation>
+        <translation>OUVRIR</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">OK</translation>
+        <translation>OK</translation>
     </message>
     <message>
         <source>ERR</source>
@@ -34760,7 +34792,7 @@ Les clés sont stockées localement dans un stockage sécurisé chiffré.</trans
     </message>
     <message>
         <source>+ ADD</source>
-        <translation type="unfinished">+ AJOUTER</translation>
+        <translation>+ AJOUTER</translation>
     </message>
     <message>
         <source>REMOVE</source>
@@ -34814,7 +34846,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Erreur : %1</translation>
+        <translation>Erreur : %1</translation>
     </message>
     <message>
         <source>Connected as %1</source>
@@ -34850,7 +34882,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>API KEY</source>
-        <translation type="unfinished">CLÉ API</translation>
+        <translation>CLÉ API</translation>
     </message>
     <message>
         <source>Enter API Key...</source>
@@ -34882,7 +34914,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>PASSWORD</source>
-        <translation type="unfinished">MOT DE PASSE</translation>
+        <translation>MOT DE PASSE</translation>
     </message>
     <message>
         <source>Zerodha login password</source>
@@ -35122,7 +35154,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>ACCOUNT TYPE</source>
-        <translation type="unfinished">TYPE DE COMPTE</translation>
+        <translation>TYPE DE COMPTE</translation>
     </message>
     <message>
         <source>Demo</source>
@@ -35144,6 +35176,18 @@ Cette action est irréversible.</translation>
         <source>Connected</source>
         <translation>Connecté</translation>
     </message>
+    <message>
+        <source>Auto — execute immediately</source>
+        <translation>Auto — exécuter immédiatement</translation>
+    </message>
+    <message>
+        <source>Order Approval:</source>
+        <translation>Approbation de l'ordre :</translation>
+    </message>
+    <message>
+        <source>Semi-Auto — require approval</source>
+        <translation>Semi-automatique — approbation requise</translation>
+    </message>
 </context>
 <context>
     <name>fincept::screens::equity::BroadcastOrderDialog</name>
@@ -35157,11 +35201,11 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>Select All</source>
@@ -35177,7 +35221,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>PLACE BUY</source>
@@ -35209,18 +35253,26 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>DONE</source>
-        <translation type="unfinished">TERMINÉ</translation>
+        <translation>TERMINÉ</translation>
+    </message>
+    <message>
+        <source>%1 order(s) queued for approval</source>
+        <translation>%1 ordre(s) en file d'attente pour approbation</translation>
+    </message>
+    <message>
+        <source>Placing %1 order(s); %2 queued for approval...</source>
+        <translation>Passage de %1 ordre(s) ; %2 en file d'attente pour approbation...</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::equity::EquityBottomPanel</name>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">POSITIONS</translation>
+        <translation>POSITIONS</translation>
     </message>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">TITRES</translation>
+        <translation>TITRES</translation>
     </message>
     <message>
         <source>ORDERS</source>
@@ -35248,7 +35300,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Symbole</translation>
+        <translation>Symbole</translation>
     </message>
     <message>
         <source>Opened</source>
@@ -35260,7 +35312,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Qty</translation>
     </message>
     <message>
         <source>Avg Price</source>
@@ -35272,11 +35324,11 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">P&amp;L %</translation>
+        <translation>P&amp;L %</translation>
     </message>
     <message>
         <source>Invested</source>
@@ -35292,11 +35344,11 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Type</translation>
+        <translation>Type</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Prix</translation>
+        <translation>Prix</translation>
     </message>
     <message>
         <source>Status</source>
@@ -35312,7 +35364,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Date</translation>
+        <translation>Date</translation>
     </message>
     <message>
         <source>Size</source>
@@ -35364,7 +35416,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">ACTUEL</translation>
+        <translation>ACTUEL</translation>
     </message>
     <message>
         <source>TOTAL P&amp;L</source>
@@ -35396,7 +35448,7 @@ Cette action est irréversible.</translation>
     </message>
     <message>
         <source>Win Rate</source>
-        <translation type="unfinished">Taux de réussite</translation>
+        <translation>Taux de réussite</translation>
     </message>
     <message>
         <source>Total Trades</source>
@@ -35448,7 +35500,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>QTY</translation>
     </message>
     <message>
         <source>LIMIT PRICE</source>
@@ -35460,11 +35512,11 @@ Are you sure?</source>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">OUVERT</translation>
+        <translation>OUVERT</translation>
     </message>
     <message>
         <source>CLOSE</source>
@@ -35518,11 +35570,11 @@ Are you sure?</source>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">PRIX</translation>
+        <translation>PRIX</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>QTY</translation>
     </message>
     <message>
         <source>ORDERS</source>
@@ -35533,7 +35585,7 @@ Are you sure?</source>
     <name>fincept::screens::equity::EquityOrderEntry</name>
     <message>
         <source>ORDER ENTRY</source>
-        <translation type="unfinished">SAISIE D'ORDRE</translation>
+        <translation>SAISIE D'ORDRE</translation>
     </message>
     <message>
         <source>PAPER</source>
@@ -35541,11 +35593,11 @@ Are you sure?</source>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>MKT</source>
@@ -35589,11 +35641,11 @@ Are you sure?</source>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>QTY</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">PRIX</translation>
+        <translation>PRIX</translation>
     </message>
     <message>
         <source>Limit price</source>
@@ -35633,7 +35685,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>STRATEGY</source>
-        <translation type="unfinished">STRATÉGIE</translation>
+        <translation>STRATÉGIE</translation>
     </message>
     <message>
         <source>None</source>
@@ -35737,7 +35789,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">EN DIRECT</translation>
+        <translation>EN DIRECT</translation>
     </message>
     <message>
         <source>Est: %1%2</source>
@@ -35772,7 +35824,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SYMBOLE</translation>
+        <translation>SYMBOLE</translation>
     </message>
     <message>
         <source>LTP</source>
@@ -35780,7 +35832,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
     </message>
 </context>
 <context>
@@ -35830,7 +35882,7 @@ Are you sure?</source>
     <name>fincept::screens::fno::BuilderSubTab</name>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">ENREGISTRER</translation>
+        <translation>ENREGISTRER</translation>
     </message>
     <message>
         <source>LOAD</source>
@@ -35908,7 +35960,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>Save failed</source>
-        <translation type="unfinished">Échec de l'enregistrement</translation>
+        <translation>Échec de l'enregistrement</translation>
     </message>
     <message>
         <source>Save strategy</source>
@@ -36021,11 +36073,11 @@ Are you sure?</source>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">ACTUALISER</translation>
+        <translation>ACTUALISER</translation>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Date</translation>
+        <translation>Date</translation>
     </message>
     <message>
         <source>FII Buy</source>
@@ -36072,7 +36124,7 @@ Are you sure?</source>
     <name>fincept::screens::fno::FnoHeaderBar</name>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">ACTUALISER</translation>
+        <translation>ACTUALISER</translation>
     </message>
     <message>
         <source>Broker:</source>
@@ -36205,11 +36257,11 @@ Are you sure?</source>
     <name>fincept::screens::fno::LegEditorModel</name>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>On</source>
@@ -36221,7 +36273,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Type</translation>
+        <translation>Type</translation>
     </message>
     <message>
         <source>Strike</source>
@@ -36249,7 +36301,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
 </context>
 <context>
@@ -36278,7 +36330,7 @@ Are you sure?</source>
     <name>fincept::screens::fno::MultiStraddleSubTab</name>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Type</translation>
+        <translation>Type</translation>
     </message>
     <message>
         <source>Anchor</source>
@@ -36286,7 +36338,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>ADD</source>
-        <translation type="unfinished">AJOUTER</translation>
+        <translation>AJOUTER</translation>
     </message>
     <message>
         <source>Double-click an entry to remove it.</source>
@@ -36417,7 +36469,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Symbole</translation>
+        <translation>Symbole</translation>
     </message>
     <message>
         <source>B/S</source>
@@ -36425,11 +36477,11 @@ Are you sure?</source>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Qty</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Type</translation>
+        <translation>Type</translation>
     </message>
     <message>
         <source>Entry</source>
@@ -36453,7 +36505,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>PLACE PAPER ORDERS</source>
@@ -36461,11 +36513,11 @@ Are you sure?</source>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>Broker %1 not registered</source>
@@ -36620,7 +36672,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">EN DIRECT</translation>
+        <translation>EN DIRECT</translation>
     </message>
     <message>
         <source>LOCKED</source>
@@ -36636,7 +36688,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">PONDÉRATION</translation>
+        <translation>PONDÉRATION</translation>
     </message>
     <message>
         <source>YIELD (LIFETIME)</source>
@@ -36644,7 +36696,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>DEMO</source>
@@ -36679,7 +36731,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">EN DIRECT</translation>
+        <translation>EN DIRECT</translation>
     </message>
     <message>
         <source>THIS EPOCH</source>
@@ -36813,7 +36865,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">PRIX</translation>
+        <translation>PRIX</translation>
     </message>
     <message>
         <source>USD VALUE</source>
@@ -36904,7 +36956,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>AMOUNT</source>
-        <translation type="unfinished">MONTANT</translation>
+        <translation>MONTANT</translation>
     </message>
     <message>
         <source>TOKEN</source>
@@ -36940,7 +36992,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">PONDÉRATION</translation>
+        <translation>PONDÉRATION</translation>
     </message>
     <message>
         <source>EST. YIELD</source>
@@ -36963,11 +37015,11 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>YES</source>
-        <translation type="unfinished">OUI</translation>
+        <translation>OUI</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">NON</translation>
+        <translation>NON</translation>
     </message>
     <message>
         <source>24h VOL</source>
@@ -36987,7 +37039,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">MARCHÉS</translation>
+        <translation>MARCHÉS</translation>
     </message>
     <message>
         <source>DEMO</source>
@@ -36995,7 +37047,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">ERREUR</translation>
+        <translation>ERREUR</translation>
     </message>
     <message>
         <source>● LIVE</source>
@@ -37018,7 +37070,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">EN DIRECT</translation>
+        <translation>EN DIRECT</translation>
     </message>
     <message>
         <source>DEMO</source>
@@ -37207,7 +37259,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">EN DIRECT</translation>
+        <translation>EN DIRECT</translation>
     </message>
     <message>
         <source>USDC RESERVES</source>
@@ -37242,7 +37294,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">TYPE</translation>
+        <translation>TYPE</translation>
     </message>
     <message>
         <source>SIDE</source>
@@ -37250,7 +37302,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">PRIX</translation>
+        <translation>PRIX</translation>
     </message>
     <message>
         <source>SIZE</source>
@@ -37261,7 +37313,7 @@ P/P cible : %3</translation>
     <name>fincept::screens::polymarket::PolymarketBrowsePanel</name>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">MARCHÉS</translation>
+        <translation>MARCHÉS</translation>
     </message>
     <message>
         <source>MARKETS  %1</source>
@@ -37273,7 +37325,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">CHARGEMENT...</translation>
+        <translation>CHARGEMENT...</translation>
     </message>
 </context>
 <context>
@@ -37296,7 +37348,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">VOLUME</translation>
+        <translation>VOLUME</translation>
     </message>
     <message>
         <source>LIQUIDITY</source>
@@ -37304,7 +37356,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">DATE</translation>
+        <translation>DATE</translation>
     </message>
     <message>
         <source>↻</source>
@@ -37312,7 +37364,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>Refresh</source>
-        <translation type="unfinished">Actualiser</translation>
+        <translation>Actualiser</translation>
     </message>
     <message>
         <source>ALL SERIES</source>
@@ -37351,7 +37403,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">APERÇU</translation>
+        <translation>APERÇU</translation>
     </message>
     <message>
         <source>ORDER BOOK</source>
@@ -37387,7 +37439,7 @@ P/P cible : %3</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">VOLUME</translation>
+        <translation>VOLUME</translation>
     </message>
     <message>
         <source>LIQUIDITY</source>
@@ -37433,11 +37485,11 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>OUTCOME</source>
@@ -37524,11 +37576,11 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>PNL</source>
-        <translation type="unfinished">PNL</translation>
+        <translation>PNL</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">VOLUME</translation>
+        <translation>VOLUME</translation>
     </message>
     <message>
         <source>TRADES</source>
@@ -37577,7 +37629,7 @@ pour passer des ordres</translation>
     <name>fincept::screens::polymarket::PolymarketOrderBook</name>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">PRIX</translation>
+        <translation>PRIX</translation>
     </message>
     <message>
         <source>SIZE</source>
@@ -37585,7 +37637,7 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>SPREAD %1</source>
@@ -37702,7 +37754,7 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Enregistrer</translation>
+        <translation>Enregistrer</translation>
     </message>
     <message>
         <source>Test Connection</source>
@@ -37868,19 +37920,19 @@ pour passer des ordres</translation>
     <name>fincept::screens::widgets::BaseWidget</name>
     <message>
         <source>Configure widget</source>
-        <translation type="unfinished">Configurer le widget</translation>
+        <translation>Configurer le widget</translation>
     </message>
     <message>
         <source>Refresh widget data</source>
-        <translation type="unfinished">Actualiser les donnees du widget</translation>
+        <translation>Actualiser les données du widget</translation>
     </message>
     <message>
         <source>Close widget</source>
-        <translation type="unfinished">Fermer le widget</translation>
+        <translation>Fermer le widget</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">CHARGEMENT...</translation>
+        <translation>CHARGEMENT...</translation>
     </message>
     <message>
         <source>No data yet — click refresh to retry</source>
@@ -37891,15 +37943,15 @@ pour passer des ordres</translation>
     <name>fincept::screens::widgets::BrokerHoldingsWidget</name>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">TITRES</translation>
+        <translation>TITRES</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Symbole</translation>
+        <translation>Symbole</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Qty</translation>
     </message>
     <message>
         <source>Avg</source>
@@ -37911,7 +37963,7 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">P&amp;L %</translation>
+        <translation>P&amp;L %</translation>
     </message>
     <message>
         <source>No active account — click gear to configure</source>
@@ -37972,7 +38024,7 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Symbole</translation>
+        <translation>Symbole</translation>
     </message>
 </context>
 <context>
@@ -37991,7 +38043,7 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">DATE</translation>
+        <translation>DATE</translation>
     </message>
     <message>
         <source>REF</source>
@@ -38031,7 +38083,7 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">HAUT</translation>
+        <translation>HAUT</translation>
     </message>
     <message>
         <source>MED</source>
@@ -38039,7 +38091,7 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">BAS</translation>
+        <translation>BAS</translation>
     </message>
 </context>
 <context>
@@ -38116,7 +38168,7 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>Total</source>
-        <translation type="unfinished">Total</translation>
+        <translation>Total</translation>
     </message>
     <message>
         <source>Collateral</source>
@@ -38213,7 +38265,7 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">CHARGEMENT...</translation>
+        <translation>CHARGEMENT...</translation>
     </message>
     <message>
         <source>-- BULL</source>
@@ -38245,7 +38297,7 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NEUTRE</translation>
+        <translation>NEUTRE</translation>
     </message>
     <message>
         <source>BEARISH</source>
@@ -38302,7 +38354,7 @@ pour passer des ordres</translation>
     <name>fincept::screens::widgets::NotesWidget</name>
     <message>
         <source>NOTES</source>
-        <translation type="unfinished">NOTES</translation>
+        <translation>NOTES</translation>
     </message>
     <message>
         <source>NOTES — FAVORITES</source>
@@ -38357,11 +38409,11 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Symbole</translation>
+        <translation>Symbole</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Qty</translation>
     </message>
     <message>
         <source>Avg</source>
@@ -38373,7 +38425,7 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>No active account — click gear to configure</source>
@@ -38396,7 +38448,7 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Symbole</translation>
+        <translation>Symbole</translation>
     </message>
     <message>
         <source>Side</source>
@@ -38404,11 +38456,11 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Qty</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Prix</translation>
+        <translation>Prix</translation>
     </message>
     <message>
         <source>Status</source>
@@ -38483,7 +38535,7 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>TODAY</source>
-        <translation type="unfinished">AUJOURD'HUI</translation>
+        <translation>AUJOURD'HUI</translation>
     </message>
 </context>
 <context>
@@ -38506,7 +38558,7 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Marchés</translation>
+        <translation>Marchés</translation>
     </message>
 </context>
 <context>
@@ -38517,7 +38569,7 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>TOTAL VALUE</source>
-        <translation type="unfinished">VALEUR TOTALE</translation>
+        <translation>VALEUR TOTALE</translation>
     </message>
     <message>
         <source>DAY P&amp;L</source>
@@ -38529,7 +38581,7 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">TITRES</translation>
+        <translation>TITRES</translation>
     </message>
     <message>
         <source>SYM</source>
@@ -38541,15 +38593,15 @@ pour passer des ordres</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">PRIX</translation>
+        <translation>PRIX</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">VALEUR</translation>
+        <translation>VALEUR</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>No portfolios yet.
@@ -38573,7 +38625,7 @@ Ajoutez des positions depuis l'onglet Portefeuille.</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portefeuille</translation>
+        <translation>Portefeuille</translation>
     </message>
 </context>
 <context>
@@ -38600,11 +38652,11 @@ Ajoutez des positions depuis l'onglet Portefeuille.</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>SHORT</source>
@@ -38624,11 +38676,11 @@ Ajoutez des positions depuis l'onglet Portefeuille.</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>QTY</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">PRIX</translation>
+        <translation>PRIX</translation>
     </message>
     <message>
         <source>market</source>
@@ -38693,11 +38745,11 @@ Ordre envoyé au moteur de trading.</translation>
     <name>fincept::screens::widgets::QuoteTableWidget</name>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SYMBOLE</translation>
+        <translation>SYMBOLE</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">PRIX</translation>
+        <translation>PRIX</translation>
     </message>
     <message>
         <source>CHG</source>
@@ -38705,7 +38757,23 @@ Ordre envoyé au moteur de trading.</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
+    </message>
+    <message>
+        <source>COMMODITIES</source>
+        <translation>MATIÈRES PREMIÈRES</translation>
+    </message>
+    <message>
+        <source>CRYPTOCURRENCY</source>
+        <translation>CRYPTOMONNAIE</translation>
+    </message>
+    <message>
+        <source>FOREX - MAJOR PAIRS</source>
+        <translation>FOREX - PAIRES MAJEURES</translation>
+    </message>
+    <message>
+        <source>GLOBAL INDICES</source>
+        <translation>INDICES MONDIAUX</translation>
     </message>
 </context>
 <context>
@@ -38767,7 +38835,7 @@ Ordre envoyé au moteur de trading.</translation>
     </message>
     <message>
         <source>EXTREME FEAR</source>
-        <translation type="unfinished">PEUR EXTREME</translation>
+        <translation>PEUR EXTRÊME</translation>
     </message>
 </context>
 <context>
@@ -38802,23 +38870,23 @@ Ordre envoyé au moteur de trading.</translation>
     </message>
     <message>
         <source>%1 symbols</source>
-        <translation type="unfinished">%1 symboles</translation>
+        <translation>%1 symboles</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SYMBOLE</translation>
+        <translation>SYMBOLE</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">PRIX</translation>
+        <translation>PRIX</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">VOLUME</translation>
+        <translation>VOLUME</translation>
     </message>
     <message>
         <source>FILTER:</source>
@@ -38907,7 +38975,7 @@ Ordre envoyé au moteur de trading.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">OUVERT</translation>
+        <translation>OUVERTURE</translation>
     </message>
     <message>
         <source>PREV CLOSE</source>
@@ -38915,15 +38983,15 @@ Ordre envoyé au moteur de trading.</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">HAUT</translation>
+        <translation>HAUT</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">BAS</translation>
+        <translation>BAS</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">VOLUME</translation>
+        <translation>VOLUME</translation>
     </message>
 </context>
 <context>
@@ -38942,7 +39010,7 @@ Ordre envoyé au moteur de trading.</translation>
     </message>
     <message>
         <source>Positions</source>
-        <translation type="unfinished">Positions</translation>
+        <translation>Positions</translation>
     </message>
     <message>
         <source>No active account — click gear to configure</source>
@@ -38961,27 +39029,27 @@ Ordre envoyé au moteur de trading.</translation>
     <name>fincept::screens::widgets::TopMoversWidget</name>
     <message>
         <source>TOP MOVERS</source>
-        <translation type="unfinished">PRINCIPAUX MOUVEMENTS</translation>
+        <translation>PRINCIPAUX MOUVEMENTS</translation>
     </message>
     <message>
         <source>GAINERS</source>
-        <translation type="unfinished">GAGNANTS</translation>
+        <translation>GAGNANTS</translation>
     </message>
     <message>
         <source>LOSERS</source>
-        <translation type="unfinished">PERDANTS</translation>
+        <translation>PERDANTS</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SYMBOLE</translation>
+        <translation>SYMBOLE</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">PRIX</translation>
+        <translation>PRIX</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
     </message>
 </context>
 <context>
@@ -38996,7 +39064,7 @@ Ordre envoyé au moteur de trading.</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Prix</translation>
+        <translation>Prix</translation>
     </message>
     <message>
         <source>Size</source>
@@ -39100,7 +39168,7 @@ Compilez avec Qt6 Multimedia pour la lecture en intégré.</translation>
     </message>
     <message>
         <source>SYMBOLS:</source>
-        <translation type="unfinished">SYMBOLES :</translation>
+        <translation>SYMBOLES :</translation>
     </message>
     <message>
         <source>GO</source>
@@ -39108,11 +39176,11 @@ Compilez avec Qt6 Multimedia pour la lecture en intégré.</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SYMBOLE</translation>
+        <translation>SYMBOLE</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">PRIX</translation>
+        <translation>PRIX</translation>
     </message>
     <message>
         <source>CHG</source>
@@ -39120,7 +39188,7 @@ Compilez avec Qt6 Multimedia pour la lecture en intégré.</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
     </message>
 </context>
 <context>
@@ -39264,11 +39332,11 @@ X-API-Key: xyz</translation>
     <name>fincept::surface::SurfaceAnalyticsScreen</name>
     <message>
         <source>IMPORT CSV</source>
-        <translation type="unfinished">IMPORTER CSV</translation>
+        <translation>IMPORTER CSV</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">ACTUALISER</translation>
+        <translation>ACTUALISER</translation>
     </message>
     <message>
         <source>3D</source>
@@ -39288,7 +39356,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">Fichiers CSV (*.csv)</translation>
+        <translation>Fichiers CSV (*.csv)</translation>
     </message>
     <message>
         <source>No Databento API key configured</source>
@@ -39411,7 +39479,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">MÉTRIQUES</translation>
+        <translation>MÉTRIQUES</translation>
     </message>
     <message>
         <source>count</source>
@@ -39462,7 +39530,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>EXPORT CSV</source>
-        <translation type="unfinished">EXPORTER CSV</translation>
+        <translation>EXPORTER CSV</translation>
     </message>
     <message>
         <source>LINEAGE</source>
@@ -39522,7 +39590,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Exporter CSV</translation>
+        <translation>Exporter CSV</translation>
     </message>
     <message>
         <source>CSV files (*.csv)</source>
@@ -39533,66 +39601,66 @@ X-API-Key: xyz</translation>
     <name>fincept::surface::SurfaceLineWidget</name>
     <message>
         <source>No data</source>
-        <translation type="unfinished">Aucune donnée</translation>
+        <translation>Aucune donnée</translation>
     </message>
 </context>
 <context>
     <name>fincept::ui::CommandBar</name>
     <message>
         <source>Dashboard</source>
-        <translation type="unfinished">Tableau de Bord</translation>
+        <translation>Tableau de Bord</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Marchés</translation>
+        <translation>Marchés</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">Actualités</translation>
+        <translation>Actualités</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portefeuille</translation>
+        <translation>Portefeuille</translation>
     </message>
     <message>
         <source>Backtesting</source>
-        <translation type="unfinished">Backtesting</translation>
+        <translation>Backtesting</translation>
     </message>
     <message>
         <source>Watchlist</source>
-        <translation type="unfinished">Liste de Suivi</translation>
+        <translation>Liste de Suivi</translation>
     </message>
     <message>
         <source>Crypto Trading</source>
-        <translation type="unfinished">Trading Crypto</translation>
+        <translation>Trading Crypto</translation>
     </message>
     <message>
         <source>AI Chat</source>
-        <translation type="unfinished">Chat IA</translation>
+        <translation>Chat IA</translation>
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Notes</translation>
+        <translation>Notes</translation>
     </message>
     <message>
         <source>Profile</source>
-        <translation type="unfinished">Profil</translation>
+        <translation>Profil</translation>
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">Paramètres</translation>
+        <translation>Paramètres</translation>
     </message>
     <message>
         <source>Forum</source>
-        <translation type="unfinished">Forum</translation>
+        <translation>Forum</translation>
     </message>
     <message>
         <source>Equity Trading</source>
-        <translation type="unfinished">Trading d'Actions</translation>
+        <translation>Trading d'Actions</translation>
     </message>
     <message>
         <source>Algo Trading</source>
-        <translation type="unfinished">Trading Algorithmique</translation>
+        <translation>Trading Algorithmique</translation>
     </message>
     <message>
         <source>Action Center</source>
@@ -39600,15 +39668,15 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Alpha Arena</source>
-        <translation type="unfinished">Alpha Arena</translation>
+        <translation>Alpha Arena</translation>
     </message>
     <message>
         <source>Prediction Markets</source>
-        <translation type="unfinished">Marchés de Prédiction</translation>
+        <translation>Marchés de Prédiction</translation>
     </message>
     <message>
         <source>Derivatives</source>
-        <translation type="unfinished">Dérivés</translation>
+        <translation>Dérivés</translation>
     </message>
     <message>
         <source>F&amp;O</source>
@@ -39616,7 +39684,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Equity Research</source>
-        <translation type="unfinished">Recherche d'Actions</translation>
+        <translation>Recherche d'Actions</translation>
     </message>
     <message>
         <source>Screener</source>
@@ -39624,23 +39692,23 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>M&amp;A Analytics</source>
-        <translation type="unfinished">Analyse M&amp;A</translation>
+        <translation>Analyse M&amp;A</translation>
     </message>
     <message>
         <source>Alt. Investments</source>
-        <translation type="unfinished">Inv. Alternatifs</translation>
+        <translation>Inv. Alternatifs</translation>
     </message>
     <message>
         <source>Surface Analytics</source>
-        <translation type="unfinished">Analyse de Surface</translation>
+        <translation>Analyse de Surface</translation>
     </message>
     <message>
         <source>Economics</source>
-        <translation type="unfinished">Économie</translation>
+        <translation>Économie</translation>
     </message>
     <message>
         <source>GOVT Data</source>
-        <translation type="unfinished">Données Gouvern.</translation>
+        <translation>Données Gouvern.</translation>
     </message>
     <message>
         <source>DBnomics</source>
@@ -39648,27 +39716,27 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>AKShare Data</source>
-        <translation type="unfinished">Données AKShare</translation>
+        <translation>Données AKShare</translation>
     </message>
     <message>
         <source>Asia Markets</source>
-        <translation type="unfinished">Marchés Asiatiques</translation>
+        <translation>Marchés Asiatiques</translation>
     </message>
     <message>
         <source>Geopolitics</source>
-        <translation type="unfinished">Géopolitique</translation>
+        <translation>Géopolitique</translation>
     </message>
     <message>
         <source>Maritime</source>
-        <translation type="unfinished">Maritime</translation>
+        <translation>Maritime</translation>
     </message>
     <message>
         <source>Relationship Map</source>
-        <translation type="unfinished">Carte des Relations</translation>
+        <translation>Carte des Relations</translation>
     </message>
     <message>
         <source>AI Quant Lab</source>
-        <translation type="unfinished">Labo Quant IA</translation>
+        <translation>Labo Quant IA</translation>
     </message>
     <message>
         <source>QuantLib</source>
@@ -39676,19 +39744,19 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Agent Config</source>
-        <translation type="unfinished">Config. Agent</translation>
+        <translation>Config. Agent</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">Serveurs MCP</translation>
+        <translation>Serveurs MCP</translation>
     </message>
     <message>
         <source>Node Editor</source>
-        <translation type="unfinished">Éditeur de Nœuds</translation>
+        <translation>Éditeur de Nœuds</translation>
     </message>
     <message>
         <source>Code Editor</source>
-        <translation type="unfinished">Éditeur de Code</translation>
+        <translation>Éditeur de Code</translation>
     </message>
     <message>
         <source>Excel</source>
@@ -39696,15 +39764,15 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Report Builder</source>
-        <translation type="unfinished">Générateur de Rapports</translation>
+        <translation>Générateur de Rapports</translation>
     </message>
     <message>
         <source>Data Sources</source>
-        <translation type="unfinished">Sources de Données</translation>
+        <translation>Sources de Données</translation>
     </message>
     <message>
         <source>Data Mapping</source>
-        <translation type="unfinished">Mappage de Données</translation>
+        <translation>Mappage de Données</translation>
     </message>
     <message>
         <source>Trade Visualization</source>
@@ -39712,11 +39780,11 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>About</source>
-        <translation type="unfinished">À propos</translation>
+        <translation>À propos</translation>
     </message>
     <message>
         <source>Support</source>
-        <translation type="unfinished">Support</translation>
+        <translation>Support</translation>
     </message>
     <message>
         <source>Stock</source>
@@ -39760,7 +39828,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Crypto</source>
-        <translation type="unfinished">Crypto</translation>
+        <translation>Crypto</translation>
     </message>
     <message>
         <source>Search cryptocurrencies</source>
@@ -39822,7 +39890,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tous</translation>
+        <translation>Tous</translation>
     </message>
     <message numerus="yes">
         <source>%n component(s)</source>
@@ -39889,18 +39957,18 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Layout name:</source>
-        <translation type="unfinished">Nom de la disposition :</translation>
+        <translation>Nom de la disposition :</translation>
     </message>
 </context>
 <context>
     <name>fincept::ui::NavigationBar</name>
     <message>
         <source> LIVE</source>
-        <translation type="unfinished"> EN DIRECT</translation>
+        <translation> EN DIRECT</translation>
     </message>
     <message>
         <source>LOGOUT</source>
-        <translation type="unfinished">DÉCONNEXION</translation>
+        <translation>DÉCONNEXION</translation>
     </message>
 </context>
 <context>
@@ -39955,15 +40023,15 @@ X-API-Key: xyz</translation>
     <name>fincept::ui::StatusBadge</name>
     <message>
         <source>CONNECTED</source>
-        <translation type="unfinished">CONNECTE</translation>
+        <translation>CONNECTÉ</translation>
     </message>
     <message>
         <source>OFFLINE</source>
-        <translation type="unfinished">HORS LIGNE</translation>
+        <translation>HORS LIGNE</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">CHARGEMENT...</translation>
+        <translation>CHARGEMENT...</translation>
     </message>
     <message>
         <source>READY</source>
@@ -40349,11 +40417,11 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">Serveurs MCP</translation>
+        <translation>Serveurs MCP</translation>
     </message>
     <message>
         <source>Data Sources</source>
-        <translation type="unfinished">Sources de Données</translation>
+        <translation>Sources de Données</translation>
     </message>
     <message>
         <source>Excel</source>
@@ -40372,11 +40440,11 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>TOTAL RETURN</source>
-        <translation type="unfinished">RENDEMENT TOTAL</translation>
+        <translation>RENDEMENT TOTAL</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">SHARPE</translation>
+        <translation>SHARPE</translation>
     </message>
     <message>
         <source>SORTINO</source>
@@ -40384,7 +40452,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">PERTE MAXIMALE</translation>
+        <translation>PERTE MAXIMALE</translation>
     </message>
     <message>
         <source>CALMAR</source>
@@ -40392,7 +40460,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">TAUX DE RÉUSSITE</translation>
+        <translation>TAUX DE RÉUSSITE</translation>
     </message>
     <message>
         <source>PROFIT FACTOR</source>
@@ -40452,15 +40520,15 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Qty</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">P&amp;L %</translation>
+        <translation>P&amp;L %</translation>
     </message>
     <message>
         <source>Bars</source>
@@ -40683,7 +40751,7 @@ X-API-Key: xyz</translation>
     <name>fincept::ui::algo::RiskManagementPanel</name>
     <message>
         <source>RISK MANAGEMENT</source>
-        <translation type="unfinished">GESTION DES RISQUES</translation>
+        <translation>GESTION DES RISQUES</translation>
     </message>
     <message>
         <source>Stop Loss %</source>
@@ -40734,7 +40802,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Annuler</translation>
+        <translation>Annuler</translation>
     </message>
     <message>
         <source>cancelled by user</source>
@@ -40781,7 +40849,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Annuler</translation>
+        <translation>Annuler</translation>
     </message>
     <message>
         <source>Browser opened. Approve the transaction in your wallet. The terminal is waiting on a single-use loopback bridge — this dialog will close automatically when the wallet returns the signature.</source>
@@ -40804,7 +40872,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">DESCRIPTION</translation>
+        <translation>DESCRIPTION</translation>
     </message>
     <message>
         <source>Describe what this workflow does...</source>
@@ -40812,7 +40880,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>SAVE DRAFT</source>
@@ -40850,7 +40918,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>COPY</source>
-        <translation type="unfinished">COPIER</translation>
+        <translation>COPIER</translation>
     </message>
     <message>
         <source>Copy all results to clipboard</source>
@@ -40858,7 +40926,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>COPIED!</source>
-        <translation type="unfinished">COPIÉ !</translation>
+        <translation>COPIÉ !</translation>
     </message>
     <message>
         <source>RUNNING…</source>
@@ -41045,7 +41113,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">ENREGISTRER</translation>
+        <translation>ENREGISTRER</translation>
     </message>
     <message>
         <source>Save workflow to database</source>
@@ -41065,7 +41133,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">IMPORTER</translation>
+        <translation>IMPORTER</translation>
     </message>
     <message>
         <source>EXPORT</source>
@@ -41132,15 +41200,15 @@ pour modifier les propriétés</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NOM</translation>
+        <translation>NOM</translation>
     </message>
     <message>
         <source>PARAMETERS</source>
-        <translation type="unfinished">PARAMÈTRES</translation>
+        <translation>PARAMÈTRES</translation>
     </message>
     <message>
         <source>SETTINGS</source>
-        <translation type="unfinished">PARAMÈTRES</translation>
+        <translation>PARAMÈTRES</translation>
     </message>
     <message>
         <source>Disabled</source>
@@ -41149,6 +41217,46 @@ pour modifier les propriétés</translation>
     <message>
         <source>Continue on Fail</source>
         <translation>Continuer en cas d'échec</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::screens::OrderConfirmDialog</name>
+    <message>
+        <source>Confirm Order</source>
+        <translation>Confirmer l'ordre</translation>
+    </message>
+    <message>
+        <source>Est. value</source>
+        <translation>Val. est.</translation>
+    </message>
+    <message>
+        <source>Send Order</source>
+        <translation>Envoyer l'ordre</translation>
+    </message>
+    <message>
+        <source>⚠  SEMI-AUTO — review before sending</source>
+        <translation>⚠  SEMI-AUTOMATIQUE — examiner avant l'envoi</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::screens::PendingOrdersBadge</name>
+    <message>
+        <source>Orders awaiting approval — click to review</source>
+        <translation>Ordres en attente d'approbation — cliquez pour examiner</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::screens::PendingOrdersPanel</name>
+    <message>
+        <source>PENDING ORDERS</source>
+        <translation>ORDRES EN ATTENTE</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::ui::PhoneCodeComboBox</name>
+    <message>
+        <source>Search country…</source>
+        <translation>Rechercher un pays…</translation>
     </message>
 </context>
 </TS>

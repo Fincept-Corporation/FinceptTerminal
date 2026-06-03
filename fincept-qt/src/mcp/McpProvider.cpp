@@ -154,7 +154,7 @@ QFuture<ToolResult> McpProvider::call_tool_async(const QString& name, const QJso
     ToolHandler sync_handler;
     AsyncToolHandler async_handler;
     ToolSchema schema;
-    int default_timeout_ms = 30000;
+    int default_timeout_ms = kMcpDefaultTimeoutMs;
     AuthLevel auth_required = AuthLevel::None;
     bool is_destructive = false;
 
@@ -263,7 +263,7 @@ QFuture<ToolResult> McpProvider::call_tool_async(const QString& name, const QJso
 
     // Per-call timeout overrides ToolDef::default_timeout_ms when supplied
     // (Phase 4 framework; Phase 6 wires _meta.timeout_ms here).
-    if (ctx.timeout_ms == 30000) // ToolContext default — not explicitly set
+    if (ctx.timeout_ms == kMcpDefaultTimeoutMs) // ToolContext default — not explicitly set
         ctx.timeout_ms = default_timeout_ms;
 
     // Async preferred; fall back to sync wrapped in an immediately-resolved

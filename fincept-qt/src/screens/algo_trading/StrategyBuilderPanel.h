@@ -69,17 +69,21 @@ private:
     QPushButton* save_btn_ = nullptr;
     QPushButton* backtest_btn_ = nullptr;
     QPushButton* deploy_btn_ = nullptr;
+    // Small pill showing whether this is a fresh draft or an existing strategy.
+    QLabel* state_chip_ = nullptr;
 
     // Left panel — condition builder
     ui::algo::ConditionSection* entry_section_ = nullptr;
     ui::algo::ConditionSection* exit_section_ = nullptr;
     ui::algo::RiskManagementPanel* risk_panel_ = nullptr;
 
-    // Right panel — backtest
+    // Right panel — backtest setup card
     QLabel* bt_header_ = nullptr;
+    QLabel* bt_symbol_label_ = nullptr;
     QLabel* bt_capital_label_ = nullptr;
     QLabel* bt_start_label_ = nullptr;
     QLabel* bt_end_label_ = nullptr;
+    QLabel* results_header_ = nullptr;
     QDoubleSpinBox* bt_capital_ = nullptr;
     QDateEdit* bt_start_date_ = nullptr;
     QDateEdit* bt_end_date_ = nullptr;

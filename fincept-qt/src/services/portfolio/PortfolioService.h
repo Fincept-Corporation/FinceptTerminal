@@ -183,7 +183,9 @@ class PortfolioService : public QObject {
     QVector<double> spy_closes_cache_;
 
     // ── Risk-free rate cache (annual decimal, e.g. 0.043) ────────────────────
-    double rf_rate_ = 0.04; // default 4% until FRED responds
+    // Canonical fallback used wherever the live FRED rate is unavailable.
+    static constexpr double kDefaultRiskFreeRate = 0.04; // 4%
+    double rf_rate_ = kDefaultRiskFreeRate; // default until FRED responds
 
     // ── Backfill state ───────────────────────────────────────────────────────
     // Per-portfolio guard so compute_metrics doesn't kick off backfill on

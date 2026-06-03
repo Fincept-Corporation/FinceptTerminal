@@ -24,6 +24,7 @@ struct OptionsLeg {
     double strike = 0;
     QString option_type;  // "CE" (call) or "PE" (put)
     QString expiry;       // "2025-03-28"
+    QString underlying;   // e.g. "NIFTY" — root symbol, used to resolve the real tradingsymbol
 };
 
 // ----------------------------------------------------------------------------
@@ -80,14 +81,20 @@ public:
     // OpenAlgo's options_multiorder_service ordering. Each leg becomes a Market
     // UnifiedOrder with the supplied product type. The strategy name is copied to
     // BasketOrderRequest::strategy_name.
+    //
+    // When broker_id is supplied and the instrument master is loaded, each leg's
+    // tradingsymbol is resolved from the master to the real, broker-tradable
+    // symbol. If a leg can't be resolved it falls back to the build_option_symbol()
+    // placeholder so behaviour never regresses (a warning is logged).
     static BasketOrderRequest to_basket_order(const OptionsStrategy& strategy,
-                                              ProductType product);
+                                              ProductType product,
+                                              const QString& broker_id = {});
 
     // Build a readable placeholder option symbol of the form
     // "<UNDERLYING><EXPIRY-COMPACT><STRIKE><CE|PE>", e.g. "NIFTY28MAR25500CE".
-    // TODO: Replace with InstrumentService lookup once available — exchange
-    // tradingsymbols vary per broker and must be resolved from the instrument
-    // master rather than constructed by string concatenation.
+    // This is a human-readable label for previews and a last-resort fallback —
+    // the real, broker-tradable symbol is resolved from the instrument master in
+    // to_basket_order() (the path that actually reaches a broker).
     static QString build_option_symbol(const QString& underlying, const QString& expiry,
                                        double strike, const QString& opt_type);
 };

@@ -338,6 +338,7 @@ class VectorBTProvider(BacktestingProviderBase):
 
             result_dict = result.to_dict()
             result_dict['using_synthetic_data'] = using_synthetic
+            result_dict['dataSource'] = getattr(self, '_broker_data_source', '') or 'yahoo'
             result_dict['extended_stats'] = extended
 
             if using_synthetic:
@@ -1649,6 +1650,58 @@ class VectorBTProvider(BacktestingProviderBase):
             stub = types.SimpleNamespace(__version__='pure-numpy')
             return stub
 
+    @staticmethod
+    def _canon_symbol(sym):
+        """Canonical key for matching injected broker candles: uppercase, strip an
+        EXCHANGE: prefix and any .NS/.BO suffix. 'NSE:RELIANCE.NS' -> 'RELIANCE'."""
+        s = (sym or "").strip().upper()
+        if ":" in s:
+            parts = s.split(":")
+            s = parts[1] if len(parts) > 1 and parts[1] else parts[0]
+        for suf in (".NS", ".BO"):
+            if s.endswith(suf):
+                s = s[: -len(suf)]
+        return s
+
+    def _load_from_broker_candles(self, symbols, multi_asset):
+        """Build a close Series (single symbol) or DataFrame (multi) from candles
+        the C++ host pre-fetched from a broker and stashed on self._broker_candles.
+
+        Returns None when the injected candles do not FULLY cover the requested
+        symbols (the caller then falls back to yfinance). Multi-symbol is
+        all-or-nothing to avoid mixing broker + yfinance rows.
+        """
+        import pandas as pd
+
+        candles_map = getattr(self, "_broker_candles", None) or {}
+        if not candles_map:
+            return None
+
+        by_canon = {self._canon_symbol(k): v for k, v in candles_map.items()}
+
+        def series_for(sym):
+            rows = by_canon.get(self._canon_symbol(sym))
+            if not rows:
+                return None
+            idx = pd.to_datetime([int(r["t"]) for r in rows], unit="s")
+            closes = [float(r["c"]) for r in rows]
+            s = pd.Series(closes, index=idx, name="Close").sort_index()
+            s = s[~s.index.duplicated(keep="last")]
+            return s if len(s) >= 5 else None
+
+        if multi_asset and len(symbols) > 1:
+            cols = {}
+            for sym in symbols:
+                s = series_for(sym)
+                if s is None:
+                    return None  # all-or-nothing
+                cols[self._canon_symbol(sym)] = s
+            df = pd.DataFrame(cols).dropna()
+            return df.round(4) if len(df) >= 5 else None
+
+        s = series_for(symbols[0]) if symbols else None
+        return s.round(4) if s is not None else None
+
     def _load_market_data(self, symbols: list, start_date: str, end_date: str,
                           interval: str = '1d', multi_asset: bool = False):
         """
@@ -1668,6 +1721,15 @@ class VectorBTProvider(BacktestingProviderBase):
         import numpy as np
 
         using_synthetic = False
+
+        # ── Broker-sourced data injection ────────────────────────────────────
+        # The C++ host pre-fetches candles from a connected broker and passes
+        # them in args["brokerCandles"] (stashed on self in main()). When they
+        # fully cover the requested symbols, use them as REAL data and skip
+        # yfinance entirely. Any gap → fall through to the yfinance path below.
+        injected = self._load_from_broker_candles(symbols, multi_asset)
+        if injected is not None:
+            return injected, False
 
         # --- Normalize symbols for yfinance compatibility ---
         normalized_symbols = self._normalize_symbols(symbols)
@@ -2077,6 +2139,8 @@ def main():
         args = parse_json_input(json_args)
         print(f'[PY-MAIN] parsed args keys: {sorted(args.keys()) if isinstance(args, dict) else type(args)}', file=sys.stderr)
         provider = VectorBTProvider()
+        provider._broker_candles = args.get("brokerCandles") or {}
+        provider._broker_data_source = args.get("brokerDataSource", "")
 
         if command == 'test_import':
             vbt = provider._import_vbt()

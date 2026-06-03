@@ -85,7 +85,7 @@
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">BUKA</translation>
+        <translation>BUKA</translation>
     </message>
 </context>
 <context>
@@ -168,15 +168,15 @@
     <name>GovDataProviderPanel</name>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Ekspor CSV</translation>
+        <translation>Ekspor CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">Berkas CSV (*.csv)</translation>
+        <translation>Berkas CSV (*.csv)</translation>
     </message>
     <message>
         <source>Export failed</source>
-        <translation type="unfinished">Ekspor gagal</translation>
+        <translation>Ekspor gagal</translation>
     </message>
     <message>
         <source>Unable to open file for writing.</source>
@@ -187,11 +187,11 @@
     <name>MAModulePanel</name>
     <message>
         <source>YES</source>
-        <translation type="unfinished">YA</translation>
+        <translation>YA</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">TIDAK</translation>
+        <translation>TIDAK</translation>
     </message>
     <message>
         <source>Metric</source>
@@ -262,7 +262,7 @@
     </message>
     <message>
         <source>PORTFOLIO</source>
-        <translation type="unfinished">PORTOFOLIO</translation>
+        <translation>PORTOFOLIO</translation>
     </message>
     <message>
         <source>GENERAL</source>
@@ -518,7 +518,7 @@
     </message>
     <message>
         <source>AI</source>
-        <translation type="unfinished">AI</translation>
+        <translation>AI</translation>
     </message>
     <message>
         <source>Copy</source>
@@ -600,7 +600,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Batal</translation>
+        <translation>Batal</translation>
     </message>
     <message>
         <source>Update Connection</source>
@@ -791,7 +791,7 @@ Pastikan kolom wajib (URL, host, atau API key) telah diisi.</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NETRAL</translation>
+        <translation>NETRAL</translation>
     </message>
     <message>
         <source>VOLATILE</source>
@@ -887,7 +887,7 @@ Untuk obrolan panjang, gunakan tab AI Chat.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
     <message>
         <source>Listening — speak now</source>
@@ -1054,7 +1054,7 @@ Untuk obrolan panjang, gunakan tab AI Chat.</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">Server MCP</translation>
+        <translation>Server MCP</translation>
     </message>
     <message>
         <source>Node Editor</source>
@@ -1109,7 +1109,7 @@ Untuk obrolan panjang, gunakan tab AI Chat.</translation>
     <name>fincept::MonitorMapWidget</name>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">SAAT INI</translation>
+        <translation>SAAT INI</translation>
     </message>
 </context>
 <context>
@@ -1131,7 +1131,7 @@ Untuk obrolan panjang, gunakan tab AI Chat.</translation>
     <name>fincept::WindowFrame</name>
     <message>
         <source>Save Layout</source>
-        <translation type="unfinished">Simpan Tata Letak</translation>
+        <translation>Simpan Tata Letak</translation>
     </message>
     <message>
         <source>Layout name:</source>
@@ -1139,7 +1139,7 @@ Untuk obrolan panjang, gunakan tab AI Chat.</translation>
     </message>
     <message>
         <source>Import Layout</source>
-        <translation type="unfinished">Impor Tata Letak</translation>
+        <translation>Impor Tata Letak</translation>
     </message>
     <message>
         <source>Fincept Layout (*.flayout *.fwsp);;All Files (*)</source>
@@ -1151,7 +1151,7 @@ Untuk obrolan panjang, gunakan tab AI Chat.</translation>
     </message>
     <message>
         <source>Export Layout</source>
-        <translation type="unfinished">Ekspor Tata Letak</translation>
+        <translation>Ekspor Tata Letak</translation>
     </message>
     <message>
         <source>Open or save a layout first, then export it.</source>
@@ -1278,7 +1278,7 @@ Untuk obrolan panjang, gunakan tab AI Chat.</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Batal</translation>
+        <translation>Batal</translation>
     </message>
     <message>
         <source>Cancel task</source>
@@ -1286,7 +1286,7 @@ Untuk obrolan panjang, gunakan tab AI Chat.</translation>
     </message>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">SERVER MCP</translation>
+        <translation>SERVER MCP</translation>
     </message>
     <message>
         <source>Model Context Protocol tool servers.</source>
@@ -1372,7 +1372,7 @@ Untuk obrolan panjang, gunakan tab AI Chat.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Jenis</translation>
+        <translation>Jenis</translation>
     </message>
     <message>
         <source>Memory type:</source>
@@ -1460,7 +1460,7 @@ Hasil:
     </message>
     <message>
         <source>Name:</source>
-        <translation type="unfinished">Nama:</translation>
+        <translation>Nama:</translation>
     </message>
     <message>
         <source>Transport</source>
@@ -1540,7 +1540,7 @@ Hasil:
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Simbol</translation>
+        <translation>Simbol</translation>
     </message>
     <message>
         <source>Symbol:</source>
@@ -1677,7 +1677,7 @@ Pasar, ekuitas, portofolio, wawasan makro.</translation>
     </message>
     <message>
         <source>%1 credits</source>
-        <translation type="unfinished">%1 kredit</translation>
+        <translation>%1 kredit</translation>
     </message>
     <message>
         <source>0 credits</source>
@@ -1952,7 +1952,7 @@ Pasar, ekuitas, portofolio, wawasan makro.</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">SIAP</translation>
+        <translation>SIAP</translation>
     </message>
 </context>
 <context>
@@ -2079,7 +2079,7 @@ Pasar, ekuitas, portofolio, wawasan makro.</translation>
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">KEAMANAN</translation>
+        <translation>KEAMANAN</translation>
     </message>
     <message>
         <source>LEGAL</source>
@@ -2114,7 +2114,7 @@ Pasar, ekuitas, portofolio, wawasan makro.</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Semua</translation>
+        <translation>Semua</translation>
     </message>
     <message>
         <source>Mode:</source>
@@ -2142,11 +2142,11 @@ Pasar, ekuitas, portofolio, wawasan makro.</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>APPROVE ALL</source>
@@ -2166,11 +2166,11 @@ Pasar, ekuitas, portofolio, wawasan makro.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Jenis</translation>
+        <translation>Jenis</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Simbol</translation>
+        <translation>Simbol</translation>
     </message>
     <message>
         <source>Side</source>
@@ -2178,7 +2178,7 @@ Pasar, ekuitas, portofolio, wawasan makro.</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Qty</translation>
     </message>
     <message>
         <source>Price Type</source>
@@ -2293,7 +2293,7 @@ Pasar, ekuitas, portofolio, wawasan makro.</translation>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">STATUS</translation>
+        <translation>STATUS</translation>
     </message>
     <message>
         <source>SIGNATURE</source>
@@ -2397,11 +2397,11 @@ Data ADB gratis — tidak perlu API key</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">BATAL</translation>
+        <translation>BATAL</translation>
     </message>
     <message>
         <source>ADD</source>
-        <translation type="unfinished">TAMBAH</translation>
+        <translation>TAMBAH</translation>
     </message>
     <message>
         <source>No results found</source>
@@ -2444,7 +2444,7 @@ Data ADB gratis — tidak perlu API key</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">BATAL</translation>
+        <translation>BATAL</translation>
     </message>
     <message>
         <source>RECORD</source>
@@ -2467,19 +2467,19 @@ Data ADB gratis — tidak perlu API key</translation>
     </message>
     <message>
         <source>%1 AVAILABLE</source>
-        <translation type="unfinished">%1 TERSEDIA</translation>
+        <translation>%1 TERSEDIA</translation>
     </message>
     <message>
         <source>Search widgets...</source>
-        <translation type="unfinished">Cari widget...</translation>
+        <translation>Cari widget...</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">BATAL</translation>
+        <translation>BATAL</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Semua</translation>
+        <translation>Semua</translation>
     </message>
 </context>
 <context>
@@ -2566,11 +2566,11 @@ Data ADB gratis — tidak perlu API key</translation>
     </message>
     <message>
         <source>REBALANCE</source>
-        <translation type="unfinished">REBALANCE</translation>
+        <translation>REBALANCE</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">RISIKO</translation>
+        <translation>RISIKO</translation>
     </message>
     <message>
         <source>How can I help you?</source>
@@ -2604,7 +2604,7 @@ Pilih agen di atas, atau gunakan Rute Otomatis agar sistem yang memutuskan.</tra
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
     <message>
         <source>Response received (%1ms)</source>
@@ -2774,7 +2774,7 @@ Pilih agen di atas, atau gunakan Rute Otomatis agar sistem yang memutuskan.</tra
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Semua</translation>
+        <translation>Semua</translation>
     </message>
     <message>
         <source>Running</source>
@@ -2830,7 +2830,7 @@ Pilih agen di atas, atau gunakan Rute Otomatis agar sistem yang memutuskan.</tra
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">BATAL</translation>
+        <translation>BATAL</translation>
     </message>
     <message>
         <source>SCHEDULE…</source>
@@ -2842,7 +2842,7 @@ Pilih agen di atas, atau gunakan Rute Otomatis agar sistem yang memutuskan.</tra
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">HAPUS</translation>
+        <translation>HAPUS</translation>
     </message>
     <message>
         <source>(no plan persisted)</source>
@@ -3005,11 +3005,11 @@ Pilih agen di atas, atau gunakan Rute Otomatis agar sistem yang memutuskan.</tra
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">ALAT</translation>
+        <translation>ALAT</translation>
     </message>
     <message>
         <source>FEATURES</source>
-        <translation type="unfinished">FITUR</translation>
+        <translation>FITUR</translation>
     </message>
     <message>
         <source>Reasoning</source>
@@ -3041,7 +3041,7 @@ Pilih agen di atas, atau gunakan Rute Otomatis agar sistem yang memutuskan.</tra
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">HAPUS</translation>
+        <translation>HAPUS</translation>
     </message>
     <message>
         <source>APPLY JSON</source>
@@ -3069,7 +3069,7 @@ Pilih agen di atas, atau gunakan Rute Otomatis agar sistem yang memutuskan.</tra
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
     <message>
         <source>Routed → %1 (intent: %2, confidence: %3%)</source>
@@ -3186,7 +3186,7 @@ Percakapan disimpan otomatis.</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Pasar</translation>
+        <translation>Pasar</translation>
     </message>
     <message>
         <source>Show me today's top market movers</source>
@@ -3194,7 +3194,7 @@ Percakapan disimpan otomatis.</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">Berita</translation>
+        <translation>Berita</translation>
     </message>
     <message>
         <source>Summarize the latest financial news</source>
@@ -3202,7 +3202,7 @@ Percakapan disimpan otomatis.</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portofolio</translation>
+        <translation>Portofolio</translation>
     </message>
     <message>
         <source>Analyze my portfolio performance</source>
@@ -3218,7 +3218,7 @@ Percakapan disimpan otomatis.</translation>
     </message>
     <message>
         <source>Economics</source>
-        <translation type="unfinished">Ekonomi</translation>
+        <translation>Ekonomi</translation>
     </message>
     <message>
         <source>Current GDP and inflation data</source>
@@ -3286,7 +3286,7 @@ Percakapan disimpan otomatis.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
     <message>
         <source>(empty response — model returned no content)</source>
@@ -3396,7 +3396,7 @@ untuk memuat endpoint yang tersedia</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>START</source>
@@ -3523,11 +3523,11 @@ untuk memuat endpoint yang tersedia</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>Entry Side:</source>
@@ -3673,7 +3673,7 @@ untuk memuat endpoint yang tersedia</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">KESALAHAN</translation>
+        <translation>KESALAHAN</translation>
     </message>
     <message>
         <source>ANALYZING...</source>
@@ -3696,121 +3696,121 @@ untuk memuat endpoint yang tersedia</translation>
     <name>fincept::screens::AnalyticsSectorsView</name>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">IKHTISAR</translation>
+        <translation>IKHTISAR</translation>
     </message>
     <message>
         <source>CORRELATION</source>
-        <translation type="unfinished">KORELASI</translation>
+        <translation>KORELASI</translation>
     </message>
     <message>
         <source>SECTORS</source>
-        <translation type="unfinished">SEKTOR</translation>
+        <translation>SEKTOR</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">POSISI</translation>
+        <translation>POSISI</translation>
     </message>
     <message>
         <source>MARKET VALUE</source>
-        <translation type="unfinished">NILAI PASAR</translation>
+        <translation>NILAI PASAR</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>SECTOR ALLOCATION</source>
-        <translation type="unfinished">ALOKASI SEKTOR</translation>
+        <translation>ALOKASI SEKTOR</translation>
     </message>
     <message>
         <source>SECTOR BREAKDOWN</source>
-        <translation type="unfinished">RINCIAN SEKTOR</translation>
+        <translation>RINCIAN SEKTOR</translation>
     </message>
     <message>
         <source>SECTOR</source>
-        <translation type="unfinished">SEKTOR</translation>
+        <translation>SEKTOR</translation>
     </message>
     <message>
         <source>POS</source>
-        <translation type="unfinished">POS</translation>
+        <translation>POS</translation>
     </message>
     <message>
         <source>MKT VAL</source>
-        <translation type="unfinished">MKT VAL</translation>
+        <translation>MKT VAL</translation>
     </message>
     <message>
         <source>WT</source>
-        <translation type="unfinished">WT</translation>
+        <translation>WT</translation>
     </message>
     <message>
         <source>P&amp;L%</source>
-        <translation type="unfinished">P&amp;L%</translation>
+        <translation>P&amp;L%</translation>
     </message>
     <message>
         <source>HOLDINGS CORRELATION MATRIX</source>
-        <translation type="unfinished">MATRIKS KORELASI KEPEMILIKAN</translation>
+        <translation>MATRIKS KORELASI KEPEMILIKAN</translation>
     </message>
     <message>
         <source>%1
 sectors</source>
-        <translation type="unfinished">%1
+        <translation>%1
 sektor</translation>
     </message>
     <message>
         <source>+%1 more</source>
-        <translation type="unfinished">+%1 lainnya</translation>
+        <translation>+%1 lainnya</translation>
     </message>
     <message>
         <source>LARGEST</source>
-        <translation type="unfinished">TERBESAR</translation>
+        <translation>TERBESAR</translation>
     </message>
     <message>
         <source>SMALLEST</source>
-        <translation type="unfinished">TERKECIL</translation>
+        <translation>TERKECIL</translation>
     </message>
     <message>
         <source>BEST</source>
-        <translation type="unfinished">TERBAIK</translation>
+        <translation>TERBAIK</translation>
     </message>
     <message>
         <source>WORST</source>
-        <translation type="unfinished">TERBURUK</translation>
+        <translation>TERBURUK</translation>
     </message>
     <message>
         <source>%1 positions</source>
-        <translation type="unfinished">%1 posisi</translation>
+        <translation>%1 posisi</translation>
     </message>
     <message>
         <source>HHI CONCENTRATION</source>
-        <translation type="unfinished">KONSENTRASI HHI</translation>
+        <translation>KONSENTRASI HHI</translation>
     </message>
     <message>
         <source>Herfindahl index across sectors (lower = more diversified)</source>
-        <translation type="unfinished">Indeks Herfindahl lintas sektor (lebih rendah = lebih terdiversifikasi)</translation>
+        <translation>Indeks Herfindahl lintas sektor (lebih rendah = lebih terdiversifikasi)</translation>
     </message>
     <message>
         <source>TOP-3 CONCENTRATION</source>
-        <translation type="unfinished">KONSENTRASI 3 TERATAS</translation>
+        <translation>KONSENTRASI 3 TERATAS</translation>
     </message>
     <message>
         <source>Weight of the three largest sectors (%1)</source>
-        <translation type="unfinished">Bobot dari tiga sektor terbesar (%1)</translation>
+        <translation>Bobot dari tiga sektor terbesar (%1)</translation>
     </message>
     <message>
         <source>Diversified</source>
-        <translation type="unfinished">Terdiversifikasi</translation>
+        <translation>Terdiversifikasi</translation>
     </message>
     <message>
         <source>Balanced</source>
-        <translation type="unfinished">Seimbang</translation>
+        <translation>Seimbang</translation>
     </message>
     <message>
         <source>Concentrated</source>
-        <translation type="unfinished">Terkonsentrasi</translation>
+        <translation>Terkonsentrasi</translation>
     </message>
     <message>
         <source>Need 2+ holdings for correlation analysis</source>
-        <translation type="unfinished">Membutuhkan 2+ kepemilikan untuk analisis korelasi</translation>
+        <translation>Membutuhkan 2+ kepemilikan untuk analisis korelasi</translation>
     </message>
     <message>
         <source>Top-10 holdings by weight. Pearson correlation of daily returns over the trailing 30 trading days (from real price history).</source>
@@ -3908,7 +3908,7 @@ sektor</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>e.g. 000001</source>
@@ -4007,7 +4007,7 @@ sektor</translation>
     </message>
     <message>
         <source>STRATEGY</source>
-        <translation type="unfinished">STRATEGI</translation>
+        <translation>STRATEGI</translation>
     </message>
     <message>
         <source>CATEGORY</source>
@@ -4041,7 +4041,7 @@ Perintah: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">RINGKASAN</translation>
+        <translation>RINGKASAN</translation>
     </message>
     <message>
         <source>EQUITY CURVE</source>
@@ -4049,7 +4049,7 @@ Perintah: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">METRIK</translation>
+        <translation>METRIK</translation>
     </message>
     <message>
         <source>DETAILS</source>
@@ -4125,11 +4125,11 @@ Perintah: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>BENCHMARK</source>
-        <translation type="unfinished">BENCHMARK</translation>
+        <translation>BENCHMARK</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>None</source>
@@ -4149,7 +4149,7 @@ Perintah: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">SIAP</translation>
+        <translation>SIAP</translation>
     </message>
     <message>
         <source>Export Backtest Results</source>
@@ -4189,7 +4189,7 @@ Perintah: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>METHOD</source>
-        <translation type="unfinished">METODE</translation>
+        <translation>METODE</translation>
     </message>
     <message>
         <source>MAX ITERATIONS</source>
@@ -4341,7 +4341,7 @@ Perintah: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>ANALYSIS TYPE</source>
-        <translation type="unfinished">JENIS ANALISIS</translation>
+        <translation>JENIS ANALISIS</translation>
     </message>
     <message>
         <source>ROLLING WINDOW</source>
@@ -4349,7 +4349,7 @@ Perintah: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>METRIC</source>
-        <translation type="unfinished">METRIK</translation>
+        <translation>METRIK</translation>
     </message>
     <message>
         <source>SIGNAL GENERATORS</source>
@@ -4425,7 +4425,7 @@ Perintah: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">JENIS</translation>
+        <translation>JENIS</translation>
     </message>
     <message>
         <source>CONDITION</source>
@@ -4485,7 +4485,7 @@ Perintah: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">KESALAHAN</translation>
+        <translation>KESALAHAN</translation>
     </message>
 </context>
 <context>
@@ -4622,7 +4622,7 @@ Data BIS gratis — tidak memerlukan kunci API</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">NEGARA</translation>
+        <translation>NEGARA</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -4713,7 +4713,7 @@ Kunci gratis di: data.bls.gov/registrationEngine/</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">JENIS</translation>
+        <translation>JENIS</translation>
     </message>
     <message>
         <source>UP</source>
@@ -4729,7 +4729,7 @@ Kunci gratis di: data.bls.gov/registrationEngine/</translation>
     </message>
     <message>
         <source>OUTPUT</source>
-        <translation type="unfinished">KELUARAN</translation>
+        <translation>KELUARAN</translation>
     </message>
     <message>
         <source>OUTPUT [collapsed]</source>
@@ -4941,11 +4941,11 @@ Data CFTC gratis — tidak perlu API key</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">BUKA</translation>
+        <translation>BUKA</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">SIMPAN</translation>
+        <translation>SIMPAN</translation>
     </message>
     <message>
         <source>+ CELL</source>
@@ -4973,7 +4973,7 @@ Data CFTC gratis — tidak perlu API key</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">SIAP</translation>
+        <translation>SIAP</translation>
     </message>
     <message>
         <source>Ctrl+Enter: RUN  |  Shift+Enter: RUN &amp; NEXT  |  Tab: 4 SPACES  |  Ctrl+S: SAVE</source>
@@ -5181,11 +5181,11 @@ Ini akan menghapus semua kepemilikan dan transaksi.</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">BATAL</translation>
+        <translation>BATAL</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">HAPUS</translation>
+        <translation>HAPUS</translation>
     </message>
 </context>
 <context>
@@ -5208,7 +5208,7 @@ Ini akan menghapus semua kepemilikan dan transaksi.</translation>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Tanggal</translation>
+        <translation>Tanggal</translation>
     </message>
     <message>
         <source>Lat</source>
@@ -5224,7 +5224,7 @@ Ini akan menghapus semua kepemilikan dan transaksi.</translation>
     </message>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">IKHTISAR</translation>
+        <translation>IKHTISAR</translation>
     </message>
     <message>
         <source>EVENTS</source>
@@ -5262,7 +5262,7 @@ Ini akan menghapus semua kepemilikan dan transaksi.</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">NEGARA</translation>
+        <translation>NEGARA</translation>
     </message>
     <message>
         <source>CITY</source>
@@ -5270,7 +5270,7 @@ Ini akan menghapus semua kepemilikan dan transaksi.</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">TANGGAL</translation>
+        <translation>TANGGAL</translation>
     </message>
     <message>
         <source>SOURCE</source>
@@ -5345,7 +5345,7 @@ Ini akan menghapus semua kepemilikan dan transaksi.</translation>
     </message>
     <message>
         <source>QUICK ACTIONS</source>
-        <translation type="unfinished">TINDAKAN CEPAT</translation>
+        <translation>TINDAKAN CEPAT</translation>
     </message>
     <message>
         <source>Send Email</source>
@@ -5424,7 +5424,7 @@ Ini akan menghapus semua kepemilikan dan transaksi.</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">HAPUS</translation>
+        <translation>HAPUS</translation>
     </message>
     <message>
         <source>SKIP</source>
@@ -5559,7 +5559,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
     <message>
         <source>Failed</source>
@@ -5619,7 +5619,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">ALAT</translation>
+        <translation>ALAT</translation>
     </message>
     <message>
         <source>TERMINAL TOOLS</source>
@@ -5627,11 +5627,11 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>FEATURES</source>
-        <translation type="unfinished">FITUR</translation>
+        <translation>FITUR</translation>
     </message>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">SERVER MCP</translation>
+        <translation>SERVER MCP</translation>
     </message>
     <message>
         <source>e.g. My Equity Analyst</source>
@@ -5731,7 +5731,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Jenis</translation>
+        <translation>Jenis</translation>
     </message>
     <message>
         <source>URLs (one per line)</source>
@@ -5942,7 +5942,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>SETTINGS</source>
-        <translation type="unfinished">PENGATURAN</translation>
+        <translation>PENGATURAN</translation>
     </message>
     <message>
         <source>STAKE</source>
@@ -5950,7 +5950,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">PASAR</translation>
+        <translation>PASAR</translation>
     </message>
     <message>
         <source>ROADMAP</source>
@@ -5966,11 +5966,11 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">SIAP</translation>
+        <translation>SIAP</translation>
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">KEAMANAN</translation>
+        <translation>KEAMANAN</translation>
     </message>
     <message>
         <source>● CONNECTED</source>
@@ -6017,136 +6017,136 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>OFFLINE</source>
-        <translation type="unfinished">LURING</translation>
+        <translation>LURING</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::CustomIndexView</name>
     <message>
         <source>CREATE INDEX</source>
-        <translation type="unfinished">BUAT INDEKS</translation>
+        <translation>BUAT INDEKS</translation>
     </message>
     <message>
         <source>MY INDICES</source>
-        <translation type="unfinished">INDEKS SAYA</translation>
+        <translation>INDEKS SAYA</translation>
     </message>
     <message>
         <source>PERFORMANCE</source>
-        <translation type="unfinished">KINERJA</translation>
+        <translation>KINERJA</translation>
     </message>
     <message>
         <source>CREATE CUSTOM INDEX</source>
-        <translation type="unfinished">BUAT INDEKS KUSTOM</translation>
+        <translation>BUAT INDEKS KUSTOM</translation>
     </message>
     <message>
         <source>My Custom Index</source>
-        <translation type="unfinished">Indeks Kustom Saya</translation>
+        <translation>Indeks Kustom Saya</translation>
     </message>
     <message>
         <source>NAME:</source>
-        <translation type="unfinished">NAMA:</translation>
+        <translation>NAMA:</translation>
     </message>
     <message>
         <source>METHOD:</source>
-        <translation type="unfinished">METODE:</translation>
+        <translation>METODE:</translation>
     </message>
     <message>
         <source>BASE:</source>
-        <translation type="unfinished">BASIS:</translation>
+        <translation>BASIS:</translation>
     </message>
     <message>
         <source>CONSTITUENTS (from portfolio holdings)</source>
-        <translation type="unfinished">KONSTITUEN (dari kepemilikan portofolio)</translation>
+        <translation>KONSTITUEN (dari kepemilikan portofolio)</translation>
     </message>
     <message>
         <source>INCLUDE</source>
-        <translation type="unfinished">SERTAKAN</translation>
+        <translation>SERTAKAN</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">HARGA</translation>
+        <translation>HARGA</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">BOBOT</translation>
+        <translation>BOBOT</translation>
     </message>
     <message>
         <source>MKT VALUE</source>
-        <translation type="unfinished">NILAI PASAR</translation>
+        <translation>NILAI PASAR</translation>
     </message>
     <message>
         <source>MY CUSTOM INDICES</source>
-        <translation type="unfinished">INDEKS KUSTOM SAYA</translation>
+        <translation>INDEKS KUSTOM SAYA</translation>
     </message>
     <message>
         <source>DELETE SELECTED</source>
-        <translation type="unfinished">HAPUS YANG DIPILIH</translation>
+        <translation>HAPUS YANG DIPILIH</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NAMA</translation>
+        <translation>NAMA</translation>
     </message>
     <message>
         <source>METHOD</source>
-        <translation type="unfinished">METODE</translation>
+        <translation>METODE</translation>
     </message>
     <message>
         <source>BASE</source>
-        <translation type="unfinished">BASIS</translation>
+        <translation>BASIS</translation>
     </message>
     <message>
         <source>CURRENT VALUE</source>
-        <translation type="unfinished">NILAI SAAT INI</translation>
+        <translation>NILAI SAAT INI</translation>
     </message>
     <message>
         <source>CHANGE</source>
-        <translation type="unfinished">PERUBAHAN</translation>
+        <translation>PERUBAHAN</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">DIBUAT</translation>
+        <translation>DIBUAT</translation>
     </message>
     <message>
         <source>No custom indices created yet.
 Go to CREATE INDEX tab to build one from your portfolio.</source>
-        <translation type="unfinished">Belum ada indeks kustom yang dibuat.
+        <translation>Belum ada indeks kustom yang dibuat.
 Buka tab BUAT INDEKS untuk membangunnya dari portofolio Anda.</translation>
     </message>
     <message>
         <source>INDEX PERFORMANCE</source>
-        <translation type="unfinished">KINERJA INDEKS</translation>
+        <translation>KINERJA INDEKS</translation>
     </message>
     <message>
         <source>Select an index from MY INDICES to see its performance.</source>
-        <translation type="unfinished">Pilih indeks dari INDEKS SAYA untuk melihat kinerjanya.</translation>
+        <translation>Pilih indeks dari INDEKS SAYA untuk melihat kinerjanya.</translation>
     </message>
     <message>
         <source>Base value must be positive.</source>
-        <translation type="unfinished">Nilai basis harus positif.</translation>
+        <translation>Nilai basis harus positif.</translation>
     </message>
     <message>
         <source>Select at least one constituent.</source>
-        <translation type="unfinished">Pilih setidaknya satu konstituen.</translation>
+        <translation>Pilih setidaknya satu konstituen.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
     <message>
         <source>Index '%1' created successfully.</source>
-        <translation type="unfinished">Indeks '%1' berhasil dibuat.</translation>
+        <translation>Indeks '%1' berhasil dibuat.</translation>
     </message>
     <message>
         <source>PERFORMANCE — %1  (no data)</source>
-        <translation type="unfinished">KINERJA — %1  (tidak ada data)</translation>
+        <translation>KINERJA — %1  (tidak ada data)</translation>
     </message>
     <message>
         <source>PERFORMANCE — %1</source>
-        <translation type="unfinished">KINERJA — %1</translation>
+        <translation>KINERJA — %1</translation>
     </message>
 </context>
 <context>
@@ -6172,7 +6172,7 @@ Buka tab BUAT INDEKS untuk membangunnya dari portofolio Anda.</translation>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">STATUS</translation>
+        <translation>STATUS</translation>
     </message>
     <message>
         <source>No data — select a series</source>
@@ -6191,7 +6191,7 @@ Buka tab BUAT INDEKS untuk membangunnya dari portofolio Anda.</translation>
     </message>
     <message>
         <source>COMPARE</source>
-        <translation type="unfinished">BANDINGKAN</translation>
+        <translation>BANDINGKAN</translation>
     </message>
     <message>
         <source>CHART:</source>
@@ -6237,7 +6237,7 @@ Klik  + TAMBAH SLOT  di panel kiri untuk memulai</translation>
     </message>
     <message>
         <source>EXPORT CSV</source>
-        <translation type="unfinished">EKSPOR CSV</translation>
+        <translation>EKSPOR CSV</translation>
     </message>
     <message>
         <source>SLOT %1</source>
@@ -6281,7 +6281,7 @@ Klik  + TAMBAH SLOT  di panel kiri untuk memulai</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Ekspor CSV</translation>
+        <translation>Ekspor CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
@@ -6424,7 +6424,7 @@ Klik  + TAMBAH SLOT  di panel kiri untuk memulai</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">MEMUAT...</translation>
+        <translation>MEMUAT...</translation>
     </message>
 </context>
 <context>
@@ -6569,7 +6569,7 @@ Klik  + TAMBAH SLOT  di panel kiri untuk memulai</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">SIMPAN</translation>
+        <translation>SIMPAN</translation>
     </message>
     <message>
         <source>RESET</source>
@@ -6612,7 +6612,7 @@ Klik  + TAMBAH SLOT  di panel kiri untuk memulai</translation>
     </message>
     <message>
         <source>CREATE</source>
-        <translation type="unfinished">BUAT</translation>
+        <translation>BUAT</translation>
     </message>
     <message>
         <source>API CONFIG</source>
@@ -6676,7 +6676,7 @@ Klik  + TAMBAH SLOT  di panel kiri untuk memulai</translation>
     </message>
     <message>
         <source>SYSTEM</source>
-        <translation type="unfinished">SISTEM</translation>
+        <translation>SISTEM</translation>
     </message>
     <message>
         <source>MAPPING ENGINE</source>
@@ -6688,7 +6688,7 @@ Klik  + TAMBAH SLOT  di panel kiri untuk memulai</translation>
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">KEAMANAN</translation>
+        <translation>KEAMANAN</translation>
     </message>
     <message>
         <source>CURRENT MAPPING</source>
@@ -6776,7 +6776,7 @@ Klik  + TAMBAH SLOT  di panel kiri untuk memulai</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Jenis</translation>
+        <translation>Jenis</translation>
     </message>
     <message>
         <source>Required</source>
@@ -6846,7 +6846,7 @@ Data sensitif tidak pernah disimpan dalam teks biasa.</translation>
     </message>
     <message>
         <source>RUN TEST</source>
-        <translation type="unfinished">JALANKAN TES</translation>
+        <translation>JALANKAN TES</translation>
     </message>
     <message>
         <source>Test results will appear here...</source>
@@ -6866,7 +6866,7 @@ Data sensitif tidak pernah disimpan dalam teks biasa.</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">HAPUS</translation>
+        <translation>HAPUS</translation>
     </message>
     <message>
         <source>+ NEW MAPPING</source>
@@ -7075,7 +7075,7 @@ TAG: %12</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>ACTIVE</source>
@@ -7099,7 +7099,7 @@ TAG: %12</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">JENIS</translation>
+        <translation>JENIS</translation>
     </message>
     <message>
         <source>CATEGORY</source>
@@ -7166,7 +7166,7 @@ Ini tidak dapat dibatalkan. Anda dapat menambahkannya kembali dari layar Sumber 
     <name>fincept::screens::DeploymentDashboard</name>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>LTP</source>
@@ -7174,7 +7174,7 @@ Ini tidak dapat dibatalkan. Anda dapat menambahkannya kembali dari layar Sumber 
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">WIN RATE</translation>
+        <translation>WIN RATE</translation>
     </message>
     <message>
         <source>POSITION</source>
@@ -7489,7 +7489,7 @@ Ini tidak dapat dibatalkan. Anda dapat menambahkannya kembali dari layar Sumber 
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">KESALAHAN</translation>
+        <translation>KESALAHAN</translation>
     </message>
     <message>
         <source>DIRTY PRICE</source>
@@ -7643,19 +7643,19 @@ Ini tidak dapat dibatalkan. Anda dapat menambahkannya kembali dari layar Sumber 
     </message>
     <message>
         <source>Dashboard</source>
-        <translation type="unfinished">Dasbor</translation>
+        <translation>Dasbor</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Pasar</translation>
+        <translation>Pasar</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">Berita</translation>
+        <translation>Berita</translation>
     </message>
     <message>
         <source>Watchlist</source>
-        <translation type="unfinished">Daftar Pantauan</translation>
+        <translation>Daftar Pantauan</translation>
     </message>
     <message>
         <source>TRADING</source>
@@ -7663,7 +7663,7 @@ Ini tidak dapat dibatalkan. Anda dapat menambahkannya kembali dari layar Sumber 
     </message>
     <message>
         <source>Crypto Trading</source>
-        <translation type="unfinished">Trading Kripto</translation>
+        <translation>Trading Kripto</translation>
     </message>
     <message>
         <source>Paper Trading</source>
@@ -7695,7 +7695,7 @@ Ini tidak dapat dibatalkan. Anda dapat menambahkannya kembali dari layar Sumber 
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portofolio</translation>
+        <translation>Portofolio</translation>
     </message>
     <message>
         <source>M&amp;A Analytics</source>
@@ -7715,7 +7715,7 @@ Ini tidak dapat dibatalkan. Anda dapat menambahkannya kembali dari layar Sumber 
     </message>
     <message>
         <source>AI Chat</source>
-        <translation type="unfinished">Obrolan AI</translation>
+        <translation>Obrolan AI</translation>
     </message>
     <message>
         <source>Agent Studio</source>
@@ -7727,7 +7727,7 @@ Ini tidak dapat dibatalkan. Anda dapat menambahkannya kembali dari layar Sumber 
     </message>
     <message>
         <source>DATA SOURCES</source>
-        <translation type="unfinished">SUMBER DATA</translation>
+        <translation>SUMBER DATA</translation>
     </message>
     <message>
         <source>DBnomics</source>
@@ -7735,7 +7735,7 @@ Ini tidak dapat dibatalkan. Anda dapat menambahkannya kembali dari layar Sumber 
     </message>
     <message>
         <source>Economics</source>
-        <translation type="unfinished">Ekonomi</translation>
+        <translation>Ekonomi</translation>
     </message>
     <message>
         <source>AkShare Data</source>
@@ -7751,7 +7751,7 @@ Ini tidak dapat dibatalkan. Anda dapat menambahkannya kembali dari layar Sumber 
     </message>
     <message>
         <source>Geopolitics</source>
-        <translation type="unfinished">Geopolitik</translation>
+        <translation>Geopolitik</translation>
     </message>
     <message>
         <source>Maritime</source>
@@ -7767,7 +7767,7 @@ Ini tidak dapat dibatalkan. Anda dapat menambahkannya kembali dari layar Sumber 
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">ALAT</translation>
+        <translation>ALAT</translation>
     </message>
     <message>
         <source>Report Builder</source>
@@ -7787,11 +7787,11 @@ Ini tidak dapat dibatalkan. Anda dapat menambahkannya kembali dari layar Sumber 
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Catatan</translation>
+        <translation>Catatan</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">Server MCP</translation>
+        <translation>Server MCP</translation>
     </message>
     <message>
         <source>Data Mapping</source>
@@ -7803,11 +7803,11 @@ Ini tidak dapat dibatalkan. Anda dapat menambahkannya kembali dari layar Sumber 
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">Pengaturan</translation>
+        <translation>Pengaturan</translation>
     </message>
     <message>
         <source>Profile</source>
-        <translation type="unfinished">Profil</translation>
+        <translation>Profil</translation>
     </message>
     <message>
         <source>DOCUMENTATION</source>
@@ -8079,7 +8079,7 @@ Tangkapan Layar (Ctrl+P) — Tangkap ke file</translation>
     </message>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">IKHTISAR</translation>
+        <translation>IKHTISAR</translation>
     </message>
     <message>
         <source>The Dashboard is your primary workspace. It features a draggable widget grid where you can arrange market widgets, a scrolling ticker bar showing live prices, a market pulse panel with sector performance, and a status bar showing connection state.</source>
@@ -8157,7 +8157,7 @@ Tangkapan Layar (Ctrl+P) — Tangkap ke file</translation>
     </message>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">PASAR</translation>
+        <translation>PASAR</translation>
     </message>
     <message>
         <source>Global and regional market overview with auto-refresh</source>
@@ -8693,7 +8693,7 @@ PRO: Model penetapan harga kustom, kalibrasi vol surface, lindung nilai Greeks</
     </message>
     <message>
         <source>PORTFOLIO</source>
-        <translation type="unfinished">PORTOFOLIO</translation>
+        <translation>PORTOFOLIO</translation>
     </message>
     <message>
         <source>Multi-portfolio management with analytics and AI agent</source>
@@ -8957,7 +8957,7 @@ PRO: Alur kerja multi-agen, integrasi server MCP, pipeline riset otomatis</trans
     </message>
     <message>
         <source>AGENT STUDIO</source>
-        <translation type="unfinished">STUDIO AGEN</translation>
+        <translation>STUDIO AGEN</translation>
     </message>
     <message>
         <source>Configure and manage AI agents, teams, and workflows</source>
@@ -9111,7 +9111,7 @@ PRO: Integrasikan data DBnomics ke dalam model trading makro kuantitatif</transl
     </message>
     <message>
         <source>ECONOMICS</source>
-        <translation type="unfinished">EKONOMI</translation>
+        <translation>EKONOMI</translation>
     </message>
     <message>
         <source>Macroeconomic data and analysis tools</source>
@@ -9601,7 +9601,7 @@ PRO: Pembaruan model otomatis dengan feed data langsung</translation>
     </message>
     <message>
         <source>NOTES</source>
-        <translation type="unfinished">CATATAN</translation>
+        <translation>CATATAN</translation>
     </message>
     <message>
         <source>Persistent note-taking for research and trade journals</source>
@@ -9645,7 +9645,7 @@ PRO: Alur kerja riset terintegrasi dengan catatan tertaut ke posisi</translation
     </message>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">SERVER MCP</translation>
+        <translation>SERVER MCP</translation>
     </message>
     <message>
         <source>Model Context Protocol server management</source>
@@ -9733,7 +9733,7 @@ PRO: Alur data multi-sumber kompleks dengan validasi</translation>
     </message>
     <message>
         <source>SETTINGS</source>
-        <translation type="unfinished">PENGATURAN</translation>
+        <translation>PENGATURAN</translation>
     </message>
     <message>
         <source>Application configuration and preferences</source>
@@ -9865,7 +9865,7 @@ Sumber: EconDB — data makroekonomi, tidak memerlukan kunci API</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">NEGARA</translation>
+        <translation>NEGARA</translation>
     </message>
     <message>
         <source>Fetching EconDB: %1 — %2…</source>
@@ -9892,7 +9892,7 @@ Sumber: EconDB — data makroekonomi, tidak memerlukan kunci API</translation>
     </message>
     <message>
         <source>CHANGE</source>
-        <translation type="unfinished">PERUBAHAN</translation>
+        <translation>PERUBAHAN</translation>
     </message>
     <message>
         <source>MIN</source>
@@ -9920,7 +9920,7 @@ Sumber: EconDB — data makroekonomi, tidak memerlukan kunci API</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
     <message>
         <source>No data returned for this selection</source>
@@ -9932,7 +9932,7 @@ Sumber: EconDB — data makroekonomi, tidak memerlukan kunci API</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Ekspor CSV</translation>
+        <translation>Ekspor CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
@@ -9961,7 +9961,7 @@ Sumber: Forex Factory — kalender ekonomi global (tidak memerlukan kunci API)</
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">TANGGAL</translation>
+        <translation>TANGGAL</translation>
     </message>
     <message>
         <source>IMPACT</source>
@@ -9999,103 +9999,103 @@ Sumber: Forex Factory — kalender ekonomi global (tidak memerlukan kunci API)</
     <name>fincept::screens::EconomicsView</name>
     <message>
         <source>PORTFOLIO ECONOMICS OVERVIEW</source>
-        <translation type="unfinished">IKHTISAR EKONOMI PORTOFOLIO</translation>
+        <translation>IKHTISAR EKONOMI PORTOFOLIO</translation>
     </message>
     <message>
         <source>Per-holding contribution to portfolio value, P&amp;L, and risk</source>
-        <translation type="unfinished">Kontribusi per kepemilikan terhadap nilai portofolio, P&amp;L, dan risiko</translation>
+        <translation>Kontribusi per kepemilikan terhadap nilai portofolio, P&amp;L, dan risiko</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>SECTOR</source>
-        <translation type="unfinished">SEKTOR</translation>
+        <translation>SEKTOR</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">BOBOT</translation>
+        <translation>BOBOT</translation>
     </message>
     <message>
         <source>COST BASIS</source>
-        <translation type="unfinished">DASAR BIAYA</translation>
+        <translation>DASAR BIAYA</translation>
     </message>
     <message>
         <source>MARKET VALUE</source>
-        <translation type="unfinished">NILAI PASAR</translation>
+        <translation>NILAI PASAR</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">P&amp;L %</translation>
+        <translation>P&amp;L %</translation>
     </message>
     <message>
         <source>PORTFOLIO FACTOR SENSITIVITY</source>
-        <translation type="unfinished">SENSITIVITAS FAKTOR PORTOFOLIO</translation>
+        <translation>SENSITIVITAS FAKTOR PORTOFOLIO</translation>
     </message>
     <message>
         <source>Estimated portfolio impact from macro factor shocks, weighted by holdings</source>
-        <translation type="unfinished">Estimasi dampak portofolio dari guncangan faktor makro, ditimbang berdasarkan kepemilikan</translation>
+        <translation>Estimasi dampak portofolio dari guncangan faktor makro, ditimbang berdasarkan kepemilikan</translation>
     </message>
     <message>
         <source>FACTOR SHOCK</source>
-        <translation type="unfinished">GUNCANGAN FAKTOR</translation>
+        <translation>GUNCANGAN FAKTOR</translation>
     </message>
     <message>
         <source>SENSITIVITY</source>
-        <translation type="unfinished">SENSITIVITAS</translation>
+        <translation>SENSITIVITAS</translation>
     </message>
     <message>
         <source>DIRECTION</source>
-        <translation type="unfinished">ARAH</translation>
+        <translation>ARAH</translation>
     </message>
     <message>
         <source>ESTIMATED IMPACT</source>
-        <translation type="unfinished">ESTIMASI DAMPAK</translation>
+        <translation>ESTIMASI DAMPAK</translation>
     </message>
     <message>
         <source>Positive</source>
-        <translation type="unfinished">Positif</translation>
+        <translation>Positif</translation>
     </message>
     <message>
         <source>Negative</source>
-        <translation type="unfinished">Negatif</translation>
+        <translation>Negatif</translation>
     </message>
     <message>
         <source>Interest Rates (+1%)</source>
-        <translation type="unfinished">Suku Bunga (+1%)</translation>
+        <translation>Suku Bunga (+1%)</translation>
     </message>
     <message>
         <source>GDP Growth (+1%)</source>
-        <translation type="unfinished">Pertumbuhan PDB (+1%)</translation>
+        <translation>Pertumbuhan PDB (+1%)</translation>
     </message>
     <message>
         <source>Inflation / CPI (+1%)</source>
-        <translation type="unfinished">Inflasi / CPI (+1%)</translation>
+        <translation>Inflasi / CPI (+1%)</translation>
     </message>
     <message>
         <source>USD Strength (+1%)</source>
-        <translation type="unfinished">Kekuatan USD (+1%)</translation>
+        <translation>Kekuatan USD (+1%)</translation>
     </message>
     <message>
         <source>Oil Price (+10%)</source>
-        <translation type="unfinished">Harga Minyak (+10%)</translation>
+        <translation>Harga Minyak (+10%)</translation>
     </message>
     <message>
         <source>Consumer Spending (+1%)</source>
-        <translation type="unfinished">Belanja Konsumen (+1%)</translation>
+        <translation>Belanja Konsumen (+1%)</translation>
     </message>
     <message>
         <source>Credit Spreads (+50bps)</source>
-        <translation type="unfinished">Selisih Kredit (+50bps)</translation>
+        <translation>Selisih Kredit (+50bps)</translation>
     </message>
     <message>
         <source>Unemployment (+1%)</source>
-        <translation type="unfinished">Pengangguran (+1%)</translation>
+        <translation>Pengangguran (+1%)</translation>
     </message>
     <message>
         <source>CURRENT MACRO CONDITIONS  (LIVE · FRED)</source>
@@ -10125,7 +10125,7 @@ Kunci disimpan terenkripsi dan dibagikan ke semua fitur berbasis FRED.</translat
     </message>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">SAAT INI</translation>
+        <translation>SAAT INI</translation>
     </message>
     <message>
         <source>AS OF</source>
@@ -10148,7 +10148,7 @@ Kunci disimpan terenkripsi dan dibagikan ke semua fitur berbasis FRED.</translat
     <name>fincept::screens::EditTransactionDialog</name>
     <message>
         <source>Edit Transaction</source>
-        <translation type="unfinished">Edit Transaksi</translation>
+        <translation>Edit Transaksi</translation>
     </message>
     <message>
         <source>EDIT %1 — %2</source>
@@ -10176,11 +10176,11 @@ Kunci disimpan terenkripsi dan dibagikan ke semua fitur berbasis FRED.</translat
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">BATAL</translation>
+        <translation>BATAL</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">SIMPAN</translation>
+        <translation>SIMPAN</translation>
     </message>
 </context>
 <context>
@@ -10328,7 +10328,7 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BETA</translation>
+        <translation>BETA</translation>
     </message>
     <message>
         <source>SHORT RATIO</source>
@@ -10355,7 +10355,7 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>EXPORT CSV</source>
-        <translation type="unfinished">EKSPOR CSV</translation>
+        <translation>EKSPOR CSV</translation>
     </message>
     <message>
         <source>Metric</source>
@@ -10693,15 +10693,15 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">BUKA</translation>
+        <translation>BUKA</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">TERTINGGI</translation>
+        <translation>TERTINGGI</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">TERENDAH</translation>
+        <translation>TERENDAH</translation>
     </message>
     <message>
         <source>PREV CLOSE</source>
@@ -10709,7 +10709,7 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">VOLUME</translation>
+        <translation>VOLUME</translation>
     </message>
     <message>
         <source>VALUATION</source>
@@ -10741,7 +10741,7 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BETA</translation>
+        <translation>BETA</translation>
     </message>
     <message>
         <source>SHARE STATS</source>
@@ -10873,7 +10873,7 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>HOLD</source>
@@ -10881,7 +10881,7 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>STRONG SELL</source>
@@ -10924,11 +10924,11 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">HARGA</translation>
+        <translation>HARGA</translation>
     </message>
     <message>
         <source>P/E</source>
@@ -10984,7 +10984,7 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BETA</translation>
+        <translation>BETA</translation>
     </message>
 </context>
 <context>
@@ -11043,7 +11043,7 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">Berita</translation>
+        <translation>Berita</translation>
     </message>
     <message>
         <source>Sentiment</source>
@@ -11051,7 +11051,7 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">BACKTEST</translation>
+        <translation>BACKTEST</translation>
     </message>
 </context>
 <context>
@@ -11090,7 +11090,7 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">RINGKASAN</translation>
+        <translation>RINGKASAN</translation>
     </message>
     <message>
         <source>AVERAGE BUZZ</source>
@@ -11181,7 +11181,7 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>LAST</source>
-        <translation type="unfinished">TERAKHIR</translation>
+        <translation>TERAKHIR</translation>
     </message>
     <message>
         <source>N/A</source>
@@ -11200,11 +11200,11 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>STRONG SELL</source>
@@ -11212,7 +11212,7 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NETRAL</translation>
+        <translation>NETRAL</translation>
     </message>
     <message>
         <source>Deeply oversold — potential reversal zone</source>
@@ -11532,7 +11532,7 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">NILAI</translation>
+        <translation>NILAI</translation>
     </message>
     <message>
         <source>SIGNAL</source>
@@ -11675,11 +11675,11 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>Name:</source>
-        <translation type="unfinished">Nama:</translation>
+        <translation>Nama:</translation>
     </message>
     <message>
         <source>Currency:</source>
-        <translation type="unfinished">Mata Uang:</translation>
+        <translation>Mata Uang:</translation>
     </message>
     <message>
         <source>Loading portfolios...</source>
@@ -11723,7 +11723,7 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">IMPOR</translation>
+        <translation>IMPOR</translation>
     </message>
     <message>
         <source>(no portfolios yet)</source>
@@ -11749,6 +11749,18 @@ Kunci gratis di: www.eia.gov/opendata/register.php</translation>
         <source>Imported %1 holdings.</source>
         <translation>Mengimpor %1 kepemilikan.</translation>
     </message>
+    <message>
+        <source>Failed to queue strategy</source>
+        <translation>Gagal mengantrekan strategi</translation>
+    </message>
+    <message>
+        <source>Order cancelled</source>
+        <translation>Order dibatalkan</translation>
+    </message>
+    <message>
+        <source>Strategy queued for approval (%1 legs)</source>
+        <translation>Strategi diantrekan untuk persetujuan (%1 leg)</translation>
+    </message>
 </context>
 <context>
     <name>fincept::screens::EurostatPanel</name>
@@ -11764,7 +11776,7 @@ Sumber: Eurostat — kantor statistik UE</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">NEGARA</translation>
+        <translation>NEGARA</translation>
     </message>
     <message>
         <source>Fetching Eurostat: %1 — %2…</source>
@@ -11783,7 +11795,7 @@ Sumber: Eurostat — kantor statistik UE</translation>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">IMPOR</translation>
+        <translation>IMPOR</translation>
     </message>
     <message>
         <source>Import XLSX/CSV file</source>
@@ -11823,7 +11835,7 @@ Sumber: Eurostat — kantor statistik UE</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">HAPUS</translation>
+        <translation>HAPUS</translation>
     </message>
     <message>
         <source>Delete current sheet</source>
@@ -11871,7 +11883,7 @@ Ekspor CSV masih tersedia melalui toolbar.</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Ekspor CSV</translation>
+        <translation>Ekspor CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
@@ -11879,12 +11891,12 @@ Ekspor CSV masih tersedia melalui toolbar.</translation>
     </message>
     <message>
         <source>Export failed</source>
-        <translation type="unfinished">Ekspor gagal</translation>
+        <translation>Ekspor gagal</translation>
     </message>
     <message>
         <source>Could not open file for writing:
 %1</source>
-        <translation type="unfinished">Tidak dapat membuka berkas untuk ditulis:
+        <translation>Tidak dapat membuka berkas untuk ditulis:
 %1</translation>
     </message>
     <message>
@@ -11971,7 +11983,7 @@ Tidak perlu API key</translation>
     </message>
     <message>
         <source>DELETE SELECTED</source>
-        <translation type="unfinished">HAPUS YANG DIPILIH</translation>
+        <translation>HAPUS YANG DIPILIH</translation>
     </message>
     <message>
         <source>CLEAR SELECTION</source>
@@ -12089,7 +12101,7 @@ dari layar mana pun. Anda juga dapat mengunggah file secara manual menggunakan t
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">SIMPAN</translation>
+        <translation>SIMPAN</translation>
     </message>
     <message>
         <source>DEL</source>
@@ -12121,7 +12133,7 @@ dari layar mana pun. Anda juga dapat mengunggah file secara manual menggunakan t
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Jenis</translation>
+        <translation>Jenis</translation>
     </message>
 </context>
 <context>
@@ -12460,7 +12472,7 @@ Tidak perlu API key</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">BATAL</translation>
+        <translation>BATAL</translation>
     </message>
     <message>
         <source>PUBLISH POST</source>
@@ -12468,7 +12480,7 @@ Tidak perlu API key</translation>
     </message>
     <message>
         <source>EDIT PROFILE</source>
-        <translation type="unfinished">EDIT PROFIL</translation>
+        <translation>EDIT PROFIL</translation>
     </message>
     <message>
         <source>DISPLAY NAME</source>
@@ -12519,7 +12531,7 @@ Tidak perlu API key</translation>
     </message>
     <message>
         <source>TODAY</source>
-        <translation type="unfinished">HARI INI</translation>
+        <translation>HARI INI</translation>
     </message>
     <message>
         <source>  ▲  TRENDING POSTS</source>
@@ -12756,7 +12768,7 @@ fred.stlouisfed.org/docs/api/api_key.html</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">NEGARA</translation>
+        <translation>NEGARA</translation>
     </message>
     <message>
         <source>CITY</source>
@@ -12816,11 +12828,11 @@ fred.stlouisfed.org/docs/api/api_key.html</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">SIAP</translation>
+        <translation>SIAP</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">MEMUAT...</translation>
+        <translation>MEMUAT...</translation>
     </message>
     <message>
         <source>%1 MAPPED / %2 LOADED</source>
@@ -12840,7 +12852,7 @@ Total di API: %3</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">KESALAHAN</translation>
+        <translation>KESALAHAN</translation>
     </message>
 </context>
 <context>
@@ -12874,7 +12886,7 @@ Tidak memerlukan kunci API untuk sumber mana pun</translation>
     <name>fincept::screens::GovDataAustraliaPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← KEMBALI</translation>
+        <translation>← KEMBALI</translation>
     </message>
     <message>
         <source>AGENCIES</source>
@@ -12902,15 +12914,15 @@ Tidak memerlukan kunci API untuk sumber mana pun</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NAMA</translation>
+        <translation>NAMA</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">DESKRIPSI</translation>
+        <translation>DESKRIPSI</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">DIBUAT</translation>
+        <translation>DIBUAT</translation>
     </message>
     <message>
         <source>TITLE</source>
@@ -12942,7 +12954,7 @@ Tidak memerlukan kunci API untuk sumber mana pun</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">BUKA</translation>
+        <translation>BUKA</translation>
     </message>
     <message>
         <source>Loading Australian Government agencies…</source>
@@ -13018,14 +13030,14 @@ Tidak memerlukan kunci API untuk sumber mana pun</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataCongressPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← KEMBALI</translation>
+        <translation>← KEMBALI</translation>
     </message>
     <message>
         <source>BILLS</source>
@@ -13033,7 +13045,7 @@ Tidak memerlukan kunci API untuk sumber mana pun</translation>
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">RINGKASAN</translation>
+        <translation>RINGKASAN</translation>
     </message>
     <message>
         <source>FETCH</source>
@@ -13049,7 +13061,7 @@ Tidak memerlukan kunci API untuk sumber mana pun</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">JENIS</translation>
+        <translation>JENIS</translation>
     </message>
     <message>
         <source>All Types</source>
@@ -13101,7 +13113,7 @@ Tidak memerlukan kunci API untuk sumber mana pun</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">TANGGAL</translation>
+        <translation>TANGGAL</translation>
     </message>
     <message>
         <source>BILL TYPE</source>
@@ -13141,14 +13153,14 @@ Tidak memerlukan kunci API untuk sumber mana pun</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataFrancePanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← KEMBALI</translation>
+        <translation>← KEMBALI</translation>
     </message>
     <message>
         <source>DATA SERVICES</source>
@@ -13184,7 +13196,7 @@ Tidak memerlukan kunci API untuk sumber mana pun</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NAMA</translation>
+        <translation>NAMA</translation>
     </message>
     <message>
         <source>VIEWS</source>
@@ -13196,7 +13208,7 @@ Tidak memerlukan kunci API untuk sumber mana pun</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">DIBUAT</translation>
+        <translation>DIBUAT</translation>
     </message>
     <message>
         <source>TITLE</source>
@@ -13220,7 +13232,7 @@ Tidak memerlukan kunci API untuk sumber mana pun</translation>
     </message>
     <message>
         <source>CODE</source>
-        <translation type="unfinished">KODE</translation>
+        <translation>KODE</translation>
     </message>
     <message>
         <source>POSTAL</source>
@@ -13240,7 +13252,7 @@ Tidak memerlukan kunci API untuk sumber mana pun</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">JENIS</translation>
+        <translation>JENIS</translation>
     </message>
     <message>
         <source>Loading data services from data.gouv.fr…</source>
@@ -13316,14 +13328,14 @@ Tidak memerlukan kunci API untuk sumber mana pun</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataHKPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← KEMBALI</translation>
+        <translation>← KEMBALI</translation>
     </message>
     <message>
         <source>CATEGORIES</source>
@@ -13363,7 +13375,7 @@ Tidak memerlukan kunci API untuk sumber mana pun</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NAMA</translation>
+        <translation>NAMA</translation>
     </message>
     <message>
         <source>FORMAT</source>
@@ -13455,7 +13467,7 @@ Coba cari berdasarkan nama menggunakan kotak pencarian di atas.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
 </context>
 <context>
@@ -13498,7 +13510,7 @@ Coba cari berdasarkan nama menggunakan kotak pencarian di atas.</translation>
     </message>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← KEMBALI</translation>
+        <translation>← KEMBALI</translation>
     </message>
     <message>
         <source>DATASETS</source>
@@ -13534,7 +13546,7 @@ Coba cari berdasarkan nama menggunakan kotak pencarian di atas.</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NAMA</translation>
+        <translation>NAMA</translation>
     </message>
     <message>
         <source>FORMAT</source>
@@ -13546,7 +13558,7 @@ Coba cari berdasarkan nama menggunakan kotak pencarian di atas.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">BUKA</translation>
+        <translation>BUKA</translation>
     </message>
     <message>
         <source>Loading %1…</source>
@@ -13606,15 +13618,15 @@ Coba cari berdasarkan nama menggunakan kotak pencarian di atas.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Ekspor CSV</translation>
+        <translation>Ekspor CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">Berkas CSV (*.csv)</translation>
+        <translation>Berkas CSV (*.csv)</translation>
     </message>
     <message>
         <source>✗ FAILED</source>
@@ -13663,7 +13675,7 @@ Pemilih menampilkan semua portal CKAN yang dicakup oleh penyedia universal.</tra
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">SIAP</translation>
+        <translation>SIAP</translation>
     </message>
 </context>
 <context>
@@ -13682,7 +13694,7 @@ Pemilih menampilkan semua portal CKAN yang dicakup oleh penyedia universal.</tra
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">RINGKASAN</translation>
+        <translation>RINGKASAN</translation>
     </message>
     <message>
         <source>FETCH</source>
@@ -13702,11 +13714,11 @@ Pemilih menampilkan semua portal CKAN yang dicakup oleh penyedia universal.</tra
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">JENIS</translation>
+        <translation>JENIS</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Semua</translation>
+        <translation>Semua</translation>
     </message>
     <message>
         <source>Bills</source>
@@ -13714,7 +13726,7 @@ Pemilih menampilkan semua portal CKAN yang dicakup oleh penyedia universal.</tra
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Catatan</translation>
+        <translation>Catatan</translation>
     </message>
     <message>
         <source>Bonds</source>
@@ -13826,14 +13838,14 @@ Pemilih menampilkan semua portal CKAN yang dicakup oleh penyedia universal.</tra
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataUKPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← KEMBALI</translation>
+        <translation>← KEMBALI</translation>
     </message>
     <message>
         <source>PUBLISHERS</source>
@@ -13861,7 +13873,7 @@ Pemilih menampilkan semua portal CKAN yang dicakup oleh penyedia universal.</tra
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NAMA</translation>
+        <translation>NAMA</translation>
     </message>
     <message>
         <source>TITLE</source>
@@ -13889,7 +13901,7 @@ Pemilih menampilkan semua portal CKAN yang dicakup oleh penyedia universal.</tra
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">BUKA</translation>
+        <translation>BUKA</translation>
     </message>
     <message>
         <source>Loading UK Government publishers…</source>
@@ -13961,7 +13973,7 @@ Pemilih menampilkan semua portal CKAN yang dicakup oleh penyedia universal.</tra
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
 </context>
 <context>
@@ -14004,7 +14016,7 @@ Pemilih menampilkan semua portal CKAN yang dicakup oleh penyedia universal.</tra
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Tanggal</translation>
+        <translation>Tanggal</translation>
     </message>
     <message>
         <source>Resources</source>
@@ -14055,7 +14067,7 @@ Pemilih menampilkan semua portal CKAN yang dicakup oleh penyedia universal.</tra
     </message>
     <message>
         <source>QUICK ACTIONS</source>
-        <translation type="unfinished">TINDAKAN CEPAT</translation>
+        <translation>TINDAKAN CEPAT</translation>
     </message>
     <message>
         <source>Common tasks you can do right now</source>
@@ -14274,7 +14286,7 @@ Pemilih menampilkan semua portal CKAN yang dicakup oleh penyedia universal.</tra
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>$FNCPT PRICE</source>
@@ -14325,7 +14337,7 @@ Pemilih menampilkan semua portal CKAN yang dicakup oleh penyedia universal.</tra
     </message>
     <message>
         <source>COPIED</source>
-        <translation type="unfinished">DISALIN</translation>
+        <translation>DISALIN</translation>
     </message>
     <message>
         <source>Solana wallet</source>
@@ -14357,11 +14369,11 @@ Pemilih menampilkan semua portal CKAN yang dicakup oleh penyedia universal.</tra
     </message>
     <message>
         <source>CONNECTED</source>
-        <translation type="unfinished">TERHUBUNG</translation>
+        <translation>TERHUBUNG</translation>
     </message>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">KEPEMILIKAN</translation>
+        <translation>KEPEMILIKAN</translation>
     </message>
     <message>
         <source>POLL</source>
@@ -14424,7 +14436,7 @@ Semua negara: ALL</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">NEGARA</translation>
+        <translation>NEGARA</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -14463,7 +14475,7 @@ Semua negara: ALL</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">NEGARA</translation>
+        <translation>NEGARA</translation>
     </message>
     <message>
         <source>Select an indicator</source>
@@ -14579,11 +14591,11 @@ Anda sekarang dapat mengimpornya menggunakan tombol JELAJAHI.</translation>
     </message>
     <message>
         <source>Apply</source>
-        <translation type="unfinished">Terapkan</translation>
+        <translation>Terapkan</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Batal</translation>
+        <translation>Batal</translation>
     </message>
     <message>
         <source>Warning: already used by "%1"</source>
@@ -14633,7 +14645,7 @@ Anda sekarang dapat mengimpornya menggunakan tombol JELAJAHI.</translation>
     </message>
     <message>
         <source>New Window</source>
-        <translation type="unfinished">Jendela Baru</translation>
+        <translation>Jendela Baru</translation>
     </message>
     <message>
         <source>Open Saved Layout…</source>
@@ -14814,7 +14826,7 @@ Rentang 1-200. Naikkan untuk alur kerja panjang (mis. mengisi laporan multi-bagi
     </message>
     <message>
         <source>API KEY</source>
-        <translation type="unfinished">KUNCI API</translation>
+        <translation>KUNCI API</translation>
     </message>
     <message>
         <source>BASE URL (custom endpoint)</source>
@@ -15296,7 +15308,7 @@ untuk mengatur ulang PIN dan mendapatkan kembali akses.</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">SIAP</translation>
+        <translation>SIAP</translation>
     </message>
     <message>
         <source>CORPORATE FINANCE TOOLKIT</source>
@@ -16454,7 +16466,7 @@ untuk mengatur ulang PIN dan mendapatkan kembali akses.</translation>
     <name>fincept::screens::MaritimeScreen</name>
     <message>
         <source>READY</source>
-        <translation type="unfinished">SIAP</translation>
+        <translation>SIAP</translation>
     </message>
     <message>
         <source>FINCEPT MARITIME INTELLIGENCE</source>
@@ -16610,7 +16622,7 @@ untuk mengatur ulang PIN dan mendapatkan kembali akses.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Jenis</translation>
+        <translation>Jenis</translation>
     </message>
     <message>
         <source>▾ ADVANCED: RAW BBOX</source>
@@ -16780,11 +16792,11 @@ untuk mengatur ulang PIN dan mendapatkan kembali akses.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">KESALAHAN</translation>
+        <translation>KESALAHAN</translation>
     </message>
     <message>
         <source>No ports found.</source>
@@ -16869,11 +16881,11 @@ untuk mengatur ulang PIN dan mendapatkan kembali akses.</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NAMA</translation>
+        <translation>NAMA</translation>
     </message>
     <message>
         <source>LAST</source>
-        <translation type="unfinished">TERAKHIR</translation>
+        <translation>TERAKHIR</translation>
     </message>
     <message>
         <source>CHG</source>
@@ -16881,15 +16893,15 @@ untuk mengatur ulang PIN dan mendapatkan kembali akses.</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">TERTINGGI</translation>
+        <translation>TERTINGGI</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">TERENDAH</translation>
+        <translation>TERENDAH</translation>
     </message>
     <message>
         <source>VOL</source>
@@ -16905,7 +16917,7 @@ untuk mengatur ulang PIN dan mendapatkan kembali akses.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">BUKA</translation>
+        <translation>BUKA</translation>
     </message>
     <message>
         <source>TICKER</source>
@@ -17173,7 +17185,7 @@ untuk mengatur ulang PIN dan mendapatkan kembali akses.</translation>
     <name>fincept::screens::McpServersScreen</name>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">SERVER MCP</translation>
+        <translation>SERVER MCP</translation>
     </message>
     <message>
         <source>MARKETPLACE</source>
@@ -17185,7 +17197,7 @@ untuk mengatur ulang PIN dan mendapatkan kembali akses.</translation>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">ALAT</translation>
+        <translation>ALAT</translation>
     </message>
     <message>
         <source>Search...</source>
@@ -17241,7 +17253,7 @@ untuk mengatur ulang PIN dan mendapatkan kembali akses.</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">DESKRIPSI</translation>
+        <translation>DESKRIPSI</translation>
     </message>
     <message>
         <source>No servers match the current filter.</source>
@@ -17257,7 +17269,7 @@ untuk mengatur ulang PIN dan mendapatkan kembali akses.</translation>
     </message>
     <message>
         <source>ADD</source>
-        <translation type="unfinished">TAMBAH</translation>
+        <translation>TAMBAH</translation>
     </message>
     <message>
         <source>● RUNNING</source>
@@ -17416,7 +17428,7 @@ Gunakan MARKETPLACE untuk menambah, atau klik TAMBAH SERVER MCP KUSTOM di bawah.
     </message>
     <message>
         <source>Tools</source>
-        <translation type="unfinished">Alat</translation>
+        <translation>Alat</translation>
     </message>
     <message>
         <source>%1 internal tools active</source>
@@ -17605,7 +17617,7 @@ Klik '+ Tambah' untuk menambahkan.</translation>
     <name>fincept::screens::NewsCommandBar</name>
     <message>
         <source>Auto-refresh interval</source>
-        <translation type="unfinished">Interval segar otomatis</translation>
+        <translation>Interval penyegaran otomatis</translation>
     </message>
     <message>
         <source>MANUAL</source>
@@ -17681,7 +17693,7 @@ Klik '+ Tambah' untuk menambahkan.</translation>
     </message>
     <message>
         <source>AI</source>
-        <translation type="unfinished">AI</translation>
+        <translation>AI</translation>
     </message>
     <message>
         <source>SRC</source>
@@ -17697,7 +17709,7 @@ Klik '+ Tambah' untuk menambahkan.</translation>
     </message>
     <message>
         <source>OFFLINE</source>
-        <translation type="unfinished">LURING</translation>
+        <translation>LURING</translation>
     </message>
     <message>
         <source>...</source>
@@ -17740,7 +17752,7 @@ Klik '+ Tambah' untuk menambahkan.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">BUKA</translation>
+        <translation>BUKA</translation>
     </message>
     <message>
         <source>COPY URL</source>
@@ -17756,7 +17768,7 @@ Klik '+ Tambah' untuk menambahkan.</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">SIMPAN</translation>
+        <translation>SIMPAN</translation>
     </message>
     <message>
         <source>Save article to File Manager</source>
@@ -17776,7 +17788,7 @@ Klik '+ Tambah' untuk menambahkan.</translation>
     </message>
     <message>
         <source>COPIED</source>
-        <translation type="unfinished">DISALIN</translation>
+        <translation>DISALIN</translation>
     </message>
     <message>
         <source>ANALYZING...</source>
@@ -17792,7 +17804,7 @@ Klik '+ Tambah' untuk menambahkan.</translation>
     </message>
     <message>
         <source>AI ANALYSIS</source>
-        <translation type="unfinished">ANALISIS AI</translation>
+        <translation>ANALISIS AI</translation>
     </message>
     <message>
         <source>KEY POINTS</source>
@@ -18075,15 +18087,15 @@ Klik '+ Tambah' untuk menambahkan.</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">HAPUS</translation>
+        <translation>HAPUS</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">SIMPAN</translation>
+        <translation>SIMPAN</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">BATAL</translation>
+        <translation>BATAL</translation>
     </message>
     <message>
         <source>EXPORT</source>
@@ -18281,7 +18293,7 @@ Klik '+ Tambah' untuk menambahkan.</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">NEGARA</translation>
+        <translation>NEGARA</translation>
     </message>
     <message>
         <source>FREQ</source>
@@ -18414,7 +18426,7 @@ Contoh negara: United States, China, Germany, India, Japan, World</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">NEGARA</translation>
+        <translation>NEGARA</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -18441,67 +18453,67 @@ Contoh negara: United States, China, Germany, India, Japan, World</translation>
     <name>fincept::screens::PerformanceRiskView</name>
     <message>
         <source>NAV PERFORMANCE (FROM SNAPSHOTS)</source>
-        <translation type="unfinished">KINERJA NAV (DARI SNAPSHOT)</translation>
+        <translation>KINERJA NAV (DARI SNAPSHOT)</translation>
     </message>
     <message>
         <source>  RISK METRICS</source>
-        <translation type="unfinished">  METRIK RISIKO</translation>
+        <translation>  METRIK RISIKO</translation>
     </message>
     <message>
         <source>SHARPE RATIO</source>
-        <translation type="unfinished">SHARPE RATIO</translation>
+        <translation>SHARPE RATIO</translation>
     </message>
     <message>
         <source>Risk-adjusted return (annualised)</source>
-        <translation type="unfinished">Imbal hasil disesuaikan risiko (disetahunkan)</translation>
+        <translation>Imbal hasil disesuaikan risiko (disetahunkan)</translation>
     </message>
     <message>
         <source>SORTINO RATIO</source>
-        <translation type="unfinished">SORTINO RATIO</translation>
+        <translation>SORTINO RATIO</translation>
     </message>
     <message>
         <source>Downside risk-adjusted return</source>
-        <translation type="unfinished">Imbal hasil disesuaikan risiko sisi bawah</translation>
+        <translation>Imbal hasil disesuaikan risiko sisi bawah</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BETA</translation>
+        <translation>BETA</translation>
     </message>
     <message>
         <source>Sensitivity vs SPY (snapshot regression)</source>
-        <translation type="unfinished">Sensitivitas vs SPY (regresi snapshot)</translation>
+        <translation>Sensitivitas vs SPY (regresi snapshot)</translation>
     </message>
     <message>
         <source>ALPHA</source>
-        <translation type="unfinished">ALPHA</translation>
+        <translation>ALPHA</translation>
     </message>
     <message>
         <source>VOLATILITY</source>
-        <translation type="unfinished">VOLATILITAS</translation>
+        <translation>VOLATILITAS</translation>
     </message>
     <message>
         <source>Annualised from daily returns</source>
-        <translation type="unfinished">Disetahunkan dari imbal hasil harian</translation>
+        <translation>Disetahunkan dari imbal hasil harian</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">MAX DRAWDOWN</translation>
+        <translation>MAX DRAWDOWN</translation>
     </message>
     <message>
         <source>Peak-to-trough from snapshots</source>
-        <translation type="unfinished">Puncak ke palung dari snapshot</translation>
+        <translation>Puncak ke palung dari snapshot</translation>
     </message>
     <message>
         <source>VALUE AT RISK (95%)</source>
-        <translation type="unfinished">VALUE AT RISK (95%)</translation>
+        <translation>VALUE AT RISK (95%)</translation>
     </message>
     <message>
         <source>CONDITIONAL VaR</source>
-        <translation type="unfinished">VaR KONDISIONAL</translation>
+        <translation>VaR KONDISIONAL</translation>
     </message>
     <message>
         <source>Expected shortfall (95%)</source>
-        <translation type="unfinished">Expected shortfall (95%)</translation>
+        <translation>Expected shortfall (95%)</translation>
     </message>
     <message>
         <source>Jensen's alpha vs benchmark (CAPM)</source>
@@ -18656,7 +18668,7 @@ Contoh negara: United States, China, Germany, India, Japan, World</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Jenis</translation>
+        <translation>Jenis</translation>
     </message>
     <message>
         <source>Status</source>
@@ -18664,7 +18676,7 @@ Contoh negara: United States, China, Germany, India, Japan, World</translation>
     </message>
     <message>
         <source>+ ADD</source>
-        <translation type="unfinished">+ TAMBAH</translation>
+        <translation>+ TAMBAH</translation>
     </message>
     <message>
         <source>- REMOVE</source>
@@ -18683,87 +18695,87 @@ Contoh negara: United States, China, Germany, India, Japan, World</translation>
     <name>fincept::screens::PlanningView</name>
     <message>
         <source>RETIREMENT</source>
-        <translation type="unfinished">PENSIUN</translation>
+        <translation>PENSIUN</translation>
     </message>
     <message>
         <source>GOALS</source>
-        <translation type="unfinished">TUJUAN</translation>
+        <translation>TUJUAN</translation>
     </message>
     <message>
         <source>SAVINGS</source>
-        <translation type="unfinished">TABUNGAN</translation>
+        <translation>TABUNGAN</translation>
     </message>
     <message>
         <source>RETIREMENT CALCULATOR</source>
-        <translation type="unfinished">KALKULATOR PENSIUN</translation>
+        <translation>KALKULATOR PENSIUN</translation>
     </message>
     <message>
         <source>Current Age:</source>
-        <translation type="unfinished">Usia Saat Ini:</translation>
+        <translation>Usia Saat Ini:</translation>
     </message>
     <message>
         <source>Retire Age:</source>
-        <translation type="unfinished">Usia Pensiun:</translation>
+        <translation>Usia Pensiun:</translation>
     </message>
     <message>
         <source>Annual Expense:</source>
-        <translation type="unfinished">Pengeluaran Tahunan:</translation>
+        <translation>Pengeluaran Tahunan:</translation>
     </message>
     <message>
         <source>Monthly Savings:</source>
-        <translation type="unfinished">Tabungan Bulanan:</translation>
+        <translation>Tabungan Bulanan:</translation>
     </message>
     <message>
         <source>Exp. Return:</source>
-        <translation type="unfinished">Imbal Hasil Diharapkan:</translation>
+        <translation>Imbal Hasil Diharapkan:</translation>
     </message>
     <message>
         <source>Inflation:</source>
-        <translation type="unfinished">Inflasi:</translation>
+        <translation>Inflasi:</translation>
     </message>
     <message>
         <source>Withdrawal Rate:</source>
-        <translation type="unfinished">Tingkat Penarikan:</translation>
+        <translation>Tingkat Penarikan:</translation>
     </message>
     <message>
         <source>CALCULATE</source>
-        <translation type="unfinished">HITUNG</translation>
+        <translation>HITUNG</translation>
     </message>
     <message>
         <source>PROJECTION RESULTS</source>
-        <translation type="unfinished">HASIL PROYEKSI</translation>
+        <translation>HASIL PROYEKSI</translation>
     </message>
     <message>
         <source>YEARS TO RETIREMENT</source>
-        <translation type="unfinished">TAHUN MENUJU PENSIUN</translation>
+        <translation>TAHUN MENUJU PENSIUN</translation>
     </message>
     <message>
         <source>TARGET NEST EGG</source>
-        <translation type="unfinished">TARGET DANA PENSIUN</translation>
+        <translation>TARGET DANA PENSIUN</translation>
     </message>
     <message>
         <source>PROJECTED VALUE</source>
-        <translation type="unfinished">NILAI PROYEKSI</translation>
+        <translation>NILAI PROYEKSI</translation>
     </message>
     <message>
         <source>SURPLUS / GAP</source>
-        <translation type="unfinished">SURPLUS / KESENJANGAN</translation>
+        <translation>SURPLUS / KESENJANGAN</translation>
     </message>
     <message>
         <source>GOAL-BASED PLANNING</source>
-        <translation type="unfinished">PERENCANAAN BERBASIS TUJUAN</translation>
+        <translation>PERENCANAAN BERBASIS TUJUAN</translation>
     </message>
     <message>
         <source>SAVINGS RATE ANALYSIS</source>
-        <translation type="unfinished">ANALISIS TINGKAT TABUNGAN</translation>
+        <translation>ANALISIS TINGKAT TABUNGAN</translation>
     </message>
     <message>
         <source>✓ On track! Your projected retirement fund of %1 %2 exceeds your target of %1 %3 by %1 %4.</source>
-        <translation type="unfinished">✓ Sesuai jalur! Dana pensiun proyeksi Anda sebesar %1 %2 melampaui target Anda sebesar %1 %3 sejumlah %1 %4.</translation>
+        <translation>✓ Sesuai jalur! Dana pensiun proyeksi Anda sebesar %1 %2 melampaui target Anda sebesar %1 %3 sejumlah %1 %4.</translation>
     </message>
     <message>
         <source>⚠ Shortfall of %1 %2. Consider increasing monthly savings by %1 %3 to close the gap.</source>
-        <translation type="unfinished">⚠ Kekurangan sebesar %1 %2. Pertimbangkan untuk meningkatkan tabungan bulanan sebesar %1 %3 untuk menutup kesenjangan.</translation>
+        <translation>⚠ Kekurangan sebesar %1 %2. Pertimbangkan untuk meningkatkan tabungan bulanan sebesar %1 %3 untuk menutup kesenjangan.</translation>
     </message>
     <message>
         <source>⚙  OPTIMIZE PORTFOLIO FOR THIS GOAL</source>
@@ -19705,155 +19717,155 @@ Buka Settings → LLM Configuration, tambahkan penyedia dengan kunci API, lalu c
     <name>fincept::screens::PortfolioOptimizationView</name>
     <message>
         <source>OPTIMIZE</source>
-        <translation type="unfinished">OPTIMALKAN</translation>
+        <translation>OPTIMALKAN</translation>
     </message>
     <message>
         <source>FRONTIER</source>
-        <translation type="unfinished">FRONTIER</translation>
+        <translation>FRONTIER</translation>
     </message>
     <message>
         <source>ALLOCATION</source>
-        <translation type="unfinished">ALOKASI</translation>
+        <translation>ALOKASI</translation>
     </message>
     <message>
         <source>STRATEGIES</source>
-        <translation type="unfinished">STRATEGI</translation>
+        <translation>STRATEGI</translation>
     </message>
     <message>
         <source>COMPARE</source>
-        <translation type="unfinished">BANDINGKAN</translation>
+        <translation>BANDINGKAN</translation>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">BACKTEST</translation>
+        <translation>BACKTEST</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">RISIKO</translation>
+        <translation>RISIKO</translation>
     </message>
     <message>
         <source>STRESS</source>
-        <translation type="unfinished">STRES</translation>
+        <translation>STRES</translation>
     </message>
     <message>
         <source>B-L MODEL</source>
-        <translation type="unfinished">MODEL B-L</translation>
+        <translation>MODEL B-L</translation>
     </message>
     <message>
         <source>METHOD:</source>
-        <translation type="unfinished">METODE:</translation>
+        <translation>METODE:</translation>
     </message>
     <message>
         <source>RETURNS:</source>
-        <translation type="unfinished">IMBAL HASIL:</translation>
+        <translation>IMBAL HASIL:</translation>
     </message>
     <message>
         <source>RISK MODEL:</source>
-        <translation type="unfinished">MODEL RISIKO:</translation>
+        <translation>MODEL RISIKO:</translation>
     </message>
     <message>
         <source>▶ RUN OPTIMIZATION</source>
-        <translation type="unfinished">▶ JALANKAN OPTIMASI</translation>
+        <translation>▶ JALANKAN OPTIMASI</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>CURRENT WT%</source>
-        <translation type="unfinished">WT% SAAT INI</translation>
+        <translation>WT% SAAT INI</translation>
     </message>
     <message>
         <source>OPTIMAL WT%</source>
-        <translation type="unfinished">WT% OPTIMAL</translation>
+        <translation>WT% OPTIMAL</translation>
     </message>
     <message>
         <source>CHANGE</source>
-        <translation type="unfinished">PERUBAHAN</translation>
+        <translation>PERUBAHAN</translation>
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">AKSI</translation>
+        <translation>AKSI</translation>
     </message>
     <message>
         <source>EFFICIENT FRONTIER</source>
-        <translation type="unfinished">EFFICIENT FRONTIER</translation>
+        <translation>EFFICIENT FRONTIER</translation>
     </message>
     <message>
         <source>Run optimization on the OPTIMIZE tab to generate the efficient frontier.</source>
-        <translation type="unfinished">Jalankan optimasi di tab OPTIMALKAN untuk menghasilkan efficient frontier.</translation>
+        <translation>Jalankan optimasi di tab OPTIMALKAN untuk menghasilkan efficient frontier.</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">BOBOT</translation>
+        <translation>BOBOT</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">NILAI</translation>
+        <translation>NILAI</translation>
     </message>
     <message>
         <source>VS EQUAL WT</source>
-        <translation type="unfinished">VS WT SETARA</translation>
+        <translation>VS WT SETARA</translation>
     </message>
     <message>
         <source>STRATEGY COMPARISON  (populated after optimization)</source>
-        <translation type="unfinished">PERBANDINGAN STRATEGI  (terisi setelah optimasi)</translation>
+        <translation>PERBANDINGAN STRATEGI  (terisi setelah optimasi)</translation>
     </message>
     <message>
         <source>Run optimization on the OPTIMIZE tab.
 All 5 strategies will be compared automatically.</source>
-        <translation type="unfinished">Jalankan optimasi di tab OPTIMALKAN.
+        <translation>Jalankan optimasi di tab OPTIMALKAN.
 Kelima strategi akan dibandingkan secara otomatis.</translation>
     </message>
     <message>
         <source>STRATEGY</source>
-        <translation type="unfinished">STRATEGI</translation>
+        <translation>STRATEGI</translation>
     </message>
     <message>
         <source>EXP. RETURN</source>
-        <translation type="unfinished">IMBAL HASIL DIHARAPKAN</translation>
+        <translation>IMBAL HASIL DIHARAPKAN</translation>
     </message>
     <message>
         <source>VOLATILITY</source>
-        <translation type="unfinished">VOLATILITAS</translation>
+        <translation>VOLATILITAS</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">SHARPE</translation>
+        <translation>SHARPE</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">DESKRIPSI</translation>
+        <translation>DESKRIPSI</translation>
     </message>
     <message>
         <source>WEIGHT COMPARISON  (all methods, per symbol)</source>
-        <translation type="unfinished">PERBANDINGAN BOBOT  (semua metode, per simbol)</translation>
+        <translation>PERBANDINGAN BOBOT  (semua metode, per simbol)</translation>
     </message>
     <message>
         <source>Run optimization on the OPTIMIZE tab to populate this comparison.</source>
-        <translation type="unfinished">Jalankan optimasi di tab OPTIMALKAN untuk mengisi perbandingan ini.</translation>
+        <translation>Jalankan optimasi di tab OPTIMALKAN untuk mengisi perbandingan ini.</translation>
     </message>
     <message>
         <source>BACKTEST RESULTS</source>
-        <translation type="unfinished">HASIL BACKTEST</translation>
+        <translation>HASIL BACKTEST</translation>
     </message>
     <message>
         <source>Run an optimization first, then backtest the optimal weights
 against historical data to evaluate out-of-sample performance.</source>
-        <translation type="unfinished">Jalankan optimasi terlebih dahulu, kemudian backtest bobot optimal
+        <translation>Jalankan optimasi terlebih dahulu, kemudian backtest bobot optimal
 terhadap data historis untuk mengevaluasi kinerja out-of-sample.</translation>
     </message>
     <message>
         <source>RISK DECOMPOSITION</source>
-        <translation type="unfinished">DEKOMPOSISI RISIKO</translation>
+        <translation>DEKOMPOSISI RISIKO</translation>
     </message>
     <message>
         <source>BLACK-LITTERMAN MODEL</source>
-        <translation type="unfinished">MODEL BLACK-LITTERMAN</translation>
+        <translation>MODEL BLACK-LITTERMAN</translation>
     </message>
     <message>
         <source>Running optimization…</source>
-        <translation type="unfinished">Menjalankan optimasi…</translation>
+        <translation>Menjalankan optimasi…</translation>
     </message>
     <message>
         <source>BACKTEST PORTFOLIO</source>
@@ -19883,7 +19895,7 @@ kinerja historis, atau buka terminal Backtesting lengkap.</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">SIAP</translation>
+        <translation>SIAP</translation>
     </message>
     <message>
         <source>BACK</source>
@@ -19905,7 +19917,7 @@ Jalankan optimasi pada tab OPTIMIZE untuk menghitungnya dari matriks kovarians.<
     </message>
     <message>
         <source>RISK CONTRIB</source>
-        <translation type="unfinished">RISK CONTRIB</translation>
+        <translation>RISK CONTRIB</translation>
     </message>
     <message>
         <source>STRESS SCENARIOS</source>
@@ -19919,7 +19931,7 @@ Pilih portofolio untuk melihat estimasi dampak per skenario.</translation>
     </message>
     <message>
         <source>SCENARIO</source>
-        <translation type="unfinished">SKENARIO</translation>
+        <translation>SKENARIO</translation>
     </message>
     <message>
         <source>IMPACT</source>
@@ -20476,7 +20488,7 @@ Expected format:
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">KEAMANAN</translation>
+        <translation>KEAMANAN</translation>
     </message>
     <message>
         <source>Protect accounts, detect fraud, enforce terms of service, and ensure platform integrity</source>
@@ -20779,7 +20791,7 @@ Expected format:
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">TANGGAL</translation>
+        <translation>TANGGAL</translation>
     </message>
     <message>
         <source>REQUESTS</source>
@@ -20823,7 +20835,7 @@ Expected format:
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">STATUS</translation>
+        <translation>STATUS</translation>
     </message>
     <message>
         <source>SUBSCRIPTION</source>
@@ -20995,7 +21007,7 @@ untuk mengedit properti</translation>
     </message>
     <message>
         <source>Rows:</source>
-        <translation type="unfinished">Baris:</translation>
+        <translation>Baris:</translation>
     </message>
     <message>
         <source>Cols:</source>
@@ -21202,7 +21214,7 @@ komponen Judul.</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Semua</translation>
+        <translation>Semua</translation>
     </message>
     <message>
         <source>Trading</source>
@@ -21266,7 +21278,7 @@ komponen Judul.</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">OK</translation>
+        <translation>OK</translation>
     </message>
     <message>
         <source>Install</source>
@@ -21391,11 +21403,11 @@ Contoh: {"spot": 100, "strike": 105, "risk_free_rate": 0.05}</translation>
     </message>
     <message>
         <source>(empty response)</source>
-        <translation type="unfinished">(respons kosong)</translation>
+        <translation>(respons kosong)</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">OK</translation>
+        <translation>OK</translation>
     </message>
     <message>
         <source>Field</source>
@@ -21564,15 +21576,15 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>YES</source>
-        <translation type="unfinished">YA</translation>
+        <translation>YA</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">TIDAK</translation>
+        <translation>TIDAK</translation>
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">AKSI</translation>
+        <translation>AKSI</translation>
     </message>
     <message>
         <source>CLASS</source>
@@ -21644,7 +21656,7 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Harga</translation>
+        <translation>Harga</translation>
     </message>
     <message>
         <source>Quantity</source>
@@ -21792,7 +21804,7 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">DIBUAT</translation>
+        <translation>DIBUAT</translation>
     </message>
     <message>
         <source>Schedule created</source>
@@ -21864,7 +21876,7 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">STATUS</translation>
+        <translation>STATUS</translation>
     </message>
     <message>
         <source>STAGES</source>
@@ -21968,11 +21980,11 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>SKEWNESS</source>
-        <translation type="unfinished">SKEWNESS</translation>
+        <translation>SKEWNESS</translation>
     </message>
     <message>
         <source>KURTOSIS</source>
-        <translation type="unfinished">KURTOSIS</translation>
+        <translation>KURTOSIS</translation>
     </message>
     <message>
         <source>p-VALUE</source>
@@ -21984,7 +21996,7 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Tanggal</translation>
+        <translation>Tanggal</translation>
     </message>
     <message>
         <source>IC</source>
@@ -22024,7 +22036,7 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>Win Rate</source>
-        <translation type="unfinished">Win Rate</translation>
+        <translation>Win Rate</translation>
     </message>
     <message>
         <source>L/S Sharpe=%1  spread=%2%</source>
@@ -22032,15 +22044,15 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>VOLATILITY</source>
-        <translation type="unfinished">VOLATILITAS</translation>
+        <translation>VOLATILITAS</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">MAX DRAWDOWN</translation>
+        <translation>MAX DRAWDOWN</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BETA</translation>
+        <translation>BETA</translation>
     </message>
     <message>
         <source>TRACKING ERROR</source>
@@ -22148,7 +22160,7 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">SHARPE</translation>
+        <translation>SHARPE</translation>
     </message>
     <message>
         <source>MAX DD</source>
@@ -22168,7 +22180,7 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">WIN RATE</translation>
+        <translation>WIN RATE</translation>
     </message>
     <message>
         <source>BEST DAY</source>
@@ -22180,7 +22192,7 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>ALPHA</source>
-        <translation type="unfinished">ALPHA</translation>
+        <translation>ALPHA</translation>
     </message>
     <message>
         <source>Annual %1%  Sharpe %2  MaxDD %3%</source>
@@ -22192,11 +22204,11 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">JENIS</translation>
+        <translation>JENIS</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">DESKRIPSI</translation>
+        <translation>DESKRIPSI</translation>
     </message>
     <message>
         <source>↓ see below</source>
@@ -22204,7 +22216,7 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>EXP. RETURN</source>
-        <translation type="unfinished">IMBAL HASIL DIHARAPKAN</translation>
+        <translation>IMBAL HASIL DIHARAPKAN</translation>
     </message>
     <message>
         <source>EXP. VOL</source>
@@ -22220,7 +22232,7 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>REBALANCE</source>
-        <translation type="unfinished">REBALANCE</translation>
+        <translation>REBALANCE</translation>
     </message>
     <message>
         <source>ASSETS</source>
@@ -22244,7 +22256,7 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>BENCHMARK</source>
-        <translation type="unfinished">BENCHMARK</translation>
+        <translation>BENCHMARK</translation>
     </message>
     <message>
         <source>ACTIVE SHARE</source>
@@ -22406,11 +22418,11 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>BACKTEST RESULTS</source>
-        <translation type="unfinished">HASIL BACKTEST</translation>
+        <translation>HASIL BACKTEST</translation>
     </message>
     <message>
         <source>TOTAL RETURN</source>
-        <translation type="unfinished">TOTAL IMBAL HASIL</translation>
+        <translation>TOTAL IMBAL HASIL</translation>
     </message>
     <message>
         <source>%1 final</source>
@@ -22422,7 +22434,7 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>SHARPE RATIO</source>
-        <translation type="unfinished">SHARPE RATIO</translation>
+        <translation>SHARPE RATIO</translation>
     </message>
     <message>
         <source>Excellent</source>
@@ -22450,7 +22462,7 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portofolio</translation>
+        <translation>Portofolio</translation>
     </message>
     <message>
         <source>EQUITY CURVE</source>
@@ -22630,7 +22642,7 @@ mis. {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>DIRECTION</source>
-        <translation type="unfinished">ARAH</translation>
+        <translation>ARAH</translation>
     </message>
     <message>
         <source>SLOPE</source>
@@ -22872,7 +22884,7 @@ mis. "Bangun strategi ekuitas kuantitatif untuk saham mid-cap AS"</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Semua</translation>
+        <translation>Semua</translation>
     </message>
     <message>
         <source>running</source>
@@ -22916,7 +22928,7 @@ mis. "Bangun strategi ekuitas kuantitatif untuk saham mid-cap AS"</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Jenis</translation>
+        <translation>Jenis</translation>
     </message>
     <message>
         <source>Status</source>
@@ -23500,7 +23512,7 @@ mis. "Bangun strategi ekuitas kuantitatif untuk saham mid-cap AS"</translation>
     </message>
     <message>
         <source>Volatility</source>
-        <translation type="unfinished">Volatilitas</translation>
+        <translation>Volatilitas</translation>
     </message>
     <message>
         <source>Option Type</source>
@@ -23828,7 +23840,7 @@ mis. "Bangun strategi ekuitas kuantitatif untuk saham mid-cap AS"</translation>
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Catatan</translation>
+        <translation>Catatan</translation>
     </message>
     <message>
         <source>Parametric (Variance-Covariance)</source>
@@ -23972,7 +23984,7 @@ mis. "Bangun strategi ekuitas kuantitatif untuk saham mid-cap AS"</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>e.g. BTC/USDT, ETH/USDT</source>
@@ -24632,7 +24644,7 @@ mis. "Bangun strategi ekuitas kuantitatif untuk saham mid-cap AS"</translation>
     </message>
     <message>
         <source>EFFICIENT FRONTIER</source>
-        <translation type="unfinished">EFFICIENT FRONTIER</translation>
+        <translation>EFFICIENT FRONTIER</translation>
     </message>
     <message>
         <source>Eff. Frontier</source>
@@ -25098,7 +25110,7 @@ Port berjalan: %3</translation>
     </message>
     <message>
         <source>Complete</source>
-        <translation type="unfinished">Selesai</translation>
+        <translation>Selesai</translation>
     </message>
     <message>
         <source>
@@ -26466,11 +26478,11 @@ Kesimpulan menuntut KEDUA uji sepakat.</translation>
     </message>
     <message>
         <source>First</source>
-        <translation type="unfinished">Depan</translation>
+        <translation>Pertama</translation>
     </message>
     <message>
         <source>Last</source>
-        <translation type="unfinished">Belakang</translation>
+        <translation>Terakhir</translation>
     </message>
     <message>
         <source>FORECAST BY STEP</source>
@@ -26598,7 +26610,7 @@ Kesimpulan menuntut KEDUA uji sepakat.</translation>
     </message>
     <message>
         <source>METHOD</source>
-        <translation type="unfinished">METODE</translation>
+        <translation>METODE</translation>
     </message>
     <message>
         <source>TRAIN</source>
@@ -26622,7 +26634,7 @@ Kesimpulan menuntut KEDUA uji sepakat.</translation>
     </message>
     <message>
         <source>FEATURES</source>
-        <translation type="unfinished">FITUR</translation>
+        <translation>FITUR</translation>
     </message>
     <message>
         <source>TRAIN / TEST</source>
@@ -26862,7 +26874,7 @@ Kesimpulan menuntut KEDUA uji sepakat.</translation>
     </message>
     <message>
         <source>DISTRIBUTION</source>
-        <translation type="unfinished">DISTRIBUSI</translation>
+        <translation>DISTRIBUSI</translation>
     </message>
     <message>
         <source>POP MEAN</source>
@@ -27666,7 +27678,7 @@ Kesimpulan menuntut KEDUA uji sepakat.</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">OK</translation>
+        <translation>OK</translation>
     </message>
     <message>
         <source>Online model created</source>
@@ -27698,7 +27710,7 @@ Kesimpulan menuntut KEDUA uji sepakat.</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">KESALAHAN</translation>
+        <translation>KESALAHAN</translation>
     </message>
     <message>
         <source>ABS ERROR</source>
@@ -27858,7 +27870,7 @@ Kesimpulan menuntut KEDUA uji sepakat.</translation>
     </message>
     <message>
         <source>WARNING</source>
-        <translation type="unfinished">PERINGATAN</translation>
+        <translation>PERINGATAN</translation>
     </message>
     <message>
         <source>PRESENT</source>
@@ -27882,7 +27894,7 @@ Kesimpulan menuntut KEDUA uji sepakat.</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Simbol</translation>
+        <translation>Simbol</translation>
     </message>
     <message>
         <source>%1 instrument(s)  market=%2</source>
@@ -27898,7 +27910,7 @@ Kesimpulan menuntut KEDUA uji sepakat.</translation>
     </message>
     <message>
         <source>LAST</source>
-        <translation type="unfinished">TERAKHIR</translation>
+        <translation>TERAKHIR</translation>
     </message>
     <message>
         <source>%1 trading day(s)</source>
@@ -27910,7 +27922,7 @@ Kesimpulan menuntut KEDUA uji sepakat.</translation>
     </message>
     <message>
         <source>EMPTY</source>
-        <translation type="unfinished">KOSONG</translation>
+        <translation>KOSONG</translation>
     </message>
     <message>
         <source>LOADED</source>
@@ -27922,7 +27934,7 @@ Kesimpulan menuntut KEDUA uji sepakat.</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>TYPES</source>
@@ -27938,11 +27950,11 @@ Kesimpulan menuntut KEDUA uji sepakat.</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">SIAP</translation>
+        <translation>SIAP</translation>
     </message>
     <message>
         <source>VERSION</source>
-        <translation type="unfinished">VERSI</translation>
+        <translation>VERSI</translation>
     </message>
     <message>
         <source>HANDLERS</source>
@@ -27950,7 +27962,7 @@ Kesimpulan menuntut KEDUA uji sepakat.</translation>
     </message>
     <message>
         <source>STRATEGIES</source>
-        <translation type="unfinished">STRATEGI</translation>
+        <translation>STRATEGI</translation>
     </message>
     <message>
         <source>MODELS AVAIL</source>
@@ -28006,7 +28018,7 @@ Kesimpulan menuntut KEDUA uji sepakat.</translation>
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">METRIK</translation>
+        <translation>METRIK</translation>
     </message>
     <message>
         <source>Trained: %1</source>
@@ -28161,325 +28173,325 @@ Kesimpulan menuntut KEDUA uji sepakat.</translation>
     <name>fincept::screens::QuantStatsView</name>
     <message>
         <source>QUANTSTATS ANALYSIS</source>
-        <translation type="unfinished">ANALISIS QUANTSTATS</translation>
+        <translation>ANALISIS QUANTSTATS</translation>
     </message>
     <message>
         <source>▶ RUN QUANTSTATS</source>
-        <translation type="unfinished">▶ JALANKAN QUANTSTATS</translation>
+        <translation>▶ JALANKAN QUANTSTATS</translation>
     </message>
     <message>
         <source>KEY PERFORMANCE INDICATORS</source>
-        <translation type="unfinished">INDIKATOR KINERJA UTAMA</translation>
+        <translation>INDIKATOR KINERJA UTAMA</translation>
     </message>
     <message>
         <source>METRIC</source>
-        <translation type="unfinished">METRIK</translation>
+        <translation>METRIK</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">NILAI</translation>
+        <translation>NILAI</translation>
     </message>
     <message>
         <source>BENCHMARK</source>
-        <translation type="unfinished">BENCHMARK</translation>
+        <translation>BENCHMARK</translation>
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">METRIK</translation>
+        <translation>METRIK</translation>
     </message>
     <message>
         <source>Run QuantStats Analysis for return distribution</source>
-        <translation type="unfinished">Jalankan Analisis QuantStats untuk distribusi imbal hasil</translation>
+        <translation>Jalankan Analisis QuantStats untuk distribusi imbal hasil</translation>
     </message>
     <message>
         <source>RETURNS</source>
-        <translation type="unfinished">IMBAL HASIL</translation>
+        <translation>IMBAL HASIL</translation>
     </message>
     <message>
         <source>Run QuantStats Analysis for drawdown metrics</source>
-        <translation type="unfinished">Jalankan Analisis QuantStats untuk metrik drawdown</translation>
+        <translation>Jalankan Analisis QuantStats untuk metrik drawdown</translation>
     </message>
     <message>
         <source>DRAWDOWN</source>
-        <translation type="unfinished">DRAWDOWN</translation>
+        <translation>DRAWDOWN</translation>
     </message>
     <message>
         <source>Run QuantStats Analysis for rolling metrics</source>
-        <translation type="unfinished">Jalankan Analisis QuantStats untuk metrik rolling</translation>
+        <translation>Jalankan Analisis QuantStats untuk metrik rolling</translation>
     </message>
     <message>
         <source>ROLLING</source>
-        <translation type="unfinished">ROLLING</translation>
+        <translation>ROLLING</translation>
     </message>
     <message>
         <source>MONTE CARLO SIMULATION</source>
-        <translation type="unfinished">SIMULASI MONTE CARLO</translation>
+        <translation>SIMULASI MONTE CARLO</translation>
     </message>
     <message>
         <source>Simulate 1,000 portfolio return paths using GBM to estimate probability
 distributions of future returns, drawdowns, and terminal wealth.</source>
-        <translation type="unfinished">Simulasikan 1.000 jalur imbal hasil portofolio menggunakan GBM untuk mengestimasi distribusi probabilitas
+        <translation>Simulasikan 1.000 jalur imbal hasil portofolio menggunakan GBM untuk mengestimasi distribusi probabilitas
 imbal hasil masa depan, drawdown, dan kekayaan akhir.</translation>
     </message>
     <message>
         <source>▶ RUN MONTE CARLO (1000 paths)</source>
-        <translation type="unfinished">▶ JALANKAN MONTE CARLO (1000 jalur)</translation>
+        <translation>▶ JALANKAN MONTE CARLO (1000 jalur)</translation>
     </message>
     <message>
         <source>Press RUN MONTE CARLO to simulate 1,000 return paths</source>
-        <translation type="unfinished">Tekan JALANKAN MONTE CARLO untuk mensimulasikan 1.000 jalur imbal hasil</translation>
+        <translation>Tekan JALANKAN MONTE CARLO untuk mensimulasikan 1.000 jalur imbal hasil</translation>
     </message>
     <message>
         <source>MONTE CARLO</source>
-        <translation type="unfinished">MONTE CARLO</translation>
+        <translation>MONTE CARLO</translation>
     </message>
     <message>
         <source>PERFORMANCE</source>
-        <translation type="unfinished">KINERJA</translation>
+        <translation>KINERJA</translation>
     </message>
     <message>
         <source>Total Return</source>
-        <translation type="unfinished">Total Imbal Hasil</translation>
+        <translation>Total Imbal Hasil</translation>
     </message>
     <message>
         <source>Annualized Return</source>
-        <translation type="unfinished">Imbal Hasil Disetahunkan</translation>
+        <translation>Imbal Hasil Disetahunkan</translation>
     </message>
     <message>
         <source>Trading Days</source>
-        <translation type="unfinished">Hari Perdagangan</translation>
+        <translation>Hari Perdagangan</translation>
     </message>
     <message>
         <source>Best Day</source>
-        <translation type="unfinished">Hari Terbaik</translation>
+        <translation>Hari Terbaik</translation>
     </message>
     <message>
         <source>Worst Day</source>
-        <translation type="unfinished">Hari Terburuk</translation>
+        <translation>Hari Terburuk</translation>
     </message>
     <message>
         <source>Avg Daily Return</source>
-        <translation type="unfinished">Rata-rata Imbal Hasil Harian</translation>
+        <translation>Rata-rata Imbal Hasil Harian</translation>
     </message>
     <message>
         <source>Unrealized P&amp;L %</source>
-        <translation type="unfinished">P&amp;L Belum Direalisasi %</translation>
+        <translation>P&amp;L Belum Direalisasi %</translation>
     </message>
     <message>
         <source>Day Change %</source>
-        <translation type="unfinished">Perubahan Harian %</translation>
+        <translation>Perubahan Harian %</translation>
     </message>
     <message>
         <source>Total Positions</source>
-        <translation type="unfinished">Total Posisi</translation>
+        <translation>Total Posisi</translation>
     </message>
     <message>
         <source>Gainers</source>
-        <translation type="unfinished">Penguatan</translation>
+        <translation>Penguatan</translation>
     </message>
     <message>
         <source>Losers</source>
-        <translation type="unfinished">Pelemahan</translation>
+        <translation>Pelemahan</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">RISIKO</translation>
+        <translation>RISIKO</translation>
     </message>
     <message>
         <source>Annualized Volatility</source>
-        <translation type="unfinished">Volatilitas Disetahunkan</translation>
+        <translation>Volatilitas Disetahunkan</translation>
     </message>
     <message>
         <source>Max Drawdown</source>
-        <translation type="unfinished">Max Drawdown</translation>
+        <translation>Max Drawdown</translation>
     </message>
     <message>
         <source>VaR 95% (Daily)</source>
-        <translation type="unfinished">VaR 95% (Harian)</translation>
+        <translation>VaR 95% (Harian)</translation>
     </message>
     <message>
         <source>CVaR 95% (Daily)</source>
-        <translation type="unfinished">CVaR 95% (Harian)</translation>
+        <translation>CVaR 95% (Harian)</translation>
     </message>
     <message>
         <source>Downside Deviation</source>
-        <translation type="unfinished">Deviasi Sisi Bawah</translation>
+        <translation>Deviasi Sisi Bawah</translation>
     </message>
     <message>
         <source>RATIOS</source>
-        <translation type="unfinished">RASIO</translation>
+        <translation>RASIO</translation>
     </message>
     <message>
         <source>Sharpe Ratio</source>
-        <translation type="unfinished">Sharpe Ratio</translation>
+        <translation>Sharpe Ratio</translation>
     </message>
     <message>
         <source>Sortino Ratio</source>
-        <translation type="unfinished">Sortino Ratio</translation>
+        <translation>Sortino Ratio</translation>
     </message>
     <message>
         <source>Calmar Ratio</source>
-        <translation type="unfinished">Calmar Ratio</translation>
+        <translation>Calmar Ratio</translation>
     </message>
     <message>
         <source>Profit Factor</source>
-        <translation type="unfinished">Profit Factor</translation>
+        <translation>Profit Factor</translation>
     </message>
     <message>
         <source>DISTRIBUTION</source>
-        <translation type="unfinished">DISTRIBUSI</translation>
+        <translation>DISTRIBUSI</translation>
     </message>
     <message>
         <source>Skewness</source>
-        <translation type="unfinished">Skewness</translation>
+        <translation>Skewness</translation>
     </message>
     <message>
         <source>Kurtosis</source>
-        <translation type="unfinished">Kurtosis</translation>
+        <translation>Kurtosis</translation>
     </message>
     <message>
         <source>Win Rate</source>
-        <translation type="unfinished">Win Rate</translation>
+        <translation>Win Rate</translation>
     </message>
     <message>
         <source>Win Days</source>
-        <translation type="unfinished">Hari Menang</translation>
+        <translation>Hari Menang</translation>
     </message>
     <message>
         <source>Loss Days</source>
-        <translation type="unfinished">Hari Rugi</translation>
+        <translation>Hari Rugi</translation>
     </message>
     <message>
         <source>Avg Win</source>
-        <translation type="unfinished">Rata-rata Menang</translation>
+        <translation>Rata-rata Menang</translation>
     </message>
     <message>
         <source>Avg Loss</source>
-        <translation type="unfinished">Rata-rata Rugi</translation>
+        <translation>Rata-rata Rugi</translation>
     </message>
     <message>
         <source>Run QuantStats for full metrics →</source>
-        <translation type="unfinished">Jalankan QuantStats untuk metrik lengkap →</translation>
+        <translation>Jalankan QuantStats untuk metrik lengkap →</translation>
     </message>
     <message>
         <source>RETURN DISTRIBUTION</source>
-        <translation type="unfinished">DISTRIBUSI IMBAL HASIL</translation>
+        <translation>DISTRIBUSI IMBAL HASIL</translation>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">WIN RATE</translation>
+        <translation>WIN RATE</translation>
     </message>
     <message>
         <source>LOSS RATE</source>
-        <translation type="unfinished">LOSS RATE</translation>
+        <translation>LOSS RATE</translation>
     </message>
     <message>
         <source>WIN DAYS</source>
-        <translation type="unfinished">HARI MENANG</translation>
+        <translation>HARI MENANG</translation>
     </message>
     <message>
         <source>LOSS DAYS</source>
-        <translation type="unfinished">HARI RUGI</translation>
+        <translation>HARI RUGI</translation>
     </message>
     <message>
         <source>AVG WIN</source>
-        <translation type="unfinished">RATA-RATA MENANG</translation>
+        <translation>RATA-RATA MENANG</translation>
     </message>
     <message>
         <source>AVG LOSS</source>
-        <translation type="unfinished">RATA-RATA RUGI</translation>
+        <translation>RATA-RATA RUGI</translation>
     </message>
     <message>
         <source>SKEWNESS</source>
-        <translation type="unfinished">SKEWNESS</translation>
+        <translation>SKEWNESS</translation>
     </message>
     <message>
         <source>KURTOSIS</source>
-        <translation type="unfinished">KURTOSIS</translation>
+        <translation>KURTOSIS</translation>
     </message>
     <message>
         <source>DRAWDOWN &amp; RISK METRICS</source>
-        <translation type="unfinished">METRIK DRAWDOWN &amp; RISIKO</translation>
+        <translation>METRIK DRAWDOWN &amp; RISIKO</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">MAX DRAWDOWN</translation>
+        <translation>MAX DRAWDOWN</translation>
     </message>
     <message>
         <source>RISK METRIC</source>
-        <translation type="unfinished">METRIK RISIKO</translation>
+        <translation>METRIK RISIKO</translation>
     </message>
     <message>
         <source>RISK-ADJUSTED RATIOS &amp; WIN/LOSS BREAKDOWN</source>
-        <translation type="unfinished">RASIO DISESUAIKAN RISIKO &amp; RINCIAN MENANG/RUGI</translation>
+        <translation>RASIO DISESUAIKAN RISIKO &amp; RINCIAN MENANG/RUGI</translation>
     </message>
     <message>
         <source>RATIO</source>
-        <translation type="unfinished">RASIO</translation>
+        <translation>RASIO</translation>
     </message>
     <message>
         <source>WIN / LOSS BREAKDOWN</source>
-        <translation type="unfinished">RINCIAN MENANG / RUGI</translation>
+        <translation>RINCIAN MENANG / RUGI</translation>
     </message>
     <message>
         <source>Avg Win/Day</source>
-        <translation type="unfinished">Rata-rata Menang/Hari</translation>
+        <translation>Rata-rata Menang/Hari</translation>
     </message>
     <message>
         <source>Avg Loss/Day</source>
-        <translation type="unfinished">Rata-rata Rugi/Hari</translation>
+        <translation>Rata-rata Rugi/Hari</translation>
     </message>
     <message>
         <source>MEDIAN RETURN</source>
-        <translation type="unfinished">MEDIAN IMBAL HASIL</translation>
+        <translation>MEDIAN IMBAL HASIL</translation>
     </message>
     <message>
         <source>5TH PERCENTILE</source>
-        <translation type="unfinished">PERSENTIL KE-5</translation>
+        <translation>PERSENTIL KE-5</translation>
     </message>
     <message>
         <source>95TH PERCENTILE</source>
-        <translation type="unfinished">PERSENTIL KE-95</translation>
+        <translation>PERSENTIL KE-95</translation>
     </message>
     <message>
         <source>PROB OF LOSS</source>
-        <translation type="unfinished">PROBABILITAS RUGI</translation>
+        <translation>PROBABILITAS RUGI</translation>
     </message>
     <message>
         <source>EXP MAX DRAWDOWN</source>
-        <translation type="unfinished">MAX DRAWDOWN DIHARAPKAN</translation>
+        <translation>MAX DRAWDOWN DIHARAPKAN</translation>
     </message>
     <message>
         <source>Cumulative Return (%)</source>
-        <translation type="unfinished">Imbal Hasil Kumulatif (%)</translation>
+        <translation>Imbal Hasil Kumulatif (%)</translation>
     </message>
     <message>
         <source>Showing %1 of 1000 simulated paths over 252 trading days (GBM). Bright line = median path.</source>
-        <translation type="unfinished">Menampilkan %1 dari 1000 jalur simulasi selama 252 hari perdagangan (GBM). Garis terang = jalur median.</translation>
+        <translation>Menampilkan %1 dari 1000 jalur simulasi selama 252 hari perdagangan (GBM). Garis terang = jalur median.</translation>
     </message>
     <message>
         <source>Fetching 1-year price history...</source>
-        <translation type="unfinished">Mengambil riwayat harga 1 tahun...</translation>
+        <translation>Mengambil riwayat harga 1 tahun...</translation>
     </message>
     <message>
         <source>QuantStats: %1</source>
-        <translation type="unfinished">QuantStats: %1</translation>
+        <translation>QuantStats: %1</translation>
     </message>
     <message>
         <source>Complete</source>
-        <translation type="unfinished">Selesai</translation>
+        <translation>Selesai</translation>
     </message>
     <message>
         <source>Running 1000 simulation paths...</source>
-        <translation type="unfinished">Menjalankan 1000 jalur simulasi...</translation>
+        <translation>Menjalankan 1000 jalur simulasi...</translation>
     </message>
     <message>
         <source>Monte Carlo: %1</source>
-        <translation type="unfinished">Monte Carlo: %1</translation>
+        <translation>Monte Carlo: %1</translation>
     </message>
     <message>
         <source>Complete — %1 paths simulated</source>
-        <translation type="unfinished">Selesai — %1 jalur disimulasikan</translation>
+        <translation>Selesai — %1 jalur disimulasikan</translation>
     </message>
 </context>
 <context>
@@ -28657,7 +28669,7 @@ imbal hasil masa depan, drawdown, dan kekayaan akhir.</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">SIAP</translation>
+        <translation>SIAP</translation>
     </message>
     <message>
         <source>FINCEPT TERMINAL</source>
@@ -28713,11 +28725,11 @@ imbal hasil masa depan, drawdown, dan kekayaan akhir.</translation>
     </message>
     <message>
         <source>Complete</source>
-        <translation type="unfinished">Selesai</translation>
+        <translation>Selesai</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
     <message>
         <source>NODE</source>
@@ -28741,7 +28753,7 @@ imbal hasil masa depan, drawdown, dan kekayaan akhir.</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Harga</translation>
+        <translation>Harga</translation>
     </message>
     <message>
         <source>P/E</source>
@@ -28827,7 +28839,7 @@ imbal hasil masa depan, drawdown, dan kekayaan akhir.</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Simpan</translation>
+        <translation>Simpan</translation>
     </message>
     <message>
         <source>Export PDF</source>
@@ -29144,127 +29156,127 @@ imbal hasil masa depan, drawdown, dan kekayaan akhir.</translation>
     <name>fincept::screens::ReportsView</name>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">RINGKASAN</translation>
+        <translation>RINGKASAN</translation>
     </message>
     <message>
         <source>TRANSACTION HISTORY</source>
-        <translation type="unfinished">RIWAYAT TRANSAKSI</translation>
+        <translation>RIWAYAT TRANSAKSI</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">TANGGAL</translation>
+        <translation>TANGGAL</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">JENIS</translation>
+        <translation>JENIS</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>QTY</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">HARGA</translation>
+        <translation>HARGA</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>NOTES</source>
-        <translation type="unfinished">CATATAN</translation>
+        <translation>CATATAN</translation>
     </message>
     <message>
         <source>TRANSACTIONS</source>
-        <translation type="unfinished">TRANSAKSI</translation>
+        <translation>TRANSAKSI</translation>
     </message>
     <message>
         <source>PERFORMANCE ATTRIBUTION</source>
-        <translation type="unfinished">ATRIBUSI KINERJA</translation>
+        <translation>ATRIBUSI KINERJA</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">BOBOT</translation>
+        <translation>BOBOT</translation>
     </message>
     <message>
         <source>RETURN</source>
-        <translation type="unfinished">IMBAL HASIL</translation>
+        <translation>IMBAL HASIL</translation>
     </message>
     <message>
         <source>CONTRIBUTION</source>
-        <translation type="unfinished">KONTRIBUSI</translation>
+        <translation>KONTRIBUSI</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">STATUS</translation>
+        <translation>STATUS</translation>
     </message>
     <message>
         <source>ATTRIBUTION</source>
-        <translation type="unfinished">ATRIBUSI</translation>
+        <translation>ATRIBUSI</translation>
     </message>
     <message>
         <source>PORTFOLIO SUMMARY REPORT</source>
-        <translation type="unfinished">LAPORAN RINGKASAN PORTOFOLIO</translation>
+        <translation>LAPORAN RINGKASAN PORTOFOLIO</translation>
     </message>
     <message>
         <source>PORTFOLIO</source>
-        <translation type="unfinished">PORTOFOLIO</translation>
+        <translation>PORTOFOLIO</translation>
     </message>
     <message>
         <source>TOTAL VALUE</source>
-        <translation type="unfinished">TOTAL NILAI</translation>
+        <translation>TOTAL NILAI</translation>
     </message>
     <message>
         <source>COST BASIS</source>
-        <translation type="unfinished">DASAR BIAYA</translation>
+        <translation>DASAR BIAYA</translation>
     </message>
     <message>
         <source>UNREALIZED P&amp;L</source>
-        <translation type="unfinished">P&amp;L BELUM DIREALISASI</translation>
+        <translation>P&amp;L BELUM DIREALISASI</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">POSISI</translation>
+        <translation>POSISI</translation>
     </message>
     <message>
         <source>GAINERS</source>
-        <translation type="unfinished">PENGUATAN</translation>
+        <translation>PENGUATAN</translation>
     </message>
     <message>
         <source>LOSERS</source>
-        <translation type="unfinished">PELEMAHAN</translation>
+        <translation>PELEMAHAN</translation>
     </message>
     <message>
         <source>HOLDINGS BREAKDOWN</source>
-        <translation type="unfinished">RINCIAN KEPEMILIKAN</translation>
+        <translation>RINCIAN KEPEMILIKAN</translation>
     </message>
     <message>
         <source>AVG COST</source>
-        <translation type="unfinished">RATA-RATA BIAYA</translation>
+        <translation>RATA-RATA BIAYA</translation>
     </message>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">SAAT INI</translation>
+        <translation>SAAT INI</translation>
     </message>
     <message>
         <source>OUTPERFORM</source>
-        <translation type="unfinished">MENGUNGGULI</translation>
+        <translation>MENGUNGGULI</translation>
     </message>
     <message>
         <source>UNDERPERFORM</source>
-        <translation type="unfinished">TERTINGGAL</translation>
+        <translation>TERTINGGAL</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NETRAL</translation>
+        <translation>NETRAL</translation>
     </message>
 </context>
 <context>
@@ -29342,135 +29354,135 @@ imbal hasil masa depan, drawdown, dan kekayaan akhir.</translation>
     </message>
     <message>
         <source>RISK OVERVIEW</source>
-        <translation type="unfinished">IKHTISAR RISIKO</translation>
+        <translation>IKHTISAR RISIKO</translation>
     </message>
     <message>
         <source>PORTFOLIO STRESS TESTING</source>
-        <translation type="unfinished">STRESS TESTING PORTOFOLIO</translation>
+        <translation>STRESS TESTING PORTOFOLIO</translation>
     </message>
     <message>
         <source>Estimated impact of historical and hypothetical market scenarios</source>
-        <translation type="unfinished">Estimasi dampak skenario pasar historis dan hipotetis</translation>
+        <translation>Estimasi dampak skenario pasar historis dan hipotetis</translation>
     </message>
     <message>
         <source>SCENARIO</source>
-        <translation type="unfinished">SKENARIO</translation>
+        <translation>SKENARIO</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">DESKRIPSI</translation>
+        <translation>DESKRIPSI</translation>
     </message>
     <message>
         <source>EQUITY SHOCK</source>
-        <translation type="unfinished">GUNCANGAN EKUITAS</translation>
+        <translation>GUNCANGAN EKUITAS</translation>
     </message>
     <message>
         <source>PORTFOLIO IMPACT</source>
-        <translation type="unfinished">DAMPAK PORTOFOLIO</translation>
+        <translation>DAMPAK PORTOFOLIO</translation>
     </message>
     <message>
         <source>LOSS</source>
-        <translation type="unfinished">KERUGIAN</translation>
+        <translation>KERUGIAN</translation>
     </message>
     <message>
         <source>STRESS TEST</source>
-        <translation type="unfinished">STRESS TEST</translation>
+        <translation>STRESS TEST</translation>
     </message>
     <message>
         <source>RISK CONTRIBUTION BY HOLDING</source>
-        <translation type="unfinished">KONTRIBUSI RISIKO PER KEPEMILIKAN</translation>
+        <translation>KONTRIBUSI RISIKO PER KEPEMILIKAN</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">BOBOT</translation>
+        <translation>BOBOT</translation>
     </message>
     <message>
         <source>VOL PROXY</source>
-        <translation type="unfinished">VOL PROXY</translation>
+        <translation>VOL PROXY</translation>
     </message>
     <message>
         <source>RISK CONTRIB</source>
-        <translation type="unfinished">RISK CONTRIB</translation>
+        <translation>RISK CONTRIB</translation>
     </message>
     <message>
         <source>VAR CONTRIB</source>
-        <translation type="unfinished">VAR CONTRIB</translation>
+        <translation>VAR CONTRIB</translation>
     </message>
     <message>
         <source>CONCENTRATION</source>
-        <translation type="unfinished">KONSENTRASI</translation>
+        <translation>KONSENTRASI</translation>
     </message>
     <message>
         <source>RISK CONTRIBUTION</source>
-        <translation type="unfinished">KONTRIBUSI RISIKO</translation>
+        <translation>KONTRIBUSI RISIKO</translation>
     </message>
     <message>
         <source>PORTFOLIO RISK OVERVIEW</source>
-        <translation type="unfinished">IKHTISAR RISIKO PORTOFOLIO</translation>
+        <translation>IKHTISAR RISIKO PORTOFOLIO</translation>
     </message>
     <message>
         <source>PORTFOLIO VALUE</source>
-        <translation type="unfinished">NILAI PORTOFOLIO</translation>
+        <translation>NILAI PORTOFOLIO</translation>
     </message>
     <message>
         <source>Total market value</source>
-        <translation type="unfinished">Total nilai pasar</translation>
+        <translation>Total nilai pasar</translation>
     </message>
     <message>
         <source>ANNUALIZED VOLATILITY</source>
-        <translation type="unfinished">VOLATILITAS DISETAHUNKAN</translation>
+        <translation>VOLATILITAS DISETAHUNKAN</translation>
     </message>
     <message>
         <source>Based on day-change proxy</source>
-        <translation type="unfinished">Berdasarkan proksi perubahan harian</translation>
+        <translation>Berdasarkan proksi perubahan harian</translation>
     </message>
     <message>
         <source>VALUE AT RISK (95%)</source>
-        <translation type="unfinished">VALUE AT RISK (95%)</translation>
+        <translation>VALUE AT RISK (95%)</translation>
     </message>
     <message>
         <source>1-day parametric</source>
-        <translation type="unfinished">Parametrik 1 hari</translation>
+        <translation>Parametrik 1 hari</translation>
     </message>
     <message>
         <source>CONDITIONAL VaR</source>
-        <translation type="unfinished">VaR KONDISIONAL</translation>
+        <translation>VaR KONDISIONAL</translation>
     </message>
     <message>
         <source>Expected shortfall</source>
-        <translation type="unfinished">Expected shortfall</translation>
+        <translation>Expected shortfall</translation>
     </message>
     <message>
         <source>TOP HOLDING CONC.</source>
-        <translation type="unfinished">KONSENTRASI KEPEMILIKAN TERATAS</translation>
+        <translation>KONSENTRASI KEPEMILIKAN TERATAS</translation>
     </message>
     <message>
         <source>Largest position</source>
-        <translation type="unfinished">Posisi terbesar</translation>
+        <translation>Posisi terbesar</translation>
     </message>
     <message>
         <source>TOP 3 CONCENTRATION</source>
-        <translation type="unfinished">KONSENTRASI 3 TERATAS</translation>
+        <translation>KONSENTRASI 3 TERATAS</translation>
     </message>
     <message>
         <source>Sum of top 3</source>
-        <translation type="unfinished">Jumlah dari 3 teratas</translation>
+        <translation>Jumlah dari 3 teratas</translation>
     </message>
     <message>
         <source>TOP 5 CONCENTRATION</source>
-        <translation type="unfinished">KONSENTRASI 5 TERATAS</translation>
+        <translation>KONSENTRASI 5 TERATAS</translation>
     </message>
     <message>
         <source>Sum of top 5</source>
-        <translation type="unfinished">Jumlah dari 5 teratas</translation>
+        <translation>Jumlah dari 5 teratas</translation>
     </message>
     <message>
         <source>DIVERSIFICATION</source>
-        <translation type="unfinished">DIVERSIFIKASI</translation>
+        <translation>DIVERSIFIKASI</translation>
     </message>
     <message numerus="yes">
         <source>%n holdings</source>
@@ -29480,23 +29492,23 @@ imbal hasil masa depan, drawdown, dan kekayaan akhir.</translation>
     </message>
     <message>
         <source>Well diversified</source>
-        <translation type="unfinished">Terdiversifikasi dengan baik</translation>
+        <translation>Terdiversifikasi dengan baik</translation>
     </message>
     <message>
         <source>Consider adding more</source>
-        <translation type="unfinished">Pertimbangkan untuk menambah lagi</translation>
+        <translation>Pertimbangkan untuk menambah lagi</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">TERTINGGI</translation>
+        <translation>TINGGI</translation>
     </message>
     <message>
         <source>MEDIUM</source>
-        <translation type="unfinished">SEDANG</translation>
+        <translation>SEDANG</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">TERENDAH</translation>
+        <translation>RENDAH</translation>
     </message>
 </context>
 <context>
@@ -29559,11 +29571,11 @@ imbal hasil masa depan, drawdown, dan kekayaan akhir.</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Batal</translation>
+        <translation>Batal</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Simpan</translation>
+        <translation>Simpan</translation>
     </message>
     <message>
         <source>✗ Enter a valid URL first.</source>
@@ -29662,7 +29674,7 @@ Tetap simpan umpan ini?</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Jenis</translation>
+        <translation>Jenis</translation>
     </message>
     <message>
         <source>Source</source>
@@ -29885,7 +29897,7 @@ Tetap simpan umpan ini?</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>SIGNAL</source>
@@ -29925,7 +29937,7 @@ Tetap simpan umpan ini?</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NETRAL</translation>
+        <translation>NETRAL</translation>
     </message>
     <message>
         <source>Error [%1]: %2</source>
@@ -29948,11 +29960,11 @@ Tetap simpan umpan ini?</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">BATAL</translation>
+        <translation>BATAL</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">SIMPAN</translation>
+        <translation>SIMPAN</translation>
     </message>
 </context>
 <context>
@@ -30011,7 +30023,7 @@ Tetap simpan umpan ini?</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Batal</translation>
+        <translation>Batal</translation>
     </message>
     <message>
         <source>Locked out — try again in %1s</source>
@@ -30146,11 +30158,11 @@ Tetap simpan umpan ini?</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">BATAL</translation>
+        <translation>BATAL</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
 </context>
 <context>
@@ -30176,7 +30188,7 @@ Tetap simpan umpan ini?</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">SIMPAN</translation>
+        <translation>SIMPAN</translation>
     </message>
     <message>
         <source>CLEAR</source>
@@ -30528,7 +30540,7 @@ Tidak perlu API key — data melalui vector ID untuk keandalan</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>Cache Entries</source>
@@ -30548,7 +30560,7 @@ Tidak perlu API key — data melalui vector ID untuk keandalan</translation>
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">AKSI</translation>
+        <translation>AKSI</translation>
     </message>
     <message>
         <source>CLR</source>
@@ -30680,7 +30692,7 @@ Lanjutkan?</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
     <message>
         <source>OK — %1 row(s) affected</source>
@@ -30787,7 +30799,7 @@ Apakah Anda benar-benar yakin?</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Simpan</translation>
+        <translation>Simpan</translation>
     </message>
     <message>
         <source>Backtest</source>
@@ -30799,7 +30811,7 @@ Apakah Anda benar-benar yakin?</translation>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">BACKTEST</translation>
+        <translation>BACKTEST</translation>
     </message>
     <message>
         <source>Capital</source>
@@ -30914,7 +30926,7 @@ Apakah Anda benar-benar yakin?</translation>
     </message>
     <message>
         <source>Page %1 of %2</source>
-        <translation type="unfinished">Halaman %1 dari %2</translation>
+        <translation>Halaman %1 dari %2</translation>
     </message>
     <message>
         <source>NEXT ▶</source>
@@ -30926,7 +30938,7 @@ Apakah Anda benar-benar yakin?</translation>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">BACKTEST</translation>
+        <translation>BACKTEST</translation>
     </message>
     <message>
         <source>DEPLOY</source>
@@ -30934,7 +30946,7 @@ Apakah Anda benar-benar yakin?</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">HAPUS</translation>
+        <translation>HAPUS</translation>
     </message>
     <message>
         <source>Page %1 of %2  ·  %3 strategies</source>
@@ -30958,7 +30970,7 @@ Apakah Anda benar-benar yakin?</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Simbol</translation>
+        <translation>Simbol</translation>
     </message>
     <message>
         <source>Start</source>
@@ -31081,7 +31093,7 @@ Apakah Anda benar-benar yakin?</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Batal</translation>
+        <translation>Batal</translation>
     </message>
     <message>
         <source>Submit Ticket →</source>
@@ -31207,7 +31219,7 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">BUKA</translation>
+        <translation>BUKA</translation>
     </message>
     <message>
         <source>IN PROGRESS</source>
@@ -31219,7 +31231,7 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
     </message>
     <message>
         <source>CLOSED</source>
-        <translation type="unfinished">TUTUP</translation>
+        <translation>TUTUP</translation>
     </message>
     <message>
         <source>PENDING</source>
@@ -31227,7 +31239,7 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
     </message>
     <message>
         <source>Support</source>
-        <translation type="unfinished">Dukungan</translation>
+        <translation>Dukungan</translation>
     </message>
     <message>
         <source>Tickets</source>
@@ -31271,7 +31283,7 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
     </message>
     <message>
         <source>Total</source>
-        <translation type="unfinished">Total</translation>
+        <translation>Total</translation>
     </message>
     <message>
         <source>Done</source>
@@ -31310,11 +31322,11 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
     </message>
     <message>
         <source>AGENTS</source>
-        <translation type="unfinished">AGEN</translation>
+        <translation>AGEN</translation>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">ALAT</translation>
+        <translation>ALAT</translation>
     </message>
     <message>
         <source>LLMS</source>
@@ -31334,7 +31346,7 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
     </message>
     <message>
         <source>AVAILABLE TOOLS</source>
-        <translation type="unfinished">ALAT TERSEDIA</translation>
+        <translation>ALAT TERSEDIA</translation>
     </message>
     <message>
         <source>Loading tools...</source>
@@ -31401,11 +31413,11 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
     </message>
     <message>
         <source>FAILED</source>
-        <translation type="unfinished">GAGAL</translation>
+        <translation>GAGAL</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">KESALAHAN</translation>
+        <translation>KESALAHAN</translation>
     </message>
     <message>
         <source>Agents coordinate through a leader who delegates and synthesizes results.</source>
@@ -31445,7 +31457,7 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
     <message>
         <source>Default (Global)</source>
@@ -31476,23 +31488,23 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
     <name>fincept::screens::TemplatePicker</name>
     <message>
         <source>Choose Dashboard Template</source>
-        <translation type="unfinished">Pilih template dasbor</translation>
+        <translation>Pilih Template Dasbor</translation>
     </message>
     <message>
         <source>CHOOSE TEMPLATE</source>
-        <translation type="unfinished">PILIH TEMPLATE</translation>
+        <translation>PILIH TEMPLATE</translation>
     </message>
     <message>
         <source>Select a template to reset your dashboard. Current layout will be replaced.</source>
-        <translation type="unfinished">Pilih template untuk mengatur ulang dasbor Anda. Tata letak saat ini akan diganti.</translation>
+        <translation>Pilih template untuk mengatur ulang dasbor Anda. Tata letak saat ini akan diganti.</translation>
     </message>
     <message>
         <source>APPLY</source>
-        <translation type="unfinished">TERAPKAN</translation>
+        <translation>TERAPKAN</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">BATAL</translation>
+        <translation>BATAL</translation>
     </message>
 </context>
 <context>
@@ -31713,7 +31725,7 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">DESKRIPSI</translation>
+        <translation>DESKRIPSI</translation>
     </message>
     <message>
         <source>Click a tool to see details...</source>
@@ -31800,7 +31812,7 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
     </message>
     <message>
         <source>ANALYSIS TYPE</source>
-        <translation type="unfinished">JENIS ANALISIS</translation>
+        <translation>JENIS ANALISIS</translation>
     </message>
     <message>
         <source>Analyzes efficiency gains, consumer benefits, growth effects, and adjustment costs of international trade.</source>
@@ -32016,11 +32028,11 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
     </message>
     <message>
         <source>YES</source>
-        <translation type="unfinished">YA</translation>
+        <translation>YA</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">TIDAK</translation>
+        <translation>TIDAK</translation>
     </message>
     <message>
         <source>Metric</source>
@@ -32103,7 +32115,7 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">Pengaturan</translation>
+        <translation>Pengaturan</translation>
     </message>
     <message>
         <source>Export</source>
@@ -32111,7 +32123,7 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Catatan</translation>
+        <translation>Catatan</translation>
     </message>
 </context>
 <context>
@@ -32259,7 +32271,7 @@ Dapatkan kunci di: tradingeconomics.com/api</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">NEGARA</translation>
+        <translation>NEGARA</translation>
     </message>
     <message>
         <source>Fetching Trading Economics: %1…</source>
@@ -32331,7 +32343,7 @@ Dapatkan kunci di: tradingeconomics.com/api</translation>
     <name>fincept::screens::UnescoPanel</name>
     <message>
         <source>THEME</source>
-        <translation type="unfinished">TEMA</translation>
+        <translation>TEMA</translation>
     </message>
     <message>
         <source>Education</source>
@@ -32371,7 +32383,7 @@ Gunakan kode negara ISO 3 huruf: USA, GBR, IND, CHN, BRA, DEU</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">NEGARA</translation>
+        <translation>NEGARA</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -32580,7 +32592,7 @@ Coba kode negara lain atau periksa apakah indikator tersedia</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Simpan</translation>
+        <translation>Simpan</translation>
     </message>
     <message>
         <source>Test Deepgram key</source>
@@ -32794,7 +32806,7 @@ Coba kode negara lain atau periksa apakah indikator tersedia</translation>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">BACKTEST</translation>
+        <translation>BACKTEST</translation>
     </message>
 </context>
 <context>
@@ -32805,7 +32817,7 @@ Coba kode negara lain atau periksa apakah indikator tersedia</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Pasar</translation>
+        <translation>Pasar</translation>
     </message>
     <message>
         <source>Major global indices — SPY, QQQ, DIA, IWM</source>
@@ -32897,11 +32909,11 @@ Coba kode negara lain atau periksa apakah indikator tersedia</translation>
     </message>
     <message>
         <source>Watchlist</source>
-        <translation type="unfinished">Daftar Pantauan</translation>
+        <translation>Daftar Pantauan</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portofolio</translation>
+        <translation>Portofolio</translation>
     </message>
     <message>
         <source>Your saved symbols with live prices</source>
@@ -32989,7 +33001,7 @@ Coba kode negara lain atau periksa apakah indikator tersedia</translation>
     </message>
     <message>
         <source>Tools</source>
-        <translation type="unfinished">Alat</translation>
+        <translation>Alat</translation>
     </message>
     <message>
         <source>Financial TV — major networks and custom streams</source>
@@ -33073,7 +33085,7 @@ Coba kode negara lain atau periksa apakah indikator tersedia</translation>
     </message>
     <message>
         <source>Geopolitics</source>
-        <translation type="unfinished">Geopolitik</translation>
+        <translation>Geopolitik</translation>
     </message>
     <message>
         <source>Live conflict / political events — subscribes to geopolitics:events</source>
@@ -33089,7 +33101,7 @@ Coba kode negara lain atau periksa apakah indikator tersedia</translation>
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Catatan</translation>
+        <translation>Catatan</translation>
     </message>
     <message>
         <source>Recent / favorite financial notes — click to open Notes screen</source>
@@ -33124,15 +33136,15 @@ Coba kode negara lain atau periksa apakah indikator tersedia</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>QUERY</source>
-        <translation type="unfinished">KUERI</translation>
+        <translation>KUERI</translation>
     </message>
     <message>
         <source>OUTPUT</source>
-        <translation type="unfinished">KELUARAN</translation>
+        <translation>KELUARAN</translation>
     </message>
     <message>
         <source>EXECUTION LOG</source>
@@ -33140,19 +33152,19 @@ Coba kode negara lain atau periksa apakah indikator tersedia</translation>
     </message>
     <message>
         <source>RESULT</source>
-        <translation type="unfinished">HASIL</translation>
+        <translation>HASIL</translation>
     </message>
     <message>
         <source>FAILED</source>
-        <translation type="unfinished">GAGAL</translation>
+        <translation>GAGAL</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">KESALAHAN</translation>
+        <translation>KESALAHAN</translation>
     </message>
     <message>
         <source>Select a workflow to configure and run.</source>
@@ -33225,7 +33237,7 @@ Sumber: World Bank — indikator Kesehatan &amp; Pembangunan</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">NEGARA</translation>
+        <translation>NEGARA</translation>
     </message>
     <message>
         <source>Fetching WB Health: %1 — %2…</source>
@@ -33240,7 +33252,7 @@ Sumber: World Bank — indikator Kesehatan &amp; Pembangunan</translation>
     <name>fincept::screens::WorldBankPanel</name>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">NEGARA</translation>
+        <translation>NEGARA</translation>
     </message>
     <message>
         <source>Filter countries…</source>
@@ -33498,7 +33510,7 @@ Ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>APPLY</source>
-        <translation type="unfinished">TERAPKAN</translation>
+        <translation>TERAPKAN</translation>
     </message>
     <message>
         <source>New competition</source>
@@ -33558,7 +33570,7 @@ Ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>CREATE</source>
-        <translation type="unfinished">BUAT</translation>
+        <translation>BUAT</translation>
     </message>
     <message>
         <source>START</source>
@@ -33570,7 +33582,7 @@ Ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">POSISI</translation>
+        <translation>POSISI</translation>
     </message>
     <message>
         <source>HITL</source>
@@ -33578,7 +33590,7 @@ Ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">RISIKO</translation>
+        <translation>RISIKO</translation>
     </message>
     <message>
         <source>AUDIT</source>
@@ -33593,7 +33605,7 @@ Ini tidak dapat dibatalkan.</translation>
     <name>fincept::screens::alpha_arena::AuditPanel</name>
     <message>
         <source>AUDIT LOG</source>
-        <translation type="unfinished">LOG AUDIT</translation>
+        <translation>LOG AUDIT</translation>
     </message>
 </context>
 <context>
@@ -33631,11 +33643,11 @@ Ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>RETURN</source>
-        <translation type="unfinished">IMBAL HASIL</translation>
+        <translation>IMBAL HASIL</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">SHARPE</translation>
+        <translation>SHARPE</translation>
     </message>
     <message>
         <source>MAX DD</source>
@@ -33678,7 +33690,7 @@ Ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Batal</translation>
+        <translation>Batal</translation>
     </message>
     <message>
         <source>ENABLE LIVE MODE</source>
@@ -33713,7 +33725,7 @@ Ini tidak dapat dibatalkan.</translation>
     <name>fincept::screens::alpha_arena::ModelChatPanel</name>
     <message>
         <source>AGENT</source>
-        <translation type="unfinished">AGENT</translation>
+        <translation>AGENT</translation>
     </message>
     <message>
         <source>Tick %1 — %2</source>
@@ -33752,7 +33764,7 @@ Kesalahan penguraian: %3</translation>
     </message>
     <message>
         <source>AGENT</source>
-        <translation type="unfinished">AGENT</translation>
+        <translation>AGENT</translation>
     </message>
     <message>
         <source>COIN</source>
@@ -33760,7 +33772,7 @@ Kesalahan penguraian: %3</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>QTY</translation>
     </message>
     <message>
         <source>ENTRY</source>
@@ -33795,7 +33807,7 @@ Kesalahan penguraian: %3</translation>
     </message>
     <message>
         <source>AGENT</source>
-        <translation type="unfinished">AGENT</translation>
+        <translation>AGENT</translation>
     </message>
     <message>
         <source>STATE</source>
@@ -33830,7 +33842,7 @@ Kesalahan penguraian: %3</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">POSISI</translation>
+        <translation>POSISI</translation>
     </message>
     <message>
         <source>ORDERS</source>
@@ -33858,7 +33870,7 @@ Kesalahan penguraian: %3</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Simbol</translation>
+        <translation>Simbol</translation>
     </message>
     <message>
         <source>Side</source>
@@ -33866,7 +33878,7 @@ Kesalahan penguraian: %3</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Qty</translation>
     </message>
     <message>
         <source>Entry</source>
@@ -33878,7 +33890,7 @@ Kesalahan penguraian: %3</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>Lev</source>
@@ -33886,11 +33898,11 @@ Kesalahan penguraian: %3</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Jenis</translation>
+        <translation>Jenis</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Harga</translation>
+        <translation>Harga</translation>
     </message>
     <message>
         <source>Status</source>
@@ -33984,7 +33996,7 @@ Hubungkan kunci API dalam mode LANGSUNG untuk mengisinya.</translation>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">WIN RATE</translation>
+        <translation>WIN RATE</translation>
     </message>
     <message>
         <source>TOTAL TRADES</source>
@@ -34052,7 +34064,7 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     </message>
     <message>
         <source>API KEY</source>
-        <translation type="unfinished">KUNCI API</translation>
+        <translation>KUNCI API</translation>
     </message>
     <message>
         <source>Enter API key</source>
@@ -34114,6 +34126,26 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
         <source>CODE: %1</source>
         <translation>KODE: %1</translation>
     </message>
+    <message>
+        <source>Enter private key</source>
+        <translation>Masukkan private key</translation>
+    </message>
+    <message>
+        <source>Enter wallet address (0x…)</source>
+        <translation>Masukkan alamat wallet (0x…)</translation>
+    </message>
+    <message>
+        <source>PRIVATE KEY</source>
+        <translation>PRIVATE KEY</translation>
+    </message>
+    <message>
+        <source>WALLET ADDRESS</source>
+        <translation>ALAMAT WALLET</translation>
+    </message>
+    <message>
+        <source>Wallet address and private key are required</source>
+        <translation>Alamat wallet dan private key wajib diisi</translation>
+    </message>
 </context>
 <context>
     <name>fincept::screens::crypto::CryptoDepthChart</name>
@@ -34158,7 +34190,7 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>QTY</translation>
     </message>
     <message>
         <source>ASK</source>
@@ -34174,7 +34206,7 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">AKSI</translation>
+        <translation>AKSI</translation>
     </message>
     <message>
         <source>IMBALANCE</source>
@@ -34198,15 +34230,15 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NETRAL</translation>
+        <translation>NETRAL</translation>
     </message>
     <message>
         <source>BUY PRESSURE</source>
@@ -34221,7 +34253,7 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     <name>fincept::screens::crypto::CryptoOrderEntry</name>
     <message>
         <source>ORDER ENTRY</source>
-        <translation type="unfinished">MASUKAN ORDER</translation>
+        <translation>ENTRI ORDER</translation>
     </message>
     <message>
         <source>PAPER</source>
@@ -34241,11 +34273,11 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>MARKET</source>
@@ -34285,7 +34317,7 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>YOU RECEIVE</source>
@@ -34391,11 +34423,11 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Simbol</translation>
+        <translation>Simbol</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Harga</translation>
+        <translation>Harga</translation>
     </message>
     <message>
         <source>%</source>
@@ -34406,7 +34438,7 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     <name>fincept::screens::datasources::DataSourcesScreen</name>
     <message>
         <source>DATA SOURCES</source>
-        <translation type="unfinished">SUMBER DATA</translation>
+        <translation>SUMBER DATA</translation>
     </message>
     <message>
         <source>%1 CONNECTORS</source>
@@ -34418,7 +34450,7 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">IMPOR</translation>
+        <translation>IMPOR</translation>
     </message>
     <message>
         <source>EXPORT</source>
@@ -34438,7 +34470,7 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     </message>
     <message>
         <source>ACTIVE</source>
-        <translation type="unfinished">AKTIF</translation>
+        <translation>AKTIF</translation>
     </message>
     <message>
         <source>AUTH REQ</source>
@@ -34446,11 +34478,11 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     </message>
     <message>
         <source>BROWSE</source>
-        <translation type="unfinished">JELAJAHI</translation>
+        <translation>JELAJAHI</translation>
     </message>
     <message>
         <source>CONNECTIONS</source>
-        <translation type="unfinished">KONEKSI</translation>
+        <translation>KONEKSI</translation>
     </message>
     <message>
         <source>CATEGORY</source>
@@ -34474,11 +34506,11 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">JENIS</translation>
+        <translation>JENIS</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>INSPECTOR</source>
@@ -34526,7 +34558,7 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     </message>
     <message>
         <source>+ ADD</source>
-        <translation type="unfinished">+ TAMBAH</translation>
+        <translation>+ TAMBAH</translation>
     </message>
     <message>
         <source>filter connections...</source>
@@ -34546,7 +34578,7 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NAMA</translation>
+        <translation>NAMA</translation>
     </message>
     <message>
         <source>PROVIDER</source>
@@ -34554,7 +34586,7 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">STATUS</translation>
+        <translation>STATUS</translation>
     </message>
     <message>
         <source>TAGS</source>
@@ -34626,11 +34658,11 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">BUKA</translation>
+        <translation>BUKA</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">OK</translation>
+        <translation>OK</translation>
     </message>
     <message>
         <source>ERR</source>
@@ -34752,7 +34784,7 @@ Kunci disimpan secara lokal dalam penyimpanan aman terenkripsi.</translation>
     </message>
     <message>
         <source>+ ADD</source>
-        <translation type="unfinished">+ TAMBAH</translation>
+        <translation>+ TAMBAH</translation>
     </message>
     <message>
         <source>REMOVE</source>
@@ -34806,7 +34838,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Kesalahan: %1</translation>
+        <translation>Kesalahan: %1</translation>
     </message>
     <message>
         <source>Connected as %1</source>
@@ -34842,7 +34874,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>API KEY</source>
-        <translation type="unfinished">KUNCI API</translation>
+        <translation>KUNCI API</translation>
     </message>
     <message>
         <source>Enter API Key...</source>
@@ -34874,7 +34906,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>PASSWORD</source>
-        <translation type="unfinished">KATA SANDI</translation>
+        <translation>KATA SANDI</translation>
     </message>
     <message>
         <source>Zerodha login password</source>
@@ -35136,6 +35168,18 @@ Tindakan ini tidak dapat dibatalkan.</translation>
         <source>Connected</source>
         <translation>Terhubung</translation>
     </message>
+    <message>
+        <source>Auto — execute immediately</source>
+        <translation>Otomatis — eksekusi langsung</translation>
+    </message>
+    <message>
+        <source>Order Approval:</source>
+        <translation>Persetujuan Order:</translation>
+    </message>
+    <message>
+        <source>Semi-Auto — require approval</source>
+        <translation>Semi-Otomatis — perlu persetujuan</translation>
+    </message>
 </context>
 <context>
     <name>fincept::screens::equity::BroadcastOrderDialog</name>
@@ -35149,11 +35193,11 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>Select All</source>
@@ -35169,7 +35213,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">BATAL</translation>
+        <translation>BATAL</translation>
     </message>
     <message>
         <source>PLACE BUY</source>
@@ -35201,18 +35245,26 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>DONE</source>
-        <translation type="unfinished">SELESAI</translation>
+        <translation>SELESAI</translation>
+    </message>
+    <message>
+        <source>%1 order(s) queued for approval</source>
+        <translation>%1 order diantrekan untuk persetujuan</translation>
+    </message>
+    <message>
+        <source>Placing %1 order(s); %2 queued for approval...</source>
+        <translation>Menempatkan %1 order; %2 diantrekan untuk persetujuan...</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::equity::EquityBottomPanel</name>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">POSISI</translation>
+        <translation>POSISI</translation>
     </message>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">KEPEMILIKAN</translation>
+        <translation>KEPEMILIKAN</translation>
     </message>
     <message>
         <source>ORDERS</source>
@@ -35240,7 +35292,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Simbol</translation>
+        <translation>Simbol</translation>
     </message>
     <message>
         <source>Opened</source>
@@ -35252,7 +35304,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Qty</translation>
     </message>
     <message>
         <source>Avg Price</source>
@@ -35264,11 +35316,11 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">P&amp;L %</translation>
+        <translation>P&amp;L %</translation>
     </message>
     <message>
         <source>Invested</source>
@@ -35284,11 +35336,11 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Jenis</translation>
+        <translation>Jenis</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Harga</translation>
+        <translation>Harga</translation>
     </message>
     <message>
         <source>Status</source>
@@ -35304,7 +35356,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Tanggal</translation>
+        <translation>Tanggal</translation>
     </message>
     <message>
         <source>Size</source>
@@ -35356,7 +35408,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">SAAT INI</translation>
+        <translation>SAAT INI</translation>
     </message>
     <message>
         <source>TOTAL P&amp;L</source>
@@ -35388,7 +35440,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>Win Rate</source>
-        <translation type="unfinished">Win Rate</translation>
+        <translation>Win Rate</translation>
     </message>
     <message>
         <source>Total Trades</source>
@@ -35440,7 +35492,7 @@ Anda yakin?</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>QTY</translation>
     </message>
     <message>
         <source>LIMIT PRICE</source>
@@ -35452,11 +35504,11 @@ Anda yakin?</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">BATAL</translation>
+        <translation>BATAL</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">BUKA</translation>
+        <translation>BUKA</translation>
     </message>
     <message>
         <source>CLOSE</source>
@@ -35510,11 +35562,11 @@ Anda yakin?</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">HARGA</translation>
+        <translation>HARGA</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>QTY</translation>
     </message>
     <message>
         <source>ORDERS</source>
@@ -35525,7 +35577,7 @@ Anda yakin?</translation>
     <name>fincept::screens::equity::EquityOrderEntry</name>
     <message>
         <source>ORDER ENTRY</source>
-        <translation type="unfinished">MASUKAN ORDER</translation>
+        <translation>ENTRI ORDER</translation>
     </message>
     <message>
         <source>PAPER</source>
@@ -35533,11 +35585,11 @@ Anda yakin?</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>MKT</source>
@@ -35581,11 +35633,11 @@ Anda yakin?</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>QTY</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">HARGA</translation>
+        <translation>HARGA</translation>
     </message>
     <message>
         <source>Limit price</source>
@@ -35625,7 +35677,7 @@ Anda yakin?</translation>
     </message>
     <message>
         <source>STRATEGY</source>
-        <translation type="unfinished">STRATEGI</translation>
+        <translation>STRATEGI</translation>
     </message>
     <message>
         <source>None</source>
@@ -35764,7 +35816,7 @@ Anda yakin?</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>LTP</source>
@@ -35772,7 +35824,7 @@ Anda yakin?</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
     </message>
 </context>
 <context>
@@ -35822,7 +35874,7 @@ Anda yakin?</translation>
     <name>fincept::screens::fno::BuilderSubTab</name>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">SIMPAN</translation>
+        <translation>SIMPAN</translation>
     </message>
     <message>
         <source>LOAD</source>
@@ -36017,7 +36069,7 @@ Anda yakin?</translation>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Tanggal</translation>
+        <translation>Tanggal</translation>
     </message>
     <message>
         <source>FII Buy</source>
@@ -36197,11 +36249,11 @@ Anda yakin?</translation>
     <name>fincept::screens::fno::LegEditorModel</name>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>On</source>
@@ -36213,7 +36265,7 @@ Anda yakin?</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Jenis</translation>
+        <translation>Jenis</translation>
     </message>
     <message>
         <source>Strike</source>
@@ -36241,7 +36293,7 @@ Anda yakin?</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
 </context>
 <context>
@@ -36270,7 +36322,7 @@ Anda yakin?</translation>
     <name>fincept::screens::fno::MultiStraddleSubTab</name>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Jenis</translation>
+        <translation>Jenis</translation>
     </message>
     <message>
         <source>Anchor</source>
@@ -36278,7 +36330,7 @@ Anda yakin?</translation>
     </message>
     <message>
         <source>ADD</source>
-        <translation type="unfinished">TAMBAH</translation>
+        <translation>TAMBAH</translation>
     </message>
     <message>
         <source>Double-click an entry to remove it.</source>
@@ -36409,7 +36461,7 @@ Anda yakin?</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Simbol</translation>
+        <translation>Simbol</translation>
     </message>
     <message>
         <source>B/S</source>
@@ -36417,11 +36469,11 @@ Anda yakin?</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Qty</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Jenis</translation>
+        <translation>Jenis</translation>
     </message>
     <message>
         <source>Entry</source>
@@ -36445,7 +36497,7 @@ Anda yakin?</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">BATAL</translation>
+        <translation>BATAL</translation>
     </message>
     <message>
         <source>PLACE PAPER ORDERS</source>
@@ -36453,11 +36505,11 @@ Anda yakin?</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>Broker %1 not registered</source>
@@ -36628,7 +36680,7 @@ P/L Target: %3</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">BOBOT</translation>
+        <translation>BOBOT</translation>
     </message>
     <message>
         <source>YIELD (LIFETIME)</source>
@@ -36636,7 +36688,7 @@ P/L Target: %3</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>DEMO</source>
@@ -36805,7 +36857,7 @@ P/L Target: %3</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">HARGA</translation>
+        <translation>HARGA</translation>
     </message>
     <message>
         <source>USD VALUE</source>
@@ -36932,7 +36984,7 @@ P/L Target: %3</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">BOBOT</translation>
+        <translation>BOBOT</translation>
     </message>
     <message>
         <source>EST. YIELD</source>
@@ -36955,11 +37007,11 @@ P/L Target: %3</translation>
     </message>
     <message>
         <source>YES</source>
-        <translation type="unfinished">YA</translation>
+        <translation>YA</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">TIDAK</translation>
+        <translation>TIDAK</translation>
     </message>
     <message>
         <source>24h VOL</source>
@@ -36979,7 +37031,7 @@ P/L Target: %3</translation>
     </message>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">PASAR</translation>
+        <translation>PASAR</translation>
     </message>
     <message>
         <source>DEMO</source>
@@ -36987,7 +37039,7 @@ P/L Target: %3</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">KESALAHAN</translation>
+        <translation>KESALAHAN</translation>
     </message>
     <message>
         <source>● LIVE</source>
@@ -37234,7 +37286,7 @@ P/L Target: %3</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">JENIS</translation>
+        <translation>JENIS</translation>
     </message>
     <message>
         <source>SIDE</source>
@@ -37242,7 +37294,7 @@ P/L Target: %3</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">HARGA</translation>
+        <translation>HARGA</translation>
     </message>
     <message>
         <source>SIZE</source>
@@ -37253,7 +37305,7 @@ P/L Target: %3</translation>
     <name>fincept::screens::polymarket::PolymarketBrowsePanel</name>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">PASAR</translation>
+        <translation>PASAR</translation>
     </message>
     <message>
         <source>MARKETS  %1</source>
@@ -37265,7 +37317,7 @@ P/L Target: %3</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">MEMUAT...</translation>
+        <translation>MEMUAT...</translation>
     </message>
 </context>
 <context>
@@ -37288,7 +37340,7 @@ P/L Target: %3</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">VOLUME</translation>
+        <translation>VOLUME</translation>
     </message>
     <message>
         <source>LIQUIDITY</source>
@@ -37296,7 +37348,7 @@ P/L Target: %3</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">TANGGAL</translation>
+        <translation>TANGGAL</translation>
     </message>
     <message>
         <source>↻</source>
@@ -37343,7 +37395,7 @@ P/L Target: %3</translation>
     </message>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">IKHTISAR</translation>
+        <translation>IKHTISAR</translation>
     </message>
     <message>
         <source>ORDER BOOK</source>
@@ -37379,7 +37431,7 @@ P/L Target: %3</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">VOLUME</translation>
+        <translation>VOLUME</translation>
     </message>
     <message>
         <source>LIQUIDITY</source>
@@ -37425,11 +37477,11 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>OUTCOME</source>
@@ -37516,11 +37568,11 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>PNL</source>
-        <translation type="unfinished">PNL</translation>
+        <translation>PNL</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">VOLUME</translation>
+        <translation>VOLUME</translation>
     </message>
     <message>
         <source>TRADES</source>
@@ -37569,7 +37621,7 @@ untuk memasang order</translation>
     <name>fincept::screens::polymarket::PolymarketOrderBook</name>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">HARGA</translation>
+        <translation>HARGA</translation>
     </message>
     <message>
         <source>SIZE</source>
@@ -37577,7 +37629,7 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TOTAL</translation>
+        <translation>TOTAL</translation>
     </message>
     <message>
         <source>SPREAD %1</source>
@@ -37694,7 +37746,7 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Simpan</translation>
+        <translation>Simpan</translation>
     </message>
     <message>
         <source>Test Connection</source>
@@ -37860,19 +37912,19 @@ untuk memasang order</translation>
     <name>fincept::screens::widgets::BaseWidget</name>
     <message>
         <source>Configure widget</source>
-        <translation type="unfinished">Konfigurasi widget</translation>
+        <translation>Konfigurasi widget</translation>
     </message>
     <message>
         <source>Refresh widget data</source>
-        <translation type="unfinished">Muat ulang data widget</translation>
+        <translation>Muat ulang data widget</translation>
     </message>
     <message>
         <source>Close widget</source>
-        <translation type="unfinished">Tutup widget</translation>
+        <translation>Tutup widget</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">MEMUAT...</translation>
+        <translation>MEMUAT...</translation>
     </message>
     <message>
         <source>No data yet — click refresh to retry</source>
@@ -37883,15 +37935,15 @@ untuk memasang order</translation>
     <name>fincept::screens::widgets::BrokerHoldingsWidget</name>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">KEPEMILIKAN</translation>
+        <translation>KEPEMILIKAN</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Simbol</translation>
+        <translation>Simbol</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Qty</translation>
     </message>
     <message>
         <source>Avg</source>
@@ -37903,7 +37955,7 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">P&amp;L %</translation>
+        <translation>P&amp;L %</translation>
     </message>
     <message>
         <source>No active account — click gear to configure</source>
@@ -37964,7 +38016,7 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Simbol</translation>
+        <translation>Simbol</translation>
     </message>
 </context>
 <context>
@@ -37983,7 +38035,7 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">TANGGAL</translation>
+        <translation>TANGGAL</translation>
     </message>
     <message>
         <source>REF</source>
@@ -38023,7 +38075,7 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">TERTINGGI</translation>
+        <translation>TINGGI</translation>
     </message>
     <message>
         <source>MED</source>
@@ -38031,7 +38083,7 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">TERENDAH</translation>
+        <translation>RENDAH</translation>
     </message>
 </context>
 <context>
@@ -38108,7 +38160,7 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>Total</source>
-        <translation type="unfinished">Total</translation>
+        <translation>Total</translation>
     </message>
     <message>
         <source>Collateral</source>
@@ -38205,7 +38257,7 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">MEMUAT...</translation>
+        <translation>MEMUAT...</translation>
     </message>
     <message>
         <source>-- BULL</source>
@@ -38237,7 +38289,7 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">NETRAL</translation>
+        <translation>NETRAL</translation>
     </message>
     <message>
         <source>BEARISH</source>
@@ -38294,7 +38346,7 @@ untuk memasang order</translation>
     <name>fincept::screens::widgets::NotesWidget</name>
     <message>
         <source>NOTES</source>
-        <translation type="unfinished">CATATAN</translation>
+        <translation>CATATAN</translation>
     </message>
     <message>
         <source>NOTES — FAVORITES</source>
@@ -38349,11 +38401,11 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Simbol</translation>
+        <translation>Simbol</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Qty</translation>
     </message>
     <message>
         <source>Avg</source>
@@ -38365,7 +38417,7 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>No active account — click gear to configure</source>
@@ -38388,7 +38440,7 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Simbol</translation>
+        <translation>Simbol</translation>
     </message>
     <message>
         <source>Side</source>
@@ -38396,11 +38448,11 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Qty</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Harga</translation>
+        <translation>Harga</translation>
     </message>
     <message>
         <source>Status</source>
@@ -38475,7 +38527,7 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>TODAY</source>
-        <translation type="unfinished">HARI INI</translation>
+        <translation>HARI INI</translation>
     </message>
 </context>
 <context>
@@ -38498,7 +38550,7 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Pasar</translation>
+        <translation>Pasar</translation>
     </message>
 </context>
 <context>
@@ -38509,7 +38561,7 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>TOTAL VALUE</source>
-        <translation type="unfinished">TOTAL NILAI</translation>
+        <translation>TOTAL NILAI</translation>
     </message>
     <message>
         <source>DAY P&amp;L</source>
@@ -38521,7 +38573,7 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">KEPEMILIKAN</translation>
+        <translation>KEPEMILIKAN</translation>
     </message>
     <message>
         <source>SYM</source>
@@ -38533,15 +38585,15 @@ untuk memasang order</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">HARGA</translation>
+        <translation>HARGA</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">NILAI</translation>
+        <translation>NILAI</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>No portfolios yet.
@@ -38565,7 +38617,7 @@ Tambahkan posisi dari tab Portofolio.</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portofolio</translation>
+        <translation>Portofolio</translation>
     </message>
 </context>
 <context>
@@ -38592,11 +38644,11 @@ Tambahkan posisi dari tab Portofolio.</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>BUY</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>SELL</translation>
     </message>
     <message>
         <source>SHORT</source>
@@ -38616,11 +38668,11 @@ Tambahkan posisi dari tab Portofolio.</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>QTY</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">HARGA</translation>
+        <translation>HARGA</translation>
     </message>
     <message>
         <source>market</source>
@@ -38685,11 +38737,11 @@ Order dikirim ke mesin trading.</translation>
     <name>fincept::screens::widgets::QuoteTableWidget</name>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">HARGA</translation>
+        <translation>HARGA</translation>
     </message>
     <message>
         <source>CHG</source>
@@ -38697,7 +38749,23 @@ Order dikirim ke mesin trading.</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
+    </message>
+    <message>
+        <source>COMMODITIES</source>
+        <translation>KOMODITAS</translation>
+    </message>
+    <message>
+        <source>CRYPTOCURRENCY</source>
+        <translation>MATA UANG KRIPTO</translation>
+    </message>
+    <message>
+        <source>FOREX - MAJOR PAIRS</source>
+        <translation>FOREX - PASANGAN UTAMA</translation>
+    </message>
+    <message>
+        <source>GLOBAL INDICES</source>
+        <translation>INDEKS GLOBAL</translation>
     </message>
 </context>
 <context>
@@ -38759,7 +38827,7 @@ Order dikirim ke mesin trading.</translation>
     </message>
     <message>
         <source>EXTREME FEAR</source>
-        <translation type="unfinished">KETAKUTAN EKSTREM</translation>
+        <translation>KETAKUTAN EKSTREM</translation>
     </message>
 </context>
 <context>
@@ -38794,23 +38862,23 @@ Order dikirim ke mesin trading.</translation>
     </message>
     <message>
         <source>%1 symbols</source>
-        <translation type="unfinished">%1 simbol</translation>
+        <translation>%1 simbol</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">HARGA</translation>
+        <translation>HARGA</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">VOLUME</translation>
+        <translation>VOLUME</translation>
     </message>
     <message>
         <source>FILTER:</source>
@@ -38899,7 +38967,7 @@ Order dikirim ke mesin trading.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">BUKA</translation>
+        <translation>BUKA</translation>
     </message>
     <message>
         <source>PREV CLOSE</source>
@@ -38907,15 +38975,15 @@ Order dikirim ke mesin trading.</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">TERTINGGI</translation>
+        <translation>TERTINGGI</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">TERENDAH</translation>
+        <translation>TERENDAH</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">VOLUME</translation>
+        <translation>VOLUME</translation>
     </message>
 </context>
 <context>
@@ -38934,7 +39002,7 @@ Order dikirim ke mesin trading.</translation>
     </message>
     <message>
         <source>Positions</source>
-        <translation type="unfinished">Posisi</translation>
+        <translation>Posisi</translation>
     </message>
     <message>
         <source>No active account — click gear to configure</source>
@@ -38953,27 +39021,27 @@ Order dikirim ke mesin trading.</translation>
     <name>fincept::screens::widgets::TopMoversWidget</name>
     <message>
         <source>TOP MOVERS</source>
-        <translation type="unfinished">PERGERAKAN TERATAS</translation>
+        <translation>PERGERAKAN TERATAS</translation>
     </message>
     <message>
         <source>GAINERS</source>
-        <translation type="unfinished">PENGUATAN</translation>
+        <translation>PENGUATAN</translation>
     </message>
     <message>
         <source>LOSERS</source>
-        <translation type="unfinished">PELEMAHAN</translation>
+        <translation>PELEMAHAN</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">HARGA</translation>
+        <translation>HARGA</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
     </message>
 </context>
 <context>
@@ -38988,7 +39056,7 @@ Order dikirim ke mesin trading.</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Harga</translation>
+        <translation>Harga</translation>
     </message>
     <message>
         <source>Size</source>
@@ -39092,7 +39160,7 @@ Build dengan Qt6 Multimedia untuk pemutaran inline.</translation>
     </message>
     <message>
         <source>SYMBOLS:</source>
-        <translation type="unfinished">SIMBOL:</translation>
+        <translation>SIMBOL:</translation>
     </message>
     <message>
         <source>GO</source>
@@ -39100,11 +39168,11 @@ Build dengan Qt6 Multimedia untuk pemutaran inline.</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">SIMBOL</translation>
+        <translation>SIMBOL</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">HARGA</translation>
+        <translation>HARGA</translation>
     </message>
     <message>
         <source>CHG</source>
@@ -39112,7 +39180,7 @@ Build dengan Qt6 Multimedia untuk pemutaran inline.</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
     </message>
 </context>
 <context>
@@ -39255,7 +39323,7 @@ X-API-Key: xyz</translation>
     <name>fincept::surface::SurfaceAnalyticsScreen</name>
     <message>
         <source>IMPORT CSV</source>
-        <translation type="unfinished">IMPOR CSV</translation>
+        <translation>IMPOR CSV</translation>
     </message>
     <message>
         <source>REFRESH</source>
@@ -39402,7 +39470,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">METRIK</translation>
+        <translation>METRIK</translation>
     </message>
     <message>
         <source>count</source>
@@ -39453,7 +39521,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>EXPORT CSV</source>
-        <translation type="unfinished">EKSPOR CSV</translation>
+        <translation>EKSPOR CSV</translation>
     </message>
     <message>
         <source>LINEAGE</source>
@@ -39513,7 +39581,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Ekspor CSV</translation>
+        <translation>Ekspor CSV</translation>
     </message>
     <message>
         <source>CSV files (*.csv)</source>
@@ -39524,26 +39592,26 @@ X-API-Key: xyz</translation>
     <name>fincept::surface::SurfaceLineWidget</name>
     <message>
         <source>No data</source>
-        <translation type="unfinished">Tidak ada data</translation>
+        <translation>Tidak ada data</translation>
     </message>
 </context>
 <context>
     <name>fincept::ui::CommandBar</name>
     <message>
         <source>Dashboard</source>
-        <translation type="unfinished">Dasbor</translation>
+        <translation>Dasbor</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Pasar</translation>
+        <translation>Pasar</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">Berita</translation>
+        <translation>Berita</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Portofolio</translation>
+        <translation>Portofolio</translation>
     </message>
     <message>
         <source>Backtesting</source>
@@ -39551,35 +39619,35 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Watchlist</source>
-        <translation type="unfinished">Daftar Pantauan</translation>
+        <translation>Daftar Pantauan</translation>
     </message>
     <message>
         <source>Crypto Trading</source>
-        <translation type="unfinished">Trading Kripto</translation>
+        <translation>Trading Kripto</translation>
     </message>
     <message>
         <source>AI Chat</source>
-        <translation type="unfinished">Obrolan AI</translation>
+        <translation>Obrolan AI</translation>
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Catatan</translation>
+        <translation>Catatan</translation>
     </message>
     <message>
         <source>Profile</source>
-        <translation type="unfinished">Profil</translation>
+        <translation>Profil</translation>
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">Pengaturan</translation>
+        <translation>Pengaturan</translation>
     </message>
     <message>
         <source>Forum</source>
-        <translation type="unfinished">Forum</translation>
+        <translation>Forum</translation>
     </message>
     <message>
         <source>Equity Trading</source>
-        <translation type="unfinished">Trading Saham</translation>
+        <translation>Trading Saham</translation>
     </message>
     <message>
         <source>Algo Trading</source>
@@ -39627,7 +39695,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Economics</source>
-        <translation type="unfinished">Ekonomi</translation>
+        <translation>Ekonomi</translation>
     </message>
     <message>
         <source>GOVT Data</source>
@@ -39647,7 +39715,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Geopolitics</source>
-        <translation type="unfinished">Geopolitik</translation>
+        <translation>Geopolitik</translation>
     </message>
     <message>
         <source>Maritime</source>
@@ -39671,7 +39739,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">Server MCP</translation>
+        <translation>Server MCP</translation>
     </message>
     <message>
         <source>Node Editor</source>
@@ -39691,7 +39759,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Data Sources</source>
-        <translation type="unfinished">Sumber Data</translation>
+        <translation>Sumber Data</translation>
     </message>
     <message>
         <source>Data Mapping</source>
@@ -39703,11 +39771,11 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>About</source>
-        <translation type="unfinished">Tentang</translation>
+        <translation>Tentang</translation>
     </message>
     <message>
         <source>Support</source>
-        <translation type="unfinished">Dukungan</translation>
+        <translation>Dukungan</translation>
     </message>
     <message>
         <source>Stock</source>
@@ -39751,7 +39819,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Crypto</source>
-        <translation type="unfinished">Kripto</translation>
+        <translation>Kripto</translation>
     </message>
     <message>
         <source>Search cryptocurrencies</source>
@@ -39813,7 +39881,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Semua</translation>
+        <translation>Semua</translation>
     </message>
     <message numerus="yes">
         <source>%n component(s)</source>
@@ -39886,11 +39954,11 @@ X-API-Key: xyz</translation>
     <name>fincept::ui::NavigationBar</name>
     <message>
         <source> LIVE</source>
-        <translation type="unfinished"> LANGSUNG</translation>
+        <translation> LANGSUNG</translation>
     </message>
     <message>
         <source>LOGOUT</source>
-        <translation type="unfinished">KELUAR</translation>
+        <translation>KELUAR</translation>
     </message>
 </context>
 <context>
@@ -39945,19 +40013,19 @@ X-API-Key: xyz</translation>
     <name>fincept::ui::StatusBadge</name>
     <message>
         <source>CONNECTED</source>
-        <translation type="unfinished">TERHUBUNG</translation>
+        <translation>TERHUBUNG</translation>
     </message>
     <message>
         <source>OFFLINE</source>
-        <translation type="unfinished">LURING</translation>
+        <translation>LURING</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">MEMUAT...</translation>
+        <translation>MEMUAT...</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">SIAP</translation>
+        <translation>SIAP</translation>
     </message>
 </context>
 <context>
@@ -40123,7 +40191,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>CHAT</source>
-        <translation type="unfinished">OBROLAN</translation>
+        <translation>OBROLAN</translation>
     </message>
     <message>
         <source>Switch to Chat Mode (F9)</source>
@@ -40207,7 +40275,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">Server MCP</translation>
+        <translation>Server MCP</translation>
     </message>
     <message>
         <source>Data Mapping</source>
@@ -40215,7 +40283,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Data Sources</source>
-        <translation type="unfinished">Sumber Data</translation>
+        <translation>Sumber Data</translation>
     </message>
     <message>
         <source>Report Builder</source>
@@ -40362,11 +40430,11 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>TOTAL RETURN</source>
-        <translation type="unfinished">TOTAL IMBAL HASIL</translation>
+        <translation>TOTAL IMBAL HASIL</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">SHARPE</translation>
+        <translation>SHARPE</translation>
     </message>
     <message>
         <source>SORTINO</source>
@@ -40374,7 +40442,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">MAX DRAWDOWN</translation>
+        <translation>MAX DRAWDOWN</translation>
     </message>
     <message>
         <source>CALMAR</source>
@@ -40382,7 +40450,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">WIN RATE</translation>
+        <translation>WIN RATE</translation>
     </message>
     <message>
         <source>PROFIT FACTOR</source>
@@ -40442,15 +40510,15 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>Qty</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">P&amp;L %</translation>
+        <translation>P&amp;L %</translation>
     </message>
     <message>
         <source>Bars</source>
@@ -40673,7 +40741,7 @@ X-API-Key: xyz</translation>
     <name>fincept::ui::algo::RiskManagementPanel</name>
     <message>
         <source>RISK MANAGEMENT</source>
-        <translation type="unfinished">MANAJEMEN RISIKO</translation>
+        <translation>MANAJEMEN RISIKO</translation>
     </message>
     <message>
         <source>Stop Loss %</source>
@@ -40724,7 +40792,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Batal</translation>
+        <translation>Batal</translation>
     </message>
     <message>
         <source>cancelled by user</source>
@@ -40771,7 +40839,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Batal</translation>
+        <translation>Batal</translation>
     </message>
     <message>
         <source>Browser opened. Approve the transaction in your wallet. The terminal is waiting on a single-use loopback bridge — this dialog will close automatically when the wallet returns the signature.</source>
@@ -40794,7 +40862,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">DESKRIPSI</translation>
+        <translation>DESKRIPSI</translation>
     </message>
     <message>
         <source>Describe what this workflow does...</source>
@@ -40802,7 +40870,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">BATAL</translation>
+        <translation>BATAL</translation>
     </message>
     <message>
         <source>SAVE DRAFT</source>
@@ -40840,7 +40908,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>COPY</source>
-        <translation type="unfinished">SALIN</translation>
+        <translation>SALIN</translation>
     </message>
     <message>
         <source>Copy all results to clipboard</source>
@@ -41033,7 +41101,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">SIMPAN</translation>
+        <translation>SIMPAN</translation>
     </message>
     <message>
         <source>Save workflow to database</source>
@@ -41053,7 +41121,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">IMPOR</translation>
+        <translation>IMPOR</translation>
     </message>
     <message>
         <source>EXPORT</source>
@@ -41120,7 +41188,7 @@ untuk mengedit properti</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">NAMA</translation>
+        <translation>NAMA</translation>
     </message>
     <message>
         <source>PARAMETERS</source>
@@ -41128,7 +41196,7 @@ untuk mengedit properti</translation>
     </message>
     <message>
         <source>SETTINGS</source>
-        <translation type="unfinished">PENGATURAN</translation>
+        <translation>PENGATURAN</translation>
     </message>
     <message>
         <source>Disabled</source>
@@ -41137,6 +41205,46 @@ untuk mengedit properti</translation>
     <message>
         <source>Continue on Fail</source>
         <translation>Lanjutkan saat Gagal</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::screens::OrderConfirmDialog</name>
+    <message>
+        <source>Confirm Order</source>
+        <translation>Konfirmasi Order</translation>
+    </message>
+    <message>
+        <source>Est. value</source>
+        <translation>Est. nilai</translation>
+    </message>
+    <message>
+        <source>Send Order</source>
+        <translation>Kirim Order</translation>
+    </message>
+    <message>
+        <source>⚠  SEMI-AUTO — review before sending</source>
+        <translation>⚠  SEMI-OTOMATIS — tinjau sebelum mengirim</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::screens::PendingOrdersBadge</name>
+    <message>
+        <source>Orders awaiting approval — click to review</source>
+        <translation>Order menunggu persetujuan — klik untuk meninjau</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::screens::PendingOrdersPanel</name>
+    <message>
+        <source>PENDING ORDERS</source>
+        <translation>ORDER TERTUNDA</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::ui::PhoneCodeComboBox</name>
+    <message>
+        <source>Search country…</source>
+        <translation>Cari negara…</translation>
     </message>
 </context>
 </TS>

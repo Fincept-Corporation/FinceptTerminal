@@ -10,6 +10,9 @@ fincept-qt/build/
 fincept-qt/build-*/
 fincept-qt/build_*/
 fincept-qt/tmpqt/
+# clangd (.clangd → CompilationDatabase: .) expects compile_commands.json at the
+# fincept-qt root; it's a local symlink into the active build dir (a build artifact).
+fincept-qt/compile_commands.json
 tmpqt/
 CMakeCache.txt
 CMakeFiles/

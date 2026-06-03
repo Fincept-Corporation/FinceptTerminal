@@ -67,6 +67,7 @@ class ExchangeService : public QObject {
     /// back to an already-warm exchange.
     bool is_ws_active() const;
     void set_ws_primary_symbol(const QString& symbol);
+    void set_ws_timeframe(const QString& timeframe);
     QString get_ws_primary_symbol() const;
 
     // One-shot data fetches — delegated to current session (synchronous; worker thread only).

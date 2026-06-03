@@ -15,12 +15,13 @@
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "screens/equity_trading/EquityBottomPanel.h"
-#include "screens/equity_trading/EquityChart.h"
+#include "screens/equity_trading/EquityChartPanel.h"
 #include "screens/equity_trading/EquityOrderBook.h"
 #include "screens/equity_trading/EquityOrderEntry.h"
 #include "screens/equity_trading/EquityTickerBar.h"
 #include "screens/equity_trading/EquityWatchlist.h"
 #include "trading/AccountManager.h"
+#include "trading/BrokerRegistry.h"
 #include "trading/BrokerTopic.h"
 #include "trading/DataStreamManager.h"
 #include "trading/OrderMatcher.h"
@@ -55,39 +56,54 @@ void EquityTradingScreen::hub_subscribe_streaming() {
 
     const QString aid = focused_account_id_;
 
-    // ── Positions ──
-    hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("positions")),
-                  [this](const QVariant& v) {
-                      if (!v.canConvert<QVector<BrokerPosition>>())
-                          return;
-                      bottom_panel_->set_positions(v.value<QVector<BrokerPosition>>());
-                  });
+    // Paper accounts must NOT show live broker positions/holdings/orders/balance —
+    // that data comes from the paper engine (pt_* / OrderMatcher). Only live mode
+    // subscribes to the live broker portfolio topics. Quotes flow in both modes.
+    const bool is_paper =
+        AccountManager::instance().get_account(aid).trading_mode == QLatin1String("paper");
 
-    // ── Holdings ──
-    hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("holdings")),
-                  [this](const QVariant& v) {
-                      if (!v.canConvert<QVector<BrokerHolding>>())
-                          return;
-                      bottom_panel_->set_holdings(v.value<QVector<BrokerHolding>>());
-                  });
+    if (!is_paper) {
+        // ── Positions ──
+        hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("positions")),
+                      [this](const QVariant& v) {
+                          if (!v.canConvert<QVector<BrokerPosition>>())
+                              return;
+                          const auto positions = v.value<QVector<BrokerPosition>>();
+                          bottom_panel_->set_positions(positions);
+                          live_positions_ = positions; // cache for the chart overlay
+                          QStringList ps;
+                          for (const auto& p : positions)
+                              ps << p.symbol;
+                          update_position_symbols(ps); // give held symbols live WS prices
+                          update_chart_position();     // refresh on-chart position card
+                      });
 
-    // ── Orders ──
-    hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("orders")),
-                  [this](const QVariant& v) {
-                      if (!v.canConvert<QVector<BrokerOrderInfo>>())
-                          return;
-                      bottom_panel_->set_orders(v.value<QVector<BrokerOrderInfo>>());
-                  });
+        // ── Holdings ──
+        hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("holdings")),
+                      [this](const QVariant& v) {
+                          if (!v.canConvert<QVector<BrokerHolding>>())
+                              return;
+                          bottom_panel_->set_holdings(v.value<QVector<BrokerHolding>>());
+                      });
 
-    // ── Balance / Funds ──
-    hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("balance")),
-                  [this](const QVariant& v) {
-                      if (!v.canConvert<BrokerFunds>())
-                          return;
-                      const auto funds = v.value<BrokerFunds>();
-                      bottom_panel_->set_funds(funds);
-                      order_entry_->set_balance(funds.available_balance);
-                  });
+        // ── Orders ──
+        hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("orders")),
+                      [this](const QVariant& v) {
+                          if (!v.canConvert<QVector<BrokerOrderInfo>>())
+                              return;
+                          bottom_panel_->set_orders(v.value<QVector<BrokerOrderInfo>>());
+                      });
+
+        // ── Balance / Funds ──
+        hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("balance")),
+                      [this](const QVariant& v) {
+                          if (!v.canConvert<BrokerFunds>())
+                              return;
+                          const auto funds = v.value<BrokerFunds>();
+                          bottom_panel_->set_funds(funds);
+                          order_entry_->set_balance(funds.available_balance);
+                      });
+    }
 
     // ── Quotes (per-symbol subscriptions for ticker + watchlist + paper trading) ──
     hub_subscribe_quotes();
@@ -109,6 +125,8 @@ void EquityTradingScreen::hub_subscribe_quotes() {
     symbols.insert(selected_symbol_);
     for (const auto& s : watchlist_symbols_)
         symbols.insert(s);
+    for (const auto& s : position_symbols_) // held symbols get live quotes too
+        symbols.insert(s);
 
     for (const auto& sym : symbols) {
         const QString topic = broker_topic(bid, aid, QStringLiteral("quote"), sym);
@@ -120,6 +138,11 @@ void EquityTradingScreen::hub_subscribe_quotes() {
             // Cache for watchlist rebuild
             watchlist_quote_cache_[sym] = quote;
 
+            // Open-positions table (bottom sheet): patch LTP / P&L from the SAME
+            // quote that feeds the ticker bar, so the header and the position row
+            // never show different prices. Live & paper both handled inside.
+            bottom_panel_->update_quote(sym, quote);
+
             // Ticker bar + order entry for selected symbol
             if (sym == selected_symbol_) {
                 current_price_ = quote.ltp;
@@ -127,6 +150,8 @@ void EquityTradingScreen::hub_subscribe_quotes() {
                                           quote.high, quote.low, quote.volume,
                                           quote.bid, quote.ask);
                 order_entry_->set_current_price(quote.ltp);
+                chart_->on_quote(quote);       // roll the tick into the live forming candle
+                chart_->update_pnl(quote.ltp); // live P&L on the chart's position card
             }
 
             // Rebuild watchlist from cache
@@ -158,6 +183,51 @@ void EquityTradingScreen::hub_unsubscribe_all() {
     datahub::DataHub::instance().unsubscribe(this);
     hub_active_ = false;
     LOG_INFO(TAG, "Hub unsubscribed");
+}
+
+void EquityTradingScreen::update_chart_position() {
+    if (!chart_)
+        return;
+    const auto account = AccountManager::instance().get_account(focused_account_id_);
+    const bool is_paper = account.trading_mode == QLatin1String("paper");
+
+    if (is_paper) {
+        if (account.paper_portfolio_id.isEmpty()) {
+            chart_->clear_position();
+            return;
+        }
+        for (const auto& p : pt_get_positions(account.paper_portfolio_id)) {
+            if (p.symbol == selected_symbol_ && qAbs(p.quantity) > 0.0) {
+                chart_->set_position(selected_symbol_, p.side, qAbs(p.quantity), p.entry_price,
+                                     selected_exchange_, QString());
+                if (current_price_ > 0.0)
+                    chart_->update_pnl(current_price_);
+                return;
+            }
+        }
+        chart_->clear_position();
+        return;
+    }
+
+    // Live: scan the cached broker positions for the displayed symbol. P&L is in
+    // the broker's own currency (intrinsic), not the global preference.
+    QString ccy;
+    if (auto* broker = BrokerRegistry::instance().get(account.broker_id))
+        ccy = broker->profile().currency;
+    for (const auto& p : live_positions_) {
+        if (p.symbol == selected_symbol_ && qAbs(p.quantity) > 0.0) {
+            QString side = p.side.toLower();
+            if (side != QLatin1String("long") && side != QLatin1String("short"))
+                side = p.quantity >= 0 ? QStringLiteral("long") : QStringLiteral("short");
+            chart_->set_position(selected_symbol_, side, qAbs(p.quantity), p.avg_price,
+                                 p.exchange.isEmpty() ? selected_exchange_ : p.exchange,
+                                 p.product_type, ccy);
+            if (current_price_ > 0.0)
+                chart_->update_pnl(current_price_);
+            return;
+        }
+    }
+    chart_->clear_position();
 }
 
 // ============================================================================

@@ -29,6 +29,21 @@ inline const QStringList US_WATCHLIST = {
     "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "JPM", "V", "JNJ",
 };
 
+// Full NIFTY 50 constituents (NSE) — seeded as the default watchlist for Indian
+// brokers (profile region == "IN"). Plain symbols; each broker's resolver maps them.
+inline const QStringList NIFTY50_WATCHLIST = {
+    "ADANIENT",   "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK",
+    "BAJAJ-AUTO", "BAJAJFINSV", "BAJFINANCE", "BEL",        "BHARTIARTL",
+    "CIPLA",      "COALINDIA",  "DIVISLAB",   "DRREDDY",    "EICHERMOT",
+    "GRASIM",     "HCLTECH",    "HDFCBANK",   "HDFCLIFE",   "HEROMOTOCO",
+    "HINDALCO",   "HINDUNILVR", "ICICIBANK",  "INDUSINDBK", "INFY",
+    "ITC",        "JIOFIN",     "JSWSTEEL",   "KOTAKBANK",  "LT",
+    "M&M",        "MARUTI",     "NESTLEIND",  "NTPC",       "ONGC",
+    "POWERGRID",  "RELIANCE",   "SBILIFE",    "SBIN",       "SHRIRAMFIN",
+    "SUNPHARMA",  "TATACONSUM", "TATAMOTORS", "TATASTEEL",  "TCS",
+    "TECHM",      "TITAN",      "TRENT",      "ULTRACEMCO", "WIPRO",
+};
+
 // ── Constants ──────────────────────────────────────────────────────────────
 
 inline constexpr double DEFAULT_PAPER_BALANCE = 1000000.0; // 10 Lakh INR

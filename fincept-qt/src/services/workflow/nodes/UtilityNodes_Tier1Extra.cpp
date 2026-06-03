@@ -13,6 +13,7 @@
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QMessageAuthenticationCode>
 #include <QRandomGenerator>
 #include <QRegularExpression>
 
@@ -188,12 +189,12 @@ void register_utility_tier1_extra(NodeRegistry& registry) {
                         QString::fromLatin1(QCryptographicHash::hash(text.toUtf8(), QCryptographicHash::Md5).toHex());
                     cb(true, QJsonObject{{"result", hash}, {"operation", op}}, {});
                 } else if (op == "hmac_sha256") {
-                    // Qt doesn't have built-in HMAC — return sha256 of key+text as fallback
-                    QString key = params.value("key").toString();
-                    QString combined = key + text;
-                    QString hash = QString::fromLatin1(
-                        QCryptographicHash::hash(combined.toUtf8(), QCryptographicHash::Sha256).toHex());
-                    cb(true, QJsonObject{{"result", hash}, {"operation", op}, {"note", "simplified_hmac"}}, {});
+                    const QString key = params.value("key").toString();
+                    const QString hash = QString::fromLatin1(
+                        QMessageAuthenticationCode::hash(text.toUtf8(), key.toUtf8(),
+                                                         QCryptographicHash::Sha256)
+                            .toHex());
+                    cb(true, QJsonObject{{"result", hash}, {"operation", op}}, {});
                 } else {
                     // sha256 default
                     QString hash = QString::fromLatin1(

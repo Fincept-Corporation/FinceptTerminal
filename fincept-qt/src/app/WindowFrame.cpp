@@ -426,10 +426,13 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
     // MCP navigation tool → dock_router (cross-thread safe)
     EventBus::instance().subscribe("nav.switch_screen", [this](const QVariantMap& nav_data) {
         QString screen_id = nav_data["screen_id"].toString();
+        // Optional: callers that want a clean "take me there" switch (replace the
+        // current view) rather than the default auto-tiled split set exclusive=true.
+        const bool exclusive = nav_data.value("exclusive", false).toBool();
         if (!screen_id.isEmpty())
             QMetaObject::invokeMethod(
-                dock_router_, [this, screen_id]() {
-                    if (!locked_) dock_router_->navigate(screen_id);
+                dock_router_, [this, screen_id, exclusive]() {
+                    if (!locked_) dock_router_->navigate(screen_id, exclusive);
                 }, Qt::QueuedConnection);
     });
 

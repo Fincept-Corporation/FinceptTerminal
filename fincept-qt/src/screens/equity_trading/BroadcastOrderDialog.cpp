@@ -2,6 +2,7 @@
 #include "screens/equity_trading/BroadcastOrderDialog.h"
 
 #include "trading/AccountManager.h"
+#include "trading/ActionCenter.h"
 #include "trading/BrokerRegistry.h"
 #include "ui/theme/Theme.h"
 
@@ -166,20 +167,45 @@ void BroadcastOrderDialog::on_place_order() {
         return;
     }
 
+    // Semi-Auto gate (headless): each account's mode is independent, so queue
+    // orders for Semi-Auto accounts (they surface in the status-bar popover) and
+    // broadcast only the Auto accounts immediately.
+    QStringList immediate;
+    int queued = 0;
+    for (const QString& acct : selected) {
+        if (ActionCenter::instance().should_queue(acct, "placeorder")) {
+            const QString pid = ActionCenter::instance().queue_order(
+                acct, "placeorder", ActionCenter::serialize_unified_order(order_));
+            if (!pid.isEmpty())
+                ++queued;
+        } else {
+            immediate.append(acct);
+        }
+    }
+    if (immediate.isEmpty()) {
+        status_label_->setText(tr("%1 order(s) queued for approval").arg(queued));
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::AMBER()));
+        return;
+    }
+
     // Disable UI during placement
     place_btn_->setEnabled(false);
     select_all_cb_->setEnabled(false);
     for (auto* cb : account_cbs_)
         cb->setEnabled(false);
 
-    status_label_->setText(tr("Placing order across %1 account(s)...").arg(selected.size()));
+    status_label_->setText(queued > 0
+                               ? tr("Placing %1 order(s); %2 queued for approval...")
+                                     .arg(immediate.size())
+                                     .arg(queued)
+                               : tr("Placing order across %1 account(s)...").arg(immediate.size()));
     status_label_->setStyleSheet(QString("color: %1;").arg(colors::AMBER()));
 
     // Run broadcast on background thread (P1: never block UI)
     QPointer<BroadcastOrderDialog> self = this;
     auto order_copy = order_;
-    (void)QtConcurrent::run([self, selected, order_copy]() {
-        auto results = UnifiedTrading::instance().broadcast_order(selected, order_copy);
+    (void)QtConcurrent::run([self, immediate, order_copy]() {
+        auto results = UnifiedTrading::instance().broadcast_order(immediate, order_copy);
         QMetaObject::invokeMethod(
             self,
             [self, results]() {

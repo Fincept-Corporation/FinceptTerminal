@@ -615,6 +615,12 @@ void BacktestingScreen::on_result(const QString& provider, const QString& comman
         strategy_category_combo_->blockSignals(false);
         populate_strategies();
         LOG_INFO("Backtesting", QString("[%1] Loaded %2 strategies").arg(provider).arg(strategies_.size()));
+        // A backtest auto-run was requested (e.g. from Equity Research) before
+        // strategies were ready — now that a strategy is selected, fire it.
+        if (pending_auto_run_) {
+            pending_auto_run_ = false;
+            trigger_auto_run();
+        }
         return;
     }
     if (command == "get_indicators") {

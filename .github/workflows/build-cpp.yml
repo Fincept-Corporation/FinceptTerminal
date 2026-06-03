@@ -7,7 +7,7 @@ on:
 env:
   BUILD_TYPE: Release
   QT_VERSION: "6.8.3"
-  QT_MODULES: "qtcharts qtwebsockets qtmultimedia"
+  QT_MODULES: "qtcharts qtwebsockets qtmultimedia qtwebengine qtwebchannel qtpositioning"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:

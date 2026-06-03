@@ -11,6 +11,8 @@
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "screens/crypto_trading/CryptoBottomPanel.h"
 #include "screens/crypto_trading/CryptoChart.h"
 #include "screens/crypto_trading/CryptoCredentials.h"
@@ -23,7 +25,6 @@
 #include "trading/ExchangeSessionManager.h"
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
-#include "trading/exchanges/kraken/KrakenWsClient.h"
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
 
@@ -197,13 +198,10 @@ void CryptoTradingScreen::setup_ui() {
     ws_status_->setToolTip(tr("WebSocket feed status — green=live, amber=connecting, red=offline (REST polling)"));
     cmd_layout->addWidget(ws_status_);
 
-    // Transport hint — small text right of the pill. Kraken uses the native
-    // QWebSocket client; everyone else still goes through ws_stream.py.
-    ws_transport_ = new QLabel(exchange_id_ == "kraken" ? tr("NATIVE") : tr("DAEMON"));
+    // Transport hint — all exchanges stream via ws_stream.py (ccxt.pro).
+    ws_transport_ = new QLabel(tr("DAEMON"));
     ws_transport_->setObjectName("cryptoWsTransport");
-    ws_transport_->setToolTip(exchange_id_ == "kraken"
-                                  ? tr("Native C++ WebSocket — direct connection, no Python subprocess")
-                                  : tr("ws_stream.py via ccxt.pro — Python subprocess"));
+    ws_transport_->setToolTip(tr("ws_stream.py via ccxt.pro — Python subprocess"));
     cmd_layout->addWidget(ws_transport_);
 
     // Clock
@@ -296,7 +294,11 @@ void CryptoTradingScreen::setup_ui() {
     connect(bottom_panel_, &CryptoBottomPanel::close_all_positions_requested, this,
             [this](const QString&) { on_close_all_positions(); });
     connect(chart_, &CryptoChart::timeframe_changed, this,
-            [this](const QString& tf) { async_fetch_candles(selected_symbol_, tf); });
+            [this](const QString& tf) {
+                ExchangeService::instance().set_ws_timeframe(tf);
+                hub_subscribe_topics();  // re-point the OHLC subscription to the new tf
+                async_fetch_candles(selected_symbol_, tf);
+            });
 }
 
 // ============================================================================
@@ -422,13 +424,10 @@ void CryptoTradingScreen::retranslateUi() {
             tr("WebSocket feed status — green=live, amber=connecting, red=offline (REST polling)"));
     }
 
-    // Transport hint + its tooltip depend on the active exchange.
+    // Transport hint — all exchanges stream via ws_stream.py (ccxt.pro).
     if (ws_transport_) {
-        const bool native = (exchange_id_ == "kraken");
-        ws_transport_->setText(native ? tr("NATIVE") : tr("DAEMON"));
-        ws_transport_->setToolTip(native
-                                      ? tr("Native C++ WebSocket — direct connection, no Python subprocess")
-                                      : tr("ws_stream.py via ccxt.pro — Python subprocess"));
+        ws_transport_->setText(tr("DAEMON"));
+        ws_transport_->setToolTip(tr("ws_stream.py via ccxt.pro — Python subprocess"));
     }
     // exchange_btn_ shows the exchange name (data); symbol_input_ holds the
     // selected pair (data); clock_label_ is a live timestamp — none translated.
@@ -439,15 +438,16 @@ void CryptoTradingScreen::retranslateUi() {
 // ============================================================================
 
 // ============================================================================
-// Direct Kraken WS subscription (intentionally bypasses DataHub).
+// DataHub WS subscription — uniform live-data path for ALL exchanges.
 //
-// Earlier iterations published Kraken events through DataHub topic patterns
-// (`ws:kraken:ticker:*` etc.) and consumed them here via subscribe_pattern.
-// That path crashed under high BBO update rates — the hub's coalesce timer
-// + pattern matching + fan-out machinery was the wrong tool for a
-// single-consumer single-producer crypto stream. The native client emits
-// plain Qt signals; we wire them straight to the same pending_* buffers
-// the flush_ws_updates timer drains at 10fps.
+// ExchangeSession runs the Python ws_stream.py (ccxt.pro) feed for every
+// exchange and publishes each update on DataHub topics:
+//   ws:<ex>:ticker:<pair> | :orderbook:<pair> | :trades:<pair> | :ohlc:<pair>:<interval>
+// We subscribe to the explicit topics for the current exchange + symbol and
+// route payloads into the same pending_* buffers that flush_ws_updates()
+// drains at 10fps. Explicit per-topic subscriptions (not wildcard patterns)
+// keep fan-out cheap even under high BBO rates; the producer additionally
+// coalesces ticker at ~20Hz.
 // ============================================================================
 
 void CryptoTradingScreen::hub_subscribe_topics() {
@@ -457,28 +457,23 @@ void CryptoTradingScreen::hub_subscribe_topics() {
         ws_subscription_owner_ = nullptr;
     }
 
-    if (exchange_id_ != "kraken")
-        return; // Hyperliquid still uses the daemon Python path
-
-    auto& session = fincept::trading::ExchangeSessionManager::instance();
-    auto* sess = session.session(exchange_id_);
-    if (!sess)
-        return;
-    auto* ws = sess->kraken_ws_client();
-    if (!ws) {
-        LOG_WARN(TAG, "kraken_ws_client() returned null — start_ws hasn't run yet");
-        return;
-    }
-
-    // ws_subscription_owner_ is a context QObject the connections are
-    // parented to. Destroying it auto-disconnects every connection on swap.
+    // ws_subscription_owner_ is a context QObject the subscriptions are bound
+    // to. Destroying it auto-cancels every subscription on swap.
     ws_subscription_owner_ = new QObject(this);
-
+    auto& hub = fincept::datahub::DataHub::instance();
+    const QString ex = exchange_id_;
     QPointer<CryptoTradingScreen> self = this;
-    QString primary = selected_symbol_;
 
-    connect(ws, &fincept::trading::kraken::KrakenWsClient::ticker_received,
-            ws_subscription_owner_, [self, primary](const fincept::trading::TickerData& t) {
+    // Ticker — every watchlist symbol plus the selected one (drives the
+    // watchlist prices and the primary last/bid/ask).
+    QStringList ticker_syms = watchlist_symbols_;
+    if (!ticker_syms.contains(selected_symbol_))
+        ticker_syms << selected_symbol_;
+    for (const QString& sym : ticker_syms) {
+        hub.subscribe<fincept::trading::TickerData>(
+            ws_subscription_owner_,
+            QStringLiteral("ws:") + ex + QStringLiteral(":ticker:") + sym,
+            [self](const fincept::trading::TickerData& t) {
                 if (!self || t.symbol.isEmpty())
                     return;
                 self->pending_tickers_[t.symbol] = t;
@@ -487,36 +482,46 @@ void CryptoTradingScreen::hub_subscribe_topics() {
                     self->has_pending_primary_ = true;
                 }
             });
+    }
 
-    connect(ws, &fincept::trading::kraken::KrakenWsClient::orderbook_received,
-            ws_subscription_owner_, [self](const fincept::trading::OrderBookData& ob) {
-                if (!self || ob.symbol != self->selected_symbol_)
-                    return;
-                self->pending_orderbook_ = ob;
-                self->has_pending_orderbook_ = true;
-            });
+    // Orderbook — selected symbol only.
+    hub.subscribe<fincept::trading::OrderBookData>(
+        ws_subscription_owner_,
+        QStringLiteral("ws:") + ex + QStringLiteral(":orderbook:") + selected_symbol_,
+        [self](const fincept::trading::OrderBookData& ob) {
+            if (!self || ob.symbol != self->selected_symbol_)
+                return;
+            self->pending_orderbook_ = ob;
+            self->has_pending_orderbook_ = true;
+        });
 
-    connect(ws, &fincept::trading::kraken::KrakenWsClient::trade_received,
-            ws_subscription_owner_, [self](const fincept::trading::TradeData& td) {
-                if (!self || td.symbol != self->selected_symbol_)
-                    return;
-                crypto::TradeEntry e;
-                e.side = td.side;
-                e.price = td.price;
-                e.amount = td.amount;
-                self->pending_trades_.append(e);
-            });
+    // Trades — selected symbol only.
+    hub.subscribe<fincept::trading::TradeData>(
+        ws_subscription_owner_,
+        QStringLiteral("ws:") + ex + QStringLiteral(":trades:") + selected_symbol_,
+        [self](const fincept::trading::TradeData& td) {
+            if (!self || td.symbol != self->selected_symbol_)
+                return;
+            crypto::TradeEntry e;
+            e.side = td.side;
+            e.price = td.price;
+            e.amount = td.amount;
+            self->pending_trades_.append(e);
+        });
 
-    connect(ws, &fincept::trading::kraken::KrakenWsClient::candle_received,
-            ws_subscription_owner_,
-            [self](const QString& sym, const QString& /*interval*/,
-                   const fincept::trading::Candle& c) {
-                if (!self || sym != self->selected_symbol_)
-                    return;
-                self->pending_candles_.append(c);
-            });
+    // OHLC — selected symbol at the chart's current timeframe.
+    const QString interval = chart_ ? chart_->current_timeframe() : QStringLiteral("1m");
+    hub.subscribe<fincept::trading::Candle>(
+        ws_subscription_owner_,
+        QStringLiteral("ws:") + ex + QStringLiteral(":ohlc:") + selected_symbol_ +
+            QLatin1Char(':') + interval,
+        [self](const fincept::trading::Candle& c) {
+            if (!self)
+                return;
+            self->pending_candles_.append(c);
+        });
 
-    LOG_INFO(TAG, QString("Direct WS signals connected (kraken / %1)").arg(primary));
+    LOG_INFO(TAG, QString("Hub WS subscriptions active (%1 / %2)").arg(ex, selected_symbol_));
 }
 
 void CryptoTradingScreen::hub_unsubscribe_topics() {
@@ -556,6 +561,11 @@ void CryptoTradingScreen::init_exchange() {
     } else {
         LOG_INFO(TAG, "WS already active for " + exchange_id_ + " — attaching to warm session");
     }
+
+    // On an exchange switch the freshly-spawned ws_stream defaults to 1m OHLC;
+    // if the chart is on a different timeframe, re-point the new stream to match.
+    if (chart_ && chart_->current_timeframe() != QStringLiteral("1m"))
+        es.set_ws_timeframe(chart_->current_timeframe());
 
     // Hub is the only consumer path. Every exchange shown in the dropdown
     // must have a matching producer registered on ExchangeSessionManager.

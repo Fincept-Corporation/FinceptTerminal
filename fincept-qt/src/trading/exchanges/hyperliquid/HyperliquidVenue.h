@@ -4,9 +4,11 @@
 // Phase-5c partial:
 //   * Public surface — mark prices, funding rates, position reconcile from
 //     `info` REST + WS subscriptions — fully wired.
-//   * Trading surface — gated by HyperliquidSigner::is_wired(). Until the
-//     signer lands, place_order() returns an OrderAck with status="rejected"
-//     and error="hl_signer_not_wired".
+//   * Trading surface — the signer is wired (HyperliquidSigner::is_wired()
+//     returns true), but live order submission is not yet connected:
+//     place_order() builds the signed action then returns OrderAck
+//     status="rejected", error="hl_live_path_not_yet_wired". Remaining work is
+//     asset-id resolution from `meta` and the exchange POST/ack (see .cpp).
 //
 // Reference: .grill-me/alpha-arena-production-refactor.md §Phase 5c.
 

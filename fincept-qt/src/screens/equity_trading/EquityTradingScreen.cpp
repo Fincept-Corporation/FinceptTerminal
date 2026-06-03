@@ -19,7 +19,7 @@
 #include "screens/equity_trading/AccountManagementDialog.h"
 #include "screens/equity_trading/BroadcastOrderDialog.h"
 #include "screens/equity_trading/EquityBottomPanel.h"
-#include "screens/equity_trading/EquityChart.h"
+#include "screens/equity_trading/EquityChartPanel.h"
 #include "screens/equity_trading/EquityOrderBook.h"
 #include "screens/equity_trading/EquityOrderEntry.h"
 #include "screens/equity_trading/EquityTickerBar.h"
@@ -217,12 +217,27 @@ void EquityTradingScreen::setup_ui() {
     symbol_input_->setObjectName("eqSymbolInput");
     symbol_input_->setFixedWidth(120);
     symbol_input_->setFixedHeight(22);
-    auto* completer = new QCompleter(watchlist_symbols_, symbol_input_);
-    completer->setCaseSensitivity(Qt::CaseInsensitive);
-    completer->setFilterMode(Qt::MatchContains);
-    symbol_input_->setCompleter(completer);
+    // Dynamic instrument-search completer (mirrors EquityWatchlist's add box):
+    // the model is refilled from InstrumentService on every keystroke, so the
+    // suggestion popup reflects the live broker catalog rather than a fixed list.
+    // Ownership matters for safe teardown: parent the completer to the line edit
+    // and the model to the completer. On destruction the completer disconnects
+    // (and deletes its internal QCompletionModel) before its child source model
+    // is freed — avoiding the QCompletionModel::filter-on-dying-model segfault
+    // seen when the source model is a sibling destroyed first.
+    symbol_completer_ = new QCompleter(symbol_input_);
+    symbol_completer_model_ = new QStringListModel(symbol_completer_);
+    symbol_completer_->setModel(symbol_completer_model_);
+    symbol_completer_->setCaseSensitivity(Qt::CaseInsensitive);
+    symbol_completer_->setMaxVisibleItems(10);
+    symbol_completer_->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
+    symbol_input_->setCompleter(symbol_completer_);
+    connect(symbol_input_, &QLineEdit::textEdited, this, &EquityTradingScreen::on_symbol_search_changed);
+    // Choosing a suggestion (click / Enter in the popup) activates that symbol.
+    connect(symbol_completer_, qOverload<const QString&>(&QCompleter::activated), this,
+            [this](const QString& choice) { apply_symbol_input(choice); });
     connect(symbol_input_, &QLineEdit::returnPressed, this,
-            [this]() { on_symbol_selected(symbol_input_->text().trimmed().toUpper()); });
+            [this]() { apply_symbol_input(symbol_input_->text()); });
     cmd_layout->addWidget(symbol_input_);
 
     // Separator
@@ -279,7 +294,7 @@ void EquityTradingScreen::setup_ui() {
     center_splitter->setObjectName("eqCenterSplitter");
     center_splitter->setHandleWidth(1);
 
-    chart_ = new EquityChart;
+    chart_ = new EquityChartPanel;
     center_splitter->addWidget(chart_);
 
     bottom_panel_ = new EquityBottomPanel;
@@ -287,6 +302,12 @@ void EquityTradingScreen::setup_ui() {
 
     center_splitter->setStretchFactor(0, 5);
     center_splitter->setStretchFactor(1, 2);
+    // The chart (a WebEngine view in KLineChart mode) reports a tiny size hint
+    // until its page loads, so without an explicit split the bottom panel's
+    // tall table hints would swallow all the height. Pin a chart-dominant
+    // initial split and forbid collapsing the chart pane to zero.
+    center_splitter->setCollapsible(0, false);
+    center_splitter->setSizes({560, 220});
 
     main_splitter->addWidget(center_splitter);
 
@@ -301,12 +322,14 @@ void EquityTradingScreen::setup_ui() {
     order_entry_ = new EquityOrderEntry;
     right_splitter->addWidget(order_entry_);
 
-    right_splitter->setStretchFactor(0, 3);
-    right_splitter->setStretchFactor(1, 2);
+    // Order book is pinned to its content height; order entry absorbs the rest.
+    right_splitter->setStretchFactor(0, 0);
+    right_splitter->setStretchFactor(1, 1);
+    right_splitter->setSizes({320, 800});
 
     main_splitter->addWidget(right_splitter);
 
-    main_splitter->setSizes({220, 600, 290});
+    main_splitter->setSizes({265, 555, 290});
     main_splitter->setStretchFactor(0, 0);
     main_splitter->setStretchFactor(1, 1);
     main_splitter->setStretchFactor(2, 0);
@@ -317,14 +340,12 @@ void EquityTradingScreen::setup_ui() {
     connect(mode_btn_, &QPushButton::clicked, this, &EquityTradingScreen::on_mode_toggled);
     connect(accounts_btn_, &QPushButton::clicked, this, &EquityTradingScreen::on_accounts_clicked);
     connect(watchlist_, &EquityWatchlist::symbol_selected, this, &EquityTradingScreen::on_symbol_selected);
-    connect(watchlist_, &EquityWatchlist::symbol_added, this, [this](const QString& sym) {
-        if (!watchlist_symbols_.contains(sym))
-            watchlist_symbols_.append(sym);
-        // Update all streams with new watchlist
-        auto* stream = DataStreamManager::instance().stream_for(focused_account_id_);
-        if (stream)
-            stream->subscribe_symbols(watchlist_symbols_);
-    });
+    connect(watchlist_, &EquityWatchlist::symbol_added, this, &EquityTradingScreen::on_watchlist_symbol_added);
+    connect(watchlist_, &EquityWatchlist::symbol_removed, this, &EquityTradingScreen::on_watchlist_symbol_removed);
+    connect(watchlist_, &EquityWatchlist::watchlist_selected, this, &EquityTradingScreen::on_watchlist_selected);
+    connect(watchlist_, &EquityWatchlist::watchlist_create_requested, this, &EquityTradingScreen::on_watchlist_create);
+    connect(watchlist_, &EquityWatchlist::watchlist_rename_requested, this, &EquityTradingScreen::on_watchlist_rename);
+    connect(watchlist_, &EquityWatchlist::watchlist_delete_requested, this, &EquityTradingScreen::on_watchlist_delete);
     connect(order_entry_, &EquityOrderEntry::order_submitted, this, &EquityTradingScreen::on_order_submitted);
     connect(order_entry_, &EquityOrderEntry::strategy_order_submitted, this, &EquityTradingScreen::on_strategy_submitted);
     connect(order_entry_, &EquityOrderEntry::broadcast_requested, this, [this](const trading::UnifiedOrder& order) {
@@ -340,11 +361,13 @@ void EquityTradingScreen::setup_ui() {
     connect(bottom_panel_, &EquityBottomPanel::close_all_positions_requested, this,
             [this](const QString&) { on_close_all_positions(); });
     connect(bottom_panel_, &EquityBottomPanel::import_holdings_requested, this, &EquityTradingScreen::on_import_holdings_requested);
-    connect(chart_, &EquityChart::timeframe_changed, this, [this](const QString& tf) {
+    connect(chart_, &EquityChartPanel::timeframe_changed, this, [this](const QString& tf) {
         auto* stream = DataStreamManager::instance().stream_for(focused_account_id_);
         if (stream)
             stream->fetch_candles(selected_symbol_, tf);
     });
+    connect(chart_, &EquityChartPanel::exit_position_requested, this,
+            &EquityTradingScreen::on_chart_exit_position);
 }
 
 // ============================================================================
@@ -534,24 +557,9 @@ void EquityTradingScreen::init_focused_account() {
                     LOG_INFO(TAG, QString("Paper order filled: %1 %2 @ %3")
                                       .arg(ev.side, ev.symbol)
                                       .arg(ev.fill_price, 0, 'f', 2));
-                    // Refresh paper portfolio for focused account
-                    auto acct = AccountManager::instance().get_account(self->focused_account_id_);
-                    if (acct.trading_mode == "paper" && !acct.paper_portfolio_id.isEmpty()) {
-                        try {
-                            auto portfolio = pt_get_portfolio(acct.paper_portfolio_id);
-                            auto positions = pt_get_positions(acct.paper_portfolio_id);
-                            auto orders = pt_get_orders(acct.paper_portfolio_id);
-                            auto trades = pt_get_trades(acct.paper_portfolio_id, 50);
-                            auto stats = pt_get_stats(acct.paper_portfolio_id);
-                            self->order_entry_->set_balance(portfolio.balance);
-                            self->bottom_panel_->set_paper_positions(positions);
-                            self->bottom_panel_->set_paper_orders(orders);
-                            self->bottom_panel_->set_paper_trades(trades);
-                            self->bottom_panel_->set_paper_stats(stats);
-                        } catch (...) {
-                            LOG_WARN(TAG, "Exception refreshing paper portfolio on fill");
-                        }
-                    }
+                    // Refresh paper panels for the focused account (positions,
+                    // orders, trades, stats, funds) — single source of truth.
+                    self->refresh_paper_panels();
                 },
                 Qt::QueuedConnection);
         });
@@ -668,16 +676,25 @@ QVariantMap EquityTradingScreen::save_state() const {
         {"symbol", selected_symbol_},
         {"exchange", selected_exchange_},
         {"account_id", focused_account_id_},
+        {"watchlist_id", active_watchlist_id_},
     };
 }
 
 void EquityTradingScreen::restore_state(const QVariantMap& state) {
+    // Set the active watchlist first so load_watchlists() (via on_account_changed
+    // or the trailing call below) selects it.
+    const QString wl = state.value("watchlist_id").toString();
+    if (!wl.isEmpty())
+        active_watchlist_id_ = wl;
     const QString sym = state.value("symbol", "RELIANCE").toString();
     if (!sym.isEmpty() && sym != selected_symbol_)
         on_symbol_selected(sym);
     const QString acct = state.value("account_id").toString();
     if (!acct.isEmpty() && acct != focused_account_id_)
         on_account_changed(acct);
+    // Honour the restored list even when the account didn't change (idempotent).
+    if (!wl.isEmpty() && !focused_account_id_.isEmpty())
+        load_watchlists();
 }
 
 } // namespace fincept::screens

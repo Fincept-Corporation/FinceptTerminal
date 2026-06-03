@@ -662,9 +662,9 @@ QString equity_trading_styles() {
                "#eqObHeader { background: %8; border-bottom: 1px solid %3; }"
                "#eqObTitle { color: %12; font-weight: 700; font-size: 11px; "
                "  letter-spacing: 0.5px; background: transparent; border: none; }"
+               "#eqObLevels { color: %9; font-size: 10px; font-weight: 600; "
+               "  letter-spacing: 0.3px; background: transparent; border: none; }"
                "#eqObCanvas { background: transparent; }"
-               "#eqObSpread { background: %8; color: %7; font-size: 11px; font-weight: 700; "
-               "  border-top: 1px solid %3; border-bottom: 1px solid %3; }"
 
                /* ── Order entry ── */
                "#eqOrderEntry { background: %2; border: 1px solid %3; }"

@@ -645,6 +645,8 @@ struct ExchangeCredentials {
     QString api_key;
     QString secret;
     QString password;
+    QString wallet_address;
+    QString private_key;
 };
 
 // ============================================================================

@@ -25,6 +25,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QSplitter>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -72,6 +73,28 @@ void BacktestingScreen::apply_portfolio_config(const QJsonObject& config) {
     LOG_INFO("Backtesting", QString("Portfolio config applied: %1 symbols, $%2")
                                 .arg(sym_list.size())
                                 .arg(config["initialCapital"].toDouble(), 0, 'f', 0));
+
+    // Auto-run: a caller (e.g. Equity Research's BACKTEST button) can request an
+    // immediate basic backtest of the supplied symbol. Strategies load
+    // asynchronously, so run now only if one is already selected; otherwise defer
+    // until the get_strategies callback populates the combo (see on_result).
+    if (config.value("autoRun").toBool()) {
+        const bool strategies_ready = strategy_combo_ && strategy_combo_->count() > 0 &&
+                                      !strategy_combo_->currentData().toString().isEmpty();
+        if (strategies_ready)
+            trigger_auto_run();
+        else
+            pending_auto_run_ = true;
+    }
+}
+
+void BacktestingScreen::trigger_auto_run() {
+    // Defer to the next event-loop tick so the just-shown screen and any
+    // freshly-rebuilt strategy params have settled before on_run() reads them.
+    QTimer::singleShot(0, this, [this]() {
+        if (!is_running_)
+            on_run();
+    });
 }
 
 void BacktestingScreen::hideEvent(QHideEvent* e) {

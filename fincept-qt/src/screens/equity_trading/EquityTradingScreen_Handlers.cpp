@@ -15,11 +15,12 @@
 #include "screens/equity_trading/AccountManagementDialog.h"
 #include "screens/equity_trading/BroadcastOrderDialog.h"
 #include "screens/equity_trading/EquityBottomPanel.h"
-#include "screens/equity_trading/EquityChart.h"
+#include "screens/equity_trading/EquityChartPanel.h"
 #include "screens/equity_trading/EquityOrderBook.h"
 #include "screens/equity_trading/EquityOrderEntry.h"
 #include "screens/equity_trading/EquityTickerBar.h"
 #include "screens/equity_trading/EquityWatchlist.h"
+#include "screens/equity_trading/OrderConfirmDialog.h"
 #include "services/portfolio/PortfolioService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "trading/AccountManager.h"
@@ -28,6 +29,7 @@
 #include "trading/DataStreamManager.h"
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
+#include "trading/instruments/InstrumentService.h"
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
 
@@ -86,8 +88,9 @@ void EquityTradingScreen::on_account_changed(const QString& account_id) {
     if (broker) {
         const auto prof = broker->profile();
 
-        // Update defaults if switching broker types
-        watchlist_symbols_ = QStringList(prof.default_watchlist.begin(), prof.default_watchlist.end());
+        // Watchlist symbols come from the active named list (global), not the
+        // broker default — see load_watchlists() below. Only the default
+        // selected symbol/exchange follow the broker.
         selected_symbol_ = prof.default_symbol;
         selected_exchange_ = prof.default_exchange;
 
@@ -108,7 +111,10 @@ void EquityTradingScreen::on_account_changed(const QString& account_id) {
 
     exchange_label_->setText(selected_exchange_);
     symbol_input_->setText(selected_symbol_);
-    watchlist_->set_symbols(watchlist_symbols_);
+    // Load named watchlists (seeds a default from the broker on first run) and
+    // populate watchlist_symbols_ from the active list before the stream wiring
+    // below subscribes to it.
+    load_watchlists();
     ticker_bar_->set_symbol(selected_symbol_);
     ticker_bar_->set_currency(currency_symbol(exchange_currency(selected_exchange_)));
     order_entry_->set_symbol(selected_symbol_);
@@ -151,21 +157,8 @@ void EquityTradingScreen::on_account_changed(const QString& account_id) {
             if (o.order_type != "market")
                 OrderMatcher::instance().add_order(o);
         }
-        // Refresh paper data immediately
-        try {
-            auto portfolio = pt_get_portfolio(account.paper_portfolio_id);
-            auto positions = pt_get_positions(account.paper_portfolio_id);
-            auto orders = pt_get_orders(account.paper_portfolio_id);
-            auto trades = pt_get_trades(account.paper_portfolio_id, 50);
-            auto stats = pt_get_stats(account.paper_portfolio_id);
-            order_entry_->set_balance(portfolio.balance);
-            bottom_panel_->set_paper_positions(positions);
-            bottom_panel_->set_paper_orders(orders);
-            bottom_panel_->set_paper_trades(trades);
-            bottom_panel_->set_paper_stats(stats);
-        } catch (...) {
-            LOG_WARN(TAG, "Exception loading paper portfolio on account switch");
-        }
+        // Refresh paper data immediately (positions/orders/trades/stats/funds).
+        refresh_paper_panels();
     }
 
     update_account_menu();
@@ -181,10 +174,12 @@ void EquityTradingScreen::on_symbol_selected(const QString& symbol) {
 
 void EquityTradingScreen::switch_symbol(const QString& symbol) {
     selected_symbol_ = symbol;
+    current_price_ = 0.0; // unknown until the new symbol's first quote arrives
     symbol_input_->setText(symbol);
     ticker_bar_->set_symbol(symbol);
     order_entry_->set_symbol(symbol);
     watchlist_->set_active_symbol(symbol);
+    update_chart_position(); // show/clear the new symbol's position on the chart
 
     // Resubscribe quote topics so the new symbol gets a hub subscription
     if (isVisible() && hub_active_)
@@ -211,6 +206,60 @@ void EquityTradingScreen::switch_symbol(const QString& symbol) {
     }
 }
 
+QStringList EquityTradingScreen::search_broker_ids() const {
+    // Focused broker first (its matches sort to the top of unified search), then
+    // every other connected broker so a symbol only one carries is still found.
+    QStringList ids;
+    const QString bid = broker_id_for_focused();
+    if (!bid.isEmpty())
+        ids << bid;
+    for (const auto& a : AccountManager::instance().active_accounts())
+        if (!a.broker_id.isEmpty() && !ids.contains(a.broker_id))
+            ids << a.broker_id;
+    return ids;
+}
+
+void EquityTradingScreen::on_symbol_search_changed(const QString& text) {
+    const QString query = text.trimmed().toUpper();
+    if (query.length() < 2)
+        return; // wait for a meaningful prefix before hitting the catalog
+
+    const QStringList ids = search_broker_ids();
+    if (ids.isEmpty())
+        return;
+
+    // search_all queries the SQLite instrument catalog directly (no in-memory
+    // gate), so suggestions surface as soon as a connected broker's master is on
+    // disk — even before the in-memory cache rebuild lands. One row per
+    // (broker, instrument); symbol stays the leading token so prefix completion
+    // on the typed text keeps working, with exchange + broker as context tags.
+    const auto results = InstrumentService::instance().search_all(query, "", ids, 24);
+    QStringList suggestions;
+    suggestions.reserve(results.size());
+    for (const auto& inst : results) {
+        auto* b = BrokerRegistry::instance().get(inst.broker_id);
+        const QString broker_name = b ? b->profile().display_name : inst.broker_id;
+        suggestions.append(QString("%1  ·  %2  ·  %3").arg(inst.symbol, inst.exchange, broker_name));
+    }
+    symbol_completer_model_->setStringList(suggestions);
+    // Re-evaluate the popup against the just-updated model; otherwise the
+    // completer filters this keystroke against the previous (stale/empty) model
+    // and shows nothing.
+    if (!suggestions.isEmpty())
+        symbol_completer_->complete();
+}
+
+void EquityTradingScreen::apply_symbol_input(const QString& raw) {
+    // A chosen suggestion is "SYMBOL  ·  EXCH  ·  Broker" — keep only the leading
+    // symbol token. Also tolerate the legacy "EXCHANGE:SYMBOL" form and bare input.
+    QString sym = raw.trimmed().section(QStringLiteral("  ·  "), 0, 0).trimmed().toUpper();
+    if (sym.contains(':'))
+        sym = sym.section(':', 1);
+    if (sym.isEmpty())
+        return;
+    on_symbol_selected(sym);
+}
+
 void EquityTradingScreen::on_mode_toggled() {
     if (focused_account_id_.isEmpty())
         return;
@@ -226,25 +275,13 @@ void EquityTradingScreen::on_mode_toggled() {
     // Update per-account trading mode
     AccountManager::instance().set_trading_mode(focused_account_id_, is_live ? "live" : "paper");
 
+    // Re-point hub subscriptions at the new mode: paper drops the live broker
+    // positions/holdings/orders/balance topics so live data can't leak in.
+    if (isVisible())
+        hub_subscribe_streaming();
+
     if (!is_live) {
-        // Refresh paper data for this account
-        auto account = AccountManager::instance().get_account(focused_account_id_);
-        if (!account.paper_portfolio_id.isEmpty()) {
-            try {
-                auto portfolio = pt_get_portfolio(account.paper_portfolio_id);
-                auto positions = pt_get_positions(account.paper_portfolio_id);
-                auto orders = pt_get_orders(account.paper_portfolio_id);
-                auto trades = pt_get_trades(account.paper_portfolio_id, 50);
-                auto stats = pt_get_stats(account.paper_portfolio_id);
-                order_entry_->set_balance(portfolio.balance);
-                bottom_panel_->set_paper_positions(positions);
-                bottom_panel_->set_paper_orders(orders);
-                bottom_panel_->set_paper_trades(trades);
-                bottom_panel_->set_paper_stats(stats);
-            } catch (...) {
-                LOG_WARN(TAG, "Exception refreshing paper portfolio on mode switch");
-            }
-        }
+        refresh_paper_panels(); // positions/orders/trades/stats/funds from the paper engine
     }
     // Live mode data comes automatically from the running AccountDataStream
 }
@@ -400,19 +437,19 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
         // Safety: capture account_id by value at click time (immutable per order lifecycle)
         const QString acct_id = focused_account_id_;
 
-        // Action Center pre-gate (Phase 3 §2): in Semi-Auto mode, queue the
-        // order for manual approval instead of sending it to the broker. The
-        // queue decision lives here in the caller/screen layer — place_order()
-        // itself never consults ActionCenter (no recursion on approval).
+        // Semi-Auto pre-gate: confirm inline before sending. Manual orders are
+        // synchronous (the trader is present), so approval is an inline modal —
+        // no pending-queue round-trip. On confirm we place immediately, exactly
+        // like Auto mode. (Headless paths — AI/workflow/broadcast — still queue
+        // via ActionCenter and surface in the status-bar popover.)
         if (ActionCenter::instance().should_queue(acct_id, "placeorder")) {
-            const QString pending_id = ActionCenter::instance().queue_order(
-                acct_id, "placeorder", ActionCenter::serialize_unified_order(order));
-            if (!pending_id.isEmpty())
-                order_entry_->show_order_status(
-                    tr("Order queued for approval in Action Center"), true);
-            else
-                order_entry_->show_order_status(tr("Failed to queue order"), false);
-            return;
+            const auto acct_meta = AccountManager::instance().get_account(acct_id);
+            const QString acct_label =
+                acct_meta.display_name.isEmpty() ? acct_id : acct_meta.display_name;
+            if (!OrderConfirmDialog::confirm(this, order, acct_label, current_price_)) {
+                order_entry_->show_order_status(tr("Order cancelled"), false);
+                return;
+            }
         }
 
         QPointer<EquityTradingScreen> self = this;
@@ -527,9 +564,66 @@ void EquityTradingScreen::refresh_paper_panels() {
         bottom_panel_->set_paper_orders(orders);
         bottom_panel_->set_paper_trades(trades);
         bottom_panel_->set_paper_stats(stats);
+        // Paper Funds tab: live set_funds is gated off in paper, so surface a
+        // broker-equivalent funds view computed from the paper portfolio.
+        // equity = free cash + open P&L; used margin = notional / leverage.
+        double unrealized = 0.0, used_margin = 0.0;
+        for (const auto& p : positions) {
+            unrealized += p.unrealized_pnl;
+            const double lev = p.leverage > 0.0 ? p.leverage : 1.0;
+            used_margin += (qAbs(p.quantity) * p.current_price) / lev;
+        }
+        trading::BrokerFunds funds;
+        funds.available_balance = portfolio.balance;          // free cash
+        funds.used_margin = used_margin;                      // locked in open positions
+        funds.total_balance = portfolio.balance + unrealized; // equity
+        bottom_panel_->set_funds(funds);
+        // Held symbols get live WebSocket prices even if not in the active list.
+        QStringList pos_syms;
+        for (const auto& p : positions)
+            pos_syms << p.symbol;
+        update_position_symbols(pos_syms);
+        update_chart_position(); // refresh the on-chart position card
     } catch (...) {
         LOG_WARN(TAG, "Exception refreshing paper panels");
     }
+}
+
+void EquityTradingScreen::on_chart_exit_position(const QString& symbol, const QString& exchange,
+                                                 const QString& product_type, const QString& side,
+                                                 double qty) {
+    if (focused_account_id_.isEmpty()) {
+        order_entry_->show_order_status(tr("No account selected — add one via ACCOUNTS"), false);
+        return;
+    }
+    const QString side_disp =
+        side.compare("short", Qt::CaseInsensitive) == 0 ? tr("SHORT") : tr("LONG");
+    const auto reply = QMessageBox::question(
+        this, tr("Exit Position"),
+        tr("Exit %1 %2 %3 at market?").arg(side_disp).arg(qty, 0, 'f', 0).arg(symbol),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (reply != QMessageBox::Yes)
+        return;
+
+    const QString acct_id = focused_account_id_;
+    QPointer<EquityTradingScreen> self = this;
+    (void)QtConcurrent::run([self, acct_id, symbol, exchange, product_type]() {
+        if (!self)
+            return;
+        auto result =
+            UnifiedTrading::instance().close_position(acct_id, symbol, exchange, product_type);
+        QMetaObject::invokeMethod(
+            self,
+            [self, result, symbol]() {
+                if (!self)
+                    return;
+                self->order_entry_->show_order_status(
+                    result.success ? self->tr("Exit order placed: %1").arg(symbol) : result.error,
+                    result.success);
+                self->refresh_paper_panels(); // paper refreshes here; live flows via the hub
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 void EquityTradingScreen::on_cancel_all_orders() {
@@ -606,6 +700,21 @@ void EquityTradingScreen::on_strategy_submitted(const trading::BasketOrderReques
         return;
     }
     const QString acct_id = focused_account_id_;
+
+    // Semi-Auto gate (headless entry): a strategy/basket is placed in one shot
+    // with no per-leg prompt, so queue it for approval in the status-bar popover
+    // rather than confirming inline. Auto mode falls straight through.
+    if (ActionCenter::instance().should_queue(acct_id, "basketorder")) {
+        const QString pending_id = ActionCenter::instance().queue_order(
+            acct_id, "basketorder", ActionCenter::serialize_basket_order(basket));
+        order_entry_->show_order_status(
+            pending_id.isEmpty()
+                ? tr("Failed to queue strategy")
+                : tr("Strategy queued for approval (%1 legs)").arg(basket.orders.size()),
+            !pending_id.isEmpty());
+        return;
+    }
+
     QPointer<EquityTradingScreen> self = this;
     // place_basket_orders runs async on its own worker and delivers the result
     // back on the caller's thread; marshal to the UI thread defensively.

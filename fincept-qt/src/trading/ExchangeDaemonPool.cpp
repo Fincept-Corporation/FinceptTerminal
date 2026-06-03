@@ -118,7 +118,8 @@ bool ExchangeDaemonPool::wait_for_ready(int timeout_ms) {
 }
 
 QString ExchangeDaemonPool::credential_fingerprint(const ExchangeCredentials& creds) {
-    if (creds.api_key.isEmpty() && creds.secret.isEmpty() && creds.password.isEmpty())
+    if (creds.api_key.isEmpty() && creds.secret.isEmpty() && creds.password.isEmpty() &&
+        creds.wallet_address.isEmpty() && creds.private_key.isEmpty())
         return {};
     QCryptographicHash hash(QCryptographicHash::Sha256);
     hash.addData(creds.api_key.toUtf8());
@@ -126,6 +127,10 @@ QString ExchangeDaemonPool::credential_fingerprint(const ExchangeCredentials& cr
     hash.addData(creds.secret.toUtf8());
     hash.addData("|");
     hash.addData(creds.password.toUtf8());
+    hash.addData("|");
+    hash.addData(creds.wallet_address.toUtf8());
+    hash.addData("|");
+    hash.addData(creds.private_key.toUtf8());
     return QString::fromLatin1(hash.result().toHex().left(16));
 }
 
@@ -152,6 +157,10 @@ void ExchangeDaemonPool::send_credentials_if_needed(const QString& exchange, con
     c["secret"] = creds.secret;
     if (!creds.password.isEmpty())
         c["password"] = creds.password;
+    if (!creds.wallet_address.isEmpty())
+        c["wallet_address"] = creds.wallet_address;
+    if (!creds.private_key.isEmpty())
+        c["private_key"] = creds.private_key;
     QJsonObject req;
     req["id"] = "__creds_" + exchange + "_" + fp;
     req["method"] = "set_credentials";

@@ -27,8 +27,6 @@ class QuantLibClient : public QObject {
     /// Sync call — blocks via QEventLoop (use from MCP tool handlers only, never from UI thread).
     mcp::ToolResult call_sync(const QString& endpoint, const QJsonObject& body);
 
-    static const QString API_BASE;
-
     /// GET-only endpoints (no request body).
     static bool is_get_endpoint(const QString& endpoint);
 

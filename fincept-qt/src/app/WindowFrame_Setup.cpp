@@ -21,7 +21,6 @@
 #include "core/session/SessionManager.h"
 #include "screens/common/ComingSoonScreen.h"
 #include "screens/about/AboutScreen.h"
-#include "screens/action_center/ActionCenterScreen.h"
 #include "screens/agent_config/AgentConfigScreen.h"
 #include "screens/ai_chat/AiChatScreen.h"
 #include "screens/ai_quant_lab/AIQuantLabScreen.h"
@@ -263,7 +262,6 @@ void WindowFrame::setup_dock_screens() {
     dock_router_->register_factory("asia_markets", []() { return new screens::AsiaMarketsScreen; });
     dock_router_->register_factory("relationship_map", []() { return new screens::RelationshipMapScreen; });
     dock_router_->register_factory("equity_trading", []() { return new screens::EquityTradingScreen; });
-    dock_router_->register_factory("action_center", []() { return new screens::ActionCenterScreen; });
     dock_router_->register_factory("alpha_arena", []() { return new screens::AlphaArenaScreen; });
     dock_router_->register_factory("polymarket", []() { return new screens::PolymarketScreen; });
     dock_router_->register_factory("derivatives", []() { return new screens::DerivativesScreen; });

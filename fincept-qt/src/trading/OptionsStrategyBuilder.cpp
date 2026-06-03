@@ -1,5 +1,9 @@
 #include "OptionsStrategyBuilder.h"
 
+#include "core/logging/Logger.h"
+#include "trading/instruments/InstrumentNormalize.h"
+#include "trading/instruments/InstrumentService.h"
+
 #include <QDate>
 
 #include <algorithm>
@@ -59,7 +63,43 @@ OptionsLeg make_leg(const QString& underlying, const QString& expiry, double str
     leg.strike = strike;
     leg.option_type = opt_type;
     leg.expiry = expiry;
+    leg.underlying = underlying;
     return leg;
+}
+
+// Resolve a leg's real broker tradingsymbol from the instrument master.
+// Best-effort: returns the master's normalized symbol when it's loaded and the
+// exact (underlying, expiry, strike, CE/PE) contract is found; otherwise falls
+// back to the human-readable placeholder (leg.symbol) so behaviour never
+// regresses (a warning is logged). Runs at order-build time, so it also covers
+// strategies reloaded from storage.
+QString resolve_leg_symbol(const OptionsLeg& leg, const QString& broker_id)
+{
+    if (broker_id.isEmpty() || leg.underlying.isEmpty())
+        return leg.symbol;
+
+    auto& svc = InstrumentService::instance();
+    if (!svc.is_loaded(broker_id))
+        return leg.symbol;
+
+    const InstrumentType want =
+        (leg.option_type.compare(QLatin1String("PE"), Qt::CaseInsensitive) == 0) ? InstrumentType::PE
+                                                                                 : InstrumentType::CE;
+    const QString expiry_disp = norm::expiry_display(leg.expiry);
+
+    const auto candidates =
+        svc.find_options_for_underlying(broker_id, leg.underlying, expiry_disp, leg.exchange);
+    for (const auto& inst : candidates) {
+        if (inst.instrument_type == want && qFuzzyCompare(inst.strike + 1.0, leg.strike + 1.0))
+            return inst.symbol;
+    }
+
+    LOG_WARN("OptionsStrategyBuilder",
+             QString("Could not resolve tradingsymbol for %1 %2 %3 %4 (broker=%5) — using placeholder '%6'")
+                 .arg(leg.underlying, leg.expiry)
+                 .arg(leg.strike)
+                 .arg(leg.option_type, broker_id, leg.symbol));
+    return leg.symbol;
 }
 
 } // namespace
@@ -175,7 +215,8 @@ OptionsStrategy OptionsStrategyBuilder::bear_put_spread(const QString& underlyin
 }
 
 BasketOrderRequest OptionsStrategyBuilder::to_basket_order(const OptionsStrategy& strategy,
-                                                           ProductType product)
+                                                           ProductType product,
+                                                           const QString& broker_id)
 {
     BasketOrderRequest request;
     request.strategy_name = strategy.name;
@@ -189,7 +230,7 @@ BasketOrderRequest OptionsStrategyBuilder::to_basket_order(const OptionsStrategy
     request.orders.reserve(sorted.size());
     for (const OptionsLeg& leg : sorted) {
         UnifiedOrder order;
-        order.symbol = leg.symbol;
+        order.symbol = resolve_leg_symbol(leg, broker_id);
         order.exchange = leg.exchange;
         order.side = leg.side;
         order.quantity = leg.quantity;
