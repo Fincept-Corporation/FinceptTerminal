@@ -564,6 +564,12 @@ FetchContent_Declare(
     GIT_SHALLOW    TRUE
     UPDATE_DISCONNECTED TRUE
 )
+set(ADS_VERSION "4.5.0" CACHE STRING "" FORCE)   # skip git_describe() in qtads CMakeLists
+# qtads src/CMakeLists.txt does include(Versioning) unconditionally but only adds
+# cmake/modules to CMAKE_MODULE_PATH inside the if(NOT ADS_VERSION) branch.
+# Pre-set the path so the include succeeds regardless of which branch ran.
+# The _deps layout is stable: FetchContent always unpacks to <binary_dir>/_deps/<name_lower>-src.
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_BINARY_DIR}/_deps/qtads-src/cmake/modules")
 FetchContent_MakeAvailable(QtADS)
 # ADS target name is version-stamped: qtadvanceddocking-qt6
 # Disable unity build — ADS uses anonymous namespaces internally
