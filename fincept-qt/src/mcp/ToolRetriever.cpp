@@ -11,6 +11,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <vector>
 
 namespace fincept::mcp {
 
@@ -94,6 +96,9 @@ static const QHash<QString, QStringList>& query_synonyms() {
         {"strategy", {"backtest"}},
         {"sharpe",   {"risk", "metrics"}},
         {"var",      {"risk"}},
+        // Notes
+        {"memo",     {"note"}},
+        {"journal",  {"note"}},
     };
     return kSyn;
 }
@@ -167,11 +172,127 @@ QStringList ToolRetriever::tokenise(const QString& text) {
     return out;
 }
 
+QString ToolRetriever::stem(const QString& word) {
+    if (word.length() <= 2)
+        return word;
+
+    QString w = word.toLower();
+
+    // 1. Plurals and common suffixes
+    if (w.endsWith(QLatin1String("ies"))) {
+        if (w.length() > 4) {
+            w.chop(3);
+            w.append(QLatin1Char('y'));
+        }
+    } else if (w.endsWith(QLatin1String("sses"))) {
+        w.chop(2); // "classes" -> "class"
+    } else if (w.endsWith(QLatin1String("es"))) {
+        if (w.length() > 3) {
+            w.chop(2);
+        }
+    } else if (w.endsWith(QLatin1Char('s'))) {
+        if (!w.endsWith(QLatin1String("ss")) && !w.endsWith(QLatin1String("us")) && !w.endsWith(QLatin1String("is"))) {
+            w.chop(1);
+        }
+    }
+
+    // 2. Gerunds and past participles
+    if (w.endsWith(QLatin1String("ing"))) {
+        if (w.length() > 5) {
+            w.chop(3);
+        }
+    } else if (w.endsWith(QLatin1String("ed"))) {
+        if (w.length() > 4) {
+            w.chop(2);
+        }
+    }
+
+    // 3. Common derivations
+    if (w.endsWith(QLatin1String("ational"))) {
+        w.chop(7);
+        w.append(QLatin1String("ate"));
+    } else if (w.endsWith(QLatin1String("tional"))) {
+        w.chop(6);
+        w.append(QLatin1String("tion"));
+    } else if (w.endsWith(QLatin1String("ly"))) {
+        if (w.length() > 4) w.chop(2);
+    } else if (w.endsWith(QLatin1String("ment"))) {
+        if (w.length() > 5) w.chop(4);
+    }
+
+    // 4. Strip trailing silent 'e' to unify tenses (e.g. "create"/"creating" -> "creat", "price"/"pricing" -> "pric")
+    if (w.endsWith(QLatin1Char('e')) && w.length() > 3) {
+        w.chop(1);
+    }
+
+    return w;
+}
+
+int ToolRetriever::levenshtein_distance(const QString& s1, const QString& s2) {
+    const int len1 = s1.length();
+    const int len2 = s2.length();
+    if (len1 == 0) return len2;
+    if (len2 == 0) return len1;
+
+    std::vector<int> col(len2 + 1);
+    std::vector<int> prev_col(len2 + 1);
+
+    for (int i = 0; i <= len2; ++i) {
+        prev_col[i] = i;
+    }
+
+    for (int i = 0; i < len1; ++i) {
+        col[0] = i + 1;
+        for (int j = 0; j < len2; ++j) {
+            const int cost = (s1[i] == s2[j]) ? 0 : 1;
+            col[j + 1] = std::min({ col[j] + 1, prev_col[j + 1] + 1, prev_col[j] + cost });
+        }
+        col.swap(prev_col);
+    }
+    return prev_col[len2];
+}
+
+QString ToolRetriever::classify_category(const QStringList& query_stems) {
+    static const QHash<QString, QSet<QString>> kCategorySignals = {
+        {"watchlist",      {"watchlist", "watch", "track"}},
+        {"paper-trading",  {"trad", "buy", "sell", "order", "portfolio", "pnl", "hold", "position", "broker"}},
+        {"news",           {"new", "feed", "rss", "headlin", "articl", "file", "edgar"}},
+        {"report-builder", {"report", "builder", "generat", "document", "templat", "pdf"}},
+        {"quant-lab",      {"quant", "factor", "backtest", "alpha", "risk", "metric", "sharp", "var"}},
+        {"markets",        {"market", "quot", "pric", "stock", "equity", "ticker", "chart", "ohlc"}},
+        {"notes",          {"not", "memo", "mind", "journal", "writ"}},
+        {"file_manager",   {"fil", "folder", "directory", "path", "open", "read", "writ"}},
+        {"settings",       {"sett", "config", "setup", "credential", "api", "key"}}
+    };
+
+    QHash<QString, int> category_scores;
+    for (const auto& stem : query_stems) {
+        for (auto it = kCategorySignals.constBegin(); it != kCategorySignals.constEnd(); ++it) {
+            if (it.value().contains(stem)) {
+                category_scores[it.key()] += 1;
+            }
+        }
+    }
+
+    QString best_category;
+    int max_score = 0;
+    for (auto it = category_scores.constBegin(); it != category_scores.constEnd(); ++it) {
+        if (it.value() > max_score) {
+            max_score = it.value();
+            best_category = it.key();
+        }
+    }
+
+    return best_category;
+}
+
 // ── Index build ─────────────────────────────────────────────────────────
 
 void ToolRetriever::rebuild_index_locked() {
     docs_.clear();
     df_.clear();
+    inverted_index_.clear();
+    vocabulary_.clear();
     avg_doc_length_ = 0.0;
 
     // list_all_tools() returns disabled tools too — we want them in the
@@ -186,6 +307,19 @@ void ToolRetriever::rebuild_index_locked() {
         d.category = t.category;
         d.description = t.description;
         d.is_destructive = t.is_destructive;
+
+        // Construct the full raw text for phrase matching
+        QStringList raw_parts;
+        raw_parts.append(t.name);
+        raw_parts.append(t.description);
+        const QJsonObject props = t.input_schema["properties"].toObject();
+        for (auto it = props.constBegin(); it != props.constEnd(); ++it) {
+            raw_parts.append(it.key());
+            const QString p_desc = it.value().toObject()["description"].toString();
+            if (!p_desc.isEmpty())
+                raw_parts.append(p_desc);
+        }
+        d.raw_text = raw_parts.join(" ").toLower();
 
         // ── Build the weighted token stream ────────────────────────────
         // Token weighting via repetition. BM25's TF saturates with k1 so
@@ -202,9 +336,8 @@ void ToolRetriever::rebuild_index_locked() {
         for (int i = 0; i < 3; ++i)
             tokens.append(name_tok);
         for (const auto& nt : name_tok)
-            d.name_token_set.insert(nt);
+            d.name_stems.insert(stem(nt));
 
-        const QJsonObject props = t.input_schema["properties"].toObject();
         for (auto it = props.constBegin(); it != props.constEnd(); ++it) {
             const QStringList p_tok = tokenise(it.key());
             for (int i = 0; i < 2; ++i)
@@ -217,19 +350,24 @@ void ToolRetriever::rebuild_index_locked() {
 
         tokens.append(tokenise(t.description));
 
-        d.all_tokens = std::move(tokens);
-        d.length = d.all_tokens.size();
+        d.length = tokens.size();
+        avg_doc_length_ += d.length;
 
-        // Update DF — count once per term per document.
-        QSet<QString> seen;
-        for (const auto& tok : d.all_tokens) {
-            if (seen.contains(tok))
-                continue;
-            seen.insert(tok);
-            df_[tok] = df_.value(tok, 0) + 1;
+        // Populate term_tf, vocabulary_, df_, and inverted_index_
+        const int doc_idx = static_cast<int>(docs_.size());
+        QSet<QString> seen_stems;
+        for (const auto& tok : tokens) {
+            QString stemmed = stem(tok);
+            d.term_tf[stemmed] = d.term_tf.value(stemmed, 0) + 1;
+            vocabulary_.insert(stemmed);
+
+            if (!seen_stems.contains(stemmed)) {
+                seen_stems.insert(stemmed);
+                df_[stemmed] = df_.value(stemmed, 0) + 1;
+                inverted_index_[stemmed].append(doc_idx);
+            }
         }
 
-        avg_doc_length_ += d.length;
         docs_.push_back(std::move(d));
     }
 
@@ -238,7 +376,7 @@ void ToolRetriever::rebuild_index_locked() {
 
     indexed_generation_ = McpProvider::instance().generation();
 
-    LOG_INFO(TAG, QString("BM25 index built: %1 docs, %2 unique terms, avg_len=%3")
+    LOG_INFO(TAG, QString("Semantic-Enhanced BM25 index built: %1 docs, %2 unique terms, avg_len=%3")
                       .arg(docs_.size())
                       .arg(df_.size())
                       .arg(avg_doc_length_, 0, 'f', 1));
@@ -284,6 +422,14 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
     }
     const bool penalize_destructive = has_read_verb && !has_mutate_verb;
 
+    // ── Semantic Category Classifier ───────────────────────────────────
+    QStringList q_stems;
+    q_stems.reserve(q_tokens.size());
+    for (const auto& tok : q_tokens) {
+        q_stems.append(stem(tok));
+    }
+    QString target_category = classify_category(q_stems);
+
     // ── Specialist-category gating ─────────────────────────────────────
     // For each specialist category, decide whether ANY query token is a
     // genuine cue (e.g. "quant"/"backtest" for quant-lab). Categories with
@@ -303,48 +449,88 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
         }
     }
 
-    // ── Query expansion via synonyms ───────────────────────────────────
-    // Append synonym tokens AFTER the BM25 vocabulary has been used to
-    // measure IDF, so synonym hits contribute to scoring without inflating
-    // term frequencies in the index. The original token stays in q_tokens.
+    // ── Query expansion via stemmed synonyms ───────────────────────────
+    QStringList expanded_stems;
     {
-        QStringList expanded;
-        expanded.reserve(q_tokens.size() * 2);
         const auto& syn = query_synonyms();
         for (const auto& tok : q_tokens) {
-            expanded.append(tok);
+            QString s_tok = stem(tok);
+            if (!expanded_stems.contains(s_tok))
+                expanded_stems.append(s_tok);
+
             auto it = syn.constFind(tok);
             if (it != syn.constEnd()) {
                 for (const auto& s : it.value()) {
-                    if (!expanded.contains(s))
-                        expanded.append(s);
+                    QString s_syn = stem(s);
+                    if (!expanded_stems.contains(s_syn))
+                        expanded_stems.append(s_syn);
                 }
             }
         }
-        q_tokens = std::move(expanded);
+    }
+
+    // ── Fuzzy spelling correction for unmatched stems ──────────────────
+    QHash<QString, double> query_term_weights; // term_stem -> weight
+    QStringList final_query_stems;
+
+    for (const auto& term : expanded_stems) {
+        if (df_.contains(term)) {
+            query_term_weights[term] = 1.0;
+            if (!final_query_stems.contains(term))
+                final_query_stems.append(term);
+        } else {
+            // Find closest candidate term in vocabulary using Levenshtein distance
+            QString best_match;
+            int best_dist = 999;
+            for (const auto& vocab_term : vocabulary_) {
+                if (std::abs(vocab_term.length() - term.length()) > 2)
+                    continue;
+                int dist = levenshtein_distance(term, vocab_term);
+                if (dist < best_dist) {
+                    best_dist = dist;
+                    best_match = vocab_term;
+                } else if (dist == best_dist && !best_match.isEmpty()) {
+                    // Stable tie-breaker: prefer shorter length, then lexicographical order
+                    if (vocab_term.length() < best_match.length()) {
+                        best_match = vocab_term;
+                    } else if (vocab_term.length() == best_match.length()) {
+                        if (vocab_term < best_match) {
+                            best_match = vocab_term;
+                        }
+                    }
+                }
+            }
+            // Accept if distance is 1 (or 2 for words of 5 or more chars)
+            if (best_dist == 1 || (best_dist == 2 && term.length() >= 5)) {
+                query_term_weights[best_match] = 0.75;
+                if (!final_query_stems.contains(best_match))
+                    final_query_stems.append(best_match);
+            }
+        }
+    }
+
+    // ── Inverted Index retrieval ───────────────────────────────────────
+    // Fast O(M) lookup to score only documents containing at least one query term/stem
+    QSet<int> candidate_doc_indices;
+    for (const auto& term : final_query_stems) {
+        auto it = inverted_index_.constFind(term);
+        if (it != inverted_index_.constEnd()) {
+            for (int idx : it.value()) {
+                candidate_doc_indices.insert(idx);
+            }
+        }
     }
 
     const double N = static_cast<double>(docs_.size());
 
-    // ── BM25 scoring loop ──────────────────────────────────────────────
-    // For each tool doc, score = sum over query terms q of:
-    //   IDF(q) * (TF(q,D) * (k1+1)) / (TF(q,D) + k1 * (1 - b + b * |D|/avgdl))
-    //
-    // IDF uses the Robertson-Spärck Jones formulation with the +1 floor
-    // ("idf = log((N - df + 0.5) / (df + 0.5) + 1)") — keeps IDF non-negative
-    // even for very common terms, which matters when the catalog is small.
-
     struct Scored { int doc_idx; double score; };
     std::vector<Scored> scored;
-    scored.reserve(docs_.size());
+    scored.reserve(candidate_doc_indices.size());
 
-    // Also disabled-tool exclusion: rebuild_index_locked includes ALL tools
-    // (enabled + disabled) so the index doesn't churn whenever a tool is
-    // toggled. We filter at search time instead.
     auto& provider = McpProvider::instance();
 
-    for (std::size_t i = 0; i < docs_.size(); ++i) {
-        const Doc& d = docs_[i];
+    for (int doc_idx : candidate_doc_indices) {
+        const Doc& d = docs_[doc_idx];
 
         if (!category_filter.isEmpty() && d.category != category_filter)
             continue;
@@ -353,38 +539,49 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
 
         double s = 0.0;
         int name_hits = 0;
-        for (const auto& q_term : q_tokens) {
+        for (const auto& q_term : final_query_stems) {
             const int df = df_.value(q_term, 0);
             if (df == 0)
                 continue;
 
-            // TF: count occurrences of q_term in this doc's token stream.
-            // The token stream is small (typically <300 tokens) so a linear
-            // scan beats hashing-per-term overhead.
-            int tf = 0;
-            for (const auto& tok : d.all_tokens) {
-                if (tok == q_term)
-                    ++tf;
-            }
+            // O(1) pre-computed term-frequency lookup
+            int tf = d.term_tf.value(q_term, 0);
             if (tf == 0)
                 continue;
 
             const double idf = std::log(((N - df + 0.5) / (df + 0.5)) + 1.0);
             const double norm = 1.0 - kB + kB * (static_cast<double>(d.length) / avg_doc_length_);
             const double tf_part = (tf * (kK1 + 1.0)) / (tf + kK1 * norm);
-            s += idf * tf_part;
+            double term_weight = query_term_weights.value(q_term, 1.0);
+            s += idf * tf_part * term_weight;
 
-            // Exact-name bonus: query token literally appears in the tool's
-            // name (after tokenisation). Counted once per query token, not
-            // per TF — we already weight name tokens 3× during indexing.
-            if (d.name_token_set.contains(q_term))
+            // Exact stemmed name match bonus
+            if (d.name_stems.contains(q_term))
                 ++name_hits;
         }
 
         if (s <= 0.0)
             continue;
 
-        // ── Adjustments (applied after the BM25 sum) ──────────────────
+        // ── Contiguous Phrase Match Bonus ──────────────────────────────
+        double phrase_bonus = 1.0;
+        QString raw_q = q.toLower();
+        if (d.raw_text.contains(raw_q)) {
+            phrase_bonus = 2.0; // Significant bonus for perfect phrase matching
+        } else {
+            // Check if at least 2 words appear contiguously
+            if (q_tokens.size() >= 2) {
+                for (int j = 0; j < q_tokens.size() - 1; ++j) {
+                    QString bigram = q_tokens[j] + " " + q_tokens[j+1];
+                    if (d.raw_text.contains(bigram)) {
+                        phrase_bonus = std::max(phrase_bonus, 1.5);
+                    }
+                }
+            }
+        }
+        s *= phrase_bonus;
+
+        // ── Adjustments (applied after phrase bonus) ──────────────────
         if (name_hits > 0)
             s += kNameMatchBonus * name_hits;
         if (penalize_destructive && d.is_destructive)
@@ -392,7 +589,12 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
         if (demoted_categories.contains(d.category))
             s *= kSpecialistPenalty;
 
-        scored.push_back({static_cast<int>(i), s});
+        // ── Semantic Category Pre-routing Boost ───────────────────────
+        if (!target_category.isEmpty() && d.category == target_category) {
+            s *= 1.8;
+        }
+
+        scored.push_back({doc_idx, s});
     }
 
     // Top-K via partial sort — O(N log K) instead of O(N log N).
@@ -423,7 +625,7 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
         out.push_back(std::move(m));
     }
 
-    LOG_INFO(TAG, QString("BM25 search: query=\"%1\" → %2 results (cap=%3)")
+    LOG_INFO(TAG, QString("Semantic-Enhanced search: query=\"%1\" → %2 results (cap=%3)")
                       .arg(q.left(80))
                       .arg(out.size())
                       .arg(top_k));

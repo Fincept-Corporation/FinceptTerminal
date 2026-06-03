@@ -78,25 +78,31 @@ class ToolRetriever {
         QString description;       // Original full description (returned to caller)
         bool is_destructive = false;
 
-        // Tokenised fields. We weight name tokens 3x, parameter-name tokens 2x
-        // (they're the strongest discriminator for tool selection), and
-        // description tokens 1x. This is captured by repeating tokens at
-        // index build time so BM25 TF naturally accounts for it.
-        QStringList all_tokens;    // Concatenated weighted token stream
+        // Original raw string of the name/description for phrase matching
+        QString raw_text;
+
+        // Pre-computed TF: stemmed_token -> frequency count
+        QHash<QString, int> term_tf;
         int length = 0;            // |D| in BM25 formula
 
-        // Unique name-tokens — used by the exact-name-match bonus in search()
+        // Stemmed name-tokens — used by the exact-name-match bonus in search()
         // so a query token that literally appears in the tool's name beats
         // tools that merely mention the term in their description.
-        QSet<QString> name_token_set;
+        QSet<QString> name_stems;
     };
 
     // ── Index state — guarded by mutex_ ────────────────────────────────
     mutable QMutex mutex_;
     quint64 indexed_generation_ = static_cast<quint64>(-1); // -1 = never built
     std::vector<Doc> docs_;
-    QHash<QString, int> df_;       // term → document frequency
+    QHash<QString, int> df_;       // stemmed term → document frequency
     double avg_doc_length_ = 0.0;
+
+    // Inverted index for O(M) search performance
+    QHash<QString, QVector<int>> inverted_index_;
+
+    // All unique stemmed terms in the vocabulary (used for fuzzy matching)
+    QSet<QString> vocabulary_;
 
     // ── BM25 hyperparameters (Okapi defaults — battle-tested) ──────────
     static constexpr double kK1 = 1.5;   // term-frequency saturation
@@ -106,6 +112,9 @@ class ToolRetriever {
     void rebuild_index_locked();
     static QStringList tokenise(const QString& text);
     static bool is_stop_word(const QString& token);
+    static QString stem(const QString& word);
+    static int levenshtein_distance(const QString& s1, const QString& s2);
+    static QString classify_category(const QStringList& query_stems);
 };
 
 } // namespace fincept::mcp
