@@ -1,6 +1,7 @@
 // src/services/geopolitics/GeopoliticsService.cpp
 #include "services/geopolitics/GeopoliticsService.h"
 
+#include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
 #include "python/PythonRunner.h"
@@ -17,7 +18,9 @@
 
 namespace fincept::services::geo {
 
-static constexpr const char* kApiBase = "https://api.fincept.in/research/news-events";
+static QString geo_api_base() {
+    return fincept::AppConfig::instance().api_base_url() + QStringLiteral("/research/news-events");
+}
 
 namespace {
 inline void publish_to_hub(const QString& topic, const QVariant& value) {
@@ -51,7 +54,7 @@ void GeopoliticsService::run_python(const QString& script, const QStringList& ar
 void GeopoliticsService::fetch_events(const QString& country, const QString& city, const QString& category,
                                       int limit, int page, const QString& source,
                                       const QString& date_from, const QString& date_to) {
-    QUrl url(kApiBase);
+    QUrl url(geo_api_base());
     QUrlQuery q;
     if (!country.isEmpty())   q.addQueryItem("country", country);
     if (!city.isEmpty())      q.addQueryItem("city", city);
@@ -194,7 +197,7 @@ void GeopoliticsService::fetch_unique_countries() {
 
     QPointer<GeopoliticsService> self = this;
     HttpClient::instance().get(
-        QString(kApiBase) + "?get_unique_countries=true&limit=100", [self](Result<QJsonDocument> result) {
+        geo_api_base() + "?get_unique_countries=true&limit=100", [self](Result<QJsonDocument> result) {
             if (!self)
                 return;
             if (!result.is_ok()) {
@@ -242,7 +245,7 @@ void GeopoliticsService::fetch_unique_categories() {
     }
 
     QPointer<GeopoliticsService> self = this;
-    HttpClient::instance().get(QString(kApiBase) + "?get_unique_categories=true", [self](Result<QJsonDocument> result) {
+    HttpClient::instance().get(geo_api_base() + "?get_unique_categories=true", [self](Result<QJsonDocument> result) {
         if (!self)
             return;
         if (!result.is_ok()) {
@@ -277,7 +280,7 @@ void GeopoliticsService::fetch_unique_categories() {
 
 void GeopoliticsService::fetch_unique_cities() {
     QPointer<GeopoliticsService> self = this;
-    HttpClient::instance().get(QString(kApiBase) + "?get_unique_cities=true", [self](Result<QJsonDocument> result) {
+    HttpClient::instance().get(geo_api_base() + "?get_unique_cities=true", [self](Result<QJsonDocument> result) {
         if (!self)
             return;
         if (!result.is_ok()) {

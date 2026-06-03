@@ -116,11 +116,12 @@ class HistoricalDataStore {
     bool refresh_now(const QString& symbol, const QString& exchange, const QString& interval,
                      const QVector<trading::BrokerCandle>& candles);
 
-    /// TODO(auto-download): periodic refresh of every watchlist entry. Not wired
-    /// in this pass — broker historical fetches must be driven through the
-    /// trading layer / DataHub, then the results pushed back via refresh_now().
-    /// Intentionally a no-op placeholder so a scheduler can call it once the
-    /// fetch path exists. Returns the number of entries it would refresh.
+    /// Refresh every watchlist entry: fetches historical candles from the first
+    /// connected active broker account (on a worker thread, sequentially) and
+    /// stores them via refresh_now(). No-ops gracefully (returns 0) when the
+    /// watchlist is empty or no broker is connected. Returns the number of
+    /// entries dispatched for refresh. A periodic scheduler (app/main.cpp) calls
+    /// this; it is also safe to call on demand.
     int refresh_watchlist();
 
   private:

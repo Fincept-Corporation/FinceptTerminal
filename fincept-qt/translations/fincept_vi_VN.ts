@@ -85,7 +85,7 @@
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">MO CUA</translation>
+        <translation>MỞ</translation>
     </message>
 </context>
 <context>
@@ -168,15 +168,15 @@
     <name>GovDataProviderPanel</name>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Xuất CSV</translation>
+        <translation>Xuất CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">Tệp CSV (*.csv)</translation>
+        <translation>Tệp CSV (*.csv)</translation>
     </message>
     <message>
         <source>Export failed</source>
-        <translation type="unfinished">Xuất thất bại</translation>
+        <translation>Xuất thất bại</translation>
     </message>
     <message>
         <source>Unable to open file for writing.</source>
@@ -187,11 +187,11 @@
     <name>MAModulePanel</name>
     <message>
         <source>YES</source>
-        <translation type="unfinished">CÓ</translation>
+        <translation>CÓ</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">KHÔNG</translation>
+        <translation>KHÔNG</translation>
     </message>
     <message>
         <source>Metric</source>
@@ -262,7 +262,7 @@
     </message>
     <message>
         <source>PORTFOLIO</source>
-        <translation type="unfinished">DANH MỤC</translation>
+        <translation>DANH MỤC</translation>
     </message>
     <message>
         <source>GENERAL</source>
@@ -518,7 +518,7 @@
     </message>
     <message>
         <source>AI</source>
-        <translation type="unfinished">AI</translation>
+        <translation>AI</translation>
     </message>
     <message>
         <source>Copy</source>
@@ -600,7 +600,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Hủy</translation>
+        <translation>Hủy</translation>
     </message>
     <message>
         <source>Update Connection</source>
@@ -791,7 +791,7 @@ Hãy đảm bảo các trường bắt buộc (URL, host hoặc API key) đã đ
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">TRUNG LAP</translation>
+        <translation>TRUNG LẬP</translation>
     </message>
     <message>
         <source>VOLATILE</source>
@@ -887,7 +887,7 @@ For long-form chats use the AI Chat tab.</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
     <message>
         <source>Listening — speak now</source>
@@ -1054,7 +1054,7 @@ For long-form chats use the AI Chat tab.</source>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">Máy chủ MCP</translation>
+        <translation>Máy chủ MCP</translation>
     </message>
     <message>
         <source>Node Editor</source>
@@ -1109,7 +1109,7 @@ For long-form chats use the AI Chat tab.</source>
     <name>fincept::MonitorMapWidget</name>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">HIỆN TẠI</translation>
+        <translation>HIỆN TẠI</translation>
     </message>
 </context>
 <context>
@@ -1131,7 +1131,7 @@ For long-form chats use the AI Chat tab.</source>
     <name>fincept::WindowFrame</name>
     <message>
         <source>Save Layout</source>
-        <translation type="unfinished">Lưu bố cục</translation>
+        <translation>Lưu bố cục</translation>
     </message>
     <message>
         <source>Layout name:</source>
@@ -1139,7 +1139,7 @@ For long-form chats use the AI Chat tab.</source>
     </message>
     <message>
         <source>Import Layout</source>
-        <translation type="unfinished">Nhập bố cục</translation>
+        <translation>Nhập bố cục</translation>
     </message>
     <message>
         <source>Fincept Layout (*.flayout *.fwsp);;All Files (*)</source>
@@ -1151,7 +1151,7 @@ For long-form chats use the AI Chat tab.</source>
     </message>
     <message>
         <source>Export Layout</source>
-        <translation type="unfinished">Xuất bố cục</translation>
+        <translation>Xuất bố cục</translation>
     </message>
     <message>
         <source>Open or save a layout first, then export it.</source>
@@ -1278,7 +1278,7 @@ For long-form chats use the AI Chat tab.</source>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Hủy</translation>
+        <translation>Hủy</translation>
     </message>
     <message>
         <source>Cancel task</source>
@@ -1286,7 +1286,7 @@ For long-form chats use the AI Chat tab.</source>
     </message>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">MÁY CHỦ MCP</translation>
+        <translation>MÁY CHỦ MCP</translation>
     </message>
     <message>
         <source>Model Context Protocol tool servers.</source>
@@ -1372,7 +1372,7 @@ For long-form chats use the AI Chat tab.</source>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Loại</translation>
+        <translation>Loại</translation>
     </message>
     <message>
         <source>Memory type:</source>
@@ -1460,7 +1460,7 @@ Kết quả:
     </message>
     <message>
         <source>Name:</source>
-        <translation type="unfinished">Tên:</translation>
+        <translation>Tên:</translation>
     </message>
     <message>
         <source>Transport</source>
@@ -1540,7 +1540,7 @@ Kết quả:
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Mã</translation>
+        <translation>Mã</translation>
     </message>
     <message>
         <source>Symbol:</source>
@@ -1677,7 +1677,7 @@ Thị trường, cổ phiếu, danh mục, phân tích vĩ mô.</translation>
     </message>
     <message>
         <source>%1 credits</source>
-        <translation type="unfinished">%1 tín dụng</translation>
+        <translation>%1 tín dụng</translation>
     </message>
     <message>
         <source>0 credits</source>
@@ -2079,7 +2079,7 @@ Thị trường, cổ phiếu, danh mục, phân tích vĩ mô.</translation>
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">BẢO MẬT</translation>
+        <translation>BẢO MẬT</translation>
     </message>
     <message>
         <source>LEGAL</source>
@@ -2114,7 +2114,7 @@ Thị trường, cổ phiếu, danh mục, phân tích vĩ mô.</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tat ca</translation>
+        <translation>Tất cả</translation>
     </message>
     <message>
         <source>Mode:</source>
@@ -2142,11 +2142,11 @@ Thị trường, cổ phiếu, danh mục, phân tích vĩ mô.</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>MUA</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>BÁN</translation>
     </message>
     <message>
         <source>APPROVE ALL</source>
@@ -2166,11 +2166,11 @@ Thị trường, cổ phiếu, danh mục, phân tích vĩ mô.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Loại</translation>
+        <translation>Loại</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Mã</translation>
+        <translation>Mã</translation>
     </message>
     <message>
         <source>Side</source>
@@ -2178,7 +2178,7 @@ Thị trường, cổ phiếu, danh mục, phân tích vĩ mô.</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>SL</translation>
     </message>
     <message>
         <source>Price Type</source>
@@ -2293,7 +2293,7 @@ Thị trường, cổ phiếu, danh mục, phân tích vĩ mô.</translation>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">TRẠNG THÁI</translation>
+        <translation>TRẠNG THÁI</translation>
     </message>
     <message>
         <source>SIGNATURE</source>
@@ -2401,7 +2401,7 @@ Dữ liệu ADB miễn phí — không cần khóa API</translation>
     </message>
     <message>
         <source>ADD</source>
-        <translation type="unfinished">THÊM</translation>
+        <translation>THÊM</translation>
     </message>
     <message>
         <source>No results found</source>
@@ -2467,11 +2467,11 @@ Dữ liệu ADB miễn phí — không cần khóa API</translation>
     </message>
     <message>
         <source>%1 AVAILABLE</source>
-        <translation type="unfinished">%1 KHA DUNG</translation>
+        <translation>%1 KHẢ DỤNG</translation>
     </message>
     <message>
         <source>Search widgets...</source>
-        <translation type="unfinished">Tim widget...</translation>
+        <translation>Tìm widget...</translation>
     </message>
     <message>
         <source>CANCEL</source>
@@ -2479,7 +2479,7 @@ Dữ liệu ADB miễn phí — không cần khóa API</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tat ca</translation>
+        <translation>Tất cả</translation>
     </message>
 </context>
 <context>
@@ -2566,11 +2566,11 @@ Dữ liệu ADB miễn phí — không cần khóa API</translation>
     </message>
     <message>
         <source>REBALANCE</source>
-        <translation type="unfinished">TÁI CÂN BẰNG</translation>
+        <translation>TÁI CÂN BẰNG</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">RỦI RO</translation>
+        <translation>RỦI RO</translation>
     </message>
     <message>
         <source>How can I help you?</source>
@@ -2604,7 +2604,7 @@ Chọn một tác nhân ở trên, hoặc dùng Định tuyến tự động đ�
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
     <message>
         <source>Response received (%1ms)</source>
@@ -2774,7 +2774,7 @@ Chọn một tác nhân ở trên, hoặc dùng Định tuyến tự động đ�
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tat ca</translation>
+        <translation>Tất cả</translation>
     </message>
     <message>
         <source>Running</source>
@@ -2798,7 +2798,7 @@ Chọn một tác nhân ở trên, hoặc dùng Định tuyến tự động đ�
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">LÀM MỚI</translation>
+        <translation>LÀM MỚI</translation>
     </message>
     <message>
         <source>Select a task to view details</source>
@@ -2842,7 +2842,7 @@ Chọn một tác nhân ở trên, hoặc dùng Định tuyến tự động đ�
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">XÓA</translation>
+        <translation>XÓA</translation>
     </message>
     <message>
         <source>(no plan persisted)</source>
@@ -2973,7 +2973,7 @@ Chọn một tác nhân ở trên, hoặc dùng Định tuyến tự động đ�
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">LÀM MỚI</translation>
+        <translation>LÀM MỚI</translation>
     </message>
     <message>
         <source>JSON EDITOR</source>
@@ -3005,11 +3005,11 @@ Chọn một tác nhân ở trên, hoặc dùng Định tuyến tự động đ�
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">CÔNG CỤ</translation>
+        <translation>CÔNG CỤ</translation>
     </message>
     <message>
         <source>FEATURES</source>
-        <translation type="unfinished">TÍNH NĂNG</translation>
+        <translation>TÍNH NĂNG</translation>
     </message>
     <message>
         <source>Reasoning</source>
@@ -3041,7 +3041,7 @@ Chọn một tác nhân ở trên, hoặc dùng Định tuyến tự động đ�
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">XÓA</translation>
+        <translation>XÓA</translation>
     </message>
     <message>
         <source>APPLY JSON</source>
@@ -3069,7 +3069,7 @@ Chọn một tác nhân ở trên, hoặc dùng Định tuyến tự động đ�
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
     <message>
         <source>Routed → %1 (intent: %2, confidence: %3%)</source>
@@ -3186,7 +3186,7 @@ Cuộc trò chuyện được lưu tự động.</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Thị trường</translation>
+        <translation>Thị trường</translation>
     </message>
     <message>
         <source>Show me today's top market movers</source>
@@ -3194,7 +3194,7 @@ Cuộc trò chuyện được lưu tự động.</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">Tin tức</translation>
+        <translation>Tin tức</translation>
     </message>
     <message>
         <source>Summarize the latest financial news</source>
@@ -3202,7 +3202,7 @@ Cuộc trò chuyện được lưu tự động.</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Danh mục</translation>
+        <translation>Danh mục</translation>
     </message>
     <message>
         <source>Analyze my portfolio performance</source>
@@ -3218,7 +3218,7 @@ Cuộc trò chuyện được lưu tự động.</translation>
     </message>
     <message>
         <source>Economics</source>
-        <translation type="unfinished">Kinh tế</translation>
+        <translation>Kinh tế</translation>
     </message>
     <message>
         <source>Current GDP and inflation data</source>
@@ -3286,7 +3286,7 @@ Cuộc trò chuyện được lưu tự động.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
     <message>
         <source>(empty response — model returned no content)</source>
@@ -3396,7 +3396,7 @@ to load available endpoints</source>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>START</source>
@@ -3424,7 +3424,7 @@ to load available endpoints</source>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">LÀM MỚI</translation>
+        <translation>LÀM MỚI</translation>
     </message>
     <message>
         <source>AKSHARE DATA</source>
@@ -3523,11 +3523,11 @@ to load available endpoints</source>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>MUA</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>BÁN</translation>
     </message>
     <message>
         <source>Entry Side:</source>
@@ -3673,7 +3673,7 @@ to load available endpoints</source>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">LỖI</translation>
+        <translation>LỖI</translation>
     </message>
     <message>
         <source>ANALYZING...</source>
@@ -3696,121 +3696,121 @@ to load available endpoints</source>
     <name>fincept::screens::AnalyticsSectorsView</name>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">TỔNG QUAN</translation>
+        <translation>TỔNG QUAN</translation>
     </message>
     <message>
         <source>CORRELATION</source>
-        <translation type="unfinished">TƯƠNG QUAN</translation>
+        <translation>TƯƠNG QUAN</translation>
     </message>
     <message>
         <source>SECTORS</source>
-        <translation type="unfinished">NGÀNH</translation>
+        <translation>NGÀNH</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">VỊ THẾ</translation>
+        <translation>VỊ THẾ</translation>
     </message>
     <message>
         <source>MARKET VALUE</source>
-        <translation type="unfinished">GIÁ TRỊ THỊ TRƯỜNG</translation>
+        <translation>GIÁ TRỊ THỊ TRƯỜNG</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>SECTOR ALLOCATION</source>
-        <translation type="unfinished">PHÂN BỔ NGÀNH</translation>
+        <translation>PHÂN BỔ NGÀNH</translation>
     </message>
     <message>
         <source>SECTOR BREAKDOWN</source>
-        <translation type="unfinished">PHÂN TÍCH THEO NGÀNH</translation>
+        <translation>PHÂN TÍCH THEO NGÀNH</translation>
     </message>
     <message>
         <source>SECTOR</source>
-        <translation type="unfinished">NGÀNH</translation>
+        <translation>NGÀNH</translation>
     </message>
     <message>
         <source>POS</source>
-        <translation type="unfinished">POS</translation>
+        <translation>VỊ THẾ</translation>
     </message>
     <message>
         <source>MKT VAL</source>
-        <translation type="unfinished">MKT VAL</translation>
+        <translation>GT TT</translation>
     </message>
     <message>
         <source>WT</source>
-        <translation type="unfinished">WT</translation>
+        <translation>TS</translation>
     </message>
     <message>
         <source>P&amp;L%</source>
-        <translation type="unfinished">P&amp;L%</translation>
+        <translation>P&amp;L%</translation>
     </message>
     <message>
         <source>HOLDINGS CORRELATION MATRIX</source>
-        <translation type="unfinished">MA TRẬN TƯƠNG QUAN CÁC KHOẢN NẮM GIỮ</translation>
+        <translation>MA TRẬN TƯƠNG QUAN CÁC KHOẢN NẮM GIỮ</translation>
     </message>
     <message>
         <source>%1
 sectors</source>
-        <translation type="unfinished">%1
+        <translation>%1
 ngành</translation>
     </message>
     <message>
         <source>+%1 more</source>
-        <translation type="unfinished">+%1 nữa</translation>
+        <translation>+%1 nữa</translation>
     </message>
     <message>
         <source>LARGEST</source>
-        <translation type="unfinished">LỚN NHẤT</translation>
+        <translation>LỚN NHẤT</translation>
     </message>
     <message>
         <source>SMALLEST</source>
-        <translation type="unfinished">NHỎ NHẤT</translation>
+        <translation>NHỎ NHẤT</translation>
     </message>
     <message>
         <source>BEST</source>
-        <translation type="unfinished">TỐT NHẤT</translation>
+        <translation>TỐT NHẤT</translation>
     </message>
     <message>
         <source>WORST</source>
-        <translation type="unfinished">TỆ NHẤT</translation>
+        <translation>TỆ NHẤT</translation>
     </message>
     <message>
         <source>%1 positions</source>
-        <translation type="unfinished">%1 vị thế</translation>
+        <translation>%1 vị thế</translation>
     </message>
     <message>
         <source>HHI CONCENTRATION</source>
-        <translation type="unfinished">TẬP TRUNG HHI</translation>
+        <translation>TẬP TRUNG HHI</translation>
     </message>
     <message>
         <source>Herfindahl index across sectors (lower = more diversified)</source>
-        <translation type="unfinished">Chỉ số Herfindahl giữa các ngành (thấp hơn = đa dạng hơn)</translation>
+        <translation>Chỉ số Herfindahl giữa các ngành (thấp hơn = đa dạng hơn)</translation>
     </message>
     <message>
         <source>TOP-3 CONCENTRATION</source>
-        <translation type="unfinished">TẬP TRUNG TOP-3</translation>
+        <translation>TẬP TRUNG TOP-3</translation>
     </message>
     <message>
         <source>Weight of the three largest sectors (%1)</source>
-        <translation type="unfinished">Trọng số của ba ngành lớn nhất (%1)</translation>
+        <translation>Trọng số của ba ngành lớn nhất (%1)</translation>
     </message>
     <message>
         <source>Diversified</source>
-        <translation type="unfinished">Đa dạng</translation>
+        <translation>Đa dạng</translation>
     </message>
     <message>
         <source>Balanced</source>
-        <translation type="unfinished">Cân bằng</translation>
+        <translation>Cân bằng</translation>
     </message>
     <message>
         <source>Concentrated</source>
-        <translation type="unfinished">Tập trung</translation>
+        <translation>Tập trung</translation>
     </message>
     <message>
         <source>Need 2+ holdings for correlation analysis</source>
-        <translation type="unfinished">Cần 2+ khoản nắm giữ để phân tích tương quan</translation>
+        <translation>Cần 2+ khoản nắm giữ để phân tích tương quan</translation>
     </message>
     <message>
         <source>Top-10 holdings by weight. Pearson correlation of daily returns over the trailing 30 trading days (from real price history).</source>
@@ -3908,7 +3908,7 @@ ngành</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>e.g. 000001</source>
@@ -3928,7 +3928,7 @@ ngành</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">LÀM MỚI</translation>
+        <translation>LÀM MỚI</translation>
     </message>
     <message>
         <source>ASIA MARKETS</source>
@@ -4007,7 +4007,7 @@ ngành</translation>
     </message>
     <message>
         <source>STRATEGY</source>
-        <translation type="unfinished">CHIẾN LƯỢC</translation>
+        <translation>CHIẾN LƯỢC</translation>
     </message>
     <message>
         <source>CATEGORY</source>
@@ -4041,7 +4041,7 @@ Lệnh: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Retu
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">TÓM TẮT</translation>
+        <translation>TÓM TẮT</translation>
     </message>
     <message>
         <source>EQUITY CURVE</source>
@@ -4049,7 +4049,7 @@ Lệnh: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Retu
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">CHỈ SỐ</translation>
+        <translation>CHỈ SỐ</translation>
     </message>
     <message>
         <source>DETAILS</source>
@@ -4125,11 +4125,11 @@ Lệnh: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Retu
     </message>
     <message>
         <source>BENCHMARK</source>
-        <translation type="unfinished">CHUẨN</translation>
+        <translation>CHUẨN</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>None</source>
@@ -4189,7 +4189,7 @@ Lệnh: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Retu
     </message>
     <message>
         <source>METHOD</source>
-        <translation type="unfinished">PHƯƠNG PHÁP</translation>
+        <translation>PHƯƠNG PHÁP</translation>
     </message>
     <message>
         <source>MAX ITERATIONS</source>
@@ -4341,7 +4341,7 @@ Lệnh: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Retu
     </message>
     <message>
         <source>ANALYSIS TYPE</source>
-        <translation type="unfinished">LOẠI PHÂN TÍCH</translation>
+        <translation>LOẠI PHÂN TÍCH</translation>
     </message>
     <message>
         <source>ROLLING WINDOW</source>
@@ -4349,7 +4349,7 @@ Lệnh: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Retu
     </message>
     <message>
         <source>METRIC</source>
-        <translation type="unfinished">CHỈ SỐ</translation>
+        <translation>CHỈ SỐ</translation>
     </message>
     <message>
         <source>SIGNAL GENERATORS</source>
@@ -4425,7 +4425,7 @@ Lệnh: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Retu
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">LOẠI</translation>
+        <translation>LOẠI</translation>
     </message>
     <message>
         <source>CONDITION</source>
@@ -4485,7 +4485,7 @@ Lệnh: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Retu
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">LỖI</translation>
+        <translation>LỖI</translation>
     </message>
 </context>
 <context>
@@ -4622,7 +4622,7 @@ Dữ liệu BIS miễn phí — không cần khóa API</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">QUỐC GIA</translation>
+        <translation>QUỐC GIA</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -4713,7 +4713,7 @@ Khóa miễn phí tại: data.bls.gov/registrationEngine/</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">LOẠI</translation>
+        <translation>LOẠI</translation>
     </message>
     <message>
         <source>UP</source>
@@ -4729,7 +4729,7 @@ Khóa miễn phí tại: data.bls.gov/registrationEngine/</translation>
     </message>
     <message>
         <source>OUTPUT</source>
-        <translation type="unfinished">ĐẦU RA</translation>
+        <translation>ĐẦU RA</translation>
     </message>
     <message>
         <source>OUTPUT [collapsed]</source>
@@ -4941,11 +4941,11 @@ Dữ liệu CFTC miễn phí — không cần API key</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">MO CUA</translation>
+        <translation>MỞ</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">LƯU</translation>
+        <translation>LƯU</translation>
     </message>
     <message>
         <source>+ CELL</source>
@@ -5185,7 +5185,7 @@ Thao tác này sẽ xóa tất cả khoản nắm giữ và giao dịch.</transl
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">XÓA</translation>
+        <translation>XÓA</translation>
     </message>
 </context>
 <context>
@@ -5208,7 +5208,7 @@ Thao tác này sẽ xóa tất cả khoản nắm giữ và giao dịch.</transl
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Ngày</translation>
+        <translation>Ngày</translation>
     </message>
     <message>
         <source>Lat</source>
@@ -5224,7 +5224,7 @@ Thao tác này sẽ xóa tất cả khoản nắm giữ và giao dịch.</transl
     </message>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">TỔNG QUAN</translation>
+        <translation>TỔNG QUAN</translation>
     </message>
     <message>
         <source>EVENTS</source>
@@ -5262,7 +5262,7 @@ Thao tác này sẽ xóa tất cả khoản nắm giữ và giao dịch.</transl
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">QUỐC GIA</translation>
+        <translation>QUỐC GIA</translation>
     </message>
     <message>
         <source>CITY</source>
@@ -5270,7 +5270,7 @@ Thao tác này sẽ xóa tất cả khoản nắm giữ và giao dịch.</transl
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">NGÀY</translation>
+        <translation>NGÀY</translation>
     </message>
     <message>
         <source>SOURCE</source>
@@ -5345,7 +5345,7 @@ Thao tác này sẽ xóa tất cả khoản nắm giữ và giao dịch.</transl
     </message>
     <message>
         <source>QUICK ACTIONS</source>
-        <translation type="unfinished">HÀNH ĐỘNG NHANH</translation>
+        <translation>HÀNH ĐỘNG NHANH</translation>
     </message>
     <message>
         <source>Send Email</source>
@@ -5424,7 +5424,7 @@ Thao tác này sẽ xóa tất cả khoản nắm giữ và giao dịch.</transl
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">XÓA</translation>
+        <translation>XÓA</translation>
     </message>
     <message>
         <source>SKIP</source>
@@ -5559,7 +5559,7 @@ Thao tác này không thể hoàn tác.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
     <message>
         <source>Failed</source>
@@ -5619,7 +5619,7 @@ Thao tác này không thể hoàn tác.</translation>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">CÔNG CỤ</translation>
+        <translation>CÔNG CỤ</translation>
     </message>
     <message>
         <source>TERMINAL TOOLS</source>
@@ -5627,11 +5627,11 @@ Thao tác này không thể hoàn tác.</translation>
     </message>
     <message>
         <source>FEATURES</source>
-        <translation type="unfinished">TÍNH NĂNG</translation>
+        <translation>TÍNH NĂNG</translation>
     </message>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">MÁY CHỦ MCP</translation>
+        <translation>MÁY CHỦ MCP</translation>
     </message>
     <message>
         <source>e.g. My Equity Analyst</source>
@@ -5731,7 +5731,7 @@ Thao tác này không thể hoàn tác.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Loại</translation>
+        <translation>Loại</translation>
     </message>
     <message>
         <source>URLs (one per line)</source>
@@ -5942,7 +5942,7 @@ Thao tác này không thể hoàn tác.</translation>
     </message>
     <message>
         <source>SETTINGS</source>
-        <translation type="unfinished">CÀI ĐẶT</translation>
+        <translation>CÀI ĐẶT</translation>
     </message>
     <message>
         <source>STAKE</source>
@@ -5950,7 +5950,7 @@ Thao tác này không thể hoàn tác.</translation>
     </message>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">THỊ TRƯỜNG</translation>
+        <translation>THỊ TRƯỜNG</translation>
     </message>
     <message>
         <source>ROADMAP</source>
@@ -5970,7 +5970,7 @@ Thao tác này không thể hoàn tác.</translation>
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">BẢO MẬT</translation>
+        <translation>BẢO MẬT</translation>
     </message>
     <message>
         <source>● CONNECTED</source>
@@ -6017,136 +6017,136 @@ Thao tác này không thể hoàn tác.</translation>
     </message>
     <message>
         <source>OFFLINE</source>
-        <translation type="unfinished">NGOAI TUYEN</translation>
+        <translation>NGOẠI TUYẾN</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::CustomIndexView</name>
     <message>
         <source>CREATE INDEX</source>
-        <translation type="unfinished">TẠO CHỈ SỐ</translation>
+        <translation>TẠO CHỈ SỐ</translation>
     </message>
     <message>
         <source>MY INDICES</source>
-        <translation type="unfinished">CHỈ SỐ CỦA TÔI</translation>
+        <translation>CHỈ SỐ CỦA TÔI</translation>
     </message>
     <message>
         <source>PERFORMANCE</source>
-        <translation type="unfinished">HIỆU SUẤT</translation>
+        <translation>HIỆU SUẤT</translation>
     </message>
     <message>
         <source>CREATE CUSTOM INDEX</source>
-        <translation type="unfinished">TẠO CHỈ SỐ TÙY CHỈNH</translation>
+        <translation>TẠO CHỈ SỐ TÙY CHỈNH</translation>
     </message>
     <message>
         <source>My Custom Index</source>
-        <translation type="unfinished">Chỉ Số Tùy Chỉnh Của Tôi</translation>
+        <translation>Chỉ Số Tùy Chỉnh Của Tôi</translation>
     </message>
     <message>
         <source>NAME:</source>
-        <translation type="unfinished">TÊN:</translation>
+        <translation>TÊN:</translation>
     </message>
     <message>
         <source>METHOD:</source>
-        <translation type="unfinished">PHƯƠNG PHÁP:</translation>
+        <translation>PHƯƠNG PHÁP:</translation>
     </message>
     <message>
         <source>BASE:</source>
-        <translation type="unfinished">CƠ SỞ:</translation>
+        <translation>CƠ SỞ:</translation>
     </message>
     <message>
         <source>CONSTITUENTS (from portfolio holdings)</source>
-        <translation type="unfinished">THÀNH PHẦN (từ các khoản nắm giữ trong danh mục)</translation>
+        <translation>THÀNH PHẦN (từ các khoản nắm giữ trong danh mục)</translation>
     </message>
     <message>
         <source>INCLUDE</source>
-        <translation type="unfinished">BAO GỒM</translation>
+        <translation>BAO GỒM</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">GIÁ</translation>
+        <translation>GIÁ</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">TRỌNG SỐ</translation>
+        <translation>TRỌNG SỐ</translation>
     </message>
     <message>
         <source>MKT VALUE</source>
-        <translation type="unfinished">GIÁ TRỊ TT</translation>
+        <translation>GIÁ TRỊ TT</translation>
     </message>
     <message>
         <source>MY CUSTOM INDICES</source>
-        <translation type="unfinished">CHỈ SỐ TÙY CHỈNH CỦA TÔI</translation>
+        <translation>CHỈ SỐ TÙY CHỈNH CỦA TÔI</translation>
     </message>
     <message>
         <source>DELETE SELECTED</source>
-        <translation type="unfinished">XÓA ĐÃ CHỌN</translation>
+        <translation>XÓA ĐÃ CHỌN</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">TÊN</translation>
+        <translation>TÊN</translation>
     </message>
     <message>
         <source>METHOD</source>
-        <translation type="unfinished">PHƯƠNG PHÁP</translation>
+        <translation>PHƯƠNG PHÁP</translation>
     </message>
     <message>
         <source>BASE</source>
-        <translation type="unfinished">CƠ SỞ</translation>
+        <translation>CƠ SỞ</translation>
     </message>
     <message>
         <source>CURRENT VALUE</source>
-        <translation type="unfinished">GIÁ TRỊ HIỆN TẠI</translation>
+        <translation>GIÁ TRỊ HIỆN TẠI</translation>
     </message>
     <message>
         <source>CHANGE</source>
-        <translation type="unfinished">THAY ĐỔI</translation>
+        <translation>THAY ĐỔI</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">ĐÃ TẠO</translation>
+        <translation>ĐÃ TẠO</translation>
     </message>
     <message>
         <source>No custom indices created yet.
 Go to CREATE INDEX tab to build one from your portfolio.</source>
-        <translation type="unfinished">Chưa tạo chỉ số tùy chỉnh nào.
+        <translation>Chưa tạo chỉ số tùy chỉnh nào.
 Vào tab TẠO CHỈ SỐ để xây dựng từ danh mục của bạn.</translation>
     </message>
     <message>
         <source>INDEX PERFORMANCE</source>
-        <translation type="unfinished">HIỆU SUẤT CHỈ SỐ</translation>
+        <translation>HIỆU SUẤT CHỈ SỐ</translation>
     </message>
     <message>
         <source>Select an index from MY INDICES to see its performance.</source>
-        <translation type="unfinished">Chọn một chỉ số từ CHỈ SỐ CỦA TÔI để xem hiệu suất.</translation>
+        <translation>Chọn một chỉ số từ CHỈ SỐ CỦA TÔI để xem hiệu suất.</translation>
     </message>
     <message>
         <source>Base value must be positive.</source>
-        <translation type="unfinished">Giá trị cơ sở phải dương.</translation>
+        <translation>Giá trị cơ sở phải dương.</translation>
     </message>
     <message>
         <source>Select at least one constituent.</source>
-        <translation type="unfinished">Chọn ít nhất một thành phần.</translation>
+        <translation>Chọn ít nhất một thành phần.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
     <message>
         <source>Index '%1' created successfully.</source>
-        <translation type="unfinished">Chỉ số '%1' đã được tạo thành công.</translation>
+        <translation>Chỉ số '%1' đã được tạo thành công.</translation>
     </message>
     <message>
         <source>PERFORMANCE — %1  (no data)</source>
-        <translation type="unfinished">HIỆU SUẤT — %1  (không có dữ liệu)</translation>
+        <translation>HIỆU SUẤT — %1  (không có dữ liệu)</translation>
     </message>
     <message>
         <source>PERFORMANCE — %1</source>
-        <translation type="unfinished">HIỆU SUẤT — %1</translation>
+        <translation>HIỆU SUẤT — %1</translation>
     </message>
 </context>
 <context>
@@ -6172,7 +6172,7 @@ Vào tab TẠO CHỈ SỐ để xây dựng từ danh mục của bạn.</transl
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">TRẠNG THÁI</translation>
+        <translation>TRẠNG THÁI</translation>
     </message>
     <message>
         <source>No data — select a series</source>
@@ -6191,7 +6191,7 @@ Vào tab TẠO CHỈ SỐ để xây dựng từ danh mục của bạn.</transl
     </message>
     <message>
         <source>COMPARE</source>
-        <translation type="unfinished">SO SÁNH</translation>
+        <translation>SO SÁNH</translation>
     </message>
     <message>
         <source>CHART:</source>
@@ -6233,11 +6233,11 @@ Nhấp  + THÊM Ô  ở bảng bên trái để bắt đầu</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">LÀM MỚI</translation>
+        <translation>LÀM MỚI</translation>
     </message>
     <message>
         <source>EXPORT CSV</source>
-        <translation type="unfinished">XUẤT CSV</translation>
+        <translation>XUẤT CSV</translation>
     </message>
     <message>
         <source>SLOT %1</source>
@@ -6281,11 +6281,11 @@ Nhấp  + THÊM Ô  ở bảng bên trái để bắt đầu</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Xuất CSV</translation>
+        <translation>Xuất CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">Tệp CSV (*.csv)</translation>
+        <translation>Tệp CSV (*.csv)</translation>
     </message>
     <message>
         <source>Failed to open file: %1</source>
@@ -6424,7 +6424,7 @@ Nhấp  + THÊM Ô  ở bảng bên trái để bắt đầu</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">DANG TAI...</translation>
+        <translation>ĐANG TẢI...</translation>
     </message>
 </context>
 <context>
@@ -6557,7 +6557,7 @@ Nhấp  + THÊM Ô  ở bảng bên trái để bắt đầu</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">LÀM MỚI</translation>
+        <translation>LÀM MỚI</translation>
     </message>
     <message>
         <source>Force-refresh all live data on the dashboard</source>
@@ -6569,7 +6569,7 @@ Nhấp  + THÊM Ô  ở bảng bên trái để bắt đầu</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">LƯU</translation>
+        <translation>LƯU</translation>
     </message>
     <message>
         <source>RESET</source>
@@ -6612,7 +6612,7 @@ Nhấp  + THÊM Ô  ở bảng bên trái để bắt đầu</translation>
     </message>
     <message>
         <source>CREATE</source>
-        <translation type="unfinished">TẠO</translation>
+        <translation>TẠO</translation>
     </message>
     <message>
         <source>API CONFIG</source>
@@ -6676,7 +6676,7 @@ Nhấp  + THÊM Ô  ở bảng bên trái để bắt đầu</translation>
     </message>
     <message>
         <source>SYSTEM</source>
-        <translation type="unfinished">HỆ THỐNG</translation>
+        <translation>HỆ THỐNG</translation>
     </message>
     <message>
         <source>MAPPING ENGINE</source>
@@ -6688,7 +6688,7 @@ Nhấp  + THÊM Ô  ở bảng bên trái để bắt đầu</translation>
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">BẢO MẬT</translation>
+        <translation>BẢO MẬT</translation>
     </message>
     <message>
         <source>CURRENT MAPPING</source>
@@ -6776,7 +6776,7 @@ Nhấp  + THÊM Ô  ở bảng bên trái để bắt đầu</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Loại</translation>
+        <translation>Loại</translation>
     </message>
     <message>
         <source>Required</source>
@@ -6846,7 +6846,7 @@ Dữ liệu nhạy cảm không bao giờ được lưu dưới dạng văn bả
     </message>
     <message>
         <source>RUN TEST</source>
-        <translation type="unfinished">CHẠY THỬ</translation>
+        <translation>CHẠY THỬ</translation>
     </message>
     <message>
         <source>Test results will appear here...</source>
@@ -6866,7 +6866,7 @@ Dữ liệu nhạy cảm không bao giờ được lưu dưới dạng văn bả
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">XÓA</translation>
+        <translation>XÓA</translation>
     </message>
     <message>
         <source>+ NEW MAPPING</source>
@@ -7075,7 +7075,7 @@ THẺ: %12</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TỔNG</translation>
+        <translation>TỔNG</translation>
     </message>
     <message>
         <source>ACTIVE</source>
@@ -7099,7 +7099,7 @@ THẺ: %12</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">LOẠI</translation>
+        <translation>LOẠI</translation>
     </message>
     <message>
         <source>CATEGORY</source>
@@ -7166,7 +7166,7 @@ Thao tác này không thể hoàn tác. Bạn có thể thêm lại chúng từ 
     <name>fincept::screens::DeploymentDashboard</name>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>LTP</source>
@@ -7174,7 +7174,7 @@ Thao tác này không thể hoàn tác. Bạn có thể thêm lại chúng từ 
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">TỶ LỆ THẮNG</translation>
+        <translation>TỶ LỆ THẮNG</translation>
     </message>
     <message>
         <source>POSITION</source>
@@ -7226,7 +7226,7 @@ Thao tác này không thể hoàn tác. Bạn có thể thêm lại chúng từ 
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">LÀM MỚI</translation>
+        <translation>LÀM MỚI</translation>
     </message>
     <message>
         <source>STOP ALL</source>
@@ -7489,7 +7489,7 @@ Thao tác này không thể hoàn tác. Bạn có thể thêm lại chúng từ 
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">LỖI</translation>
+        <translation>LỖI</translation>
     </message>
     <message>
         <source>DIRTY PRICE</source>
@@ -7643,19 +7643,19 @@ Thao tác này không thể hoàn tác. Bạn có thể thêm lại chúng từ 
     </message>
     <message>
         <source>Dashboard</source>
-        <translation type="unfinished">Bảng điều khiển</translation>
+        <translation>Bảng điều khiển</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Thị trường</translation>
+        <translation>Thị trường</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">Tin tức</translation>
+        <translation>Tin tức</translation>
     </message>
     <message>
         <source>Watchlist</source>
-        <translation type="unfinished">Danh sách theo dõi</translation>
+        <translation>Danh sách theo dõi</translation>
     </message>
     <message>
         <source>TRADING</source>
@@ -7663,7 +7663,7 @@ Thao tác này không thể hoàn tác. Bạn có thể thêm lại chúng từ 
     </message>
     <message>
         <source>Crypto Trading</source>
-        <translation type="unfinished">Giao dịch tiền điện tử</translation>
+        <translation>Giao dịch tiền điện tử</translation>
     </message>
     <message>
         <source>Paper Trading</source>
@@ -7695,7 +7695,7 @@ Thao tác này không thể hoàn tác. Bạn có thể thêm lại chúng từ 
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Danh mục</translation>
+        <translation>Danh mục</translation>
     </message>
     <message>
         <source>M&amp;A Analytics</source>
@@ -7715,7 +7715,7 @@ Thao tác này không thể hoàn tác. Bạn có thể thêm lại chúng từ 
     </message>
     <message>
         <source>AI Chat</source>
-        <translation type="unfinished">Trò chuyện AI</translation>
+        <translation>Trò chuyện AI</translation>
     </message>
     <message>
         <source>Agent Studio</source>
@@ -7727,7 +7727,7 @@ Thao tác này không thể hoàn tác. Bạn có thể thêm lại chúng từ 
     </message>
     <message>
         <source>DATA SOURCES</source>
-        <translation type="unfinished">NGUỒN DỮ LIỆU</translation>
+        <translation>NGUỒN DỮ LIỆU</translation>
     </message>
     <message>
         <source>DBnomics</source>
@@ -7735,7 +7735,7 @@ Thao tác này không thể hoàn tác. Bạn có thể thêm lại chúng từ 
     </message>
     <message>
         <source>Economics</source>
-        <translation type="unfinished">Kinh tế</translation>
+        <translation>Kinh tế</translation>
     </message>
     <message>
         <source>AkShare Data</source>
@@ -7751,7 +7751,7 @@ Thao tác này không thể hoàn tác. Bạn có thể thêm lại chúng từ 
     </message>
     <message>
         <source>Geopolitics</source>
-        <translation type="unfinished">Địa chính trị</translation>
+        <translation>Địa chính trị</translation>
     </message>
     <message>
         <source>Maritime</source>
@@ -7767,7 +7767,7 @@ Thao tác này không thể hoàn tác. Bạn có thể thêm lại chúng từ 
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">CÔNG CỤ</translation>
+        <translation>CÔNG CỤ</translation>
     </message>
     <message>
         <source>Report Builder</source>
@@ -7787,11 +7787,11 @@ Thao tác này không thể hoàn tác. Bạn có thể thêm lại chúng từ 
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Ghi chú</translation>
+        <translation>Ghi chú</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">Máy chủ MCP</translation>
+        <translation>Máy chủ MCP</translation>
     </message>
     <message>
         <source>Data Mapping</source>
@@ -7803,11 +7803,11 @@ Thao tác này không thể hoàn tác. Bạn có thể thêm lại chúng từ 
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">Cài đặt</translation>
+        <translation>Cài đặt</translation>
     </message>
     <message>
         <source>Profile</source>
-        <translation type="unfinished">Hồ sơ</translation>
+        <translation>Hồ sơ</translation>
     </message>
     <message>
         <source>DOCUMENTATION</source>
@@ -8079,7 +8079,7 @@ Chụp màn hình (Ctrl+P) — Chụp vào tệp</translation>
     </message>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">TỔNG QUAN</translation>
+        <translation>TỔNG QUAN</translation>
     </message>
     <message>
         <source>The Dashboard is your primary workspace. It features a draggable widget grid where you can arrange market widgets, a scrolling ticker bar showing live prices, a market pulse panel with sector performance, and a status bar showing connection state.</source>
@@ -8157,7 +8157,7 @@ Chụp màn hình (Ctrl+P) — Chụp vào tệp</translation>
     </message>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">THỊ TRƯỜNG</translation>
+        <translation>THỊ TRƯỜNG</translation>
     </message>
     <message>
         <source>Global and regional market overview with auto-refresh</source>
@@ -8693,7 +8693,7 @@ CHUYÊN NGHIỆP: Mô hình định giá tùy chỉnh, hiệu chỉnh bề mặt
     </message>
     <message>
         <source>PORTFOLIO</source>
-        <translation type="unfinished">DANH MỤC</translation>
+        <translation>DANH MỤC</translation>
     </message>
     <message>
         <source>Multi-portfolio management with analytics and AI agent</source>
@@ -8957,7 +8957,7 @@ CHUYÊN NGHIỆP: Quy trình đa tác nhân, tích hợp máy chủ MCP, pipelin
     </message>
     <message>
         <source>AGENT STUDIO</source>
-        <translation type="unfinished">XƯỞNG TÁC NHÂN</translation>
+        <translation>XƯỞNG TÁC NHÂN</translation>
     </message>
     <message>
         <source>Configure and manage AI agents, teams, and workflows</source>
@@ -9111,7 +9111,7 @@ CHUYÊN NGHIỆP: Tích hợp dữ liệu DBnomics vào các mô hình giao dị
     </message>
     <message>
         <source>ECONOMICS</source>
-        <translation type="unfinished">KINH TẾ</translation>
+        <translation>KINH TẾ</translation>
     </message>
     <message>
         <source>Macroeconomic data and analysis tools</source>
@@ -9601,7 +9601,7 @@ CHUYÊN GIA: Tự động cập nhật mô hình với nguồn dữ liệu trự
     </message>
     <message>
         <source>NOTES</source>
-        <translation type="unfinished">GHI CHÚ</translation>
+        <translation>GHI CHÚ</translation>
     </message>
     <message>
         <source>Persistent note-taking for research and trade journals</source>
@@ -9645,7 +9645,7 @@ CHUYÊN GIA: Quy trình nghiên cứu tích hợp với ghi chú liên kết t�
     </message>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">MÁY CHỦ MCP</translation>
+        <translation>MÁY CHỦ MCP</translation>
     </message>
     <message>
         <source>Model Context Protocol server management</source>
@@ -9733,7 +9733,7 @@ CHUYÊN GIA: Đường ống dữ liệu đa nguồn phức tạp có xác thự
     </message>
     <message>
         <source>SETTINGS</source>
-        <translation type="unfinished">CÀI ĐẶT</translation>
+        <translation>CÀI ĐẶT</translation>
     </message>
     <message>
         <source>Application configuration and preferences</source>
@@ -9865,7 +9865,7 @@ Nguồn: EconDB — dữ liệu kinh tế vĩ mô, không cần khóa API</trans
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">QUỐC GIA</translation>
+        <translation>QUỐC GIA</translation>
     </message>
     <message>
         <source>Fetching EconDB: %1 — %2…</source>
@@ -9892,7 +9892,7 @@ Nguồn: EconDB — dữ liệu kinh tế vĩ mô, không cần khóa API</trans
     </message>
     <message>
         <source>CHANGE</source>
-        <translation type="unfinished">THAY ĐỔI</translation>
+        <translation>THAY ĐỔI</translation>
     </message>
     <message>
         <source>MIN</source>
@@ -9920,7 +9920,7 @@ Nguồn: EconDB — dữ liệu kinh tế vĩ mô, không cần khóa API</trans
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
     <message>
         <source>No data returned for this selection</source>
@@ -9932,11 +9932,11 @@ Nguồn: EconDB — dữ liệu kinh tế vĩ mô, không cần khóa API</trans
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Xuất CSV</translation>
+        <translation>Xuất CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">Tệp CSV (*.csv)</translation>
+        <translation>Tệp CSV (*.csv)</translation>
     </message>
 </context>
 <context>
@@ -9961,7 +9961,7 @@ Nguồn: Forex Factory — lịch kinh tế toàn cầu (không cần khóa API)
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">NGÀY</translation>
+        <translation>NGÀY</translation>
     </message>
     <message>
         <source>IMPACT</source>
@@ -9999,103 +9999,103 @@ Nguồn: Forex Factory — lịch kinh tế toàn cầu (không cần khóa API)
     <name>fincept::screens::EconomicsView</name>
     <message>
         <source>PORTFOLIO ECONOMICS OVERVIEW</source>
-        <translation type="unfinished">TỔNG QUAN KINH TẾ DANH MỤC</translation>
+        <translation>TỔNG QUAN KINH TẾ DANH MỤC</translation>
     </message>
     <message>
         <source>Per-holding contribution to portfolio value, P&amp;L, and risk</source>
-        <translation type="unfinished">Đóng góp của từng khoản nắm giữ vào giá trị danh mục, P&amp;L và rủi ro</translation>
+        <translation>Đóng góp của từng khoản nắm giữ vào giá trị danh mục, P&amp;L và rủi ro</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>SECTOR</source>
-        <translation type="unfinished">NGÀNH</translation>
+        <translation>NGÀNH</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">TRỌNG SỐ</translation>
+        <translation>TRỌNG SỐ</translation>
     </message>
     <message>
         <source>COST BASIS</source>
-        <translation type="unfinished">GIÁ VỐN</translation>
+        <translation>GIÁ VỐN</translation>
     </message>
     <message>
         <source>MARKET VALUE</source>
-        <translation type="unfinished">GIÁ TRỊ THỊ TRƯỜNG</translation>
+        <translation>GIÁ TRỊ THỊ TRƯỜNG</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">P&amp;L %</translation>
+        <translation>P&amp;L %</translation>
     </message>
     <message>
         <source>PORTFOLIO FACTOR SENSITIVITY</source>
-        <translation type="unfinished">ĐỘ NHẠY YẾU TỐ DANH MỤC</translation>
+        <translation>ĐỘ NHẠY YẾU TỐ DANH MỤC</translation>
     </message>
     <message>
         <source>Estimated portfolio impact from macro factor shocks, weighted by holdings</source>
-        <translation type="unfinished">Tác động ước tính lên danh mục từ các cú sốc yếu tố vĩ mô, có trọng số theo nắm giữ</translation>
+        <translation>Tác động ước tính lên danh mục từ các cú sốc yếu tố vĩ mô, có trọng số theo nắm giữ</translation>
     </message>
     <message>
         <source>FACTOR SHOCK</source>
-        <translation type="unfinished">CÚ SỐC YẾU TỐ</translation>
+        <translation>CÚ SỐC YẾU TỐ</translation>
     </message>
     <message>
         <source>SENSITIVITY</source>
-        <translation type="unfinished">ĐỘ NHẠY</translation>
+        <translation>ĐỘ NHẠY</translation>
     </message>
     <message>
         <source>DIRECTION</source>
-        <translation type="unfinished">HƯỚNG</translation>
+        <translation>HƯỚNG</translation>
     </message>
     <message>
         <source>ESTIMATED IMPACT</source>
-        <translation type="unfinished">TÁC ĐỘNG ƯỚC TÍNH</translation>
+        <translation>TÁC ĐỘNG ƯỚC TÍNH</translation>
     </message>
     <message>
         <source>Positive</source>
-        <translation type="unfinished">Tích cực</translation>
+        <translation>Tích cực</translation>
     </message>
     <message>
         <source>Negative</source>
-        <translation type="unfinished">Tiêu cực</translation>
+        <translation>Tiêu cực</translation>
     </message>
     <message>
         <source>Interest Rates (+1%)</source>
-        <translation type="unfinished">Lãi suất (+1%)</translation>
+        <translation>Lãi suất (+1%)</translation>
     </message>
     <message>
         <source>GDP Growth (+1%)</source>
-        <translation type="unfinished">Tăng trưởng GDP (+1%)</translation>
+        <translation>Tăng trưởng GDP (+1%)</translation>
     </message>
     <message>
         <source>Inflation / CPI (+1%)</source>
-        <translation type="unfinished">Lạm phát / CPI (+1%)</translation>
+        <translation>Lạm phát / CPI (+1%)</translation>
     </message>
     <message>
         <source>USD Strength (+1%)</source>
-        <translation type="unfinished">Sức mạnh USD (+1%)</translation>
+        <translation>Sức mạnh USD (+1%)</translation>
     </message>
     <message>
         <source>Oil Price (+10%)</source>
-        <translation type="unfinished">Giá dầu (+10%)</translation>
+        <translation>Giá dầu (+10%)</translation>
     </message>
     <message>
         <source>Consumer Spending (+1%)</source>
-        <translation type="unfinished">Chi tiêu tiêu dùng (+1%)</translation>
+        <translation>Chi tiêu tiêu dùng (+1%)</translation>
     </message>
     <message>
         <source>Credit Spreads (+50bps)</source>
-        <translation type="unfinished">Chênh lệch tín dụng (+50bps)</translation>
+        <translation>Chênh lệch tín dụng (+50bps)</translation>
     </message>
     <message>
         <source>Unemployment (+1%)</source>
-        <translation type="unfinished">Thất nghiệp (+1%)</translation>
+        <translation>Thất nghiệp (+1%)</translation>
     </message>
     <message>
         <source>CURRENT MACRO CONDITIONS  (LIVE · FRED)</source>
@@ -10125,7 +10125,7 @@ Khóa được lưu trữ ở dạng mã hóa và chia sẻ cho tất cả các 
     </message>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">HIỆN TẠI</translation>
+        <translation>HIỆN TẠI</translation>
     </message>
     <message>
         <source>AS OF</source>
@@ -10148,7 +10148,7 @@ Khóa được lưu trữ ở dạng mã hóa và chia sẻ cho tất cả các 
     <name>fincept::screens::EditTransactionDialog</name>
     <message>
         <source>Edit Transaction</source>
-        <translation type="unfinished">Chỉnh sửa giao dịch</translation>
+        <translation>Chỉnh sửa giao dịch</translation>
     </message>
     <message>
         <source>EDIT %1 — %2</source>
@@ -10180,7 +10180,7 @@ Khóa được lưu trữ ở dạng mã hóa và chia sẻ cho tất cả các 
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">LƯU</translation>
+        <translation>LƯU</translation>
     </message>
 </context>
 <context>
@@ -10328,7 +10328,7 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BETA</translation>
+        <translation>BETA</translation>
     </message>
     <message>
         <source>SHORT RATIO</source>
@@ -10355,7 +10355,7 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>EXPORT CSV</source>
-        <translation type="unfinished">XUẤT CSV</translation>
+        <translation>XUẤT CSV</translation>
     </message>
     <message>
         <source>Metric</source>
@@ -10658,7 +10658,7 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">LÀM MỚI</translation>
+        <translation>LÀM MỚI</translation>
     </message>
     <message>
         <source>Search for a symbol to load news.</source>
@@ -10693,15 +10693,15 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">MO CUA</translation>
+        <translation>MỞ</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">CAO</translation>
+        <translation>CAO</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">THẤP</translation>
+        <translation>THẤP</translation>
     </message>
     <message>
         <source>PREV CLOSE</source>
@@ -10709,7 +10709,7 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">KHỐI LƯỢNG</translation>
+        <translation>KHỐI LƯỢNG</translation>
     </message>
     <message>
         <source>VALUATION</source>
@@ -10741,7 +10741,7 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BETA</translation>
+        <translation>BETA</translation>
     </message>
     <message>
         <source>SHARE STATS</source>
@@ -10873,7 +10873,7 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>MUA</translation>
     </message>
     <message>
         <source>HOLD</source>
@@ -10881,7 +10881,7 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>BÁN</translation>
     </message>
     <message>
         <source>STRONG SELL</source>
@@ -10924,11 +10924,11 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">GIÁ</translation>
+        <translation>GIÁ</translation>
     </message>
     <message>
         <source>P/E</source>
@@ -10984,7 +10984,7 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BETA</translation>
+        <translation>BETA</translation>
     </message>
 </context>
 <context>
@@ -11043,7 +11043,7 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">Tin tức</translation>
+        <translation>Tin tức</translation>
     </message>
     <message>
         <source>Sentiment</source>
@@ -11051,7 +11051,7 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">BACKTEST</translation>
+        <translation>BACKTEST</translation>
     </message>
 </context>
 <context>
@@ -11070,7 +11070,7 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">LÀM MỚI</translation>
+        <translation>LÀM MỚI</translation>
     </message>
     <message>
         <source>Refreshing market sentiment…</source>
@@ -11090,7 +11090,7 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">TÓM TẮT</translation>
+        <translation>TÓM TẮT</translation>
     </message>
     <message>
         <source>AVERAGE BUZZ</source>
@@ -11181,7 +11181,7 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>LAST</source>
-        <translation type="unfinished">CUỐI</translation>
+        <translation>CUỐI</translation>
     </message>
     <message>
         <source>N/A</source>
@@ -11200,11 +11200,11 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>MUA</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>BÁN</translation>
     </message>
     <message>
         <source>STRONG SELL</source>
@@ -11212,7 +11212,7 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">TRUNG LAP</translation>
+        <translation>TRUNG LẬP</translation>
     </message>
     <message>
         <source>Deeply oversold — potential reversal zone</source>
@@ -11532,7 +11532,7 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">GIÁ TRỊ</translation>
+        <translation>GIÁ TRỊ</translation>
     </message>
     <message>
         <source>SIGNAL</source>
@@ -11675,11 +11675,11 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>Name:</source>
-        <translation type="unfinished">Tên:</translation>
+        <translation>Tên:</translation>
     </message>
     <message>
         <source>Currency:</source>
-        <translation type="unfinished">Tiền tệ:</translation>
+        <translation>Tiền tệ:</translation>
     </message>
     <message>
         <source>Loading portfolios...</source>
@@ -11723,7 +11723,7 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">NHẬP</translation>
+        <translation>NHẬP</translation>
     </message>
     <message>
         <source>(no portfolios yet)</source>
@@ -11749,6 +11749,18 @@ Lấy khóa miễn phí tại: www.eia.gov/opendata/register.php</translation>
         <source>Imported %1 holdings.</source>
         <translation>Đã nhập %1 mục nắm giữ.</translation>
     </message>
+    <message>
+        <source>Failed to queue strategy</source>
+        <translation>Không thể đưa chiến lược vào hàng đợi</translation>
+    </message>
+    <message>
+        <source>Order cancelled</source>
+        <translation>Đã hủy lệnh</translation>
+    </message>
+    <message>
+        <source>Strategy queued for approval (%1 legs)</source>
+        <translation>Chiến lược đã vào hàng đợi chờ phê duyệt (%1 nhánh)</translation>
+    </message>
 </context>
 <context>
     <name>fincept::screens::EurostatPanel</name>
@@ -11764,7 +11776,7 @@ Nguồn: Eurostat — cơ quan thống kê EU</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">QUỐC GIA</translation>
+        <translation>QUỐC GIA</translation>
     </message>
     <message>
         <source>Fetching Eurostat: %1 — %2…</source>
@@ -11783,7 +11795,7 @@ Nguồn: Eurostat — cơ quan thống kê EU</translation>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">NHẬP</translation>
+        <translation>NHẬP</translation>
     </message>
     <message>
         <source>Import XLSX/CSV file</source>
@@ -11823,7 +11835,7 @@ Nguồn: Eurostat — cơ quan thống kê EU</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">XÓA</translation>
+        <translation>XÓA</translation>
     </message>
     <message>
         <source>Delete current sheet</source>
@@ -11871,20 +11883,20 @@ Xuất CSV vẫn khả dụng qua thanh công cụ.</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Xuất CSV</translation>
+        <translation>Xuất CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">Tệp CSV (*.csv)</translation>
+        <translation>Tệp CSV (*.csv)</translation>
     </message>
     <message>
         <source>Export failed</source>
-        <translation type="unfinished">Xuất thất bại</translation>
+        <translation>Xuất thất bại</translation>
     </message>
     <message>
         <source>Could not open file for writing:
 %1</source>
-        <translation type="unfinished">Không thể mở tệp để ghi:
+        <translation>Không thể mở tệp để ghi:
 %1</translation>
     </message>
     <message>
@@ -11959,7 +11971,7 @@ Không cần API key</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">LÀM MỚI</translation>
+        <translation>LÀM MỚI</translation>
     </message>
     <message>
         <source>UPLOAD FILES</source>
@@ -11971,7 +11983,7 @@ Không cần API key</translation>
     </message>
     <message>
         <source>DELETE SELECTED</source>
-        <translation type="unfinished">XÓA ĐÃ CHỌN</translation>
+        <translation>XÓA ĐÃ CHỌN</translation>
     </message>
     <message>
         <source>CLEAR SELECTION</source>
@@ -12089,7 +12101,7 @@ từ bất kỳ màn hình nào. Bạn cũng có thể tải tệp lên thủ c�
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">LƯU</translation>
+        <translation>LƯU</translation>
     </message>
     <message>
         <source>DEL</source>
@@ -12121,7 +12133,7 @@ từ bất kỳ màn hình nào. Bạn cũng có thể tải tệp lên thủ c�
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Loại</translation>
+        <translation>Loại</translation>
     </message>
 </context>
 <context>
@@ -12468,7 +12480,7 @@ Không cần API key</translation>
     </message>
     <message>
         <source>EDIT PROFILE</source>
-        <translation type="unfinished">SỬA HỒ SƠ</translation>
+        <translation>SỬA HỒ SƠ</translation>
     </message>
     <message>
         <source>DISPLAY NAME</source>
@@ -12519,7 +12531,7 @@ Không cần API key</translation>
     </message>
     <message>
         <source>TODAY</source>
-        <translation type="unfinished">HÔM NAY</translation>
+        <translation>HÔM NAY</translation>
     </message>
     <message>
         <source>  ▲  TRENDING POSTS</source>
@@ -12756,7 +12768,7 @@ fred.stlouisfed.org/docs/api/api_key.html</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">QUỐC GIA</translation>
+        <translation>QUỐC GIA</translation>
     </message>
     <message>
         <source>CITY</source>
@@ -12820,7 +12832,7 @@ fred.stlouisfed.org/docs/api/api_key.html</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">DANG TAI...</translation>
+        <translation>ĐANG TẢI...</translation>
     </message>
     <message>
         <source>%1 MAPPED / %2 LOADED</source>
@@ -12840,7 +12852,7 @@ Tổng trong API: %3</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">LỖI</translation>
+        <translation>LỖI</translation>
     </message>
 </context>
 <context>
@@ -12874,7 +12886,7 @@ Không cần khóa API cho bất kỳ nguồn nào</translation>
     <name>fincept::screens::GovDataAustraliaPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← QUAY LẠI</translation>
+        <translation>← QUAY LẠI</translation>
     </message>
     <message>
         <source>AGENCIES</source>
@@ -12902,15 +12914,15 @@ Không cần khóa API cho bất kỳ nguồn nào</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">TÊN</translation>
+        <translation>TÊN</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">MÔ TẢ</translation>
+        <translation>MÔ TẢ</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">ĐÃ TẠO</translation>
+        <translation>ĐÃ TẠO</translation>
     </message>
     <message>
         <source>TITLE</source>
@@ -12942,7 +12954,7 @@ Không cần khóa API cho bất kỳ nguồn nào</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">MO CUA</translation>
+        <translation>MỞ</translation>
     </message>
     <message>
         <source>Loading Australian Government agencies…</source>
@@ -13018,14 +13030,14 @@ Không cần khóa API cho bất kỳ nguồn nào</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataCongressPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← QUAY LẠI</translation>
+        <translation>← QUAY LẠI</translation>
     </message>
     <message>
         <source>BILLS</source>
@@ -13033,7 +13045,7 @@ Không cần khóa API cho bất kỳ nguồn nào</translation>
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">TÓM TẮT</translation>
+        <translation>TÓM TẮT</translation>
     </message>
     <message>
         <source>FETCH</source>
@@ -13049,7 +13061,7 @@ Không cần khóa API cho bất kỳ nguồn nào</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">LOẠI</translation>
+        <translation>LOẠI</translation>
     </message>
     <message>
         <source>All Types</source>
@@ -13101,7 +13113,7 @@ Không cần khóa API cho bất kỳ nguồn nào</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">NGÀY</translation>
+        <translation>NGÀY</translation>
     </message>
     <message>
         <source>BILL TYPE</source>
@@ -13141,14 +13153,14 @@ Không cần khóa API cho bất kỳ nguồn nào</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataFrancePanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← QUAY LẠI</translation>
+        <translation>← QUAY LẠI</translation>
     </message>
     <message>
         <source>DATA SERVICES</source>
@@ -13184,7 +13196,7 @@ Không cần khóa API cho bất kỳ nguồn nào</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">TÊN</translation>
+        <translation>TÊN</translation>
     </message>
     <message>
         <source>VIEWS</source>
@@ -13196,7 +13208,7 @@ Không cần khóa API cho bất kỳ nguồn nào</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">ĐÃ TẠO</translation>
+        <translation>ĐÃ TẠO</translation>
     </message>
     <message>
         <source>TITLE</source>
@@ -13220,7 +13232,7 @@ Không cần khóa API cho bất kỳ nguồn nào</translation>
     </message>
     <message>
         <source>CODE</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>POSTAL</source>
@@ -13240,7 +13252,7 @@ Không cần khóa API cho bất kỳ nguồn nào</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">LOẠI</translation>
+        <translation>LOẠI</translation>
     </message>
     <message>
         <source>Loading data services from data.gouv.fr…</source>
@@ -13316,14 +13328,14 @@ Không cần khóa API cho bất kỳ nguồn nào</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataHKPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← QUAY LẠI</translation>
+        <translation>← QUAY LẠI</translation>
     </message>
     <message>
         <source>CATEGORIES</source>
@@ -13363,7 +13375,7 @@ Không cần khóa API cho bất kỳ nguồn nào</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">TÊN</translation>
+        <translation>TÊN</translation>
     </message>
     <message>
         <source>FORMAT</source>
@@ -13455,7 +13467,7 @@ Hãy thử tìm kiếm theo tên bằng hộp tìm kiếm ở trên.</translatio
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
 </context>
 <context>
@@ -13498,7 +13510,7 @@ Hãy thử tìm kiếm theo tên bằng hộp tìm kiếm ở trên.</translatio
     </message>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← QUAY LẠI</translation>
+        <translation>← QUAY LẠI</translation>
     </message>
     <message>
         <source>DATASETS</source>
@@ -13534,7 +13546,7 @@ Hãy thử tìm kiếm theo tên bằng hộp tìm kiếm ở trên.</translatio
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">TÊN</translation>
+        <translation>TÊN</translation>
     </message>
     <message>
         <source>FORMAT</source>
@@ -13546,7 +13558,7 @@ Hãy thử tìm kiếm theo tên bằng hộp tìm kiếm ở trên.</translatio
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">MO CUA</translation>
+        <translation>MỞ</translation>
     </message>
     <message>
         <source>Loading %1…</source>
@@ -13606,15 +13618,15 @@ Hãy thử tìm kiếm theo tên bằng hộp tìm kiếm ở trên.</translatio
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Xuất CSV</translation>
+        <translation>Xuất CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">Tệp CSV (*.csv)</translation>
+        <translation>Tệp CSV (*.csv)</translation>
     </message>
     <message>
         <source>✗ FAILED</source>
@@ -13682,7 +13694,7 @@ Bộ chọn hiển thị tất cả cổng CKAN do nhà cung cấp toàn cầu b
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">TÓM TẮT</translation>
+        <translation>TÓM TẮT</translation>
     </message>
     <message>
         <source>FETCH</source>
@@ -13702,11 +13714,11 @@ Bộ chọn hiển thị tất cả cổng CKAN do nhà cung cấp toàn cầu b
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">LOẠI</translation>
+        <translation>LOẠI</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tat ca</translation>
+        <translation>Tất cả</translation>
     </message>
     <message>
         <source>Bills</source>
@@ -13714,7 +13726,7 @@ Bộ chọn hiển thị tất cả cổng CKAN do nhà cung cấp toàn cầu b
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Ghi chú</translation>
+        <translation>Ghi chú</translation>
     </message>
     <message>
         <source>Bonds</source>
@@ -13826,14 +13838,14 @@ Bộ chọn hiển thị tất cả cổng CKAN do nhà cung cấp toàn cầu b
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataUKPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← QUAY LẠI</translation>
+        <translation>← QUAY LẠI</translation>
     </message>
     <message>
         <source>PUBLISHERS</source>
@@ -13861,7 +13873,7 @@ Bộ chọn hiển thị tất cả cổng CKAN do nhà cung cấp toàn cầu b
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">TÊN</translation>
+        <translation>TÊN</translation>
     </message>
     <message>
         <source>TITLE</source>
@@ -13889,7 +13901,7 @@ Bộ chọn hiển thị tất cả cổng CKAN do nhà cung cấp toàn cầu b
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">MO CUA</translation>
+        <translation>MỞ</translation>
     </message>
     <message>
         <source>Loading UK Government publishers…</source>
@@ -13961,7 +13973,7 @@ Bộ chọn hiển thị tất cả cổng CKAN do nhà cung cấp toàn cầu b
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
 </context>
 <context>
@@ -14004,7 +14016,7 @@ Bộ chọn hiển thị tất cả cổng CKAN do nhà cung cấp toàn cầu b
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Ngày</translation>
+        <translation>Ngày</translation>
     </message>
     <message>
         <source>Resources</source>
@@ -14055,7 +14067,7 @@ Bộ chọn hiển thị tất cả cổng CKAN do nhà cung cấp toàn cầu b
     </message>
     <message>
         <source>QUICK ACTIONS</source>
-        <translation type="unfinished">HÀNH ĐỘNG NHANH</translation>
+        <translation>HÀNH ĐỘNG NHANH</translation>
     </message>
     <message>
         <source>Common tasks you can do right now</source>
@@ -14274,7 +14286,7 @@ Bộ chọn hiển thị tất cả cổng CKAN do nhà cung cấp toàn cầu b
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TỔNG</translation>
+        <translation>TỔNG</translation>
     </message>
     <message>
         <source>$FNCPT PRICE</source>
@@ -14321,11 +14333,11 @@ Bộ chọn hiển thị tất cả cổng CKAN do nhà cung cấp toàn cầu b
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">LÀM MỚI</translation>
+        <translation>LÀM MỚI</translation>
     </message>
     <message>
         <source>COPIED</source>
-        <translation type="unfinished">ĐÃ SAO CHÉP</translation>
+        <translation>ĐÃ SAO CHÉP</translation>
     </message>
     <message>
         <source>Solana wallet</source>
@@ -14357,11 +14369,11 @@ Bộ chọn hiển thị tất cả cổng CKAN do nhà cung cấp toàn cầu b
     </message>
     <message>
         <source>CONNECTED</source>
-        <translation type="unfinished">DA KET NOI</translation>
+        <translation>ĐÃ KẾT NỐI</translation>
     </message>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">NẮM GIỮ</translation>
+        <translation>NẮM GIỮ</translation>
     </message>
     <message>
         <source>POLL</source>
@@ -14424,7 +14436,7 @@ Tất cả các quốc gia: ALL</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">QUỐC GIA</translation>
+        <translation>QUỐC GIA</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -14463,7 +14475,7 @@ Tất cả các quốc gia: ALL</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">QUỐC GIA</translation>
+        <translation>QUỐC GIA</translation>
     </message>
     <message>
         <source>Select an indicator</source>
@@ -14579,11 +14591,11 @@ Bạn có thể nhập bằng nút DUYỆT.</translation>
     </message>
     <message>
         <source>Apply</source>
-        <translation type="unfinished">Áp dụng</translation>
+        <translation>Áp dụng</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Hủy</translation>
+        <translation>Hủy</translation>
     </message>
     <message>
         <source>Warning: already used by "%1"</source>
@@ -14633,7 +14645,7 @@ Bạn có thể nhập bằng nút DUYỆT.</translation>
     </message>
     <message>
         <source>New Window</source>
-        <translation type="unfinished">Cửa sổ mới</translation>
+        <translation>Cửa sổ mới</translation>
     </message>
     <message>
         <source>Open Saved Layout…</source>
@@ -14814,7 +14826,7 @@ Phạm vi 1-200. Tăng lên cho các quy trình dài (ví dụ điền các báo
     </message>
     <message>
         <source>API KEY</source>
-        <translation type="unfinished">KHÓA API</translation>
+        <translation>KHÓA API</translation>
     </message>
     <message>
         <source>BASE URL (custom endpoint)</source>
@@ -16610,7 +16622,7 @@ Bạn phải đăng nhập lại bằng email và mật khẩu
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Loại</translation>
+        <translation>Loại</translation>
     </message>
     <message>
         <source>▾ ADVANCED: RAW BBOX</source>
@@ -16780,11 +16792,11 @@ Bạn phải đăng nhập lại bằng email và mật khẩu
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">LỖI</translation>
+        <translation>LỖI</translation>
     </message>
     <message>
         <source>No ports found.</source>
@@ -16869,11 +16881,11 @@ Bạn phải đăng nhập lại bằng email và mật khẩu
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">TÊN</translation>
+        <translation>TÊN</translation>
     </message>
     <message>
         <source>LAST</source>
-        <translation type="unfinished">CUỐI</translation>
+        <translation>CUỐI</translation>
     </message>
     <message>
         <source>CHG</source>
@@ -16881,15 +16893,15 @@ Bạn phải đăng nhập lại bằng email và mật khẩu
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">CAO</translation>
+        <translation>CAO</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">THẤP</translation>
+        <translation>THẤP</translation>
     </message>
     <message>
         <source>VOL</source>
@@ -16905,7 +16917,7 @@ Bạn phải đăng nhập lại bằng email và mật khẩu
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">MO CUA</translation>
+        <translation>MỞ</translation>
     </message>
     <message>
         <source>TICKER</source>
@@ -17173,7 +17185,7 @@ Bạn phải đăng nhập lại bằng email và mật khẩu
     <name>fincept::screens::McpServersScreen</name>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">MÁY CHỦ MCP</translation>
+        <translation>MÁY CHỦ MCP</translation>
     </message>
     <message>
         <source>MARKETPLACE</source>
@@ -17185,7 +17197,7 @@ Bạn phải đăng nhập lại bằng email và mật khẩu
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">CÔNG CỤ</translation>
+        <translation>CÔNG CỤ</translation>
     </message>
     <message>
         <source>Search...</source>
@@ -17241,7 +17253,7 @@ Bạn phải đăng nhập lại bằng email và mật khẩu
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">MÔ TẢ</translation>
+        <translation>MÔ TẢ</translation>
     </message>
     <message>
         <source>No servers match the current filter.</source>
@@ -17257,7 +17269,7 @@ Bạn phải đăng nhập lại bằng email và mật khẩu
     </message>
     <message>
         <source>ADD</source>
-        <translation type="unfinished">THÊM</translation>
+        <translation>THÊM</translation>
     </message>
     <message>
         <source>● RUNNING</source>
@@ -17416,7 +17428,7 @@ Dùng CHỢ ỨNG DỤNG để thêm, hoặc nhấp THÊM MÁY CHỦ MCP TÙY CH
     </message>
     <message>
         <source>Tools</source>
-        <translation type="unfinished">Công cụ</translation>
+        <translation>Công cụ</translation>
     </message>
     <message>
         <source>%1 internal tools active</source>
@@ -17605,7 +17617,7 @@ Nhấp '+ Thêm' để thêm một máy chủ.</translation>
     <name>fincept::screens::NewsCommandBar</name>
     <message>
         <source>Auto-refresh interval</source>
-        <translation type="unfinished">Khoảng làm mới tự động</translation>
+        <translation>Khoảng làm mới tự động</translation>
     </message>
     <message>
         <source>MANUAL</source>
@@ -17681,7 +17693,7 @@ Nhấp '+ Thêm' để thêm một máy chủ.</translation>
     </message>
     <message>
         <source>AI</source>
-        <translation type="unfinished">AI</translation>
+        <translation>AI</translation>
     </message>
     <message>
         <source>SRC</source>
@@ -17689,7 +17701,7 @@ Nhấp '+ Thêm' để thêm một máy chủ.</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">LÀM MỚI</translation>
+        <translation>LÀM MỚI</translation>
     </message>
     <message>
         <source>0 WATCHES</source>
@@ -17697,7 +17709,7 @@ Nhấp '+ Thêm' để thêm một máy chủ.</translation>
     </message>
     <message>
         <source>OFFLINE</source>
-        <translation type="unfinished">NGOAI TUYEN</translation>
+        <translation>NGOẠI TUYẾN</translation>
     </message>
     <message>
         <source>...</source>
@@ -17740,7 +17752,7 @@ Nhấp '+ Thêm' để thêm một máy chủ.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">MO CUA</translation>
+        <translation>MỞ</translation>
     </message>
     <message>
         <source>COPY URL</source>
@@ -17756,7 +17768,7 @@ Nhấp '+ Thêm' để thêm một máy chủ.</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">LƯU</translation>
+        <translation>LƯU</translation>
     </message>
     <message>
         <source>Save article to File Manager</source>
@@ -17776,7 +17788,7 @@ Nhấp '+ Thêm' để thêm một máy chủ.</translation>
     </message>
     <message>
         <source>COPIED</source>
-        <translation type="unfinished">ĐÃ SAO CHÉP</translation>
+        <translation>ĐÃ SAO CHÉP</translation>
     </message>
     <message>
         <source>ANALYZING...</source>
@@ -17792,7 +17804,7 @@ Nhấp '+ Thêm' để thêm một máy chủ.</translation>
     </message>
     <message>
         <source>AI ANALYSIS</source>
-        <translation type="unfinished">PHÂN TÍCH AI</translation>
+        <translation>PHÂN TÍCH AI</translation>
     </message>
     <message>
         <source>KEY POINTS</source>
@@ -18075,11 +18087,11 @@ Nhấp '+ Thêm' để thêm một máy chủ.</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">XÓA</translation>
+        <translation>XÓA</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">LƯU</translation>
+        <translation>LƯU</translation>
     </message>
     <message>
         <source>CANCEL</source>
@@ -18281,7 +18293,7 @@ Nhấp '+ Thêm' để thêm một máy chủ.</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">QUỐC GIA</translation>
+        <translation>QUỐC GIA</translation>
     </message>
     <message>
         <source>FREQ</source>
@@ -18414,7 +18426,7 @@ Ví dụ quốc gia: United States, China, Germany, India, Japan, World</transla
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">QUỐC GIA</translation>
+        <translation>QUỐC GIA</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -18441,67 +18453,67 @@ Ví dụ quốc gia: United States, China, Germany, India, Japan, World</transla
     <name>fincept::screens::PerformanceRiskView</name>
     <message>
         <source>NAV PERFORMANCE (FROM SNAPSHOTS)</source>
-        <translation type="unfinished">HIỆU SUẤT NAV (TỪ ẢNH CHỤP)</translation>
+        <translation>HIỆU SUẤT NAV (TỪ ẢNH CHỤP)</translation>
     </message>
     <message>
         <source>  RISK METRICS</source>
-        <translation type="unfinished">  CHỈ SỐ RỦI RO</translation>
+        <translation>  CHỈ SỐ RỦI RO</translation>
     </message>
     <message>
         <source>SHARPE RATIO</source>
-        <translation type="unfinished">TỶ SỐ SHARPE</translation>
+        <translation>TỶ SỐ SHARPE</translation>
     </message>
     <message>
         <source>Risk-adjusted return (annualised)</source>
-        <translation type="unfinished">Lợi nhuận điều chỉnh theo rủi ro (đã quy đổi năm)</translation>
+        <translation>Lợi nhuận điều chỉnh theo rủi ro (đã quy đổi năm)</translation>
     </message>
     <message>
         <source>SORTINO RATIO</source>
-        <translation type="unfinished">TỶ SỐ SORTINO</translation>
+        <translation>TỶ SỐ SORTINO</translation>
     </message>
     <message>
         <source>Downside risk-adjusted return</source>
-        <translation type="unfinished">Lợi nhuận điều chỉnh theo rủi ro tiêu cực</translation>
+        <translation>Lợi nhuận điều chỉnh theo rủi ro tiêu cực</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BETA</translation>
+        <translation>BETA</translation>
     </message>
     <message>
         <source>Sensitivity vs SPY (snapshot regression)</source>
-        <translation type="unfinished">Độ nhạy so với SPY (hồi quy ảnh chụp)</translation>
+        <translation>Độ nhạy so với SPY (hồi quy ảnh chụp)</translation>
     </message>
     <message>
         <source>ALPHA</source>
-        <translation type="unfinished">ALPHA</translation>
+        <translation>ALPHA</translation>
     </message>
     <message>
         <source>VOLATILITY</source>
-        <translation type="unfinished">BIẾN ĐỘNG</translation>
+        <translation>BIẾN ĐỘNG</translation>
     </message>
     <message>
         <source>Annualised from daily returns</source>
-        <translation type="unfinished">Quy đổi năm từ lợi nhuận hàng ngày</translation>
+        <translation>Quy đổi năm từ lợi nhuận hàng ngày</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">DRAWDOWN TỐI ĐA</translation>
+        <translation>DRAWDOWN TỐI ĐA</translation>
     </message>
     <message>
         <source>Peak-to-trough from snapshots</source>
-        <translation type="unfinished">Đỉnh-đến-đáy từ các ảnh chụp</translation>
+        <translation>Đỉnh-đến-đáy từ các ảnh chụp</translation>
     </message>
     <message>
         <source>VALUE AT RISK (95%)</source>
-        <translation type="unfinished">GIÁ TRỊ CHỊU RỦI RO (95%)</translation>
+        <translation>GIÁ TRỊ CHỊU RỦI RO (95%)</translation>
     </message>
     <message>
         <source>CONDITIONAL VaR</source>
-        <translation type="unfinished">VaR ĐIỀU KIỆN</translation>
+        <translation>VaR ĐIỀU KIỆN</translation>
     </message>
     <message>
         <source>Expected shortfall (95%)</source>
-        <translation type="unfinished">Thiếu hụt kỳ vọng (95%)</translation>
+        <translation>Thiếu hụt kỳ vọng (95%)</translation>
     </message>
     <message>
         <source>Jensen's alpha vs benchmark (CAPM)</source>
@@ -18656,7 +18668,7 @@ Ví dụ quốc gia: United States, China, Germany, India, Japan, World</transla
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Loại</translation>
+        <translation>Loại</translation>
     </message>
     <message>
         <source>Status</source>
@@ -18664,7 +18676,7 @@ Ví dụ quốc gia: United States, China, Germany, India, Japan, World</transla
     </message>
     <message>
         <source>+ ADD</source>
-        <translation type="unfinished">+ THEM</translation>
+        <translation>+ THÊM</translation>
     </message>
     <message>
         <source>- REMOVE</source>
@@ -18683,87 +18695,87 @@ Ví dụ quốc gia: United States, China, Germany, India, Japan, World</transla
     <name>fincept::screens::PlanningView</name>
     <message>
         <source>RETIREMENT</source>
-        <translation type="unfinished">HƯU TRÍ</translation>
+        <translation>HƯU TRÍ</translation>
     </message>
     <message>
         <source>GOALS</source>
-        <translation type="unfinished">MỤC TIÊU</translation>
+        <translation>MỤC TIÊU</translation>
     </message>
     <message>
         <source>SAVINGS</source>
-        <translation type="unfinished">TIẾT KIỆM</translation>
+        <translation>TIẾT KIỆM</translation>
     </message>
     <message>
         <source>RETIREMENT CALCULATOR</source>
-        <translation type="unfinished">MÁY TÍNH HƯU TRÍ</translation>
+        <translation>MÁY TÍNH HƯU TRÍ</translation>
     </message>
     <message>
         <source>Current Age:</source>
-        <translation type="unfinished">Tuổi hiện tại:</translation>
+        <translation>Tuổi hiện tại:</translation>
     </message>
     <message>
         <source>Retire Age:</source>
-        <translation type="unfinished">Tuổi nghỉ hưu:</translation>
+        <translation>Tuổi nghỉ hưu:</translation>
     </message>
     <message>
         <source>Annual Expense:</source>
-        <translation type="unfinished">Chi phí hàng năm:</translation>
+        <translation>Chi phí hàng năm:</translation>
     </message>
     <message>
         <source>Monthly Savings:</source>
-        <translation type="unfinished">Tiết kiệm hàng tháng:</translation>
+        <translation>Tiết kiệm hàng tháng:</translation>
     </message>
     <message>
         <source>Exp. Return:</source>
-        <translation type="unfinished">Lợi nhuận kỳ vọng:</translation>
+        <translation>Lợi nhuận kỳ vọng:</translation>
     </message>
     <message>
         <source>Inflation:</source>
-        <translation type="unfinished">Lạm phát:</translation>
+        <translation>Lạm phát:</translation>
     </message>
     <message>
         <source>Withdrawal Rate:</source>
-        <translation type="unfinished">Tỷ lệ rút:</translation>
+        <translation>Tỷ lệ rút:</translation>
     </message>
     <message>
         <source>CALCULATE</source>
-        <translation type="unfinished">TÍNH TOÁN</translation>
+        <translation>TÍNH TOÁN</translation>
     </message>
     <message>
         <source>PROJECTION RESULTS</source>
-        <translation type="unfinished">KẾT QUẢ DỰ PHÓNG</translation>
+        <translation>KẾT QUẢ DỰ PHÓNG</translation>
     </message>
     <message>
         <source>YEARS TO RETIREMENT</source>
-        <translation type="unfinished">SỐ NĂM ĐẾN KHI HƯU</translation>
+        <translation>SỐ NĂM ĐẾN KHI HƯU</translation>
     </message>
     <message>
         <source>TARGET NEST EGG</source>
-        <translation type="unfinished">QUỸ MỤC TIÊU</translation>
+        <translation>QUỸ MỤC TIÊU</translation>
     </message>
     <message>
         <source>PROJECTED VALUE</source>
-        <translation type="unfinished">GIÁ TRỊ DỰ PHÓNG</translation>
+        <translation>GIÁ TRỊ DỰ PHÓNG</translation>
     </message>
     <message>
         <source>SURPLUS / GAP</source>
-        <translation type="unfinished">THẶNG DƯ / THIẾU HỤT</translation>
+        <translation>THẶNG DƯ / THIẾU HỤT</translation>
     </message>
     <message>
         <source>GOAL-BASED PLANNING</source>
-        <translation type="unfinished">LẬP KẾ HOẠCH THEO MỤC TIÊU</translation>
+        <translation>LẬP KẾ HOẠCH THEO MỤC TIÊU</translation>
     </message>
     <message>
         <source>SAVINGS RATE ANALYSIS</source>
-        <translation type="unfinished">PHÂN TÍCH TỶ LỆ TIẾT KIỆM</translation>
+        <translation>PHÂN TÍCH TỶ LỆ TIẾT KIỆM</translation>
     </message>
     <message>
         <source>✓ On track! Your projected retirement fund of %1 %2 exceeds your target of %1 %3 by %1 %4.</source>
-        <translation type="unfinished">✓ Đúng tiến độ! Quỹ hưu trí dự phóng %1 %2 vượt mục tiêu %1 %3 thêm %1 %4.</translation>
+        <translation>✓ Đúng tiến độ! Quỹ hưu trí dự phóng %1 %2 vượt mục tiêu %1 %3 thêm %1 %4.</translation>
     </message>
     <message>
         <source>⚠ Shortfall of %1 %2. Consider increasing monthly savings by %1 %3 to close the gap.</source>
-        <translation type="unfinished">⚠ Thiếu hụt %1 %2. Cân nhắc tăng tiết kiệm hàng tháng thêm %1 %3 để bù đắp.</translation>
+        <translation>⚠ Thiếu hụt %1 %2. Cân nhắc tăng tiết kiệm hàng tháng thêm %1 %3 để bù đắp.</translation>
     </message>
     <message>
         <source>⚙  OPTIMIZE PORTFOLIO FOR THIS GOAL</source>
@@ -19705,155 +19717,155 @@ Mở Settings → LLM Configuration, thêm nhà cung cấp kèm API key, rồi t
     <name>fincept::screens::PortfolioOptimizationView</name>
     <message>
         <source>OPTIMIZE</source>
-        <translation type="unfinished">TỐI ƯU</translation>
+        <translation>TỐI ƯU</translation>
     </message>
     <message>
         <source>FRONTIER</source>
-        <translation type="unfinished">BIÊN HIỆU QUẢ</translation>
+        <translation>BIÊN HIỆU QUẢ</translation>
     </message>
     <message>
         <source>ALLOCATION</source>
-        <translation type="unfinished">PHÂN BỔ</translation>
+        <translation>PHÂN BỔ</translation>
     </message>
     <message>
         <source>STRATEGIES</source>
-        <translation type="unfinished">CHIẾN LƯỢC</translation>
+        <translation>CHIẾN LƯỢC</translation>
     </message>
     <message>
         <source>COMPARE</source>
-        <translation type="unfinished">SO SÁNH</translation>
+        <translation>SO SÁNH</translation>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">BACKTEST</translation>
+        <translation>BACKTEST</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">RỦI RO</translation>
+        <translation>RỦI RO</translation>
     </message>
     <message>
         <source>STRESS</source>
-        <translation type="unfinished">ÁP LỰC</translation>
+        <translation>ÁP LỰC</translation>
     </message>
     <message>
         <source>B-L MODEL</source>
-        <translation type="unfinished">MÔ HÌNH B-L</translation>
+        <translation>MÔ HÌNH B-L</translation>
     </message>
     <message>
         <source>METHOD:</source>
-        <translation type="unfinished">PHƯƠNG PHÁP:</translation>
+        <translation>PHƯƠNG PHÁP:</translation>
     </message>
     <message>
         <source>RETURNS:</source>
-        <translation type="unfinished">LỢI NHUẬN:</translation>
+        <translation>LỢI NHUẬN:</translation>
     </message>
     <message>
         <source>RISK MODEL:</source>
-        <translation type="unfinished">MÔ HÌNH RỦI RO:</translation>
+        <translation>MÔ HÌNH RỦI RO:</translation>
     </message>
     <message>
         <source>▶ RUN OPTIMIZATION</source>
-        <translation type="unfinished">▶ CHẠY TỐI ƯU HÓA</translation>
+        <translation>▶ CHẠY TỐI ƯU HÓA</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>CURRENT WT%</source>
-        <translation type="unfinished">WT% HIỆN TẠI</translation>
+        <translation>WT% HIỆN TẠI</translation>
     </message>
     <message>
         <source>OPTIMAL WT%</source>
-        <translation type="unfinished">WT% TỐI ƯU</translation>
+        <translation>WT% TỐI ƯU</translation>
     </message>
     <message>
         <source>CHANGE</source>
-        <translation type="unfinished">THAY ĐỔI</translation>
+        <translation>THAY ĐỔI</translation>
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">HÀNH ĐỘNG</translation>
+        <translation>HÀNH ĐỘNG</translation>
     </message>
     <message>
         <source>EFFICIENT FRONTIER</source>
-        <translation type="unfinished">BIÊN HIỆU QUẢ</translation>
+        <translation>BIÊN HIỆU QUẢ</translation>
     </message>
     <message>
         <source>Run optimization on the OPTIMIZE tab to generate the efficient frontier.</source>
-        <translation type="unfinished">Chạy tối ưu hóa ở tab TỐI ƯU để tạo biên hiệu quả.</translation>
+        <translation>Chạy tối ưu hóa ở tab TỐI ƯU để tạo biên hiệu quả.</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">TRỌNG SỐ</translation>
+        <translation>TRỌNG SỐ</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">GIÁ TRỊ</translation>
+        <translation>GIÁ TRỊ</translation>
     </message>
     <message>
         <source>VS EQUAL WT</source>
-        <translation type="unfinished">SO VỚI WT BẰNG NHAU</translation>
+        <translation>SO VỚI WT BẰNG NHAU</translation>
     </message>
     <message>
         <source>STRATEGY COMPARISON  (populated after optimization)</source>
-        <translation type="unfinished">SO SÁNH CHIẾN LƯỢC  (được điền sau khi tối ưu)</translation>
+        <translation>SO SÁNH CHIẾN LƯỢC  (được điền sau khi tối ưu)</translation>
     </message>
     <message>
         <source>Run optimization on the OPTIMIZE tab.
 All 5 strategies will be compared automatically.</source>
-        <translation type="unfinished">Chạy tối ưu hóa ở tab TỐI ƯU.
+        <translation>Chạy tối ưu hóa ở tab TỐI ƯU.
 Cả 5 chiến lược sẽ được so sánh tự động.</translation>
     </message>
     <message>
         <source>STRATEGY</source>
-        <translation type="unfinished">CHIẾN LƯỢC</translation>
+        <translation>CHIẾN LƯỢC</translation>
     </message>
     <message>
         <source>EXP. RETURN</source>
-        <translation type="unfinished">LỢI NHUẬN KV</translation>
+        <translation>LỢI NHUẬN KV</translation>
     </message>
     <message>
         <source>VOLATILITY</source>
-        <translation type="unfinished">BIẾN ĐỘNG</translation>
+        <translation>BIẾN ĐỘNG</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">SHARPE</translation>
+        <translation>SHARPE</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">MÔ TẢ</translation>
+        <translation>MÔ TẢ</translation>
     </message>
     <message>
         <source>WEIGHT COMPARISON  (all methods, per symbol)</source>
-        <translation type="unfinished">SO SÁNH TRỌNG SỐ  (tất cả phương pháp, theo mã)</translation>
+        <translation>SO SÁNH TRỌNG SỐ  (tất cả phương pháp, theo mã)</translation>
     </message>
     <message>
         <source>Run optimization on the OPTIMIZE tab to populate this comparison.</source>
-        <translation type="unfinished">Chạy tối ưu hóa ở tab TỐI ƯU để điền so sánh này.</translation>
+        <translation>Chạy tối ưu hóa ở tab TỐI ƯU để điền so sánh này.</translation>
     </message>
     <message>
         <source>BACKTEST RESULTS</source>
-        <translation type="unfinished">KẾT QUẢ BACKTEST</translation>
+        <translation>KẾT QUẢ BACKTEST</translation>
     </message>
     <message>
         <source>Run an optimization first, then backtest the optimal weights
 against historical data to evaluate out-of-sample performance.</source>
-        <translation type="unfinished">Chạy tối ưu trước, sau đó backtest trọng số tối ưu
+        <translation>Chạy tối ưu trước, sau đó backtest trọng số tối ưu
 với dữ liệu lịch sử để đánh giá hiệu suất ngoài mẫu.</translation>
     </message>
     <message>
         <source>RISK DECOMPOSITION</source>
-        <translation type="unfinished">PHÂN TÍCH RỦI RO</translation>
+        <translation>PHÂN TÍCH RỦI RO</translation>
     </message>
     <message>
         <source>BLACK-LITTERMAN MODEL</source>
-        <translation type="unfinished">MÔ HÌNH BLACK-LITTERMAN</translation>
+        <translation>MÔ HÌNH BLACK-LITTERMAN</translation>
     </message>
     <message>
         <source>Running optimization…</source>
-        <translation type="unfinished">Đang chạy tối ưu hóa…</translation>
+        <translation>Đang chạy tối ưu hóa…</translation>
     </message>
     <message>
         <source>BACKTEST PORTFOLIO</source>
@@ -19905,7 +19917,7 @@ Chạy tối ưu hóa trên tab OPTIMIZE để tính từ ma trận hiệp phư�
     </message>
     <message>
         <source>RISK CONTRIB</source>
-        <translation type="unfinished">ĐÓNG GÓP RỦI RO</translation>
+        <translation>ĐÓNG GÓP RỦI RO</translation>
     </message>
     <message>
         <source>STRESS SCENARIOS</source>
@@ -19919,7 +19931,7 @@ Chọn một danh mục để xem tác động ước tính cho từng kịch b�
     </message>
     <message>
         <source>SCENARIO</source>
-        <translation type="unfinished">KỊCH BẢN</translation>
+        <translation>KỊCH BẢN</translation>
     </message>
     <message>
         <source>IMPACT</source>
@@ -20476,7 +20488,7 @@ Expected format:
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">BẢO MẬT</translation>
+        <translation>BẢO MẬT</translation>
     </message>
     <message>
         <source>Protect accounts, detect fraud, enforce terms of service, and ensure platform integrity</source>
@@ -20779,7 +20791,7 @@ Expected format:
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">NGÀY</translation>
+        <translation>NGÀY</translation>
     </message>
     <message>
         <source>REQUESTS</source>
@@ -20823,7 +20835,7 @@ Expected format:
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">TRẠNG THÁI</translation>
+        <translation>TRẠNG THÁI</translation>
     </message>
     <message>
         <source>SUBSCRIPTION</source>
@@ -20995,7 +21007,7 @@ to edit properties</source>
     </message>
     <message>
         <source>Rows:</source>
-        <translation type="unfinished">Hàng:</translation>
+        <translation>Hàng:</translation>
     </message>
     <message>
         <source>Cols:</source>
@@ -21202,7 +21214,7 @@ các thành phần Tiêu đề.</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tat ca</translation>
+        <translation>Tất cả</translation>
     </message>
     <message>
         <source>Trading</source>
@@ -21266,7 +21278,7 @@ các thành phần Tiêu đề.</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">OK</translation>
+        <translation>OK</translation>
     </message>
     <message>
         <source>Install</source>
@@ -21391,11 +21403,11 @@ Ví dụ: {"spot": 100, "strike": 105, "risk_free_rate": 0.05}</translation>
     </message>
     <message>
         <source>(empty response)</source>
-        <translation type="unfinished">(phản hồi trống)</translation>
+        <translation>(phản hồi trống)</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">OK</translation>
+        <translation>OK</translation>
     </message>
     <message>
         <source>Field</source>
@@ -21564,15 +21576,15 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>YES</source>
-        <translation type="unfinished">CÓ</translation>
+        <translation>CÓ</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">KHÔNG</translation>
+        <translation>KHÔNG</translation>
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">HÀNH ĐỘNG</translation>
+        <translation>HÀNH ĐỘNG</translation>
     </message>
     <message>
         <source>CLASS</source>
@@ -21644,7 +21656,7 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Giá</translation>
+        <translation>Giá</translation>
     </message>
     <message>
         <source>Quantity</source>
@@ -21792,7 +21804,7 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">ĐÃ TẠO</translation>
+        <translation>ĐÃ TẠO</translation>
     </message>
     <message>
         <source>Schedule created</source>
@@ -21864,7 +21876,7 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">TRẠNG THÁI</translation>
+        <translation>TRẠNG THÁI</translation>
     </message>
     <message>
         <source>STAGES</source>
@@ -21968,11 +21980,11 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>SKEWNESS</source>
-        <translation type="unfinished">ĐỘ LỆCH</translation>
+        <translation>ĐỘ LỆCH</translation>
     </message>
     <message>
         <source>KURTOSIS</source>
-        <translation type="unfinished">ĐỘ NHỌN</translation>
+        <translation>ĐỘ NHỌN</translation>
     </message>
     <message>
         <source>p-VALUE</source>
@@ -21984,7 +21996,7 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Ngày</translation>
+        <translation>Ngày</translation>
     </message>
     <message>
         <source>IC</source>
@@ -22024,7 +22036,7 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>Win Rate</source>
-        <translation type="unfinished">Tỷ lệ thắng</translation>
+        <translation>Tỷ lệ thắng</translation>
     </message>
     <message>
         <source>L/S Sharpe=%1  spread=%2%</source>
@@ -22032,15 +22044,15 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>VOLATILITY</source>
-        <translation type="unfinished">BIẾN ĐỘNG</translation>
+        <translation>BIẾN ĐỘNG</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">DRAWDOWN TỐI ĐA</translation>
+        <translation>DRAWDOWN TỐI ĐA</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">BETA</translation>
+        <translation>BETA</translation>
     </message>
     <message>
         <source>TRACKING ERROR</source>
@@ -22148,7 +22160,7 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">SHARPE</translation>
+        <translation>SHARPE</translation>
     </message>
     <message>
         <source>MAX DD</source>
@@ -22168,7 +22180,7 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">TỶ LỆ THẮNG</translation>
+        <translation>TỶ LỆ THẮNG</translation>
     </message>
     <message>
         <source>BEST DAY</source>
@@ -22180,7 +22192,7 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>ALPHA</source>
-        <translation type="unfinished">ALPHA</translation>
+        <translation>ALPHA</translation>
     </message>
     <message>
         <source>Annual %1%  Sharpe %2  MaxDD %3%</source>
@@ -22192,11 +22204,11 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">LOẠI</translation>
+        <translation>LOẠI</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">MÔ TẢ</translation>
+        <translation>MÔ TẢ</translation>
     </message>
     <message>
         <source>↓ see below</source>
@@ -22204,7 +22216,7 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>EXP. RETURN</source>
-        <translation type="unfinished">LỢI NHUẬN KV</translation>
+        <translation>LỢI NHUẬN KV</translation>
     </message>
     <message>
         <source>EXP. VOL</source>
@@ -22220,7 +22232,7 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>REBALANCE</source>
-        <translation type="unfinished">TÁI CÂN BẰNG</translation>
+        <translation>TÁI CÂN BẰNG</translation>
     </message>
     <message>
         <source>ASSETS</source>
@@ -22244,7 +22256,7 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>BENCHMARK</source>
-        <translation type="unfinished">CHUẨN</translation>
+        <translation>CHUẨN</translation>
     </message>
     <message>
         <source>ACTIVE SHARE</source>
@@ -22406,11 +22418,11 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>BACKTEST RESULTS</source>
-        <translation type="unfinished">KẾT QUẢ BACKTEST</translation>
+        <translation>KẾT QUẢ BACKTEST</translation>
     </message>
     <message>
         <source>TOTAL RETURN</source>
-        <translation type="unfinished">TỔNG LỢI NHUẬN</translation>
+        <translation>TỔNG LỢI NHUẬN</translation>
     </message>
     <message>
         <source>%1 final</source>
@@ -22422,7 +22434,7 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>SHARPE RATIO</source>
-        <translation type="unfinished">TỶ SỐ SHARPE</translation>
+        <translation>TỶ SỐ SHARPE</translation>
     </message>
     <message>
         <source>Excellent</source>
@@ -22450,7 +22462,7 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Danh mục</translation>
+        <translation>Danh mục</translation>
     </message>
     <message>
         <source>EQUITY CURVE</source>
@@ -22630,7 +22642,7 @@ ví dụ {"ticker":"AAPL"}</translation>
     </message>
     <message>
         <source>DIRECTION</source>
-        <translation type="unfinished">HƯỚNG</translation>
+        <translation>HƯỚNG</translation>
     </message>
     <message>
         <source>SLOPE</source>
@@ -22872,7 +22884,7 @@ ví dụ "Xây dựng chiến lược cổ phiếu định lượng cho cổ phi
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tat ca</translation>
+        <translation>Tất cả</translation>
     </message>
     <message>
         <source>running</source>
@@ -22892,7 +22904,7 @@ ví dụ "Xây dựng chiến lược cổ phiếu định lượng cho cổ phi
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">LÀM MỚI</translation>
+        <translation>LÀM MỚI</translation>
     </message>
     <message>
         <source>Task ID...</source>
@@ -22916,7 +22928,7 @@ ví dụ "Xây dựng chiến lược cổ phiếu định lượng cho cổ phi
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Loại</translation>
+        <translation>Loại</translation>
     </message>
     <message>
         <source>Status</source>
@@ -23500,7 +23512,7 @@ ví dụ "Xây dựng chiến lược cổ phiếu định lượng cho cổ phi
     </message>
     <message>
         <source>Volatility</source>
-        <translation type="unfinished">Biến động</translation>
+        <translation>Biến động</translation>
     </message>
     <message>
         <source>Option Type</source>
@@ -23828,7 +23840,7 @@ ví dụ "Xây dựng chiến lược cổ phiếu định lượng cho cổ phi
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Ghi chú</translation>
+        <translation>Ghi chú</translation>
     </message>
     <message>
         <source>Parametric (Variance-Covariance)</source>
@@ -23972,7 +23984,7 @@ ví dụ "Xây dựng chiến lược cổ phiếu định lượng cho cổ phi
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>e.g. BTC/USDT, ETH/USDT</source>
@@ -24632,7 +24644,7 @@ ví dụ "Xây dựng chiến lược cổ phiếu định lượng cho cổ phi
     </message>
     <message>
         <source>EFFICIENT FRONTIER</source>
-        <translation type="unfinished">BIÊN HIỆU QUẢ</translation>
+        <translation>BIÊN HIỆU QUẢ</translation>
     </message>
     <message>
         <source>Eff. Frontier</source>
@@ -25098,7 +25110,7 @@ Cổng đang chạy: %3</translation>
     </message>
     <message>
         <source>Complete</source>
-        <translation type="unfinished">Hoàn tất</translation>
+        <translation>Hoàn tất</translation>
     </message>
     <message>
         <source>
@@ -26466,11 +26478,11 @@ Kết luận yêu cầu CẢ HAI kiểm định đồng thuận.</translation>
     </message>
     <message>
         <source>First</source>
-        <translation type="unfinished">Tên</translation>
+        <translation>Tên</translation>
     </message>
     <message>
         <source>Last</source>
-        <translation type="unfinished">Họ</translation>
+        <translation>Họ</translation>
     </message>
     <message>
         <source>FORECAST BY STEP</source>
@@ -26598,7 +26610,7 @@ Kết luận yêu cầu CẢ HAI kiểm định đồng thuận.</translation>
     </message>
     <message>
         <source>METHOD</source>
-        <translation type="unfinished">PHƯƠNG PHÁP</translation>
+        <translation>PHƯƠNG PHÁP</translation>
     </message>
     <message>
         <source>TRAIN</source>
@@ -26622,7 +26634,7 @@ Kết luận yêu cầu CẢ HAI kiểm định đồng thuận.</translation>
     </message>
     <message>
         <source>FEATURES</source>
-        <translation type="unfinished">TÍNH NĂNG</translation>
+        <translation>TÍNH NĂNG</translation>
     </message>
     <message>
         <source>TRAIN / TEST</source>
@@ -26862,7 +26874,7 @@ Kết luận yêu cầu CẢ HAI kiểm định đồng thuận.</translation>
     </message>
     <message>
         <source>DISTRIBUTION</source>
-        <translation type="unfinished">PHÂN PHỐI</translation>
+        <translation>PHÂN PHỐI</translation>
     </message>
     <message>
         <source>POP MEAN</source>
@@ -27666,7 +27678,7 @@ Kết luận yêu cầu CẢ HAI kiểm định đồng thuận.</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">OK</translation>
+        <translation>OK</translation>
     </message>
     <message>
         <source>Online model created</source>
@@ -27698,7 +27710,7 @@ Kết luận yêu cầu CẢ HAI kiểm định đồng thuận.</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">LỖI</translation>
+        <translation>LỖI</translation>
     </message>
     <message>
         <source>ABS ERROR</source>
@@ -27858,7 +27870,7 @@ Kết luận yêu cầu CẢ HAI kiểm định đồng thuận.</translation>
     </message>
     <message>
         <source>WARNING</source>
-        <translation type="unfinished">CẢNH BÁO</translation>
+        <translation>CẢNH BÁO</translation>
     </message>
     <message>
         <source>PRESENT</source>
@@ -27882,7 +27894,7 @@ Kết luận yêu cầu CẢ HAI kiểm định đồng thuận.</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Mã</translation>
+        <translation>Mã</translation>
     </message>
     <message>
         <source>%1 instrument(s)  market=%2</source>
@@ -27898,7 +27910,7 @@ Kết luận yêu cầu CẢ HAI kiểm định đồng thuận.</translation>
     </message>
     <message>
         <source>LAST</source>
-        <translation type="unfinished">CUỐI</translation>
+        <translation>CUỐI</translation>
     </message>
     <message>
         <source>%1 trading day(s)</source>
@@ -27910,7 +27922,7 @@ Kết luận yêu cầu CẢ HAI kiểm định đồng thuận.</translation>
     </message>
     <message>
         <source>EMPTY</source>
-        <translation type="unfinished">TRONG</translation>
+        <translation>TRỐNG</translation>
     </message>
     <message>
         <source>LOADED</source>
@@ -27922,7 +27934,7 @@ Kết luận yêu cầu CẢ HAI kiểm định đồng thuận.</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TỔNG</translation>
+        <translation>TỔNG</translation>
     </message>
     <message>
         <source>TYPES</source>
@@ -27942,7 +27954,7 @@ Kết luận yêu cầu CẢ HAI kiểm định đồng thuận.</translation>
     </message>
     <message>
         <source>VERSION</source>
-        <translation type="unfinished">PHIÊN BẢN</translation>
+        <translation>PHIÊN BẢN</translation>
     </message>
     <message>
         <source>HANDLERS</source>
@@ -27950,7 +27962,7 @@ Kết luận yêu cầu CẢ HAI kiểm định đồng thuận.</translation>
     </message>
     <message>
         <source>STRATEGIES</source>
-        <translation type="unfinished">CHIẾN LƯỢC</translation>
+        <translation>CHIẾN LƯỢC</translation>
     </message>
     <message>
         <source>MODELS AVAIL</source>
@@ -28006,7 +28018,7 @@ Kết luận yêu cầu CẢ HAI kiểm định đồng thuận.</translation>
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">CHỈ SỐ</translation>
+        <translation>CHỈ SỐ</translation>
     </message>
     <message>
         <source>Trained: %1</source>
@@ -28161,325 +28173,325 @@ Kết luận yêu cầu CẢ HAI kiểm định đồng thuận.</translation>
     <name>fincept::screens::QuantStatsView</name>
     <message>
         <source>QUANTSTATS ANALYSIS</source>
-        <translation type="unfinished">PHÂN TÍCH QUANTSTATS</translation>
+        <translation>PHÂN TÍCH QUANTSTATS</translation>
     </message>
     <message>
         <source>▶ RUN QUANTSTATS</source>
-        <translation type="unfinished">▶ CHẠY QUANTSTATS</translation>
+        <translation>▶ CHẠY QUANTSTATS</translation>
     </message>
     <message>
         <source>KEY PERFORMANCE INDICATORS</source>
-        <translation type="unfinished">CHỈ SỐ HIỆU SUẤT CHÍNH</translation>
+        <translation>CHỈ SỐ HIỆU SUẤT CHÍNH</translation>
     </message>
     <message>
         <source>METRIC</source>
-        <translation type="unfinished">CHỈ SỐ</translation>
+        <translation>CHỈ SỐ</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">GIÁ TRỊ</translation>
+        <translation>GIÁ TRỊ</translation>
     </message>
     <message>
         <source>BENCHMARK</source>
-        <translation type="unfinished">CHUẨN</translation>
+        <translation>CHUẨN</translation>
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">CHỈ SỐ</translation>
+        <translation>CHỈ SỐ</translation>
     </message>
     <message>
         <source>Run QuantStats Analysis for return distribution</source>
-        <translation type="unfinished">Chạy Phân tích QuantStats để xem phân phối lợi nhuận</translation>
+        <translation>Chạy Phân tích QuantStats để xem phân phối lợi nhuận</translation>
     </message>
     <message>
         <source>RETURNS</source>
-        <translation type="unfinished">LỢI NHUẬN</translation>
+        <translation>LỢI NHUẬN</translation>
     </message>
     <message>
         <source>Run QuantStats Analysis for drawdown metrics</source>
-        <translation type="unfinished">Chạy Phân tích QuantStats để xem chỉ số drawdown</translation>
+        <translation>Chạy Phân tích QuantStats để xem chỉ số drawdown</translation>
     </message>
     <message>
         <source>DRAWDOWN</source>
-        <translation type="unfinished">DRAWDOWN</translation>
+        <translation>DRAWDOWN</translation>
     </message>
     <message>
         <source>Run QuantStats Analysis for rolling metrics</source>
-        <translation type="unfinished">Chạy Phân tích QuantStats để xem chỉ số trượt</translation>
+        <translation>Chạy Phân tích QuantStats để xem chỉ số trượt</translation>
     </message>
     <message>
         <source>ROLLING</source>
-        <translation type="unfinished">TRƯỢT</translation>
+        <translation>TRƯỢT</translation>
     </message>
     <message>
         <source>MONTE CARLO SIMULATION</source>
-        <translation type="unfinished">MÔ PHỎNG MONTE CARLO</translation>
+        <translation>MÔ PHỎNG MONTE CARLO</translation>
     </message>
     <message>
         <source>Simulate 1,000 portfolio return paths using GBM to estimate probability
 distributions of future returns, drawdowns, and terminal wealth.</source>
-        <translation type="unfinished">Mô phỏng 1.000 đường lợi nhuận danh mục bằng GBM để ước tính phân phối
+        <translation>Mô phỏng 1.000 đường lợi nhuận danh mục bằng GBM để ước tính phân phối
 xác suất của lợi nhuận tương lai, drawdown và tài sản cuối kỳ.</translation>
     </message>
     <message>
         <source>▶ RUN MONTE CARLO (1000 paths)</source>
-        <translation type="unfinished">▶ CHẠY MONTE CARLO (1000 đường)</translation>
+        <translation>▶ CHẠY MONTE CARLO (1000 đường)</translation>
     </message>
     <message>
         <source>Press RUN MONTE CARLO to simulate 1,000 return paths</source>
-        <translation type="unfinished">Nhấn CHẠY MONTE CARLO để mô phỏng 1.000 đường lợi nhuận</translation>
+        <translation>Nhấn CHẠY MONTE CARLO để mô phỏng 1.000 đường lợi nhuận</translation>
     </message>
     <message>
         <source>MONTE CARLO</source>
-        <translation type="unfinished">MONTE CARLO</translation>
+        <translation>MONTE CARLO</translation>
     </message>
     <message>
         <source>PERFORMANCE</source>
-        <translation type="unfinished">HIỆU SUẤT</translation>
+        <translation>HIỆU SUẤT</translation>
     </message>
     <message>
         <source>Total Return</source>
-        <translation type="unfinished">Tổng lợi nhuận</translation>
+        <translation>Tổng lợi nhuận</translation>
     </message>
     <message>
         <source>Annualized Return</source>
-        <translation type="unfinished">Lợi nhuận năm hóa</translation>
+        <translation>Lợi nhuận năm hóa</translation>
     </message>
     <message>
         <source>Trading Days</source>
-        <translation type="unfinished">Ngày giao dịch</translation>
+        <translation>Ngày giao dịch</translation>
     </message>
     <message>
         <source>Best Day</source>
-        <translation type="unfinished">Ngày tốt nhất</translation>
+        <translation>Ngày tốt nhất</translation>
     </message>
     <message>
         <source>Worst Day</source>
-        <translation type="unfinished">Ngày tệ nhất</translation>
+        <translation>Ngày tệ nhất</translation>
     </message>
     <message>
         <source>Avg Daily Return</source>
-        <translation type="unfinished">Lợi nhuận trung bình ngày</translation>
+        <translation>Lợi nhuận trung bình ngày</translation>
     </message>
     <message>
         <source>Unrealized P&amp;L %</source>
-        <translation type="unfinished">P&amp;L chưa thực hiện %</translation>
+        <translation>P&amp;L chưa thực hiện %</translation>
     </message>
     <message>
         <source>Day Change %</source>
-        <translation type="unfinished">Thay đổi ngày %</translation>
+        <translation>Thay đổi ngày %</translation>
     </message>
     <message>
         <source>Total Positions</source>
-        <translation type="unfinished">Tổng vị thế</translation>
+        <translation>Tổng vị thế</translation>
     </message>
     <message>
         <source>Gainers</source>
-        <translation type="unfinished">Tăng</translation>
+        <translation>Tăng</translation>
     </message>
     <message>
         <source>Losers</source>
-        <translation type="unfinished">Giảm</translation>
+        <translation>Giảm</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">RỦI RO</translation>
+        <translation>RỦI RO</translation>
     </message>
     <message>
         <source>Annualized Volatility</source>
-        <translation type="unfinished">Biến động năm hóa</translation>
+        <translation>Biến động năm hóa</translation>
     </message>
     <message>
         <source>Max Drawdown</source>
-        <translation type="unfinished">Drawdown tối đa</translation>
+        <translation>Drawdown tối đa</translation>
     </message>
     <message>
         <source>VaR 95% (Daily)</source>
-        <translation type="unfinished">VaR 95% (Hàng ngày)</translation>
+        <translation>VaR 95% (Hàng ngày)</translation>
     </message>
     <message>
         <source>CVaR 95% (Daily)</source>
-        <translation type="unfinished">CVaR 95% (Hàng ngày)</translation>
+        <translation>CVaR 95% (Hàng ngày)</translation>
     </message>
     <message>
         <source>Downside Deviation</source>
-        <translation type="unfinished">Độ lệch tiêu cực</translation>
+        <translation>Độ lệch tiêu cực</translation>
     </message>
     <message>
         <source>RATIOS</source>
-        <translation type="unfinished">TỶ SỐ</translation>
+        <translation>TỶ SỐ</translation>
     </message>
     <message>
         <source>Sharpe Ratio</source>
-        <translation type="unfinished">Tỷ số Sharpe</translation>
+        <translation>Tỷ số Sharpe</translation>
     </message>
     <message>
         <source>Sortino Ratio</source>
-        <translation type="unfinished">Tỷ số Sortino</translation>
+        <translation>Tỷ số Sortino</translation>
     </message>
     <message>
         <source>Calmar Ratio</source>
-        <translation type="unfinished">Tỷ số Calmar</translation>
+        <translation>Tỷ số Calmar</translation>
     </message>
     <message>
         <source>Profit Factor</source>
-        <translation type="unfinished">Hệ số lợi nhuận</translation>
+        <translation>Hệ số lợi nhuận</translation>
     </message>
     <message>
         <source>DISTRIBUTION</source>
-        <translation type="unfinished">PHÂN PHỐI</translation>
+        <translation>PHÂN PHỐI</translation>
     </message>
     <message>
         <source>Skewness</source>
-        <translation type="unfinished">Độ lệch</translation>
+        <translation>Độ lệch</translation>
     </message>
     <message>
         <source>Kurtosis</source>
-        <translation type="unfinished">Độ nhọn</translation>
+        <translation>Độ nhọn</translation>
     </message>
     <message>
         <source>Win Rate</source>
-        <translation type="unfinished">Tỷ lệ thắng</translation>
+        <translation>Tỷ lệ thắng</translation>
     </message>
     <message>
         <source>Win Days</source>
-        <translation type="unfinished">Ngày thắng</translation>
+        <translation>Ngày thắng</translation>
     </message>
     <message>
         <source>Loss Days</source>
-        <translation type="unfinished">Ngày thua</translation>
+        <translation>Ngày thua</translation>
     </message>
     <message>
         <source>Avg Win</source>
-        <translation type="unfinished">Thắng trung bình</translation>
+        <translation>Thắng trung bình</translation>
     </message>
     <message>
         <source>Avg Loss</source>
-        <translation type="unfinished">Thua trung bình</translation>
+        <translation>Thua trung bình</translation>
     </message>
     <message>
         <source>Run QuantStats for full metrics →</source>
-        <translation type="unfinished">Chạy QuantStats để có đầy đủ chỉ số →</translation>
+        <translation>Chạy QuantStats để có đầy đủ chỉ số →</translation>
     </message>
     <message>
         <source>RETURN DISTRIBUTION</source>
-        <translation type="unfinished">PHÂN PHỐI LỢI NHUẬN</translation>
+        <translation>PHÂN PHỐI LỢI NHUẬN</translation>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">TỶ LỆ THẮNG</translation>
+        <translation>TỶ LỆ THẮNG</translation>
     </message>
     <message>
         <source>LOSS RATE</source>
-        <translation type="unfinished">TỶ LỆ THUA</translation>
+        <translation>TỶ LỆ THUA</translation>
     </message>
     <message>
         <source>WIN DAYS</source>
-        <translation type="unfinished">NGÀY THẮNG</translation>
+        <translation>NGÀY THẮNG</translation>
     </message>
     <message>
         <source>LOSS DAYS</source>
-        <translation type="unfinished">NGÀY THUA</translation>
+        <translation>NGÀY THUA</translation>
     </message>
     <message>
         <source>AVG WIN</source>
-        <translation type="unfinished">THẮNG TB</translation>
+        <translation>THẮNG TB</translation>
     </message>
     <message>
         <source>AVG LOSS</source>
-        <translation type="unfinished">THUA TB</translation>
+        <translation>THUA TB</translation>
     </message>
     <message>
         <source>SKEWNESS</source>
-        <translation type="unfinished">ĐỘ LỆCH</translation>
+        <translation>ĐỘ LỆCH</translation>
     </message>
     <message>
         <source>KURTOSIS</source>
-        <translation type="unfinished">ĐỘ NHỌN</translation>
+        <translation>ĐỘ NHỌN</translation>
     </message>
     <message>
         <source>DRAWDOWN &amp; RISK METRICS</source>
-        <translation type="unfinished">CHỈ SỐ DRAWDOWN &amp; RỦI RO</translation>
+        <translation>CHỈ SỐ DRAWDOWN &amp; RỦI RO</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">DRAWDOWN TỐI ĐA</translation>
+        <translation>DRAWDOWN TỐI ĐA</translation>
     </message>
     <message>
         <source>RISK METRIC</source>
-        <translation type="unfinished">CHỈ SỐ RỦI RO</translation>
+        <translation>CHỈ SỐ RỦI RO</translation>
     </message>
     <message>
         <source>RISK-ADJUSTED RATIOS &amp; WIN/LOSS BREAKDOWN</source>
-        <translation type="unfinished">TỶ SỐ ĐIỀU CHỈNH RỦI RO &amp; PHÂN TÍCH THẮNG/THUA</translation>
+        <translation>TỶ SỐ ĐIỀU CHỈNH RỦI RO &amp; PHÂN TÍCH THẮNG/THUA</translation>
     </message>
     <message>
         <source>RATIO</source>
-        <translation type="unfinished">TỶ SỐ</translation>
+        <translation>TỶ SỐ</translation>
     </message>
     <message>
         <source>WIN / LOSS BREAKDOWN</source>
-        <translation type="unfinished">PHÂN TÍCH THẮNG / THUA</translation>
+        <translation>PHÂN TÍCH THẮNG / THUA</translation>
     </message>
     <message>
         <source>Avg Win/Day</source>
-        <translation type="unfinished">Thắng TB/Ngày</translation>
+        <translation>Thắng TB/Ngày</translation>
     </message>
     <message>
         <source>Avg Loss/Day</source>
-        <translation type="unfinished">Thua TB/Ngày</translation>
+        <translation>Thua TB/Ngày</translation>
     </message>
     <message>
         <source>MEDIAN RETURN</source>
-        <translation type="unfinished">LỢI NHUẬN TRUNG VỊ</translation>
+        <translation>LỢI NHUẬN TRUNG VỊ</translation>
     </message>
     <message>
         <source>5TH PERCENTILE</source>
-        <translation type="unfinished">PHÂN VỊ THỨ 5</translation>
+        <translation>PHÂN VỊ THỨ 5</translation>
     </message>
     <message>
         <source>95TH PERCENTILE</source>
-        <translation type="unfinished">PHÂN VỊ THỨ 95</translation>
+        <translation>PHÂN VỊ THỨ 95</translation>
     </message>
     <message>
         <source>PROB OF LOSS</source>
-        <translation type="unfinished">XÁC SUẤT LỖ</translation>
+        <translation>XÁC SUẤT LỖ</translation>
     </message>
     <message>
         <source>EXP MAX DRAWDOWN</source>
-        <translation type="unfinished">DRAWDOWN TỐI ĐA KV</translation>
+        <translation>DRAWDOWN TỐI ĐA KV</translation>
     </message>
     <message>
         <source>Cumulative Return (%)</source>
-        <translation type="unfinished">Lợi nhuận tích lũy (%)</translation>
+        <translation>Lợi nhuận tích lũy (%)</translation>
     </message>
     <message>
         <source>Showing %1 of 1000 simulated paths over 252 trading days (GBM). Bright line = median path.</source>
-        <translation type="unfinished">Hiển thị %1 trong 1000 đường mô phỏng trên 252 ngày giao dịch (GBM). Đường sáng = đường trung vị.</translation>
+        <translation>Hiển thị %1 trong 1000 đường mô phỏng trên 252 ngày giao dịch (GBM). Đường sáng = đường trung vị.</translation>
     </message>
     <message>
         <source>Fetching 1-year price history...</source>
-        <translation type="unfinished">Đang lấy lịch sử giá 1 năm...</translation>
+        <translation>Đang lấy lịch sử giá 1 năm...</translation>
     </message>
     <message>
         <source>QuantStats: %1</source>
-        <translation type="unfinished">QuantStats: %1</translation>
+        <translation>QuantStats: %1</translation>
     </message>
     <message>
         <source>Complete</source>
-        <translation type="unfinished">Hoàn tất</translation>
+        <translation>Hoàn tất</translation>
     </message>
     <message>
         <source>Running 1000 simulation paths...</source>
-        <translation type="unfinished">Đang chạy 1000 đường mô phỏng...</translation>
+        <translation>Đang chạy 1000 đường mô phỏng...</translation>
     </message>
     <message>
         <source>Monte Carlo: %1</source>
-        <translation type="unfinished">Monte Carlo: %1</translation>
+        <translation>Monte Carlo: %1</translation>
     </message>
     <message>
         <source>Complete — %1 paths simulated</source>
-        <translation type="unfinished">Hoàn tất — đã mô phỏng %1 đường</translation>
+        <translation>Hoàn tất — đã mô phỏng %1 đường</translation>
     </message>
 </context>
 <context>
@@ -28713,11 +28725,11 @@ xác suất của lợi nhuận tương lai, drawdown và tài sản cuối kỳ
     </message>
     <message>
         <source>Complete</source>
-        <translation type="unfinished">Hoàn tất</translation>
+        <translation>Hoàn tất</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
     <message>
         <source>NODE</source>
@@ -28741,7 +28753,7 @@ xác suất của lợi nhuận tương lai, drawdown và tài sản cuối kỳ
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Giá</translation>
+        <translation>Giá</translation>
     </message>
     <message>
         <source>P/E</source>
@@ -28827,7 +28839,7 @@ xác suất của lợi nhuận tương lai, drawdown và tài sản cuối kỳ
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Lưu</translation>
+        <translation>Lưu</translation>
     </message>
     <message>
         <source>Export PDF</source>
@@ -29144,127 +29156,127 @@ xác suất của lợi nhuận tương lai, drawdown và tài sản cuối kỳ
     <name>fincept::screens::ReportsView</name>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">TÓM TẮT</translation>
+        <translation>TÓM TẮT</translation>
     </message>
     <message>
         <source>TRANSACTION HISTORY</source>
-        <translation type="unfinished">LỊCH SỬ GIAO DỊCH</translation>
+        <translation>LỊCH SỬ GIAO DỊCH</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">NGÀY</translation>
+        <translation>NGÀY</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">LOẠI</translation>
+        <translation>LOẠI</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>SL</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">GIÁ</translation>
+        <translation>GIÁ</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TỔNG</translation>
+        <translation>TỔNG</translation>
     </message>
     <message>
         <source>NOTES</source>
-        <translation type="unfinished">GHI CHÚ</translation>
+        <translation>GHI CHÚ</translation>
     </message>
     <message>
         <source>TRANSACTIONS</source>
-        <translation type="unfinished">GIAO DỊCH</translation>
+        <translation>GIAO DỊCH</translation>
     </message>
     <message>
         <source>PERFORMANCE ATTRIBUTION</source>
-        <translation type="unfinished">PHÂN BỔ HIỆU SUẤT</translation>
+        <translation>PHÂN BỔ HIỆU SUẤT</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">TRỌNG SỐ</translation>
+        <translation>TRỌNG SỐ</translation>
     </message>
     <message>
         <source>RETURN</source>
-        <translation type="unfinished">LỢI NHUẬN</translation>
+        <translation>LỢI NHUẬN</translation>
     </message>
     <message>
         <source>CONTRIBUTION</source>
-        <translation type="unfinished">ĐÓNG GÓP</translation>
+        <translation>ĐÓNG GÓP</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">TRẠNG THÁI</translation>
+        <translation>TRẠNG THÁI</translation>
     </message>
     <message>
         <source>ATTRIBUTION</source>
-        <translation type="unfinished">PHÂN BỔ</translation>
+        <translation>PHÂN BỔ</translation>
     </message>
     <message>
         <source>PORTFOLIO SUMMARY REPORT</source>
-        <translation type="unfinished">BÁO CÁO TÓM TẮT DANH MỤC</translation>
+        <translation>BÁO CÁO TÓM TẮT DANH MỤC</translation>
     </message>
     <message>
         <source>PORTFOLIO</source>
-        <translation type="unfinished">DANH MỤC</translation>
+        <translation>DANH MỤC</translation>
     </message>
     <message>
         <source>TOTAL VALUE</source>
-        <translation type="unfinished">TỔNG GIÁ TRỊ</translation>
+        <translation>TỔNG GIÁ TRỊ</translation>
     </message>
     <message>
         <source>COST BASIS</source>
-        <translation type="unfinished">GIÁ VỐN</translation>
+        <translation>GIÁ VỐN</translation>
     </message>
     <message>
         <source>UNREALIZED P&amp;L</source>
-        <translation type="unfinished">P&amp;L CHƯA THỰC HIỆN</translation>
+        <translation>P&amp;L CHƯA THỰC HIỆN</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">VỊ THẾ</translation>
+        <translation>VỊ THẾ</translation>
     </message>
     <message>
         <source>GAINERS</source>
-        <translation type="unfinished">TĂNG</translation>
+        <translation>TĂNG</translation>
     </message>
     <message>
         <source>LOSERS</source>
-        <translation type="unfinished">GIẢM</translation>
+        <translation>GIẢM</translation>
     </message>
     <message>
         <source>HOLDINGS BREAKDOWN</source>
-        <translation type="unfinished">PHÂN TÍCH NẮM GIỮ</translation>
+        <translation>PHÂN TÍCH NẮM GIỮ</translation>
     </message>
     <message>
         <source>AVG COST</source>
-        <translation type="unfinished">GIÁ VỐN TB</translation>
+        <translation>GIÁ VỐN TB</translation>
     </message>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">HIỆN TẠI</translation>
+        <translation>HIỆN TẠI</translation>
     </message>
     <message>
         <source>OUTPERFORM</source>
-        <translation type="unfinished">VƯỢT TRỘI</translation>
+        <translation>VƯỢT TRỘI</translation>
     </message>
     <message>
         <source>UNDERPERFORM</source>
-        <translation type="unfinished">KÉM HƠN</translation>
+        <translation>KÉM HƠN</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">TRUNG LAP</translation>
+        <translation>TRUNG LẬP</translation>
     </message>
 </context>
 <context>
@@ -29342,135 +29354,135 @@ xác suất của lợi nhuận tương lai, drawdown và tài sản cuối kỳ
     </message>
     <message>
         <source>RISK OVERVIEW</source>
-        <translation type="unfinished">TỔNG QUAN RỦI RO</translation>
+        <translation>TỔNG QUAN RỦI RO</translation>
     </message>
     <message>
         <source>PORTFOLIO STRESS TESTING</source>
-        <translation type="unfinished">KIỂM TRA ÁP LỰC DANH MỤC</translation>
+        <translation>KIỂM TRA ÁP LỰC DANH MỤC</translation>
     </message>
     <message>
         <source>Estimated impact of historical and hypothetical market scenarios</source>
-        <translation type="unfinished">Tác động ước tính của các kịch bản thị trường lịch sử và giả định</translation>
+        <translation>Tác động ước tính của các kịch bản thị trường lịch sử và giả định</translation>
     </message>
     <message>
         <source>SCENARIO</source>
-        <translation type="unfinished">KỊCH BẢN</translation>
+        <translation>KỊCH BẢN</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">MÔ TẢ</translation>
+        <translation>MÔ TẢ</translation>
     </message>
     <message>
         <source>EQUITY SHOCK</source>
-        <translation type="unfinished">CÚ SỐC CỔ PHIẾU</translation>
+        <translation>CÚ SỐC CỔ PHIẾU</translation>
     </message>
     <message>
         <source>PORTFOLIO IMPACT</source>
-        <translation type="unfinished">TÁC ĐỘNG DANH MỤC</translation>
+        <translation>TÁC ĐỘNG DANH MỤC</translation>
     </message>
     <message>
         <source>LOSS</source>
-        <translation type="unfinished">THUA LỖ</translation>
+        <translation>THUA LỖ</translation>
     </message>
     <message>
         <source>STRESS TEST</source>
-        <translation type="unfinished">KIỂM TRA ÁP LỰC</translation>
+        <translation>KIỂM TRA ÁP LỰC</translation>
     </message>
     <message>
         <source>RISK CONTRIBUTION BY HOLDING</source>
-        <translation type="unfinished">ĐÓNG GÓP RỦI RO THEO NẮM GIỮ</translation>
+        <translation>ĐÓNG GÓP RỦI RO THEO NẮM GIỮ</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">TRỌNG SỐ</translation>
+        <translation>TRỌNG SỐ</translation>
     </message>
     <message>
         <source>VOL PROXY</source>
-        <translation type="unfinished">ĐẠI DIỆN VOL</translation>
+        <translation>ĐẠI DIỆN VOL</translation>
     </message>
     <message>
         <source>RISK CONTRIB</source>
-        <translation type="unfinished">ĐÓNG GÓP RỦI RO</translation>
+        <translation>ĐÓNG GÓP RỦI RO</translation>
     </message>
     <message>
         <source>VAR CONTRIB</source>
-        <translation type="unfinished">ĐÓNG GÓP VAR</translation>
+        <translation>ĐÓNG GÓP VAR</translation>
     </message>
     <message>
         <source>CONCENTRATION</source>
-        <translation type="unfinished">TẬP TRUNG</translation>
+        <translation>TẬP TRUNG</translation>
     </message>
     <message>
         <source>RISK CONTRIBUTION</source>
-        <translation type="unfinished">ĐÓNG GÓP RỦI RO</translation>
+        <translation>ĐÓNG GÓP RỦI RO</translation>
     </message>
     <message>
         <source>PORTFOLIO RISK OVERVIEW</source>
-        <translation type="unfinished">TỔNG QUAN RỦI RO DANH MỤC</translation>
+        <translation>TỔNG QUAN RỦI RO DANH MỤC</translation>
     </message>
     <message>
         <source>PORTFOLIO VALUE</source>
-        <translation type="unfinished">GIÁ TRỊ DANH MỤC</translation>
+        <translation>GIÁ TRỊ DANH MỤC</translation>
     </message>
     <message>
         <source>Total market value</source>
-        <translation type="unfinished">Tổng giá trị thị trường</translation>
+        <translation>Tổng giá trị thị trường</translation>
     </message>
     <message>
         <source>ANNUALIZED VOLATILITY</source>
-        <translation type="unfinished">BIẾN ĐỘNG NĂM HÓA</translation>
+        <translation>BIẾN ĐỘNG NĂM HÓA</translation>
     </message>
     <message>
         <source>Based on day-change proxy</source>
-        <translation type="unfinished">Dựa trên đại diện thay đổi ngày</translation>
+        <translation>Dựa trên đại diện thay đổi ngày</translation>
     </message>
     <message>
         <source>VALUE AT RISK (95%)</source>
-        <translation type="unfinished">GIÁ TRỊ CHỊU RỦI RO (95%)</translation>
+        <translation>GIÁ TRỊ CHỊU RỦI RO (95%)</translation>
     </message>
     <message>
         <source>1-day parametric</source>
-        <translation type="unfinished">Tham số 1 ngày</translation>
+        <translation>Tham số 1 ngày</translation>
     </message>
     <message>
         <source>CONDITIONAL VaR</source>
-        <translation type="unfinished">VaR ĐIỀU KIỆN</translation>
+        <translation>VaR ĐIỀU KIỆN</translation>
     </message>
     <message>
         <source>Expected shortfall</source>
-        <translation type="unfinished">Thiếu hụt kỳ vọng</translation>
+        <translation>Thiếu hụt kỳ vọng</translation>
     </message>
     <message>
         <source>TOP HOLDING CONC.</source>
-        <translation type="unfinished">TẬP TRUNG NẮM GIỮ HÀNG ĐẦU</translation>
+        <translation>TẬP TRUNG NẮM GIỮ HÀNG ĐẦU</translation>
     </message>
     <message>
         <source>Largest position</source>
-        <translation type="unfinished">Vị thế lớn nhất</translation>
+        <translation>Vị thế lớn nhất</translation>
     </message>
     <message>
         <source>TOP 3 CONCENTRATION</source>
-        <translation type="unfinished">TẬP TRUNG TOP 3</translation>
+        <translation>TẬP TRUNG TOP 3</translation>
     </message>
     <message>
         <source>Sum of top 3</source>
-        <translation type="unfinished">Tổng của top 3</translation>
+        <translation>Tổng của top 3</translation>
     </message>
     <message>
         <source>TOP 5 CONCENTRATION</source>
-        <translation type="unfinished">TẬP TRUNG TOP 5</translation>
+        <translation>TẬP TRUNG TOP 5</translation>
     </message>
     <message>
         <source>Sum of top 5</source>
-        <translation type="unfinished">Tổng của top 5</translation>
+        <translation>Tổng của top 5</translation>
     </message>
     <message>
         <source>DIVERSIFICATION</source>
-        <translation type="unfinished">ĐA DẠNG HÓA</translation>
+        <translation>ĐA DẠNG HÓA</translation>
     </message>
     <message numerus="yes">
         <source>%n holdings</source>
@@ -29480,23 +29492,23 @@ xác suất của lợi nhuận tương lai, drawdown và tài sản cuối kỳ
     </message>
     <message>
         <source>Well diversified</source>
-        <translation type="unfinished">Đa dạng tốt</translation>
+        <translation>Đa dạng tốt</translation>
     </message>
     <message>
         <source>Consider adding more</source>
-        <translation type="unfinished">Cân nhắc thêm nữa</translation>
+        <translation>Cân nhắc thêm nữa</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">CAO</translation>
+        <translation>CAO</translation>
     </message>
     <message>
         <source>MEDIUM</source>
-        <translation type="unfinished">TRUNG BÌNH</translation>
+        <translation>TRUNG BÌNH</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">THẤP</translation>
+        <translation>THẤP</translation>
     </message>
 </context>
 <context>
@@ -29559,11 +29571,11 @@ xác suất của lợi nhuận tương lai, drawdown và tài sản cuối kỳ
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Hủy</translation>
+        <translation>Hủy</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Lưu</translation>
+        <translation>Lưu</translation>
     </message>
     <message>
         <source>✗ Enter a valid URL first.</source>
@@ -29662,7 +29674,7 @@ Vẫn lưu nguồn này chứ?</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Loại</translation>
+        <translation>Loại</translation>
     </message>
     <message>
         <source>Source</source>
@@ -29885,7 +29897,7 @@ Vẫn lưu nguồn này chứ?</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>SIGNAL</source>
@@ -29925,7 +29937,7 @@ Vẫn lưu nguồn này chứ?</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">TRUNG LAP</translation>
+        <translation>TRUNG LẬP</translation>
     </message>
     <message>
         <source>Error [%1]: %2</source>
@@ -29952,7 +29964,7 @@ Vẫn lưu nguồn này chứ?</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">LƯU</translation>
+        <translation>LƯU</translation>
     </message>
 </context>
 <context>
@@ -30011,7 +30023,7 @@ Vẫn lưu nguồn này chứ?</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Hủy</translation>
+        <translation>Hủy</translation>
     </message>
     <message>
         <source>Locked out — try again in %1s</source>
@@ -30150,7 +30162,7 @@ Vẫn lưu nguồn này chứ?</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>BÁN</translation>
     </message>
 </context>
 <context>
@@ -30176,7 +30188,7 @@ Vẫn lưu nguồn này chứ?</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">LƯU</translation>
+        <translation>LƯU</translation>
     </message>
     <message>
         <source>CLEAR</source>
@@ -30528,7 +30540,7 @@ Không cần API key — dữ liệu qua vector ID để đảm bảo độ tin 
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TỔNG</translation>
+        <translation>TỔNG</translation>
     </message>
     <message>
         <source>Cache Entries</source>
@@ -30548,7 +30560,7 @@ Không cần API key — dữ liệu qua vector ID để đảm bảo độ tin 
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">HÀNH ĐỘNG</translation>
+        <translation>HÀNH ĐỘNG</translation>
     </message>
     <message>
         <source>CLR</source>
@@ -30680,7 +30692,7 @@ Tiếp tục?</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
     <message>
         <source>OK — %1 row(s) affected</source>
@@ -30787,7 +30799,7 @@ Bạn có hoàn toàn chắc chắn không?</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Lưu</translation>
+        <translation>Lưu</translation>
     </message>
     <message>
         <source>Backtest</source>
@@ -30799,7 +30811,7 @@ Bạn có hoàn toàn chắc chắn không?</translation>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">BACKTEST</translation>
+        <translation>BACKTEST</translation>
     </message>
     <message>
         <source>Capital</source>
@@ -30914,7 +30926,7 @@ Bạn có hoàn toàn chắc chắn không?</translation>
     </message>
     <message>
         <source>Page %1 of %2</source>
-        <translation type="unfinished">Trang %1 trên %2</translation>
+        <translation>Trang %1 trên %2</translation>
     </message>
     <message>
         <source>NEXT ▶</source>
@@ -30926,7 +30938,7 @@ Bạn có hoàn toàn chắc chắn không?</translation>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">BACKTEST</translation>
+        <translation>BACKTEST</translation>
     </message>
     <message>
         <source>DEPLOY</source>
@@ -30934,7 +30946,7 @@ Bạn có hoàn toàn chắc chắn không?</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">XÓA</translation>
+        <translation>XÓA</translation>
     </message>
     <message>
         <source>Page %1 of %2  ·  %3 strategies</source>
@@ -30958,7 +30970,7 @@ Bạn có hoàn toàn chắc chắn không?</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Mã</translation>
+        <translation>Mã</translation>
     </message>
     <message>
         <source>Start</source>
@@ -31081,7 +31093,7 @@ Bạn có hoàn toàn chắc chắn không?</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Hủy</translation>
+        <translation>Hủy</translation>
     </message>
     <message>
         <source>Submit Ticket →</source>
@@ -31207,7 +31219,7 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">MO CUA</translation>
+        <translation>MỞ</translation>
     </message>
     <message>
         <source>IN PROGRESS</source>
@@ -31219,7 +31231,7 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
     </message>
     <message>
         <source>CLOSED</source>
-        <translation type="unfinished">DONG CUA</translation>
+        <translation>ĐÓNG CỬA</translation>
     </message>
     <message>
         <source>PENDING</source>
@@ -31227,7 +31239,7 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
     </message>
     <message>
         <source>Support</source>
-        <translation type="unfinished">Hỗ trợ</translation>
+        <translation>Hỗ trợ</translation>
     </message>
     <message>
         <source>Tickets</source>
@@ -31271,7 +31283,7 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
     </message>
     <message>
         <source>Total</source>
-        <translation type="unfinished">Tổng</translation>
+        <translation>Tổng</translation>
     </message>
     <message>
         <source>Done</source>
@@ -31310,11 +31322,11 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
     </message>
     <message>
         <source>AGENTS</source>
-        <translation type="unfinished">TÁC NHÂN</translation>
+        <translation>TÁC NHÂN</translation>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">CÔNG CỤ</translation>
+        <translation>CÔNG CỤ</translation>
     </message>
     <message>
         <source>LLMS</source>
@@ -31334,7 +31346,7 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
     </message>
     <message>
         <source>AVAILABLE TOOLS</source>
-        <translation type="unfinished">CÔNG CỤ CÓ SẴN</translation>
+        <translation>CÔNG CỤ CÓ SẴN</translation>
     </message>
     <message>
         <source>Loading tools...</source>
@@ -31401,11 +31413,11 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
     </message>
     <message>
         <source>FAILED</source>
-        <translation type="unfinished">THẤT BẠI</translation>
+        <translation>THẤT BẠI</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">LỖI</translation>
+        <translation>LỖI</translation>
     </message>
     <message>
         <source>Agents coordinate through a leader who delegates and synthesizes results.</source>
@@ -31445,7 +31457,7 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
     <message>
         <source>Default (Global)</source>
@@ -31476,19 +31488,19 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
     <name>fincept::screens::TemplatePicker</name>
     <message>
         <source>Choose Dashboard Template</source>
-        <translation type="unfinished">Chon mau bang dieu khien</translation>
+        <translation>Chọn mẫu bảng điều khiển</translation>
     </message>
     <message>
         <source>CHOOSE TEMPLATE</source>
-        <translation type="unfinished">CHON MAU</translation>
+        <translation>CHỌN MẪU</translation>
     </message>
     <message>
         <source>Select a template to reset your dashboard. Current layout will be replaced.</source>
-        <translation type="unfinished">Chon mot mau de dat lai bang dieu khien. Bo cuc hien tai se duoc thay the.</translation>
+        <translation>Chọn một mẫu để đặt lại bảng điều khiển. Bố cục hiện tại sẽ được thay thế.</translation>
     </message>
     <message>
         <source>APPLY</source>
-        <translation type="unfinished">AP DUNG</translation>
+        <translation>ÁP DỤNG</translation>
     </message>
     <message>
         <source>CANCEL</source>
@@ -31713,7 +31725,7 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">MÔ TẢ</translation>
+        <translation>MÔ TẢ</translation>
     </message>
     <message>
         <source>Click a tool to see details...</source>
@@ -31800,7 +31812,7 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
     </message>
     <message>
         <source>ANALYSIS TYPE</source>
-        <translation type="unfinished">LOẠI PHÂN TÍCH</translation>
+        <translation>LOẠI PHÂN TÍCH</translation>
     </message>
     <message>
         <source>Analyzes efficiency gains, consumer benefits, growth effects, and adjustment costs of international trade.</source>
@@ -32016,11 +32028,11 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
     </message>
     <message>
         <source>YES</source>
-        <translation type="unfinished">CÓ</translation>
+        <translation>CÓ</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">KHÔNG</translation>
+        <translation>KHÔNG</translation>
     </message>
     <message>
         <source>Metric</source>
@@ -32103,7 +32115,7 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">Cài đặt</translation>
+        <translation>Cài đặt</translation>
     </message>
     <message>
         <source>Export</source>
@@ -32111,7 +32123,7 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Ghi chú</translation>
+        <translation>Ghi chú</translation>
     </message>
 </context>
 <context>
@@ -32259,7 +32271,7 @@ Lấy khóa tại: tradingeconomics.com/api</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">QUỐC GIA</translation>
+        <translation>QUỐC GIA</translation>
     </message>
     <message>
         <source>Fetching Trading Economics: %1…</source>
@@ -32331,7 +32343,7 @@ Lấy khóa tại: tradingeconomics.com/api</translation>
     <name>fincept::screens::UnescoPanel</name>
     <message>
         <source>THEME</source>
-        <translation type="unfinished">CHỦ ĐỀ</translation>
+        <translation>CHỦ ĐỀ</translation>
     </message>
     <message>
         <source>Education</source>
@@ -32371,7 +32383,7 @@ Dùng mã quốc gia ISO 3 chữ cái: USA, GBR, IND, CHN, BRA, DEU</translation
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">QUỐC GIA</translation>
+        <translation>QUỐC GIA</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -32580,7 +32592,7 @@ Hãy thử mã quốc gia khác hoặc kiểm tra xem chỉ số có sẵn khôn
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Lưu</translation>
+        <translation>Lưu</translation>
     </message>
     <message>
         <source>Test Deepgram key</source>
@@ -32794,7 +32806,7 @@ Hãy thử mã quốc gia khác hoặc kiểm tra xem chỉ số có sẵn khôn
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">BACKTEST</translation>
+        <translation>BACKTEST</translation>
     </message>
 </context>
 <context>
@@ -32805,7 +32817,7 @@ Hãy thử mã quốc gia khác hoặc kiểm tra xem chỉ số có sẵn khôn
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Thị trường</translation>
+        <translation>Thị trường</translation>
     </message>
     <message>
         <source>Major global indices — SPY, QQQ, DIA, IWM</source>
@@ -32897,11 +32909,11 @@ Hãy thử mã quốc gia khác hoặc kiểm tra xem chỉ số có sẵn khôn
     </message>
     <message>
         <source>Watchlist</source>
-        <translation type="unfinished">Danh sách theo dõi</translation>
+        <translation>Danh sách theo dõi</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Danh mục</translation>
+        <translation>Danh mục</translation>
     </message>
     <message>
         <source>Your saved symbols with live prices</source>
@@ -32989,7 +33001,7 @@ Hãy thử mã quốc gia khác hoặc kiểm tra xem chỉ số có sẵn khôn
     </message>
     <message>
         <source>Tools</source>
-        <translation type="unfinished">Công cụ</translation>
+        <translation>Công cụ</translation>
     </message>
     <message>
         <source>Financial TV — major networks and custom streams</source>
@@ -33073,7 +33085,7 @@ Hãy thử mã quốc gia khác hoặc kiểm tra xem chỉ số có sẵn khôn
     </message>
     <message>
         <source>Geopolitics</source>
-        <translation type="unfinished">Địa chính trị</translation>
+        <translation>Địa chính trị</translation>
     </message>
     <message>
         <source>Live conflict / political events — subscribes to geopolitics:events</source>
@@ -33089,7 +33101,7 @@ Hãy thử mã quốc gia khác hoặc kiểm tra xem chỉ số có sẵn khôn
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Ghi chú</translation>
+        <translation>Ghi chú</translation>
     </message>
     <message>
         <source>Recent / favorite financial notes — click to open Notes screen</source>
@@ -33124,15 +33136,15 @@ Hãy thử mã quốc gia khác hoặc kiểm tra xem chỉ số có sẵn khôn
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>QUERY</source>
-        <translation type="unfinished">TRUY VẤN</translation>
+        <translation>TRUY VẤN</translation>
     </message>
     <message>
         <source>OUTPUT</source>
-        <translation type="unfinished">ĐẦU RA</translation>
+        <translation>ĐẦU RA</translation>
     </message>
     <message>
         <source>EXECUTION LOG</source>
@@ -33140,19 +33152,19 @@ Hãy thử mã quốc gia khác hoặc kiểm tra xem chỉ số có sẵn khôn
     </message>
     <message>
         <source>RESULT</source>
-        <translation type="unfinished">KẾT QUẢ</translation>
+        <translation>KẾT QUẢ</translation>
     </message>
     <message>
         <source>FAILED</source>
-        <translation type="unfinished">THẤT BẠI</translation>
+        <translation>THẤT BẠI</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">LỖI</translation>
+        <translation>LỖI</translation>
     </message>
     <message>
         <source>Select a workflow to configure and run.</source>
@@ -33225,7 +33237,7 @@ Nguồn: World Bank — chỉ báo Y tế &amp; Phát triển</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">QUỐC GIA</translation>
+        <translation>QUỐC GIA</translation>
     </message>
     <message>
         <source>Fetching WB Health: %1 — %2…</source>
@@ -33240,7 +33252,7 @@ Nguồn: World Bank — chỉ báo Y tế &amp; Phát triển</translation>
     <name>fincept::screens::WorldBankPanel</name>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">QUỐC GIA</translation>
+        <translation>QUỐC GIA</translation>
     </message>
     <message>
         <source>Filter countries…</source>
@@ -33498,7 +33510,7 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>APPLY</source>
-        <translation type="unfinished">AP DUNG</translation>
+        <translation>ÁP DỤNG</translation>
     </message>
     <message>
         <source>New competition</source>
@@ -33558,7 +33570,7 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>CREATE</source>
-        <translation type="unfinished">TẠO</translation>
+        <translation>TẠO</translation>
     </message>
     <message>
         <source>START</source>
@@ -33570,7 +33582,7 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">VỊ THẾ</translation>
+        <translation>VỊ THẾ</translation>
     </message>
     <message>
         <source>HITL</source>
@@ -33578,7 +33590,7 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">RỦI RO</translation>
+        <translation>RỦI RO</translation>
     </message>
     <message>
         <source>AUDIT</source>
@@ -33593,7 +33605,7 @@ Không thể hoàn tác.</translation>
     <name>fincept::screens::alpha_arena::AuditPanel</name>
     <message>
         <source>AUDIT LOG</source>
-        <translation type="unfinished">NHẬT KÝ KIỂM TRA</translation>
+        <translation>NHẬT KÝ KIỂM TRA</translation>
     </message>
 </context>
 <context>
@@ -33631,11 +33643,11 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>RETURN</source>
-        <translation type="unfinished">LỢI NHUẬN</translation>
+        <translation>LỢI NHUẬN</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">SHARPE</translation>
+        <translation>SHARPE</translation>
     </message>
     <message>
         <source>MAX DD</source>
@@ -33678,7 +33690,7 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Hủy</translation>
+        <translation>Hủy</translation>
     </message>
     <message>
         <source>ENABLE LIVE MODE</source>
@@ -33713,7 +33725,7 @@ Không thể hoàn tác.</translation>
     <name>fincept::screens::alpha_arena::ModelChatPanel</name>
     <message>
         <source>AGENT</source>
-        <translation type="unfinished">AGENT</translation>
+        <translation>TÁC NHÂN</translation>
     </message>
     <message>
         <source>Tick %1 — %2</source>
@@ -33752,7 +33764,7 @@ Lỗi phân tích: %3</translation>
     </message>
     <message>
         <source>AGENT</source>
-        <translation type="unfinished">AGENT</translation>
+        <translation>TÁC NHÂN</translation>
     </message>
     <message>
         <source>COIN</source>
@@ -33760,7 +33772,7 @@ Lỗi phân tích: %3</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>SL</translation>
     </message>
     <message>
         <source>ENTRY</source>
@@ -33795,7 +33807,7 @@ Lỗi phân tích: %3</translation>
     </message>
     <message>
         <source>AGENT</source>
-        <translation type="unfinished">AGENT</translation>
+        <translation>TÁC NHÂN</translation>
     </message>
     <message>
         <source>STATE</source>
@@ -33830,7 +33842,7 @@ Lỗi phân tích: %3</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">VỊ THẾ</translation>
+        <translation>VỊ THẾ</translation>
     </message>
     <message>
         <source>ORDERS</source>
@@ -33858,7 +33870,7 @@ Lỗi phân tích: %3</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Mã</translation>
+        <translation>Mã</translation>
     </message>
     <message>
         <source>Side</source>
@@ -33866,7 +33878,7 @@ Lỗi phân tích: %3</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>SL</translation>
     </message>
     <message>
         <source>Entry</source>
@@ -33878,7 +33890,7 @@ Lỗi phân tích: %3</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>Lev</source>
@@ -33886,11 +33898,11 @@ Lỗi phân tích: %3</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Loại</translation>
+        <translation>Loại</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Giá</translation>
+        <translation>Giá</translation>
     </message>
     <message>
         <source>Status</source>
@@ -33984,7 +33996,7 @@ Kết nối khóa API ở chế độ TRỰC TIẾP để hiển thị dữ li�
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">TỶ LỆ THẮNG</translation>
+        <translation>TỶ LỆ THẮNG</translation>
     </message>
     <message>
         <source>TOTAL TRADES</source>
@@ -34052,7 +34064,7 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     </message>
     <message>
         <source>API KEY</source>
-        <translation type="unfinished">KHÓA API</translation>
+        <translation>KHÓA API</translation>
     </message>
     <message>
         <source>Enter API key</source>
@@ -34114,6 +34126,26 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
         <source>CODE: %1</source>
         <translation>MÃ: %1</translation>
     </message>
+    <message>
+        <source>Enter private key</source>
+        <translation>Nhập khóa riêng</translation>
+    </message>
+    <message>
+        <source>Enter wallet address (0x…)</source>
+        <translation>Nhập địa chỉ ví (0x…)</translation>
+    </message>
+    <message>
+        <source>PRIVATE KEY</source>
+        <translation>KHÓA RIÊNG</translation>
+    </message>
+    <message>
+        <source>WALLET ADDRESS</source>
+        <translation>ĐỊA CHỈ VÍ</translation>
+    </message>
+    <message>
+        <source>Wallet address and private key are required</source>
+        <translation>Cần có địa chỉ ví và khóa riêng</translation>
+    </message>
 </context>
 <context>
     <name>fincept::screens::crypto::CryptoDepthChart</name>
@@ -34158,7 +34190,7 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>SL</translation>
     </message>
     <message>
         <source>ASK</source>
@@ -34174,7 +34206,7 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">HÀNH ĐỘNG</translation>
+        <translation>HÀNH ĐỘNG</translation>
     </message>
     <message>
         <source>IMBALANCE</source>
@@ -34198,15 +34230,15 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>MUA</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>BÁN</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">TRUNG LAP</translation>
+        <translation>TRUNG LẬP</translation>
     </message>
     <message>
         <source>BUY PRESSURE</source>
@@ -34221,7 +34253,7 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     <name>fincept::screens::crypto::CryptoOrderEntry</name>
     <message>
         <source>ORDER ENTRY</source>
-        <translation type="unfinished">NHẬP LỆNH</translation>
+        <translation>NHẬP LỆNH</translation>
     </message>
     <message>
         <source>PAPER</source>
@@ -34241,11 +34273,11 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>MUA</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>BÁN</translation>
     </message>
     <message>
         <source>MARKET</source>
@@ -34285,7 +34317,7 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TỔNG</translation>
+        <translation>TỔNG</translation>
     </message>
     <message>
         <source>YOU RECEIVE</source>
@@ -34391,11 +34423,11 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Mã</translation>
+        <translation>Mã</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Giá</translation>
+        <translation>Giá</translation>
     </message>
     <message>
         <source>%</source>
@@ -34406,7 +34438,7 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     <name>fincept::screens::datasources::DataSourcesScreen</name>
     <message>
         <source>DATA SOURCES</source>
-        <translation type="unfinished">NGUỒN DỮ LIỆU</translation>
+        <translation>NGUỒN DỮ LIỆU</translation>
     </message>
     <message>
         <source>%1 CONNECTORS</source>
@@ -34418,7 +34450,7 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">NHẬP</translation>
+        <translation>NHẬP</translation>
     </message>
     <message>
         <source>EXPORT</source>
@@ -34446,11 +34478,11 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     </message>
     <message>
         <source>BROWSE</source>
-        <translation type="unfinished">DUYỆT</translation>
+        <translation>DUYỆT</translation>
     </message>
     <message>
         <source>CONNECTIONS</source>
-        <translation type="unfinished">KẾT NỐI</translation>
+        <translation>KẾT NỐI</translation>
     </message>
     <message>
         <source>CATEGORY</source>
@@ -34474,11 +34506,11 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">LOẠI</translation>
+        <translation>LOẠI</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TỔNG</translation>
+        <translation>TỔNG</translation>
     </message>
     <message>
         <source>INSPECTOR</source>
@@ -34526,7 +34558,7 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     </message>
     <message>
         <source>+ ADD</source>
-        <translation type="unfinished">+ THEM</translation>
+        <translation>+ THÊM</translation>
     </message>
     <message>
         <source>filter connections...</source>
@@ -34546,7 +34578,7 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">TÊN</translation>
+        <translation>TÊN</translation>
     </message>
     <message>
         <source>PROVIDER</source>
@@ -34554,7 +34586,7 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">TRẠNG THÁI</translation>
+        <translation>TRẠNG THÁI</translation>
     </message>
     <message>
         <source>TAGS</source>
@@ -34626,11 +34658,11 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">MO CUA</translation>
+        <translation>MỞ</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">OK</translation>
+        <translation>OK</translation>
     </message>
     <message>
         <source>ERR</source>
@@ -34752,7 +34784,7 @@ Các khóa được lưu cục bộ trong bộ lưu trữ an toàn được mã 
     </message>
     <message>
         <source>+ ADD</source>
-        <translation type="unfinished">+ THEM</translation>
+        <translation>+ THÊM</translation>
     </message>
     <message>
         <source>REMOVE</source>
@@ -34806,7 +34838,7 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">Lỗi: %1</translation>
+        <translation>Lỗi: %1</translation>
     </message>
     <message>
         <source>Connected as %1</source>
@@ -34842,7 +34874,7 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>API KEY</source>
-        <translation type="unfinished">KHÓA API</translation>
+        <translation>KHÓA API</translation>
     </message>
     <message>
         <source>Enter API Key...</source>
@@ -34874,7 +34906,7 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>PASSWORD</source>
-        <translation type="unfinished">MẬT KHẨU</translation>
+        <translation>MẬT KHẨU</translation>
     </message>
     <message>
         <source>Zerodha login password</source>
@@ -35136,6 +35168,18 @@ Không thể hoàn tác.</translation>
         <source>Connected</source>
         <translation>Đã kết nối</translation>
     </message>
+    <message>
+        <source>Auto — execute immediately</source>
+        <translation>Tự động — thực thi ngay lập tức</translation>
+    </message>
+    <message>
+        <source>Order Approval:</source>
+        <translation>Phê duyệt lệnh:</translation>
+    </message>
+    <message>
+        <source>Semi-Auto — require approval</source>
+        <translation>Bán tự động — cần phê duyệt</translation>
+    </message>
 </context>
 <context>
     <name>fincept::screens::equity::BroadcastOrderDialog</name>
@@ -35149,11 +35193,11 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>MUA</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>BÁN</translation>
     </message>
     <message>
         <source>Select All</source>
@@ -35201,18 +35245,26 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>DONE</source>
-        <translation type="unfinished">XONG</translation>
+        <translation>XONG</translation>
+    </message>
+    <message>
+        <source>%1 order(s) queued for approval</source>
+        <translation>%1 lệnh đã vào hàng đợi chờ phê duyệt</translation>
+    </message>
+    <message>
+        <source>Placing %1 order(s); %2 queued for approval...</source>
+        <translation>Đang đặt %1 lệnh; %2 lệnh chờ phê duyệt...</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::equity::EquityBottomPanel</name>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">VỊ THẾ</translation>
+        <translation>VỊ THẾ</translation>
     </message>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">NẮM GIỮ</translation>
+        <translation>NẮM GIỮ</translation>
     </message>
     <message>
         <source>ORDERS</source>
@@ -35240,7 +35292,7 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Mã</translation>
+        <translation>Mã</translation>
     </message>
     <message>
         <source>Opened</source>
@@ -35252,7 +35304,7 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>SL</translation>
     </message>
     <message>
         <source>Avg Price</source>
@@ -35264,11 +35316,11 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">P&amp;L %</translation>
+        <translation>P&amp;L %</translation>
     </message>
     <message>
         <source>Invested</source>
@@ -35284,11 +35336,11 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Loại</translation>
+        <translation>Loại</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Giá</translation>
+        <translation>Giá</translation>
     </message>
     <message>
         <source>Status</source>
@@ -35304,7 +35356,7 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Ngày</translation>
+        <translation>Ngày</translation>
     </message>
     <message>
         <source>Size</source>
@@ -35356,7 +35408,7 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">HIỆN TẠI</translation>
+        <translation>HIỆN TẠI</translation>
     </message>
     <message>
         <source>TOTAL P&amp;L</source>
@@ -35388,7 +35440,7 @@ Không thể hoàn tác.</translation>
     </message>
     <message>
         <source>Win Rate</source>
-        <translation type="unfinished">Tỷ lệ thắng</translation>
+        <translation>Tỷ lệ thắng</translation>
     </message>
     <message>
         <source>Total Trades</source>
@@ -35440,7 +35492,7 @@ Bạn có chắc không?</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>SL</translation>
     </message>
     <message>
         <source>LIMIT PRICE</source>
@@ -35456,7 +35508,7 @@ Bạn có chắc không?</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">MO CUA</translation>
+        <translation>MỞ</translation>
     </message>
     <message>
         <source>CLOSE</source>
@@ -35510,11 +35562,11 @@ Bạn có chắc không?</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">GIÁ</translation>
+        <translation>GIÁ</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>SL</translation>
     </message>
     <message>
         <source>ORDERS</source>
@@ -35525,7 +35577,7 @@ Bạn có chắc không?</translation>
     <name>fincept::screens::equity::EquityOrderEntry</name>
     <message>
         <source>ORDER ENTRY</source>
-        <translation type="unfinished">NHẬP LỆNH</translation>
+        <translation>NHẬP LỆNH</translation>
     </message>
     <message>
         <source>PAPER</source>
@@ -35533,11 +35585,11 @@ Bạn có chắc không?</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>MUA</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>BÁN</translation>
     </message>
     <message>
         <source>MKT</source>
@@ -35581,11 +35633,11 @@ Bạn có chắc không?</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>SL</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">GIÁ</translation>
+        <translation>GIÁ</translation>
     </message>
     <message>
         <source>Limit price</source>
@@ -35625,7 +35677,7 @@ Bạn có chắc không?</translation>
     </message>
     <message>
         <source>STRATEGY</source>
-        <translation type="unfinished">CHIẾN LƯỢC</translation>
+        <translation>CHIẾN LƯỢC</translation>
     </message>
     <message>
         <source>None</source>
@@ -35764,7 +35816,7 @@ Bạn có chắc không?</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>LTP</source>
@@ -35772,7 +35824,7 @@ Bạn có chắc không?</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
     </message>
 </context>
 <context>
@@ -35822,7 +35874,7 @@ Bạn có chắc không?</translation>
     <name>fincept::screens::fno::BuilderSubTab</name>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">LƯU</translation>
+        <translation>LƯU</translation>
     </message>
     <message>
         <source>LOAD</source>
@@ -36013,11 +36065,11 @@ Bạn có chắc không?</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">LÀM MỚI</translation>
+        <translation>LÀM MỚI</translation>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">Ngày</translation>
+        <translation>Ngày</translation>
     </message>
     <message>
         <source>FII Buy</source>
@@ -36064,7 +36116,7 @@ Bạn có chắc không?</translation>
     <name>fincept::screens::fno::FnoHeaderBar</name>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">LÀM MỚI</translation>
+        <translation>LÀM MỚI</translation>
     </message>
     <message>
         <source>Broker:</source>
@@ -36197,11 +36249,11 @@ Bạn có chắc không?</translation>
     <name>fincept::screens::fno::LegEditorModel</name>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>MUA</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>BÁN</translation>
     </message>
     <message>
         <source>On</source>
@@ -36213,7 +36265,7 @@ Bạn có chắc không?</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Loại</translation>
+        <translation>Loại</translation>
     </message>
     <message>
         <source>Strike</source>
@@ -36241,7 +36293,7 @@ Bạn có chắc không?</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
 </context>
 <context>
@@ -36270,7 +36322,7 @@ Bạn có chắc không?</translation>
     <name>fincept::screens::fno::MultiStraddleSubTab</name>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Loại</translation>
+        <translation>Loại</translation>
     </message>
     <message>
         <source>Anchor</source>
@@ -36278,7 +36330,7 @@ Bạn có chắc không?</translation>
     </message>
     <message>
         <source>ADD</source>
-        <translation type="unfinished">THÊM</translation>
+        <translation>THÊM</translation>
     </message>
     <message>
         <source>Double-click an entry to remove it.</source>
@@ -36409,7 +36461,7 @@ Bạn có chắc không?</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Mã</translation>
+        <translation>Mã</translation>
     </message>
     <message>
         <source>B/S</source>
@@ -36417,11 +36469,11 @@ Bạn có chắc không?</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>SL</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">Loại</translation>
+        <translation>Loại</translation>
     </message>
     <message>
         <source>Entry</source>
@@ -36453,11 +36505,11 @@ Bạn có chắc không?</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>MUA</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>BÁN</translation>
     </message>
     <message>
         <source>Broker %1 not registered</source>
@@ -36628,7 +36680,7 @@ P/L mục tiêu: %3</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">TRỌNG SỐ</translation>
+        <translation>TRỌNG SỐ</translation>
     </message>
     <message>
         <source>YIELD (LIFETIME)</source>
@@ -36636,7 +36688,7 @@ P/L mục tiêu: %3</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TỔNG</translation>
+        <translation>TỔNG</translation>
     </message>
     <message>
         <source>DEMO</source>
@@ -36805,7 +36857,7 @@ P/L mục tiêu: %3</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">GIÁ</translation>
+        <translation>GIÁ</translation>
     </message>
     <message>
         <source>USD VALUE</source>
@@ -36932,7 +36984,7 @@ P/L mục tiêu: %3</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">TRỌNG SỐ</translation>
+        <translation>TRỌNG SỐ</translation>
     </message>
     <message>
         <source>EST. YIELD</source>
@@ -36955,11 +37007,11 @@ P/L mục tiêu: %3</translation>
     </message>
     <message>
         <source>YES</source>
-        <translation type="unfinished">CÓ</translation>
+        <translation>CÓ</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">KHÔNG</translation>
+        <translation>KHÔNG</translation>
     </message>
     <message>
         <source>24h VOL</source>
@@ -36979,7 +37031,7 @@ P/L mục tiêu: %3</translation>
     </message>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">THỊ TRƯỜNG</translation>
+        <translation>THỊ TRƯỜNG</translation>
     </message>
     <message>
         <source>DEMO</source>
@@ -36987,7 +37039,7 @@ P/L mục tiêu: %3</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">LỖI</translation>
+        <translation>LỖI</translation>
     </message>
     <message>
         <source>● LIVE</source>
@@ -37234,7 +37286,7 @@ P/L mục tiêu: %3</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">LOẠI</translation>
+        <translation>LOẠI</translation>
     </message>
     <message>
         <source>SIDE</source>
@@ -37242,7 +37294,7 @@ P/L mục tiêu: %3</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">GIÁ</translation>
+        <translation>GIÁ</translation>
     </message>
     <message>
         <source>SIZE</source>
@@ -37253,7 +37305,7 @@ P/L mục tiêu: %3</translation>
     <name>fincept::screens::polymarket::PolymarketBrowsePanel</name>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">THỊ TRƯỜNG</translation>
+        <translation>THỊ TRƯỜNG</translation>
     </message>
     <message>
         <source>MARKETS  %1</source>
@@ -37265,7 +37317,7 @@ P/L mục tiêu: %3</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">DANG TAI...</translation>
+        <translation>ĐANG TẢI...</translation>
     </message>
 </context>
 <context>
@@ -37288,7 +37340,7 @@ P/L mục tiêu: %3</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">KHỐI LƯỢNG</translation>
+        <translation>KHỐI LƯỢNG</translation>
     </message>
     <message>
         <source>LIQUIDITY</source>
@@ -37296,7 +37348,7 @@ P/L mục tiêu: %3</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">NGÀY</translation>
+        <translation>NGÀY</translation>
     </message>
     <message>
         <source>↻</source>
@@ -37343,7 +37395,7 @@ P/L mục tiêu: %3</translation>
     </message>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">TỔNG QUAN</translation>
+        <translation>TỔNG QUAN</translation>
     </message>
     <message>
         <source>ORDER BOOK</source>
@@ -37379,7 +37431,7 @@ P/L mục tiêu: %3</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">KHỐI LƯỢNG</translation>
+        <translation>KHỐI LƯỢNG</translation>
     </message>
     <message>
         <source>LIQUIDITY</source>
@@ -37425,11 +37477,11 @@ to place orders</source>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>MUA</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>BÁN</translation>
     </message>
     <message>
         <source>OUTCOME</source>
@@ -37516,11 +37568,11 @@ to place orders</source>
     </message>
     <message>
         <source>PNL</source>
-        <translation type="unfinished">PNL</translation>
+        <translation>PNL</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">KHỐI LƯỢNG</translation>
+        <translation>KHỐI LƯỢNG</translation>
     </message>
     <message>
         <source>TRADES</source>
@@ -37569,7 +37621,7 @@ to place orders</source>
     <name>fincept::screens::polymarket::PolymarketOrderBook</name>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">GIÁ</translation>
+        <translation>GIÁ</translation>
     </message>
     <message>
         <source>SIZE</source>
@@ -37577,7 +37629,7 @@ to place orders</source>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">TỔNG</translation>
+        <translation>TỔNG</translation>
     </message>
     <message>
         <source>SPREAD %1</source>
@@ -37694,7 +37746,7 @@ to place orders</source>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Lưu</translation>
+        <translation>Lưu</translation>
     </message>
     <message>
         <source>Test Connection</source>
@@ -37860,19 +37912,19 @@ to place orders</source>
     <name>fincept::screens::widgets::BaseWidget</name>
     <message>
         <source>Configure widget</source>
-        <translation type="unfinished">Cau hinh widget</translation>
+        <translation>Cấu hình widget</translation>
     </message>
     <message>
         <source>Refresh widget data</source>
-        <translation type="unfinished">Lam moi du lieu widget</translation>
+        <translation>Làm mới dữ liệu widget</translation>
     </message>
     <message>
         <source>Close widget</source>
-        <translation type="unfinished">Dong widget</translation>
+        <translation>Đóng widget</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">DANG TAI...</translation>
+        <translation>ĐANG TẢI...</translation>
     </message>
     <message>
         <source>No data yet — click refresh to retry</source>
@@ -37883,15 +37935,15 @@ to place orders</source>
     <name>fincept::screens::widgets::BrokerHoldingsWidget</name>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">NẮM GIỮ</translation>
+        <translation>NẮM GIỮ</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Mã</translation>
+        <translation>Mã</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>SL</translation>
     </message>
     <message>
         <source>Avg</source>
@@ -37903,7 +37955,7 @@ to place orders</source>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">P&amp;L %</translation>
+        <translation>P&amp;L %</translation>
     </message>
     <message>
         <source>No active account — click gear to configure</source>
@@ -37964,7 +38016,7 @@ to place orders</source>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Mã</translation>
+        <translation>Mã</translation>
     </message>
 </context>
 <context>
@@ -37983,7 +38035,7 @@ to place orders</source>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">NGÀY</translation>
+        <translation>NGÀY</translation>
     </message>
     <message>
         <source>REF</source>
@@ -38023,7 +38075,7 @@ to place orders</source>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">CAO</translation>
+        <translation>CAO</translation>
     </message>
     <message>
         <source>MED</source>
@@ -38031,7 +38083,7 @@ to place orders</source>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">THẤP</translation>
+        <translation>THẤP</translation>
     </message>
 </context>
 <context>
@@ -38108,7 +38160,7 @@ to place orders</source>
     </message>
     <message>
         <source>Total</source>
-        <translation type="unfinished">Tổng</translation>
+        <translation>Tổng</translation>
     </message>
     <message>
         <source>Collateral</source>
@@ -38205,7 +38257,7 @@ to place orders</source>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">DANG TAI...</translation>
+        <translation>ĐANG TẢI...</translation>
     </message>
     <message>
         <source>-- BULL</source>
@@ -38237,7 +38289,7 @@ to place orders</source>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">TRUNG LAP</translation>
+        <translation>TRUNG LẬP</translation>
     </message>
     <message>
         <source>BEARISH</source>
@@ -38294,7 +38346,7 @@ to place orders</source>
     <name>fincept::screens::widgets::NotesWidget</name>
     <message>
         <source>NOTES</source>
-        <translation type="unfinished">GHI CHÚ</translation>
+        <translation>GHI CHÚ</translation>
     </message>
     <message>
         <source>NOTES — FAVORITES</source>
@@ -38349,11 +38401,11 @@ to place orders</source>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Mã</translation>
+        <translation>Mã</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>SL</translation>
     </message>
     <message>
         <source>Avg</source>
@@ -38365,7 +38417,7 @@ to place orders</source>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>No active account — click gear to configure</source>
@@ -38388,7 +38440,7 @@ to place orders</source>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">Mã</translation>
+        <translation>Mã</translation>
     </message>
     <message>
         <source>Side</source>
@@ -38396,11 +38448,11 @@ to place orders</source>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>SL</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Giá</translation>
+        <translation>Giá</translation>
     </message>
     <message>
         <source>Status</source>
@@ -38475,7 +38527,7 @@ to place orders</source>
     </message>
     <message>
         <source>TODAY</source>
-        <translation type="unfinished">HÔM NAY</translation>
+        <translation>HÔM NAY</translation>
     </message>
 </context>
 <context>
@@ -38498,7 +38550,7 @@ to place orders</source>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Thị trường</translation>
+        <translation>Thị trường</translation>
     </message>
 </context>
 <context>
@@ -38509,7 +38561,7 @@ to place orders</source>
     </message>
     <message>
         <source>TOTAL VALUE</source>
-        <translation type="unfinished">TỔNG GIÁ TRỊ</translation>
+        <translation>TỔNG GIÁ TRỊ</translation>
     </message>
     <message>
         <source>DAY P&amp;L</source>
@@ -38521,7 +38573,7 @@ to place orders</source>
     </message>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">NẮM GIỮ</translation>
+        <translation>NẮM GIỮ</translation>
     </message>
     <message>
         <source>SYM</source>
@@ -38533,15 +38585,15 @@ to place orders</source>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">GIÁ</translation>
+        <translation>GIÁ</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">GIÁ TRỊ</translation>
+        <translation>GIÁ TRỊ</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>No portfolios yet.
@@ -38565,7 +38617,7 @@ Thêm vị thế từ tab Danh mục.</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Danh mục</translation>
+        <translation>Danh mục</translation>
     </message>
 </context>
 <context>
@@ -38592,11 +38644,11 @@ Thêm vị thế từ tab Danh mục.</translation>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>MUA</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>BÁN</translation>
     </message>
     <message>
         <source>SHORT</source>
@@ -38616,11 +38668,11 @@ Thêm vị thế từ tab Danh mục.</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>SL</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">GIÁ</translation>
+        <translation>GIÁ</translation>
     </message>
     <message>
         <source>market</source>
@@ -38685,11 +38737,11 @@ Lệnh đã gửi đến công cụ giao dịch.</translation>
     <name>fincept::screens::widgets::QuoteTableWidget</name>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">GIÁ</translation>
+        <translation>GIÁ</translation>
     </message>
     <message>
         <source>CHG</source>
@@ -38697,7 +38749,23 @@ Lệnh đã gửi đến công cụ giao dịch.</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
+    </message>
+    <message>
+        <source>COMMODITIES</source>
+        <translation>HÀNG HÓA</translation>
+    </message>
+    <message>
+        <source>CRYPTOCURRENCY</source>
+        <translation>TIỀN MÃ HÓA</translation>
+    </message>
+    <message>
+        <source>FOREX - MAJOR PAIRS</source>
+        <translation>FOREX - CÁC CẶP CHÍNH</translation>
+    </message>
+    <message>
+        <source>GLOBAL INDICES</source>
+        <translation>CHỈ SỐ TOÀN CẦU</translation>
     </message>
 </context>
 <context>
@@ -38759,7 +38827,7 @@ Lệnh đã gửi đến công cụ giao dịch.</translation>
     </message>
     <message>
         <source>EXTREME FEAR</source>
-        <translation type="unfinished">SO HAI CUC DO</translation>
+        <translation>SỢ HÃI CỰC ĐỘ</translation>
     </message>
 </context>
 <context>
@@ -38794,23 +38862,23 @@ Lệnh đã gửi đến công cụ giao dịch.</translation>
     </message>
     <message>
         <source>%1 symbols</source>
-        <translation type="unfinished">%1 mã</translation>
+        <translation>%1 mã</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">GIÁ</translation>
+        <translation>GIÁ</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">KHỐI LƯỢNG</translation>
+        <translation>KHỐI LƯỢNG</translation>
     </message>
     <message>
         <source>FILTER:</source>
@@ -38899,7 +38967,7 @@ Lệnh đã gửi đến công cụ giao dịch.</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">MO CUA</translation>
+        <translation>MỞ</translation>
     </message>
     <message>
         <source>PREV CLOSE</source>
@@ -38907,15 +38975,15 @@ Lệnh đã gửi đến công cụ giao dịch.</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">CAO</translation>
+        <translation>CAO</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">THẤP</translation>
+        <translation>THẤP</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">KHỐI LƯỢNG</translation>
+        <translation>KHỐI LƯỢNG</translation>
     </message>
 </context>
 <context>
@@ -38934,7 +39002,7 @@ Lệnh đã gửi đến công cụ giao dịch.</translation>
     </message>
     <message>
         <source>Positions</source>
-        <translation type="unfinished">Vị thế</translation>
+        <translation>Vị thế</translation>
     </message>
     <message>
         <source>No active account — click gear to configure</source>
@@ -38953,27 +39021,27 @@ Lệnh đã gửi đến công cụ giao dịch.</translation>
     <name>fincept::screens::widgets::TopMoversWidget</name>
     <message>
         <source>TOP MOVERS</source>
-        <translation type="unfinished">BIẾN ĐỘNG HÀNG ĐẦU</translation>
+        <translation>BIẾN ĐỘNG HÀNG ĐẦU</translation>
     </message>
     <message>
         <source>GAINERS</source>
-        <translation type="unfinished">TĂNG</translation>
+        <translation>TĂNG</translation>
     </message>
     <message>
         <source>LOSERS</source>
-        <translation type="unfinished">GIẢM</translation>
+        <translation>GIẢM</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">GIÁ</translation>
+        <translation>GIÁ</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
     </message>
 </context>
 <context>
@@ -38988,7 +39056,7 @@ Lệnh đã gửi đến công cụ giao dịch.</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">Giá</translation>
+        <translation>Giá</translation>
     </message>
     <message>
         <source>Size</source>
@@ -39092,7 +39160,7 @@ Hãy build với Qt6 Multimedia để phát nội tuyến.</translation>
     </message>
     <message>
         <source>SYMBOLS:</source>
-        <translation type="unfinished">MA:</translation>
+        <translation>MÃ:</translation>
     </message>
     <message>
         <source>GO</source>
@@ -39100,11 +39168,11 @@ Hãy build với Qt6 Multimedia để phát nội tuyến.</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">MÃ</translation>
+        <translation>MÃ</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">GIÁ</translation>
+        <translation>GIÁ</translation>
     </message>
     <message>
         <source>CHG</source>
@@ -39112,7 +39180,7 @@ Hãy build với Qt6 Multimedia để phát nội tuyến.</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">CHG%</translation>
+        <translation>CHG%</translation>
     </message>
 </context>
 <context>
@@ -39255,11 +39323,11 @@ X-API-Key: xyz</translation>
     <name>fincept::surface::SurfaceAnalyticsScreen</name>
     <message>
         <source>IMPORT CSV</source>
-        <translation type="unfinished">NHẬP CSV</translation>
+        <translation>NHẬP CSV</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">LÀM MỚI</translation>
+        <translation>LÀM MỚI</translation>
     </message>
     <message>
         <source>3D</source>
@@ -39279,7 +39347,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">Tệp CSV (*.csv)</translation>
+        <translation>Tệp CSV (*.csv)</translation>
     </message>
     <message>
         <source>No Databento API key configured</source>
@@ -39402,7 +39470,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">CHỈ SỐ</translation>
+        <translation>CHỈ SỐ</translation>
     </message>
     <message>
         <source>count</source>
@@ -39453,7 +39521,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>EXPORT CSV</source>
-        <translation type="unfinished">XUẤT CSV</translation>
+        <translation>XUẤT CSV</translation>
     </message>
     <message>
         <source>LINEAGE</source>
@@ -39513,7 +39581,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">Xuất CSV</translation>
+        <translation>Xuất CSV</translation>
     </message>
     <message>
         <source>CSV files (*.csv)</source>
@@ -39524,26 +39592,26 @@ X-API-Key: xyz</translation>
     <name>fincept::surface::SurfaceLineWidget</name>
     <message>
         <source>No data</source>
-        <translation type="unfinished">Không có dữ liệu</translation>
+        <translation>Không có dữ liệu</translation>
     </message>
 </context>
 <context>
     <name>fincept::ui::CommandBar</name>
     <message>
         <source>Dashboard</source>
-        <translation type="unfinished">Bảng điều khiển</translation>
+        <translation>Bảng điều khiển</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">Thị trường</translation>
+        <translation>Thị trường</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">Tin tức</translation>
+        <translation>Tin tức</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">Danh mục</translation>
+        <translation>Danh mục</translation>
     </message>
     <message>
         <source>Backtesting</source>
@@ -39551,35 +39619,35 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Watchlist</source>
-        <translation type="unfinished">Danh sách theo dõi</translation>
+        <translation>Danh sách theo dõi</translation>
     </message>
     <message>
         <source>Crypto Trading</source>
-        <translation type="unfinished">Giao dịch tiền điện tử</translation>
+        <translation>Giao dịch tiền điện tử</translation>
     </message>
     <message>
         <source>AI Chat</source>
-        <translation type="unfinished">Trò chuyện AI</translation>
+        <translation>Trò chuyện AI</translation>
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">Ghi chú</translation>
+        <translation>Ghi chú</translation>
     </message>
     <message>
         <source>Profile</source>
-        <translation type="unfinished">Hồ sơ</translation>
+        <translation>Hồ sơ</translation>
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">Cài đặt</translation>
+        <translation>Cài đặt</translation>
     </message>
     <message>
         <source>Forum</source>
-        <translation type="unfinished">Diễn đàn</translation>
+        <translation>Diễn đàn</translation>
     </message>
     <message>
         <source>Equity Trading</source>
-        <translation type="unfinished">Giao dịch cổ phiếu</translation>
+        <translation>Giao dịch cổ phiếu</translation>
     </message>
     <message>
         <source>Algo Trading</source>
@@ -39627,7 +39695,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Economics</source>
-        <translation type="unfinished">Kinh tế</translation>
+        <translation>Kinh tế</translation>
     </message>
     <message>
         <source>GOVT Data</source>
@@ -39647,7 +39715,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Geopolitics</source>
-        <translation type="unfinished">Địa chính trị</translation>
+        <translation>Địa chính trị</translation>
     </message>
     <message>
         <source>Maritime</source>
@@ -39671,7 +39739,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">Máy chủ MCP</translation>
+        <translation>Máy chủ MCP</translation>
     </message>
     <message>
         <source>Node Editor</source>
@@ -39691,7 +39759,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Data Sources</source>
-        <translation type="unfinished">Nguồn dữ liệu</translation>
+        <translation>Nguồn dữ liệu</translation>
     </message>
     <message>
         <source>Data Mapping</source>
@@ -39703,11 +39771,11 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>About</source>
-        <translation type="unfinished">Giới thiệu</translation>
+        <translation>Giới thiệu</translation>
     </message>
     <message>
         <source>Support</source>
-        <translation type="unfinished">Hỗ trợ</translation>
+        <translation>Hỗ trợ</translation>
     </message>
     <message>
         <source>Stock</source>
@@ -39751,7 +39819,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Crypto</source>
-        <translation type="unfinished">Tiền điện tử</translation>
+        <translation>Tiền điện tử</translation>
     </message>
     <message>
         <source>Search cryptocurrencies</source>
@@ -39813,7 +39881,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">Tat ca</translation>
+        <translation>Tất cả</translation>
     </message>
     <message numerus="yes">
         <source>%n component(s)</source>
@@ -39886,11 +39954,11 @@ X-API-Key: xyz</translation>
     <name>fincept::ui::NavigationBar</name>
     <message>
         <source> LIVE</source>
-        <translation type="unfinished"> TRỰC TIẾP</translation>
+        <translation> TRỰC TIẾP</translation>
     </message>
     <message>
         <source>LOGOUT</source>
-        <translation type="unfinished">ĐĂNG XUẤT</translation>
+        <translation>ĐĂNG XUẤT</translation>
     </message>
 </context>
 <context>
@@ -39945,15 +40013,15 @@ X-API-Key: xyz</translation>
     <name>fincept::ui::StatusBadge</name>
     <message>
         <source>CONNECTED</source>
-        <translation type="unfinished">DA KET NOI</translation>
+        <translation>ĐÃ KẾT NỐI</translation>
     </message>
     <message>
         <source>OFFLINE</source>
-        <translation type="unfinished">NGOAI TUYEN</translation>
+        <translation>NGOẠI TUYẾN</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">DANG TAI...</translation>
+        <translation>ĐANG TẢI...</translation>
     </message>
     <message>
         <source>READY</source>
@@ -40127,7 +40195,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>CHAT</source>
-        <translation type="unfinished">CHAT</translation>
+        <translation>CHAT</translation>
     </message>
     <message>
         <source>Switch to Chat Mode (F9)</source>
@@ -40211,7 +40279,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">Máy chủ MCP</translation>
+        <translation>Máy chủ MCP</translation>
     </message>
     <message>
         <source>Data Mapping</source>
@@ -40219,7 +40287,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Data Sources</source>
-        <translation type="unfinished">Nguồn dữ liệu</translation>
+        <translation>Nguồn dữ liệu</translation>
     </message>
     <message>
         <source>Report Builder</source>
@@ -40362,11 +40430,11 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>TOTAL RETURN</source>
-        <translation type="unfinished">TỔNG LỢI NHUẬN</translation>
+        <translation>TỔNG LỢI NHUẬN</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">SHARPE</translation>
+        <translation>SHARPE</translation>
     </message>
     <message>
         <source>SORTINO</source>
@@ -40374,7 +40442,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">DRAWDOWN TỐI ĐA</translation>
+        <translation>DRAWDOWN TỐI ĐA</translation>
     </message>
     <message>
         <source>CALMAR</source>
@@ -40382,7 +40450,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">TỶ LỆ THẮNG</translation>
+        <translation>TỶ LỆ THẮNG</translation>
     </message>
     <message>
         <source>PROFIT FACTOR</source>
@@ -40442,15 +40510,15 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">Qty</translation>
+        <translation>SL</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">P&amp;L</translation>
+        <translation>P&amp;L</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">P&amp;L %</translation>
+        <translation>P&amp;L %</translation>
     </message>
     <message>
         <source>Bars</source>
@@ -40673,7 +40741,7 @@ X-API-Key: xyz</translation>
     <name>fincept::ui::algo::RiskManagementPanel</name>
     <message>
         <source>RISK MANAGEMENT</source>
-        <translation type="unfinished">QUẢN LÝ RỦI RO</translation>
+        <translation>QUẢN LÝ RỦI RO</translation>
     </message>
     <message>
         <source>Stop Loss %</source>
@@ -40724,7 +40792,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Hủy</translation>
+        <translation>Hủy</translation>
     </message>
     <message>
         <source>cancelled by user</source>
@@ -40771,7 +40839,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Hủy</translation>
+        <translation>Hủy</translation>
     </message>
     <message>
         <source>Browser opened. Approve the transaction in your wallet. The terminal is waiting on a single-use loopback bridge — this dialog will close automatically when the wallet returns the signature.</source>
@@ -40794,7 +40862,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">MÔ TẢ</translation>
+        <translation>MÔ TẢ</translation>
     </message>
     <message>
         <source>Describe what this workflow does...</source>
@@ -40840,7 +40908,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>COPY</source>
-        <translation type="unfinished">SAO CHÉP</translation>
+        <translation>SAO CHÉP</translation>
     </message>
     <message>
         <source>Copy all results to clipboard</source>
@@ -41033,7 +41101,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">LƯU</translation>
+        <translation>LƯU</translation>
     </message>
     <message>
         <source>Save workflow to database</source>
@@ -41053,7 +41121,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">NHẬP</translation>
+        <translation>NHẬP</translation>
     </message>
     <message>
         <source>EXPORT</source>
@@ -41120,7 +41188,7 @@ to edit properties</source>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">TÊN</translation>
+        <translation>TÊN</translation>
     </message>
     <message>
         <source>PARAMETERS</source>
@@ -41128,7 +41196,7 @@ to edit properties</source>
     </message>
     <message>
         <source>SETTINGS</source>
-        <translation type="unfinished">CÀI ĐẶT</translation>
+        <translation>CÀI ĐẶT</translation>
     </message>
     <message>
         <source>Disabled</source>
@@ -41137,6 +41205,46 @@ to edit properties</source>
     <message>
         <source>Continue on Fail</source>
         <translation>Tiếp tục khi thất bại</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::screens::OrderConfirmDialog</name>
+    <message>
+        <source>Confirm Order</source>
+        <translation>Xác nhận lệnh</translation>
+    </message>
+    <message>
+        <source>Est. value</source>
+        <translation>Giá trị ước tính</translation>
+    </message>
+    <message>
+        <source>Send Order</source>
+        <translation>Gửi lệnh</translation>
+    </message>
+    <message>
+        <source>⚠  SEMI-AUTO — review before sending</source>
+        <translation>⚠  BÁN TỰ ĐỘNG — xem xét trước khi gửi</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::screens::PendingOrdersBadge</name>
+    <message>
+        <source>Orders awaiting approval — click to review</source>
+        <translation>Lệnh đang chờ phê duyệt — nhấp để xem xét</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::screens::PendingOrdersPanel</name>
+    <message>
+        <source>PENDING ORDERS</source>
+        <translation>LỆNH ĐANG CHỜ</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::ui::PhoneCodeComboBox</name>
+    <message>
+        <source>Search country…</source>
+        <translation>Tìm quốc gia…</translation>
     </message>
 </context>
 </TS>

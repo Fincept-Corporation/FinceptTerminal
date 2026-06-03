@@ -206,6 +206,10 @@ void ExchangeService::set_ws_primary_symbol(const QString& symbol) {
     active_session()->set_ws_primary_symbol(symbol);
 }
 
+void ExchangeService::set_ws_timeframe(const QString& timeframe) {
+    active_session()->set_ws_timeframe(timeframe);
+}
+
 QString ExchangeService::get_ws_primary_symbol() const {
     return active_session()->get_ws_primary_symbol();
 }

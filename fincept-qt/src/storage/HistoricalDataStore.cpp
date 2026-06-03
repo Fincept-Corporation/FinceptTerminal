@@ -2,13 +2,17 @@
 
 #include "core/logging/Logger.h"
 #include "storage/sqlite/Database.h"
+#include "trading/AccountManager.h"
+#include "trading/BrokerInterface.h"
 
+#include <QDate>
 #include <QDateTime>
 #include <QFile>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QTextStream>
 #include <QTimeZone>
+#include <QtConcurrent>
 #include <QVariantList>
 
 #include <algorithm>
@@ -340,13 +344,69 @@ bool HistoricalDataStore::refresh_now(const QString& symbol, const QString& exch
 }
 
 int HistoricalDataStore::refresh_watchlist() {
-    // TODO(auto-download): drive broker historical fetches for each watchlist
-    // entry (through the trading layer / DataHub), then call refresh_now() with
-    // the results. Not wired in this pass — return the count so a scheduler can
-    // log what it would do.
     const auto entries = watchlist();
-    LOG_INFO("Historify",
-             QString("refresh_watchlist: %1 entries pending (auto-download not wired)").arg(entries.size()));
+    if (entries.isEmpty())
+        return 0;
+
+    // The store has no notion of "the" broker — auto-download uses whichever
+    // active account is currently connected (first one wins). Resolve it on the
+    // calling thread; the actual fetch runs on a worker.
+    auto& am = trading::AccountManager::instance();
+    QString account_id;
+    trading::BrokerCredentials creds;
+    for (const auto& acct : am.active_accounts()) {
+        if (am.connection_state(acct.account_id) != trading::ConnectionState::Connected)
+            continue;
+        auto c = am.load_credentials(acct.account_id);
+        if (c.api_key.isEmpty())
+            continue;
+        account_id = acct.account_id;
+        creds = c;
+        break;
+    }
+    if (account_id.isEmpty()) {
+        LOG_INFO("Historify",
+                 QString("refresh_watchlist: %1 entries pending, but no connected broker — skipping")
+                     .arg(entries.size()));
+        return 0;
+    }
+
+    // Fetch off the GUI thread — get_history() blocks on HTTP. Database::instance()
+    // hands out a per-thread connection, so refresh_now()/store_candles() from the
+    // worker is safe (see class header). Entries are fetched sequentially to stay
+    // friendly to broker rate limits. The watchlist `interval` is passed through as
+    // the broker resolution and `symbol` as-is — a watchlist UI should store
+    // broker-compatible values (token brokers may need extra symbol resolution).
+    const QVector<WatchEntry> work = entries;
+    (void)QtConcurrent::run([work, account_id, creds]() {
+        auto* broker = trading::AccountManager::instance().broker_for(account_id);
+        if (!broker) {
+            LOG_WARN("Historify", "refresh_watchlist: no broker for the connected account");
+            return;
+        }
+        int ok = 0;
+        for (const auto& e : work) {
+            const QString to_dt = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm");
+            QString from_dt;
+            if (e.interval == "1d" || e.interval == "D" || e.interval == "1w" || e.interval == "W")
+                from_dt = QDate::currentDate().addYears(-2).toString("yyyy-MM-dd") + " 00:00";
+            else if (e.interval == "1h" || e.interval == "60")
+                from_dt = QDate::currentDate().addDays(-30).toString("yyyy-MM-dd") + " 00:00";
+            else
+                from_dt = QDate::currentDate().addDays(-7).toString("yyyy-MM-dd") + " 00:00";
+
+            auto resp = broker->get_history(creds, e.symbol, e.interval, from_dt, to_dt);
+            if (resp.success && resp.data && !resp.data->isEmpty()) {
+                if (HistoricalDataStore::instance().refresh_now(e.symbol, e.exchange, e.interval, *resp.data))
+                    ++ok;
+            } else {
+                LOG_WARN("Historify", QString("refresh_watchlist: fetch failed for %1:%2 [%3] — %4")
+                                          .arg(e.exchange, e.symbol, e.interval, resp.error));
+            }
+        }
+        LOG_INFO("Historify", QString("refresh_watchlist: refreshed %1/%2 series").arg(ok).arg(work.size()));
+    });
+
     return entries.size();
 }
 

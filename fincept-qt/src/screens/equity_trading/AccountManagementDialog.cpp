@@ -23,6 +23,7 @@
 #include <QPointer>
 #include <QRadioButton>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QUrl>
 #include <QUrlQuery>
 #include <QVBoxLayout>
@@ -227,7 +228,32 @@ void AccountManagementDialog::setup_ui() {
 
     right_stack_->setCurrentWidget(empty_page_);
 
-    root->addWidget(right_stack_, 2);
+    // ── Right column: stacked pages + per-account approval footer ──
+    auto* right_col = new QVBoxLayout;
+    right_col->setContentsMargins(0, 0, 0, 0);
+    right_col->setSpacing(8);
+    right_col->addWidget(right_stack_, 1);
+
+    auto* approval_row = new QHBoxLayout;
+    approval_caption_ = new QLabel(tr("Order Approval:"));
+    approval_caption_->setObjectName("fieldLabel");
+    approval_row->addWidget(approval_caption_);
+    approval_mode_combo_ = new QComboBox;
+    approval_mode_combo_->addItem(tr("Auto — execute immediately"), "auto");
+    approval_mode_combo_->addItem(tr("Semi-Auto — require approval"), "semi_auto");
+    approval_mode_combo_->setEnabled(false); // enabled once an account is selected
+    approval_row->addWidget(approval_mode_combo_, 1);
+    right_col->addLayout(approval_row);
+
+    // Persist immediately on change (independent of the async CONNECT flow).
+    connect(approval_mode_combo_, &QComboBox::currentIndexChanged, this, [this](int) {
+        if (selected_account_id_.isEmpty())
+            return;
+        ActionCenter::instance().set_order_mode(
+            selected_account_id_, parse_order_mode(approval_mode_combo_->currentData().toString()));
+    });
+
+    root->addLayout(right_col, 2);
 }
 
 void AccountManagementDialog::changeEvent(QEvent* event) {
@@ -249,6 +275,11 @@ void AccountManagementDialog::retranslateUi() {
     if (empty_label_)         empty_label_->setText(tr("Select an account to configure credentials"));
     if (rename_btn_)          rename_btn_->setText(tr("RENAME"));
     if (connect_btn_)         connect_btn_->setText(tr("CONNECT"));
+    if (approval_caption_)    approval_caption_->setText(tr("Order Approval:"));
+    if (approval_mode_combo_ && approval_mode_combo_->count() >= 2) {
+        approval_mode_combo_->setItemText(0, tr("Auto — execute immediately"));
+        approval_mode_combo_->setItemText(1, tr("Semi-Auto — require approval"));
+    }
 
     // Per-broker form bottom buttons (built lazily — guarded). Their dynamic
     // status text and the account-driven titles are reapplied by
@@ -288,6 +319,8 @@ void AccountManagementDialog::on_account_selected(int row) {
     if (row < 0) {
         right_stack_->setCurrentWidget(empty_page_);
         remove_btn_->setEnabled(false);
+        if (approval_mode_combo_)
+            approval_mode_combo_->setEnabled(false);
         selected_account_id_.clear();
         return;
     }
@@ -295,6 +328,14 @@ void AccountManagementDialog::on_account_selected(int row) {
     auto* item = account_list_->item(row);
     selected_account_id_ = item->data(Qt::UserRole).toString();
     remove_btn_->setEnabled(true);
+
+    // Reflect this account's persisted approval mode (applies to every broker).
+    if (approval_mode_combo_) {
+        const auto mode = ActionCenter::instance().get_order_mode(selected_account_id_);
+        QSignalBlocker blk(approval_mode_combo_);
+        approval_mode_combo_->setCurrentIndex(mode == OrderMode::SemiAuto ? 1 : 0);
+        approval_mode_combo_->setEnabled(true);
+    }
 
     auto account = AccountManager::instance().get_account(selected_account_id_);
     auto* broker = BrokerRegistry::instance().get(account.broker_id);
@@ -958,7 +999,9 @@ void AccountManagementDialog::on_connect_zerodha_browser() {
     }
     z_redirect_server_ = new trading::auth::RedirectServer(this);
 
-    if (!z_redirect_server_->start(5010, 120)) {
+    // Must match the redirect URL shown in the setup steps above (127.0.0.1:5010).
+    constexpr quint16 kZerodhaPort = 5010;
+    if (!z_redirect_server_->start(kZerodhaPort, 120)) {
         z_status_->setText(tr("Port 5010 busy - use manual paste fallback"));
         z_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
         z_redirect_server_->deleteLater();

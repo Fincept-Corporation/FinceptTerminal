@@ -38,8 +38,13 @@ static const QVector<GovProviderInfo> kProviders = {
      "African open data from organizations across the continent", "#F59E0B", "Africa", "AF",
      "canada_gov_api.py"}, // Uses CKAN pattern
 
+    // Spain is served via the generic CKAN client for now. A native datos.gob.es
+    // client (scripts/spain_data.py) exists but exposes a different CLI/response
+    // contract (catalogues vs publishers, page-based datasets); align it to the
+    // GovDataProviderPanel contract + validate against the live portal before
+    // switching the script below.
     {"spain", "Spain Open Data", "datos.gob.es", "Spanish government open data portal", "#DC2626", "Spain", "ES",
-     "canada_gov_api.py"}, // placeholder
+     "canada_gov_api.py"},
 
     {"universal-ckan", "CKAN Portals", "Universal CKAN Open Data Portals",
      "8 CKAN portals: US, UK, Australia, Italy, Brazil & more", "#10B981", "Multi-Country", "CKAN", "datagovuk_api.py"},

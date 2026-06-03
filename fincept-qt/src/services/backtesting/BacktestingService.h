@@ -38,6 +38,10 @@ class BacktestingService : public QObject {
   private:
     explicit BacktestingService(QObject* parent = nullptr);
     Q_DISABLE_COPY(BacktestingService)
+
+    /// Run the provider script via PythonRunner (the pre-broker-injection dispatch).
+    void dispatch_python(const QString& provider, const QString& command, const QJsonObject& args);
+
     QJsonObject pending_portfolio_config_;
 };
 

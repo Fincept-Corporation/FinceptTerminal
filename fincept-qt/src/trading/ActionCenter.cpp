@@ -93,6 +93,16 @@ QJsonObject ActionCenter::serialize_unified_order(const UnifiedOrder& order) {
     return j;
 }
 
+QJsonObject ActionCenter::serialize_basket_order(const BasketOrderRequest& basket) {
+    QJsonObject j;
+    j["strategy"] = basket.strategy_name;
+    QJsonArray orders;
+    for (const auto& o : basket.orders)
+        orders.append(serialize_unified_order(o));
+    j["orders"] = orders;
+    return j;
+}
+
 UnifiedOrder ActionCenter::deserialize_unified_order(const QJsonObject& json) {
     UnifiedOrder o;
     o.symbol = json.value("symbol").toString();

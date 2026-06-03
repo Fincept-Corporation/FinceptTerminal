@@ -16,7 +16,7 @@ jobs:
 
     env:
       QT_VERSION: "6.8.3"
-      QT_MODULES: "qtcharts qtwebsockets qtmultimedia"
+      QT_MODULES: "qtcharts qtwebsockets qtmultimedia qtwebengine qtwebchannel qtpositioning"
       QT_INSTALL_DIR: "$HOME/Qt"
 
     steps:

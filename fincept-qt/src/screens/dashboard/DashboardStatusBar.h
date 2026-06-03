@@ -16,6 +16,8 @@ class NotifPanel;
 
 namespace fincept::screens {
 
+class PendingOrdersBadge;
+
 /// Bottom status bar — session uptime, feed indicators, system status,
 /// and notification bell with unread badge (right side).
 class DashboardStatusBar : public QWidget {
@@ -54,6 +56,7 @@ class DashboardStatusBar : public QWidget {
     bool    feeds_connected_ = true;
     int     last_latency_ms_ = -2; // -2 = uninitialised, -1 = error
 
+    PendingOrdersBadge* pending_badge_ = nullptr;
     fincept::ui::NotifBell* notif_bell_ = nullptr;
     fincept::ui::NotifPanel* notif_panel_ = nullptr;
 

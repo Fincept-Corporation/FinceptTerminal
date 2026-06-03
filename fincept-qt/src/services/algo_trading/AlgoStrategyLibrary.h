@@ -165,6 +165,38 @@ inline QVector<AlgoStrategy> algo_library_strategies() {
             {ci("CLOSE", {}, "value", "crosses_above", "VWAP", {}, "value")},
             {ci("CLOSE", {}, "value", "crosses_below", "VWAP", {}, "value")});
 
+    // ── Simple / Easy-Trigger ────────────────────────────────────────────────
+    // State-based (>, <) NOT crossover events, so the entry is true for many bars
+    // and fires on the next bar after deploy whenever the condition already holds —
+    // unlike crosses_above presets that wait for a one-bar crossing. Single-condition
+    // entries with tight take-profit make these the easiest starting points to edit
+    // and deploy live. Adjust the threshold / SL / TP in the Builder to taste.
+
+    // Price holds above the 20 EMA → ride it; exit when it slips below.
+    v << mk("LIB-SIMPLE-EMA20", "Price Above EMA 20", "Simple", "15m", "AND", "AND", 1.5, 1.5,
+            {ci("CLOSE", {}, "value", ">", "EMA", {{"period", 20}}, "value")},
+            {ci("CLOSE", {}, "value", "<", "EMA", {{"period", 20}}, "value")});
+    // Buy any RSI dip under 45, take profit on the bounce past 55 (or TP/SL first).
+    v << mk("LIB-SIMPLE-RSI-DIP", "Simple RSI Dip", "Simple", "15m", "AND", "AND", 1.5, 1.5,
+            {cv("RSI", {{"period", 14}}, "value", "<", 45)},
+            {cv("RSI", {{"period", 14}}, "value", ">", 55)});
+    // Fast scalp: above the 9 EMA, grab ~0.8% then out (mirrors a tight fixed-target plan).
+    v << mk("LIB-SIMPLE-SCALP", "Quick EMA Scalp", "Simple", "5m", "AND", "AND", 0.5, 0.8,
+            {ci("CLOSE", {}, "value", ">", "EMA", {{"period", 9}}, "value")},
+            {ci("CLOSE", {}, "value", "<", "EMA", {{"period", 9}}, "value")});
+    // Intraday long bias: trade only while price is above the session VWAP.
+    v << mk("LIB-SIMPLE-VWAP", "Price Above VWAP", "Simple", "5m", "AND", "AND", 1, 1,
+            {ci("CLOSE", {}, "value", ">", "VWAP", {}, "value")},
+            {ci("CLOSE", {}, "value", "<", "VWAP", {}, "value")});
+    // Momentum on: MACD histogram positive; off when it turns negative.
+    v << mk("LIB-SIMPLE-MACD-HIST", "MACD Histogram Bull", "Simple", "15m", "AND", "AND", 1.5, 2,
+            {cv("MACD", {{"fast", 12}, {"slow", 26}, {"signal", 9}}, "histogram", ">", 0)},
+            {cv("MACD", {{"fast", 12}, {"slow", 26}, {"signal", 9}}, "histogram", "<", 0)});
+    // Hold the uptrend: fast EMA above slow EMA; exit when it flips.
+    v << mk("LIB-SIMPLE-TREND", "EMA Trend Hold", "Simple", "1h", "AND", "AND", 2, 4,
+            {ci("EMA", {{"period", 20}}, "value", ">", "EMA", {{"period", 50}}, "value")},
+            {ci("EMA", {{"period", 20}}, "value", "<", "EMA", {{"period", 50}}, "value")});
+
     return v;
 }
 

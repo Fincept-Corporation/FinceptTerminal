@@ -1,5 +1,7 @@
 #include "screens/dashboard/DashboardStatusBar.h"
 
+#include "core/config/AppConfig.h"
+#include "screens/action_center/PendingOrdersBadge.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/widgets/NotifBell.h"
@@ -124,6 +126,10 @@ DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
     ready_lbl_ = make_lbl(QString::fromUtf8("● ") + tr("READY"), "dsReady");
     rl->addWidget(ready_lbl_);
     rl->addWidget(make_sep());
+
+    // ── Pending approvals badge (hidden when none) ──────────────────────────
+    pending_badge_ = new PendingOrdersBadge(this);
+    rl->addWidget(pending_badge_);
 
     // ── Notification bell ──────────────────────────────────────────────────
     notif_bell_ = new fincept::ui::NotifBell(this);
@@ -262,7 +268,7 @@ void DashboardStatusBar::update_memory() {
 }
 
 void DashboardStatusBar::ping_api() {
-    QNetworkRequest req(QUrl("https://api.fincept.in/health"));
+    QNetworkRequest req(QUrl(fincept::AppConfig::instance().api_base_url() + "/health"));
     req.setTransferTimeout(5000);
     ping_elapsed_.restart();
     QNetworkReply* reply = nam_->get(req);

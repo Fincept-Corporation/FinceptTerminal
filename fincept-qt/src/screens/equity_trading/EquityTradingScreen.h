@@ -22,10 +22,14 @@
 
 #include <atomic>
 
+class QCompleter;
+class QStringListModel;
+
 namespace fincept::screens::equity {
 class EquityTickerBar;
 class EquityWatchlist;
 class EquityChart;
+class EquityChartPanel;
 class EquityOrderEntry;
 class EquityOrderBook;
 class EquityBottomPanel;
@@ -60,6 +64,8 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     // Multi-account slots
     void on_account_changed(const QString& account_id);
     void on_symbol_selected(const QString& symbol);
+    // Live instrument-search suggestions for the command-bar symbol box.
+    void on_symbol_search_changed(const QString& text);
     void on_mode_toggled();
     void on_accounts_clicked(); // opens AccountManagementDialog
     void handle_token_expired(const QString& account_id);
@@ -70,6 +76,17 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void on_strategy_submitted(const trading::BasketOrderRequest& basket); // options strategy → basket
     void on_ob_price_clicked(double price);
     void on_import_holdings_requested(const QVector<trading::BrokerHolding>& holdings);
+    // EXIT clicked on the chart's position card → confirm + square off the symbol.
+    void on_chart_exit_position(const QString& symbol, const QString& exchange,
+                                const QString& product_type, const QString& side, double qty);
+
+    // Named-watchlist management (backed by WatchlistRepository, global lists)
+    void on_watchlist_selected(const QString& id);
+    void on_watchlist_create(const QString& name);
+    void on_watchlist_rename(const QString& id, const QString& name);
+    void on_watchlist_delete(const QString& id);
+    void on_watchlist_symbol_added(const QString& symbol);
+    void on_watchlist_symbol_removed(const QString& symbol);
 
     // Instruments ready — reloads watchlist/market data for the active account
     // when InstrumentService finishes a load/download for the matching broker.
@@ -98,6 +115,10 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void connect_data_stream_signals();
     void init_focused_account();
     void switch_symbol(const QString& symbol);
+    // Parse a (possibly "SYMBOL · EXCH · Broker") command-bar entry and activate it.
+    void apply_symbol_input(const QString& raw);
+    // Connected broker ids (focused first) for unified instrument search.
+    QStringList search_broker_ids() const;
     void update_account_menu();
     void update_connection_status();
     void async_modify_order(const QString& order_id, double qty, double price);
@@ -111,6 +132,21 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void hub_subscribe_quotes();
     QString broker_id_for_focused() const;
 
+    // Named-watchlist controller (WatchlistRepository). load_watchlists() refreshes
+    // the combo + seeds a default from the broker's default_watchlist on first run;
+    // apply_active_watchlist() pushes the active list's symbols into the view and
+    // (when resubscribe=true) re-points the live stream + hub at the new symbol set.
+    void load_watchlists();
+    void apply_active_watchlist(bool resubscribe);
+    // Effective live-subscription set = active watchlist ∪ open-position symbols,
+    // so symbols you hold (even if not in the list) get live WebSocket prices.
+    QStringList effective_symbols() const;
+    void update_position_symbols(const QStringList& syms); // re-subscribe when it changes
+    // Push the open position for the displayed symbol onto the chart's overlay
+    // card + entry line (from the live cache or the paper engine), or clear it
+    // when the symbol is flat.
+    void update_chart_position();
+
     // Ensure the broker instrument master for `account_id` is loaded into
     // InstrumentService (from SQLite cache or a fresh download). Market data
     // (quotes/charts/depth) needs the numeric securityId map, which only exists
@@ -121,6 +157,8 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     QPushButton* account_btn_ = nullptr;  // shows focused account name
     QMenu* account_menu_ = nullptr;       // lists all active accounts
     QLineEdit* symbol_input_ = nullptr;
+    QCompleter* symbol_completer_ = nullptr;             // dynamic instrument-search popup
+    QStringListModel* symbol_completer_model_ = nullptr; // suggestions, refreshed per keystroke
     QPushButton* mode_btn_ = nullptr;
     QPushButton* accounts_btn_ = nullptr; // opens AccountManagementDialog
     QLabel* exchange_label_ = nullptr;
@@ -130,7 +168,7 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     // ── Sub-widgets ──
     equity::EquityTickerBar* ticker_bar_ = nullptr;
     equity::EquityWatchlist* watchlist_ = nullptr;
-    equity::EquityChart* chart_ = nullptr;
+    equity::EquityChartPanel* chart_ = nullptr;
     equity::EquityOrderEntry* order_entry_ = nullptr;
     equity::EquityOrderBook* orderbook_ = nullptr;
     equity::EquityBottomPanel* bottom_panel_ = nullptr;
@@ -151,7 +189,10 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     std::atomic<bool> token_expired_shown_{false};
 
     QStringList watchlist_symbols_;
-    double current_price_ = 0.0; // last known LTP for selected symbol
+    QString active_watchlist_id_; // current WatchlistRepository list id
+    QStringList position_symbols_; // symbols with open positions (transient, for live pricing)
+    QVector<trading::BrokerPosition> live_positions_; // cached live positions for focused account
+    double current_price_ = 0.0;  // last known LTP for selected symbol
 
     bool initialized_ = false;
     bool hub_active_ = false;

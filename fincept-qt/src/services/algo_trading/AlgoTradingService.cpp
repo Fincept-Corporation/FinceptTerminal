@@ -100,7 +100,7 @@ static QVector<AlgoStrategy> load_dsl_strategies_from_db() {
 // On a bump, existing LIB-* rows are refreshed to the latest definition (without
 // reviving rows the user deleted); otherwise only missing ids are inserted, so
 // user-created strategies and edits are preserved.
-static constexpr int kLibraryVersion = 2;
+static constexpr int kLibraryVersion = 3;
 
 void AlgoTradingService::seed_library() {
     int stored = 0;

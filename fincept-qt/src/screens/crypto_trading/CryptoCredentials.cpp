@@ -113,6 +113,25 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
     password_edit_->setFixedHeight(28);
     layout->addWidget(password_edit_);
 
+    // Wallet address + private key — required by Hyperliquid (DEX-style auth)
+    // instead of API key/secret. Shown only for that exchange.
+    wallet_field_label_ = new QLabel(tr("WALLET ADDRESS"));
+    wallet_field_label_->setObjectName("credFieldLabel");
+    layout->addWidget(wallet_field_label_);
+    wallet_edit_ = new QLineEdit;
+    wallet_edit_->setPlaceholderText(tr("Enter wallet address (0x…)"));
+    wallet_edit_->setFixedHeight(28);
+    layout->addWidget(wallet_edit_);
+
+    private_key_field_label_ = new QLabel(tr("PRIVATE KEY"));
+    private_key_field_label_->setObjectName("credFieldLabel");
+    layout->addWidget(private_key_field_label_);
+    private_key_edit_ = new QLineEdit;
+    private_key_edit_->setPlaceholderText(tr("Enter private key"));
+    private_key_edit_->setEchoMode(QLineEdit::Password);
+    private_key_edit_->setFixedHeight(28);
+    layout->addWidget(private_key_edit_);
+
     // TOTP section
     layout->addSpacing(4);
     totp_field_label_ = new QLabel(tr("TOTP SECRET (2FA)"));
@@ -173,6 +192,24 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
     btn_row->addWidget(save_btn_);
 
     layout->addLayout(btn_row);
+
+    // Hyperliquid uses wallet-based auth (walletAddress + privateKey) rather
+    // than API key/secret. Toggle which credential fields are visible.
+    const bool wallet_auth = (exchange_id_.compare(QStringLiteral("hyperliquid"), Qt::CaseInsensitive) == 0);
+    key_field_label_->setVisible(!wallet_auth);
+    key_edit_->setVisible(!wallet_auth);
+    secret_field_label_->setVisible(!wallet_auth);
+    secret_edit_->setVisible(!wallet_auth);
+    password_field_label_->setVisible(!wallet_auth);
+    password_edit_->setVisible(!wallet_auth);
+    totp_field_label_->setVisible(!wallet_auth);
+    totp_secret_edit_->setVisible(!wallet_auth);
+    totp_code_label_->setVisible(!wallet_auth);
+    totp_countdown_label_->setVisible(!wallet_auth);
+    wallet_field_label_->setVisible(wallet_auth);
+    wallet_edit_->setVisible(wallet_auth);
+    private_key_field_label_->setVisible(wallet_auth);
+    private_key_edit_->setVisible(wallet_auth);
 }
 
 void CryptoCredentials::changeEvent(QEvent* event) {
@@ -192,6 +229,10 @@ void CryptoCredentials::retranslateUi() {
     if (secret_edit_)          secret_edit_->setPlaceholderText(tr("Enter API secret"));
     if (password_field_label_) password_field_label_->setText(tr("PASSPHRASE (OKX/KUCOIN/BITGET/COINBASE)"));
     if (password_edit_)        password_edit_->setPlaceholderText(tr("Optional"));
+    if (wallet_field_label_)   wallet_field_label_->setText(tr("WALLET ADDRESS"));
+    if (wallet_edit_)          wallet_edit_->setPlaceholderText(tr("Enter wallet address (0x…)"));
+    if (private_key_field_label_) private_key_field_label_->setText(tr("PRIVATE KEY"));
+    if (private_key_edit_)     private_key_edit_->setPlaceholderText(tr("Enter private key"));
     if (totp_field_label_)     totp_field_label_->setText(tr("TOTP SECRET (2FA)"));
     if (totp_secret_edit_)     totp_secret_edit_->setPlaceholderText(tr("Base32 secret (optional)"));
     if (clear_btn_)            clear_btn_->setText(tr("CLEAR"));
@@ -211,19 +252,34 @@ QString CryptoCredentials::api_secret() const {
 QString CryptoCredentials::password() const {
     return password_edit_->text().trimmed();
 }
+QString CryptoCredentials::wallet_address() const {
+    return wallet_edit_->text().trimmed();
+}
+QString CryptoCredentials::private_key() const {
+    return private_key_edit_->text().trimmed();
+}
 
-void CryptoCredentials::set_values(const QString& key, const QString& secret, const QString& pw) {
+void CryptoCredentials::set_values(const QString& key, const QString& secret, const QString& pw,
+                                   const QString& wallet, const QString& pk) {
     key_edit_->setText(key);
     secret_edit_->setText(secret);
     password_edit_->setText(pw);
+    wallet_edit_->setText(wallet);
+    private_key_edit_->setText(pk);
 }
 
 void CryptoCredentials::on_save() {
-    if (api_key().isEmpty() || api_secret().isEmpty()) {
+    const bool wallet_auth = (exchange_id_.compare(QStringLiteral("hyperliquid"), Qt::CaseInsensitive) == 0);
+    if (wallet_auth) {
+        if (wallet_address().isEmpty() || private_key().isEmpty()) {
+            set_status(tr("Wallet address and private key are required"), "credStatusErr");
+            return;
+        }
+    } else if (api_key().isEmpty() || api_secret().isEmpty()) {
         set_status(tr("API key and secret are required"), "credStatusErr");
         return;
     }
-    emit credentials_saved(api_key(), api_secret(), password());
+    emit credentials_saved(api_key(), api_secret(), password(), wallet_address(), private_key());
     set_status(tr("Credentials saved"), "credStatusOk");
     accept();
 }
@@ -232,6 +288,8 @@ void CryptoCredentials::on_clear() {
     key_edit_->clear();
     secret_edit_->clear();
     password_edit_->clear();
+    wallet_edit_->clear();
+    private_key_edit_->clear();
     set_status(tr("Credentials cleared"), "credStatusWarn");
 }
 

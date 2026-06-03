@@ -267,9 +267,10 @@ void PortfolioService::fetch_risk_free_rate() {
     // default rate so Sharpe/Sortino still compute (with a logged note).
     const QString code = QString(R"python(
 import os, json, urllib.request
+DEFAULT_RATE = %1
 api_key = os.environ.get("FRED_API_KEY", "").strip()
 if not api_key:
-    print(json.dumps({"rate": 0.04, "error": "FRED_API_KEY not configured; using default risk-free rate"}))
+    print(json.dumps({"rate": DEFAULT_RATE, "error": "FRED_API_KEY not configured; using default risk-free rate"}))
 else:
     url = (
         "https://api.stlouisfed.org/fred/series/observations"
@@ -285,21 +286,21 @@ else:
             if v != ".":
                 rate = float(v) / 100.0  # convert percent to decimal
                 break
-        print(json.dumps({"rate": rate if rate is not None else 0.04}))
+        print(json.dumps({"rate": rate if rate is not None else DEFAULT_RATE}))
     except Exception as e:
-        print(json.dumps({"rate": 0.04, "error": str(e)}))
-)python");
+        print(json.dumps({"rate": DEFAULT_RATE, "error": str(e)}))
+)python").arg(QString::number(kDefaultRiskFreeRate));
 
     QPointer<PortfolioService> self = this;
     python::PythonRunner::instance().run_code(code, [self, now_secs](python::PythonResult result) {
         if (!self)
             return;
-        double rate = 0.04; // fallback
+        double rate = kDefaultRiskFreeRate; // fallback
         if (result.success && !result.output.trimmed().isEmpty()) {
             QJsonParseError err;
             const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8(), &err);
             if (err.error == QJsonParseError::NoError && doc.object().contains("rate")) {
-                rate = doc.object()["rate"].toDouble(0.04);
+                rate = doc.object()["rate"].toDouble(kDefaultRiskFreeRate);
                 const QString note = doc.object().value("error").toString();
                 if (!note.isEmpty())
                     LOG_WARN("PortfolioSvc", "Risk-free rate: " + note + " (using " + QString::number(rate * 100, 'f', 2) + "%)");

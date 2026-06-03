@@ -22,7 +22,6 @@
 #include "trading/ExchangeSessionManager.h"
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
-#include "trading/exchanges/kraken/KrakenWsClient.h"
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
 
@@ -56,11 +55,8 @@ void CryptoTradingScreen::on_exchange_changed(const QString& exchange) {
     exchange_id_ = exchange;
     exchange_btn_->setText(exchange.toUpper());
     if (ws_transport_) {
-        const bool native = (exchange == "kraken");
-        ws_transport_->setText(native ? tr("NATIVE") : tr("DAEMON"));
-        ws_transport_->setToolTip(native
-                                      ? tr("Native C++ WebSocket — direct connection, no Python subprocess")
-                                      : tr("ws_stream.py via ccxt.pro — Python subprocess"));
+        ws_transport_->setText(tr("DAEMON"));
+        ws_transport_->setToolTip(tr("ws_stream.py via ccxt.pro — Python subprocess"));
     }
 
     auto& es = ExchangeService::instance();
@@ -213,11 +209,14 @@ void CryptoTradingScreen::on_mode_toggled() {
 void CryptoTradingScreen::on_api_clicked() {
     auto* dlg = new CryptoCredentials(exchange_id_, this);
     connect(dlg, &CryptoCredentials::credentials_saved, this,
-            [this](const QString& key, const QString& secret, const QString& pw) {
+            [this](const QString& key, const QString& secret, const QString& pw, const QString& wallet,
+                   const QString& pk) {
                 ExchangeCredentials creds;
                 creds.api_key = key;
                 creds.secret = secret;
                 creds.password = pw;
+                creds.wallet_address = wallet;
+                creds.private_key = pk;
                 ExchangeService::instance().set_credentials(creds);
                 LOG_INFO(TAG, "Credentials saved for " + exchange_id_);
             });

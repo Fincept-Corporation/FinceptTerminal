@@ -69,7 +69,7 @@ void register_control_flow_nodes(NodeRegistry& registry) {
         .type_id = "control.loop",
         .display_name = "Loop",
         .category = "Control Flow",
-        .description = "Iterate over items in an array",
+        .description = "Emit array items on the Item port (capped by Max Iterations); Done signals completion",
         .icon_text = "<>",
         .accent_color = "#808080",
         .version = 1,
@@ -84,11 +84,35 @@ void register_control_flow_nodes(NodeRegistry& registry) {
                 {"max_iterations", "Max Iterations", "number", 100, {}, ""},
             },
         .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>& inputs,
+            [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                // Simplified: pass through the input array as output
-                auto data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
-                cb(true, data, {});
+                // The executor is a single-pass acyclic DAG — it can't re-run the
+                // downstream subgraph once per item. Instead: normalise the input to
+                // an array, apply the max_iterations cap, and split the two output
+                // ports via the "_loop" annotation that WorkflowExecutor::collect_inputs
+                // understands — "output_item" gets the (capped) items, "output_done"
+                // gets a completion summary.
+                const QJsonValue in = inputs.isEmpty() ? QJsonValue{} : inputs[0];
+                QJsonArray items;
+                if (in.isArray())
+                    items = in.toArray();
+                else if (!in.isNull() && !in.isUndefined())
+                    items.append(in);
+
+                const int max_it = params.value("max_iterations").toInt(100);
+                if (max_it >= 0 && items.size() > max_it) {
+                    QJsonArray capped;
+                    for (int i = 0; i < max_it; ++i)
+                        capped.append(items.at(i));
+                    items = capped;
+                }
+
+                QJsonObject out;
+                out["_loop"] = true;
+                out["items"] = items;
+                out["count"] = items.size();
+                out["done"]  = QJsonObject{{"count", items.size()}, {"completed", true}};
+                cb(true, out, {});
             },
     });
 

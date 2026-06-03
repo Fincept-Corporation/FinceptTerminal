@@ -18,6 +18,10 @@
   .tb-btn { background: transparent; border: 1px solid transparent; color: #808080; font: 10px Consolas; padding: 2px 6px; cursor: pointer; border-radius: 2px; white-space: nowrap; }
   .tb-btn:hover { background: #161616; color: #e5e5e5; border-color: #333; }
   .tb-btn.active { background: #1a1a1a; color: #d97706; border-color: #d97706; }
+  #activeInds { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+  .ind-chip { display: inline-flex; align-items: center; background: #1a1a1a; color: #d97706; border: 1px solid #d97706; border-radius: 2px; font: 10px Consolas; padding: 1px 2px 1px 7px; }
+  .ind-x { background: transparent; border: none; color: #d97706; font: 13px Consolas; line-height: 1; cursor: pointer; padding: 0 4px; }
+  .ind-x:hover { color: #fff; }
   .tb-dropdown { position: relative; display: inline-block; }
   .tb-dropdown-content { display: none; position: absolute; top: 100%; left: 0; background: #111; border: 1px solid #222; min-width: 140px; z-index: 100; max-height: 300px; overflow-y: auto; }
   .tb-dropdown:hover .tb-dropdown-content { display: block; }
@@ -51,31 +55,32 @@
         <button class="tb-btn">Indicators ▾</button>
         <div class="tb-dropdown-content">
           <div class="section">OVERLAY (on chart)</div>
-          <button class="tb-btn" onclick="toggleIndicator('MA','candle_pane')">MA</button>
-          <button class="tb-btn" onclick="toggleIndicator('EMA','candle_pane')">EMA</button>
-          <button class="tb-btn" onclick="toggleIndicator('SMA','candle_pane')">SMA</button>
-          <button class="tb-btn" onclick="toggleIndicator('BOLL','candle_pane')">Bollinger</button>
-          <button class="tb-btn" onclick="toggleIndicator('SAR','candle_pane')">Parabolic SAR</button>
+          <button class="tb-btn" data-ind="MA" onclick="toggleIndicator('MA')">MA</button>
+          <button class="tb-btn" data-ind="EMA" onclick="toggleIndicator('EMA')">EMA</button>
+          <button class="tb-btn" data-ind="SMA" onclick="toggleIndicator('SMA')">SMA</button>
+          <button class="tb-btn" data-ind="BOLL" onclick="toggleIndicator('BOLL')">Bollinger</button>
+          <button class="tb-btn" data-ind="SAR" onclick="toggleIndicator('SAR')">Parabolic SAR</button>
+          <button class="tb-btn" data-ind="VWAP" onclick="toggleIndicator('VWAP')">VWAP</button>
 
           <div class="section">SUB-PANEL</div>
-          <button class="tb-btn" onclick="toggleIndicator('VOL')">Volume</button>
-          <button class="tb-btn" onclick="toggleIndicator('MACD')">MACD</button>
-          <button class="tb-btn" onclick="toggleIndicator('RSI')">RSI</button>
-          <button class="tb-btn" onclick="toggleIndicator('KDJ')">KDJ</button>
-          <button class="tb-btn" onclick="toggleIndicator('WR')">Williams %R</button>
-          <button class="tb-btn" onclick="toggleIndicator('OBV')">OBV</button>
-          <button class="tb-btn" onclick="toggleIndicator('DMI')">DMI</button>
-          <button class="tb-btn" onclick="toggleIndicator('CR')">CR</button>
-          <button class="tb-btn" onclick="toggleIndicator('PSY')">PSY</button>
-          <button class="tb-btn" onclick="toggleIndicator('DMA')">DMA</button>
-          <button class="tb-btn" onclick="toggleIndicator('TRIX')">TRIX</button>
-          <button class="tb-btn" onclick="toggleIndicator('BRAR')">BRAR</button>
-          <button class="tb-btn" onclick="toggleIndicator('VR')">VR</button>
-          <button class="tb-btn" onclick="toggleIndicator('EMV')">EMV</button>
-          <button class="tb-btn" onclick="toggleIndicator('AO')">Awesome Osc</button>
-          <button class="tb-btn" onclick="toggleIndicator('ROC')">ROC</button>
-          <button class="tb-btn" onclick="toggleIndicator('PVT')">PVT</button>
-          <button class="tb-btn" onclick="toggleIndicator('AVP')">AVP</button>
+          <button class="tb-btn" data-ind="VOL" onclick="toggleIndicator('VOL')">Volume</button>
+          <button class="tb-btn" data-ind="MACD" onclick="toggleIndicator('MACD')">MACD</button>
+          <button class="tb-btn" data-ind="RSI" onclick="toggleIndicator('RSI')">RSI</button>
+          <button class="tb-btn" data-ind="KDJ" onclick="toggleIndicator('KDJ')">KDJ</button>
+          <button class="tb-btn" data-ind="WR" onclick="toggleIndicator('WR')">Williams %R</button>
+          <button class="tb-btn" data-ind="OBV" onclick="toggleIndicator('OBV')">OBV</button>
+          <button class="tb-btn" data-ind="DMI" onclick="toggleIndicator('DMI')">DMI</button>
+          <button class="tb-btn" data-ind="CR" onclick="toggleIndicator('CR')">CR</button>
+          <button class="tb-btn" data-ind="PSY" onclick="toggleIndicator('PSY')">PSY</button>
+          <button class="tb-btn" data-ind="DMA" onclick="toggleIndicator('DMA')">DMA</button>
+          <button class="tb-btn" data-ind="TRIX" onclick="toggleIndicator('TRIX')">TRIX</button>
+          <button class="tb-btn" data-ind="BRAR" onclick="toggleIndicator('BRAR')">BRAR</button>
+          <button class="tb-btn" data-ind="VR" onclick="toggleIndicator('VR')">VR</button>
+          <button class="tb-btn" data-ind="EMV" onclick="toggleIndicator('EMV')">EMV</button>
+          <button class="tb-btn" data-ind="AO" onclick="toggleIndicator('AO')">Awesome Osc</button>
+          <button class="tb-btn" data-ind="ROC" onclick="toggleIndicator('ROC')">ROC</button>
+          <button class="tb-btn" data-ind="PVT" onclick="toggleIndicator('PVT')">PVT</button>
+          <button class="tb-btn" data-ind="AVP" onclick="toggleIndicator('AVP')">AVP</button>
         </div>
       </div>
     </div>
@@ -115,11 +120,29 @@
 
     <!-- Quick Actions -->
     <div class="tb-group">
-      <button class="tb-btn" onclick="toggleIndicator('MA','candle_pane')" title="Moving Average">MA</button>
-      <button class="tb-btn" onclick="toggleIndicator('VOL')" title="Volume">VOL</button>
-      <button class="tb-btn" onclick="toggleIndicator('MACD')" title="MACD">MACD</button>
-      <button class="tb-btn" onclick="toggleIndicator('RSI')" title="RSI">RSI</button>
-      <button class="tb-btn" onclick="toggleIndicator('BOLL','candle_pane')" title="Bollinger Bands">BOLL</button>
+      <button class="tb-btn" data-ind="MA" onclick="toggleIndicator('MA')" title="Moving Average (on chart)">MA</button>
+      <button class="tb-btn" data-ind="VOL" onclick="toggleIndicator('VOL')" title="Volume">VOL</button>
+      <button class="tb-btn" data-ind="MACD" onclick="toggleIndicator('MACD')" title="MACD">MACD</button>
+      <button class="tb-btn" data-ind="RSI" onclick="toggleIndicator('RSI')" title="RSI">RSI</button>
+      <button class="tb-btn" data-ind="BOLL" onclick="toggleIndicator('BOLL')" title="Bollinger Bands (on chart)">BOLL</button>
+    </div>
+    <div class="tb-sep"></div>
+
+    <!-- Active indicators (removable chips) -->
+    <div class="tb-group" id="activeInds"></div>
+    <div class="tb-sep"></div>
+
+    <!-- Scale + navigation -->
+    <div class="tb-group">
+      <div class="tb-dropdown">
+        <button class="tb-btn" title="Y-axis scale">Scale ▾</button>
+        <div class="tb-dropdown-content">
+          <button class="tb-btn" onclick="setScale('normal')">Normal</button>
+          <button class="tb-btn" onclick="setScale('percentage')">Percentage</button>
+          <button class="tb-btn" onclick="setScale('log')">Logarithmic</button>
+        </div>
+      </div>
+      <button class="tb-btn" onclick="chart.scrollToRealTime(300)" title="Scroll to latest">Latest</button>
     </div>
     <div class="tb-sep"></div>
 
@@ -216,34 +239,131 @@
       }
     });
     window.chart = chart;
+    // India-first defaults: IST time axis + 2dp prices, whole-number volume.
+    try { chart.setTimezone('Asia/Kolkata'); } catch (e) {}
+    try { chart.setPriceVolumePrecision(2, 0); } catch (e) {}
     log('ready');
   } catch (e) {
     log('INIT ERROR: ' + e.message);
     return;
   }
 
-  // Default: add volume sub-panel
-  chart.createIndicator('VOL');
+  // VWAP — volume-weighted average price, intraday (resets each session/day).
+  // A staple for execution desks/PMS; KLineChart has no built-in VWAP, so we
+  // register a custom price-series overlay.
+  try {
+    klinecharts.registerIndicator({
+      name: 'VWAP', shortName: 'VWAP', series: 'price', precision: 2,
+      figures: [{ key: 'vwap', title: 'VWAP: ', type: 'line' }],
+      calc: function(dataList) {
+        var out = [], cumPV = 0, cumV = 0, curDay = null;
+        for (var i = 0; i < dataList.length; i++) {
+          var k = dataList[i];
+          var dt = new Date(k.timestamp);
+          var day = dt.getUTCFullYear() + '-' + dt.getUTCMonth() + '-' + dt.getUTCDate();
+          if (day !== curDay) { cumPV = 0; cumV = 0; curDay = day; }
+          var v = k.volume || 0;
+          cumPV += ((k.high + k.low + k.close) / 3) * v;
+          cumV += v;
+          out.push({ vwap: cumV > 0 ? cumPV / cumV : k.close });
+        }
+        return out;
+      }
+    });
+  } catch (e) { log('vwap reg err: ' + e.message); }
 
   window.addEventListener('resize', function() { chart.resize(); });
 
-  // --- Track active indicators for toggle behavior ---
+  // Allow C++ to override the time axis timezone per market (e.g. US symbols).
+  window.setTimezone = function(tz) { try { chart.setTimezone(tz); } catch (e) {} };
+
+  // Y-axis scale: 'normal' | 'percentage' | 'log'.
+  window.setScale = function(type) {
+    try { chart.setStyles({ yAxis: { type: type } }); } catch (e) { log('scale err: ' + e.message); }
+  };
+
+  // Edit an active indicator's calc params (e.g. MA periods "5,10,20,60").
+  window.editIndicatorParams = function(name) {
+    var paneId = activeIndicators[name];
+    if (paneId == null) return;
+    var cur = '';
+    try {
+      if (typeof chart.getIndicators === 'function') {
+        var inds = chart.getIndicators({ name: name, paneId: paneId });
+        if (inds && inds.length && inds[0].calcParams) cur = inds[0].calcParams.join(',');
+      }
+    } catch (e) {}
+    var input = window.prompt('Parameters for ' + name + ' (comma-separated):', cur);
+    if (input == null) return;
+    var params = input.split(',').map(function(s) { return parseFloat(s.trim()); })
+                      .filter(function(n) { return !isNaN(n); });
+    try { chart.overrideIndicator({ name: name, paneId: paneId, calcParams: params }); }
+    catch (e) { log('param err: ' + e.message); }
+  };
+
+  // Indicators that draw ON the main candle pane (price-series overlays) rather
+  // than in a separate sub-pane at the bottom.
+  var OVERLAY_INDICATORS = { MA: 1, EMA: 1, SMA: 1, BOLL: 1, SAR: 1, BBI: 1, VWAP: 1 };
+
+  // name -> paneId (the string returned by createIndicator). Needed because
+  // v9.8 removeIndicator is positional: removeIndicator(paneId, name).
   var activeIndicators = {};
 
-  window.toggleIndicator = function(name, paneId) {
-    var key = name + (paneId || '');
-    if (activeIndicators[key]) {
-      chart.removeIndicator(name, paneId || activeIndicators[key]);
-      delete activeIndicators[key];
-    } else {
-      var id;
-      if (paneId === 'candle_pane') {
-        id = chart.createIndicator(name, { isStack: true, pane: { id: 'candle_pane' } });
-      } else {
-        id = chart.createIndicator(name);
-      }
-      activeIndicators[key] = id || paneId || true;
+  // Refresh toolbar active-state + the removable chip row.
+  function refreshIndicatorUi() {
+    var btns = document.querySelectorAll('[data-ind]');
+    for (var i = 0; i < btns.length; i++) {
+      var n = btns[i].getAttribute('data-ind');
+      if (activeIndicators[n] != null) btns[i].classList.add('active');
+      else btns[i].classList.remove('active');
     }
+    var box = document.getElementById('activeInds');
+    if (!box) return;
+    box.innerHTML = '';
+    Object.keys(activeIndicators).forEach(function(name) {
+      var chip = document.createElement('span');
+      chip.className = 'ind-chip';
+      chip.appendChild(document.createTextNode(name));
+      var ed = document.createElement('button');
+      ed.className = 'ind-x';
+      ed.textContent = '✎';
+      ed.title = 'Edit ' + name + ' parameters';
+      ed.onclick = function() { editIndicatorParams(name); };
+      chip.appendChild(ed);
+      var x = document.createElement('button');
+      x.className = 'ind-x';
+      x.textContent = '×';
+      x.title = 'Remove ' + name;
+      x.onclick = function() { removeOneIndicator(name); };
+      chip.appendChild(x);
+      box.appendChild(chip);
+    });
+  }
+
+  function createIndicatorFor(name) {
+    // v9.8 signature: createIndicator(value, isStack, paneOptions) -> paneId.
+    var paneId;
+    if (OVERLAY_INDICATORS[name]) {
+      // Draw on the main candle pane (overlay), stacking over the candles.
+      paneId = chart.createIndicator(name, true, { id: 'candle_pane' });
+    } else {
+      // New bounded-height sub-pane so stacking several doesn't squeeze candles.
+      paneId = chart.createIndicator(name, false, { height: 90, minHeight: 40 });
+    }
+    activeIndicators[name] = paneId || (OVERLAY_INDICATORS[name] ? 'candle_pane' : name);
+  }
+
+  function removeOneIndicator(name) {
+    if (activeIndicators[name] == null) return;
+    chart.removeIndicator(activeIndicators[name], name); // (paneId, name)
+    delete activeIndicators[name];
+    refreshIndicatorUi();
+  }
+  window.removeOneIndicator = removeOneIndicator;
+
+  window.toggleIndicator = function(name) {
+    if (activeIndicators[name] != null) removeOneIndicator(name);
+    else { createIndicatorFor(name); refreshIndicatorUi(); }
   };
 
   window.addOverlay = function(name) {
@@ -255,17 +375,19 @@
   };
 
   window.removeAllIndicators = function() {
-    var keys = Object.keys(activeIndicators);
-    for (var i = 0; i < keys.length; i++) {
-      var k = keys[i];
-      // Extract indicator name (remove pane suffix)
-      var name = k.replace('candle_pane', '');
-      chart.removeIndicator(name);
-    }
+    Object.keys(activeIndicators).forEach(function(name) {
+      chart.removeIndicator(activeIndicators[name], name);
+    });
     activeIndicators = {};
-    // Re-add volume
-    chart.createIndicator('VOL');
+    refreshIndicatorUi(); // truly clears everything (including volume)
   };
+
+  // Default: one volume sub-pane.
+  (function() {
+    var p = chart.createIndicator('VOL', false, { height: 90, minHeight: 40 });
+    activeIndicators['VOL'] = p || 'VOL';
+    refreshIndicatorUi();
+  })();
 
   window.setChartType = function(type) {
     chart.setStyles({ candle: { type: type } });
@@ -285,6 +407,8 @@
         return;
       }
       chart.applyNewData(data);
+      // Narrower bars → more candles visible at once (range 1-50, default ~8).
+      try { chart.setBarSpace(6); } catch (e) {}
       log(data.length + ' bars loaded');
     } catch (e) {
       log('ERROR: ' + e.message);
@@ -295,12 +419,34 @@
     try { chart.updateData(candle); } catch (e) { log('update err: ' + e.message); }
   };
 
-  window.addIndicator = function(name, paneId) {
-    try { window.toggleIndicator(name, paneId); } catch (e) { log('ind err: ' + e.message); }
+  // Position entry line — a locked, dashed horizontal line at the position's
+  // average entry price. Set/cleared by C++ when an open position exists for the
+  // displayed symbol. The floating P&L card (a native Qt widget) sits on top.
+  window.__posOverlayId = null;
+  window.setPositionLine = function(price, label, color) {
+    try {
+      if (window.__posOverlayId) { chart.removeOverlay(window.__posOverlayId); window.__posOverlayId = null; }
+      window.__posOverlayId = chart.createOverlay({
+        name: 'horizontalStraightLine',
+        lock: true,
+        points: [{ value: price }],
+        styles: { line: { color: color, style: 'dashed', size: 1 } }
+      });
+    } catch (e) { try { log('posline err: ' + e.message); } catch (e2) {} }
+  };
+  window.clearPositionLine = function() {
+    try {
+      if (window.__posOverlayId) { chart.removeOverlay(window.__posOverlayId); window.__posOverlayId = null; }
+    } catch (e) {}
   };
 
-  window.removeIndicator = function(name, paneId) {
-    try { chart.removeIndicator(name, paneId); } catch (e) {}
+  window.addIndicator = function(name) {
+    try { if (activeIndicators[name] == null) { createIndicatorFor(name); refreshIndicatorUi(); } }
+    catch (e) { log('ind err: ' + e.message); }
+  };
+
+  window.removeIndicator = function(name) {
+    try { removeOneIndicator(name); } catch (e) {}
   };
 
   window.clearChart = function() {

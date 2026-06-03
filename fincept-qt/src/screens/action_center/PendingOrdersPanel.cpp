@@ -1,5 +1,5 @@
-// ActionCenterScreen.cpp — semi-auto order approval UI (Phase 3 §2).
-#include "screens/action_center/ActionCenterScreen.h"
+// PendingOrdersPanel.cpp — queued-order approval popover.
+#include "screens/action_center/PendingOrdersPanel.h"
 
 #include "trading/AccountManager.h"
 #include "ui/theme/Theme.h"
@@ -16,7 +16,6 @@
 namespace fincept::screens {
 
 using fincept::trading::ActionCenter;
-using fincept::trading::OrderMode;
 using fincept::trading::PendingOrder;
 
 namespace {
@@ -32,19 +31,36 @@ constexpr int kColActions = 8;
 constexpr int kColCount = 9;
 } // namespace
 
-ActionCenterScreen::ActionCenterScreen(QWidget* parent) : QWidget(parent) {
-    setObjectName("actionCenterScreen");
+PendingOrdersPanel::PendingOrdersPanel(QWidget* parent) : QWidget(parent) {
+    setObjectName("pendingOrdersPanel");
+    // Frameless popup: auto-closes when the user clicks elsewhere.
+    setWindowFlags(Qt::Popup);
+    setFixedSize(760, 380);
     build_ui();
+
+    // Live updates — wire ActionCenter signals once, here (a popup has no
+    // persistent show/hide lifecycle to hang them on).
+    auto& ac = ActionCenter::instance();
+    connect(&ac, &ActionCenter::pending_order_created, this, &PendingOrdersPanel::on_pending_created);
+    connect(&ac, &ActionCenter::order_approved, this, &PendingOrdersPanel::on_order_approved);
+    connect(&ac, &ActionCenter::order_rejected, this, &PendingOrdersPanel::on_order_rejected);
+    connect(&ac, &ActionCenter::stats_updated, this, &PendingOrdersPanel::on_stats_updated);
+    connect(&trading::AccountManager::instance(), &trading::AccountManager::account_added, this,
+            [this](const QString&) { reload_accounts(); });
+    connect(&trading::AccountManager::instance(), &trading::AccountManager::account_removed, this,
+            [this](const QString&) { reload_accounts(); });
+    connect(&trading::AccountManager::instance(), &trading::AccountManager::account_updated, this,
+            [this](const QString&) { reload_accounts(); });
 }
 
-void ActionCenterScreen::build_ui() {
+void PendingOrdersPanel::build_ui() {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
     // Global stylesheet via descendant selectors (P7) — amber #d97706 accents.
     setStyleSheet(QString(
-        "#actionCenterScreen{background:%1;}"
+        "#pendingOrdersPanel{background:%1;border:1px solid %3;}"
         "#acHeader{background:%2;border-bottom:1px solid %3;}"
         "#acTitle{color:%4;font-size:14px;font-weight:700;letter-spacing:0.5px;}"
         "#acStatsBar{background:%2;border-bottom:1px solid %3;}"
@@ -66,14 +82,14 @@ void ActionCenterScreen::build_ui() {
              fincept::ui::colors::TEXT_SECONDARY(), fincept::ui::colors::TEXT_PRIMARY(),
              fincept::ui::colors::POSITIVE(), fincept::ui::colors::NEGATIVE()));
 
-    // ── Header: title + account selector + status filter + mode toggle ────────
+    // ── Header: title + account selector + status filter ──────────────────────
     auto* header = new QWidget;
     header->setObjectName("acHeader");
     auto* hlay = new QHBoxLayout(header);
     hlay->setContentsMargins(14, 8, 14, 8);
     hlay->setSpacing(12);
 
-    title_label_ = new QLabel(tr("ACTION CENTER"));
+    title_label_ = new QLabel(tr("PENDING ORDERS"));
     title_label_->setObjectName("acTitle");
     hlay->addWidget(title_label_);
     hlay->addSpacing(16);
@@ -97,14 +113,6 @@ void ActionCenterScreen::build_ui() {
     hlay->addWidget(status_filter_);
 
     hlay->addStretch(1);
-
-    mode_caption_ = new QLabel(tr("Mode:"));
-    hlay->addWidget(mode_caption_);
-    mode_combo_ = new QComboBox;
-    mode_combo_->setObjectName("acCombo");
-    mode_combo_->addItem(tr("Auto"), "auto");
-    mode_combo_->addItem(tr("Semi-Auto"), "semi_auto");
-    hlay->addWidget(mode_combo_);
 
     root->addWidget(header);
 
@@ -164,30 +172,8 @@ void ActionCenterScreen::build_ui() {
     root->addWidget(table_, 1);
 
     // ── Wiring ────────────────────────────────────────────────────────────────
-    connect(account_combo_, &QComboBox::currentIndexChanged, this, [this](int) {
-        // Reflect the selected account's persisted mode, then reload.
-        const QString acct = selected_account();
-        if (!acct.isEmpty()) {
-            const auto mode = ActionCenter::instance().get_order_mode(acct);
-            const int idx = mode_combo_->findData(fincept::trading::order_mode_str(mode));
-            if (idx >= 0) {
-                QSignalBlocker b(mode_combo_);
-                mode_combo_->setCurrentIndex(idx);
-            }
-            mode_combo_->setEnabled(true);
-        } else {
-            mode_combo_->setEnabled(false); // can't set a mode for "all accounts"
-        }
-        refresh();
-    });
+    connect(account_combo_, &QComboBox::currentIndexChanged, this, [this](int) { refresh(); });
     connect(status_filter_, &QComboBox::currentIndexChanged, this, [this](int) { refresh(); });
-    connect(mode_combo_, &QComboBox::currentIndexChanged, this, [this](int) {
-        const QString acct = selected_account();
-        if (acct.isEmpty())
-            return;
-        ActionCenter::instance().set_order_mode(
-            acct, fincept::trading::parse_order_mode(mode_combo_->currentData().toString()));
-    });
     connect(approve_all_btn_, &QPushButton::clicked, this, [this]() {
         const QString acct = selected_account();
         auto ans = QMessageBox::question(this, tr("Approve All"),
@@ -214,17 +200,24 @@ void ActionCenterScreen::build_ui() {
     });
 }
 
-void ActionCenterScreen::changeEvent(QEvent* event) {
+void PendingOrdersPanel::popup_at(const QPoint& global_anchor) {
+    reload_accounts();
+    refresh();
+    move(global_anchor.x() - width(), global_anchor.y() - height());
+    show();
+    raise();
+}
+
+void PendingOrdersPanel::changeEvent(QEvent* event) {
     if (event->type() == QEvent::LanguageChange)
         retranslateUi();
     QWidget::changeEvent(event);
 }
 
-void ActionCenterScreen::retranslateUi() {
-    if (title_label_)     title_label_->setText(tr("ACTION CENTER"));
+void PendingOrdersPanel::retranslateUi() {
+    if (title_label_)     title_label_->setText(tr("PENDING ORDERS"));
     if (account_caption_) account_caption_->setText(tr("Account:"));
     if (show_caption_)    show_caption_->setText(tr("Show:"));
-    if (mode_caption_)    mode_caption_->setText(tr("Mode:"));
 
     // Combo items: re-set visible text by index; userData keys are unchanged.
     if (status_filter_ && status_filter_->count() >= 4) {
@@ -232,10 +225,6 @@ void ActionCenterScreen::retranslateUi() {
         status_filter_->setItemText(1, tr("Approved"));
         status_filter_->setItemText(2, tr("Rejected"));
         status_filter_->setItemText(3, tr("All"));
-    }
-    if (mode_combo_ && mode_combo_->count() >= 2) {
-        mode_combo_->setItemText(0, tr("Auto"));
-        mode_combo_->setItemText(1, tr("Semi-Auto"));
     }
 
     if (stat_pending_cap_)  stat_pending_cap_->setText(tr("PENDING"));
@@ -254,11 +243,11 @@ void ActionCenterScreen::retranslateUi() {
     // Per-row Approve/Reject button widgets are rebuilt on the next refresh().
 }
 
-QString ActionCenterScreen::selected_account() const {
+QString PendingOrdersPanel::selected_account() const {
     return account_combo_ ? account_combo_->currentData().toString() : QString();
 }
 
-void ActionCenterScreen::reload_accounts() {
+void PendingOrdersPanel::reload_accounts() {
     const QString prev = selected_account();
     QSignalBlocker b(account_combo_);
     account_combo_->clear();
@@ -269,10 +258,9 @@ void ActionCenterScreen::reload_accounts() {
     }
     const int idx = account_combo_->findData(prev);
     account_combo_->setCurrentIndex(idx >= 0 ? idx : 0);
-    mode_combo_->setEnabled(!selected_account().isEmpty());
 }
 
-void ActionCenterScreen::refresh() {
+void PendingOrdersPanel::refresh() {
     const QString acct = selected_account();
     const QString status = status_filter_->currentData().toString();
 
@@ -355,7 +343,7 @@ void ActionCenterScreen::refresh() {
     refresh_stats();
 }
 
-void ActionCenterScreen::refresh_stats() {
+void PendingOrdersPanel::refresh_stats() {
     const auto s = ActionCenter::instance().get_stats(selected_account());
     stat_pending_->setText(QString::number(s.total_pending));
     stat_approved_->setText(QString::number(s.total_approved));
@@ -364,11 +352,11 @@ void ActionCenterScreen::refresh_stats() {
     stat_sell_->setText(QString::number(s.total_sell));
 }
 
-void ActionCenterScreen::approve_row(const QString& pending_id) {
+void PendingOrdersPanel::approve_row(const QString& pending_id) {
     ActionCenter::instance().approve_order(pending_id);
 }
 
-void ActionCenterScreen::reject_row(const QString& pending_id) {
+void PendingOrdersPanel::reject_row(const QString& pending_id) {
     bool ok = false;
     const QString reason = QInputDialog::getText(this, tr("Reject Order"), tr("Rejection reason:"),
                                                  QLineEdit::Normal, tr("Rejected by user"), &ok);
@@ -379,35 +367,17 @@ void ActionCenterScreen::reject_row(const QString& pending_id) {
 
 // ── ActionCenter signal slots ───────────────────────────────────────────────
 
-void ActionCenterScreen::on_pending_created(const PendingOrder&) { refresh(); }
-void ActionCenterScreen::on_order_approved(const QString&, const QString&) { refresh(); }
-void ActionCenterScreen::on_order_rejected(const QString&, const QString&) { refresh(); }
-void ActionCenterScreen::on_stats_updated(const QString&) { refresh_stats(); }
-
-// ── Visibility lifecycle (P3) ───────────────────────────────────────────────
-
-void ActionCenterScreen::showEvent(QShowEvent* e) {
-    QWidget::showEvent(e);
-    if (!wired_) {
-        wired_ = true;
-        auto& ac = ActionCenter::instance();
-        connect(&ac, &ActionCenter::pending_order_created, this,
-                &ActionCenterScreen::on_pending_created);
-        connect(&ac, &ActionCenter::order_approved, this, &ActionCenterScreen::on_order_approved);
-        connect(&ac, &ActionCenter::order_rejected, this, &ActionCenterScreen::on_order_rejected);
-        connect(&ac, &ActionCenter::stats_updated, this, &ActionCenterScreen::on_stats_updated);
-        // Refresh the account list when accounts change.
-        connect(&trading::AccountManager::instance(), &trading::AccountManager::account_added, this,
-                [this](const QString&) { reload_accounts(); });
-        connect(&trading::AccountManager::instance(), &trading::AccountManager::account_removed,
-                this, [this](const QString&) { reload_accounts(); });
-        connect(&trading::AccountManager::instance(), &trading::AccountManager::account_updated,
-                this, [this](const QString&) { reload_accounts(); });
-    }
-    reload_accounts();
-    refresh();
+void PendingOrdersPanel::on_pending_created(const PendingOrder&) {
+    if (isVisible()) refresh();
 }
-
-void ActionCenterScreen::hideEvent(QHideEvent* e) { QWidget::hideEvent(e); }
+void PendingOrdersPanel::on_order_approved(const QString&, const QString&) {
+    if (isVisible()) refresh();
+}
+void PendingOrdersPanel::on_order_rejected(const QString&, const QString&) {
+    if (isVisible()) refresh();
+}
+void PendingOrdersPanel::on_stats_updated(const QString&) {
+    if (isVisible()) refresh_stats();
+}
 
 } // namespace fincept::screens

@@ -107,6 +107,7 @@ class AccountDataStream : public QObject {
     void ws_init();
     void ws_teardown();
     bool ws_active() const;
+    bool ws_connected() const; // connected+authenticated, regardless of tick count
     void ws_resubscribe();
     // Wire the common BrokerWebSocketBase signals (tick/depth/connect/error) into
     // this stream. Used by all Phase 2 adapters that share BrokerWebSocketBase.

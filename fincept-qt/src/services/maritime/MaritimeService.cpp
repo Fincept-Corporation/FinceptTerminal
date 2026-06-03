@@ -1,6 +1,7 @@
 // src/services/maritime/MaritimeService.cpp
 #include "services/maritime/MaritimeService.h"
 
+#include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
 #include "storage/cache/CacheManager.h"
@@ -21,7 +22,9 @@ inline void publish_to_hub(const QString& topic, const QVariant& value) {
 }
 }  // namespace
 
-static constexpr const char* kMarineBase = "https://api.fincept.in/marine";
+static QString marine_base() {
+    return fincept::AppConfig::instance().api_base_url() + QStringLiteral("/marine");
+}
 static constexpr int kVesselTtlSec = 60;      // position data: 1 min
 static constexpr int kHistoryTtlSec = 5 * 60; // history: 5 min
 
@@ -106,7 +109,7 @@ void MaritimeService::search_vessels_by_area(const AreaSearchParams& params) {
 
     QPointer<MaritimeService> self = this;
     HttpClient::instance().post(
-        QString(kMarineBase) + "/vessel/area-search", body,
+        marine_base() + "/vessel/area-search", body,
         [self, cache_key, hard_cap](Result<QJsonDocument> result) {
             if (!self)
                 return;
@@ -201,7 +204,7 @@ void MaritimeService::get_vessel_position(const QString& imo) {
     QPointer<MaritimeService> self = this;
     const QString imo_trimmed = imo.trimmed();
     HttpClient::instance().post(
-        QString(kMarineBase) + "/vessel/position", body,
+        marine_base() + "/vessel/position", body,
         [self, cache_key, imo_trimmed](Result<QJsonDocument> result) {
             if (!self)
                 return;
@@ -254,7 +257,7 @@ void MaritimeService::get_multi_vessel_positions(const QStringList& imos) {
 
     QPointer<MaritimeService> self = this;
     HttpClient::instance().post(
-        QString(kMarineBase) + "/vessel/multi", body, [self, cache_key](Result<QJsonDocument> result) {
+        marine_base() + "/vessel/multi", body, [self, cache_key](Result<QJsonDocument> result) {
             if (!self)
                 return;
             if (!result.is_ok()) {
@@ -346,7 +349,7 @@ void MaritimeService::get_vessel_history(const QString& imo) {
 
     QPointer<MaritimeService> self = this;
     HttpClient::instance().post(
-        QString(kMarineBase) + "/vessel/history", body,
+        marine_base() + "/vessel/history", body,
         [self, cache_key, imo_trimmed](Result<QJsonDocument> result) {
             if (!self)
                 return;
@@ -417,7 +420,7 @@ void MaritimeService::get_vessel_history(const QString& imo) {
 // ── Health check ─────────────────────────────────────────────────────────────
 void MaritimeService::check_health() {
     QPointer<MaritimeService> self = this;
-    HttpClient::instance().get(QString(kMarineBase) + "/health", [self](Result<QJsonDocument> result) {
+    HttpClient::instance().get(marine_base() + "/health", [self](Result<QJsonDocument> result) {
         if (!self)
             return;
         if (!result.is_ok()) {

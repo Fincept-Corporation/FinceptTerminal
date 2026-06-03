@@ -68,6 +68,7 @@
 #include "trading/DataStreamManager.h"
 #include "trading/ExchangeService.h"
 #include "trading/ExchangeSessionManager.h"
+#include "storage/HistoricalDataStore.h"
 #include "storage/repositories/NewsArticleRepository.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "storage/sqlite/CacheDatabase.h"
@@ -544,6 +545,16 @@ int main(int argc, char* argv[]) {
         // (Zerodha/Angel One TOTP re-login, Fyers refresh token). Keeps the
         // connection indicator honest instead of showing a stale "green".
         fincept::trading::AccountManager::instance().start_session_monitor();
+
+        // Periodically auto-download historical candles for any watchlisted
+        // series. Double-gated to a no-op: does nothing unless the Historify
+        // watchlist has entries AND a broker account is connected.
+        auto* historify_timer = new QTimer(qApp);
+        historify_timer->setInterval(15 * 60 * 1000); // 15 min
+        QObject::connect(historify_timer, &QTimer::timeout, qApp, []() {
+            fincept::storage::HistoricalDataStore::instance().refresh_watchlist();
+        });
+        historify_timer->start();
 
         LOG_INFO("App", "Deferred service init complete");
     });

@@ -3,6 +3,7 @@
 #include "services/quantlib/QuantLibClient.h"
 
 #include "auth/AuthManager.h"
+#include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 #include "storage/cache/CacheManager.h"
 
@@ -20,8 +21,6 @@ static constexpr int kRefDataTtlSec = 60 * 60; // 1 hour — static reference da
 namespace fincept::services {
 
 static constexpr const char* kQuantLibClientTag = "QuantLibClient";
-
-const QString QuantLibClient::API_BASE = QStringLiteral("https://api.fincept.in");
 
 // Endpoints that use GET (no request body).
 static const QStringList GET_ENDPOINTS = {
@@ -54,7 +53,7 @@ QuantLibClient& QuantLibClient::instance() {
 // ── Request builder ──────────────────────────────────────────────────────────
 
 static QNetworkRequest build_request(const QString& endpoint, const QJsonObject& query_params = {}) {
-    QString url = QuantLibClient::API_BASE + "/quantlib/" + endpoint;
+    QString url = fincept::AppConfig::instance().api_base_url() + "/quantlib/" + endpoint;
 
     if (!query_params.isEmpty()) {
         QStringList parts;

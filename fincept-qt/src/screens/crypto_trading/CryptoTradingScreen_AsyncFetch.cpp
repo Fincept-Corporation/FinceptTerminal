@@ -22,7 +22,6 @@
 #include "trading/ExchangeSessionManager.h"
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
-#include "trading/exchanges/kraken/KrakenWsClient.h"
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
 

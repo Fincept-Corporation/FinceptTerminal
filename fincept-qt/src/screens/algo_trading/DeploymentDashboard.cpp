@@ -2,6 +2,7 @@
 #include "screens/algo_trading/DeploymentDashboard.h"
 
 #include "algo_engine/AlgoEngine.h"
+#include "core/currency/Currency.h"
 #include "core/logging/Logger.h"
 #include "services/algo_trading/AlgoTradingService.h"
 #include "trading/BrokerRegistry.h"
@@ -31,22 +32,16 @@ inline QString kSectionLabel() {
         .arg(kMonoFont());
 }
 
+// Deployment P&L is denominated in the broker's own currency (intrinsic), so we
+// resolve from the broker profile. When there's no broker we fall back to the
+// user's globally configured currency (Settings → General) instead of assuming $.
 inline QString currency_symbol(const QString& broker_id) {
     if (broker_id.isEmpty())
-        return QStringLiteral("$");
+        return cur::symbol();
     auto* broker = fincept::trading::BrokerRegistry::instance().get(broker_id);
-    if (!broker)
-        return QStringLiteral("$");
-    const auto currency = broker->profile().currency;
-    if (currency == "INR")
-        return QStringLiteral("₹");
-    if (currency == "EUR")
-        return QStringLiteral("€");
-    if (currency == "GBP")
-        return QStringLiteral("£");
-    if (currency == "JPY")
-        return QStringLiteral("¥");
-    return QStringLiteral("$");
+    if (!broker || broker->profile().currency.isEmpty())
+        return cur::symbol();
+    return cur::symbol_for(broker->profile().currency);
 }
 
 } // namespace
@@ -355,7 +350,7 @@ void DeploymentDashboard::update_summary(const QVector<AlgoDeployment>& deployme
         active_count_->setText(QString::number(active));
 
     if (total_pnl_) {
-        QString sum_cs = deployments.isEmpty() ? QStringLiteral("$") : currency_symbol(deployments.first().broker_id);
+        QString sum_cs = deployments.isEmpty() ? cur::symbol() : currency_symbol(deployments.first().broker_id);
         total_pnl_->setText(QString("%1%2%3").arg(pnl_sum >= 0 ? "+" : "-", sum_cs).arg(std::abs(pnl_sum), 0, 'f', 2));
         total_pnl_->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; %3"
                                           " background: transparent; border: none;")

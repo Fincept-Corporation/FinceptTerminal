@@ -85,7 +85,7 @@
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">開市</translation>
+        <translation>開啟</translation>
     </message>
 </context>
 <context>
@@ -168,15 +168,15 @@
     <name>GovDataProviderPanel</name>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">匯出 CSV</translation>
+        <translation>匯出 CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">CSV 檔案 (*.csv)</translation>
+        <translation>CSV 檔案 (*.csv)</translation>
     </message>
     <message>
         <source>Export failed</source>
-        <translation type="unfinished">匯出失敗</translation>
+        <translation>匯出失敗</translation>
     </message>
     <message>
         <source>Unable to open file for writing.</source>
@@ -187,11 +187,11 @@
     <name>MAModulePanel</name>
     <message>
         <source>YES</source>
-        <translation type="unfinished">是</translation>
+        <translation>是</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">否</translation>
+        <translation>否</translation>
     </message>
     <message>
         <source>Metric</source>
@@ -262,7 +262,7 @@
     </message>
     <message>
         <source>PORTFOLIO</source>
-        <translation type="unfinished">投資組合</translation>
+        <translation>投資組合</translation>
     </message>
     <message>
         <source>GENERAL</source>
@@ -518,7 +518,7 @@
     </message>
     <message>
         <source>AI</source>
-        <translation type="unfinished">AI</translation>
+        <translation>AI</translation>
     </message>
     <message>
         <source>Copy</source>
@@ -600,7 +600,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>Update Connection</source>
@@ -791,7 +791,7 @@ Ensure required fields (URL, host, or API key) are filled in.</source>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">中性</translation>
+        <translation>中性</translation>
     </message>
     <message>
         <source>VOLATILE</source>
@@ -887,7 +887,7 @@ For long-form chats use the AI Chat tab.</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
     <message>
         <source>Listening — speak now</source>
@@ -1070,7 +1070,7 @@ For long-form chats use the AI Chat tab.</source>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">MCP 伺服器</translation>
+        <translation>MCP 伺服器</translation>
     </message>
     <message>
         <source>Node Editor</source>
@@ -1109,7 +1109,7 @@ For long-form chats use the AI Chat tab.</source>
     <name>fincept::MonitorMapWidget</name>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">當前</translation>
+        <translation>目前</translation>
     </message>
 </context>
 <context>
@@ -1131,7 +1131,7 @@ For long-form chats use the AI Chat tab.</source>
     <name>fincept::WindowFrame</name>
     <message>
         <source>Save Layout</source>
-        <translation type="unfinished">儲存佈局</translation>
+        <translation>儲存佈局</translation>
     </message>
     <message>
         <source>Layout name:</source>
@@ -1139,7 +1139,7 @@ For long-form chats use the AI Chat tab.</source>
     </message>
     <message>
         <source>Import Layout</source>
-        <translation type="unfinished">匯入佈局</translation>
+        <translation>匯入佈局</translation>
     </message>
     <message>
         <source>Fincept Layout (*.flayout *.fwsp);;All Files (*)</source>
@@ -1151,7 +1151,7 @@ For long-form chats use the AI Chat tab.</source>
     </message>
     <message>
         <source>Export Layout</source>
-        <translation type="unfinished">匯出佈局</translation>
+        <translation>匯出佈局</translation>
     </message>
     <message>
         <source>Open or save a layout first, then export it.</source>
@@ -1254,7 +1254,7 @@ For long-form chats use the AI Chat tab.</source>
     </message>
     <message>
         <source>Refresh</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>Refresh task list</source>
@@ -1278,7 +1278,7 @@ For long-form chats use the AI Chat tab.</source>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>Cancel task</source>
@@ -1286,7 +1286,7 @@ For long-form chats use the AI Chat tab.</source>
     </message>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">MCP 伺服器</translation>
+        <translation>MCP 伺服器</translation>
     </message>
     <message>
         <source>Model Context Protocol tool servers.</source>
@@ -1372,7 +1372,7 @@ For long-form chats use the AI Chat tab.</source>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>Memory type:</source>
@@ -1540,7 +1540,7 @@ Result:
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>Symbol:</source>
@@ -1677,7 +1677,7 @@ Markets, equities, portfolio, macro insights.</source>
     </message>
     <message>
         <source>%1 credits</source>
-        <translation type="unfinished">%1 點數</translation>
+        <translation>%1 點數</translation>
     </message>
     <message>
         <source>0 credits</source>
@@ -1952,7 +1952,7 @@ Markets, equities, portfolio, macro insights.</source>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">就緒</translation>
+        <translation>就緒</translation>
     </message>
 </context>
 <context>
@@ -2039,7 +2039,7 @@ Markets, equities, portfolio, macro insights.</source>
     </message>
     <message>
         <source>RESOURCES</source>
-        <translation type="unfinished">資源</translation>
+        <translation>資源</translation>
     </message>
     <message>
         <source>GitHub Repository</source>
@@ -2079,7 +2079,7 @@ Markets, equities, portfolio, macro insights.</source>
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">安全</translation>
+        <translation>安全</translation>
     </message>
     <message>
         <source>LEGAL</source>
@@ -2114,7 +2114,7 @@ Markets, equities, portfolio, macro insights.</source>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">全部</translation>
+        <translation>全部</translation>
     </message>
     <message>
         <source>Mode:</source>
@@ -2142,11 +2142,11 @@ Markets, equities, portfolio, macro insights.</source>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>買入</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>賣出</translation>
     </message>
     <message>
         <source>APPROVE ALL</source>
@@ -2166,11 +2166,11 @@ Markets, equities, portfolio, macro insights.</source>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>Side</source>
@@ -2178,7 +2178,7 @@ Markets, equities, portfolio, macro insights.</source>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>數量</translation>
     </message>
     <message>
         <source>Price Type</source>
@@ -2293,7 +2293,7 @@ Markets, equities, portfolio, macro insights.</source>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">狀態</translation>
+        <translation>狀態</translation>
     </message>
     <message>
         <source>SIGNATURE</source>
@@ -2397,11 +2397,11 @@ ADB 資料免費 — 無需 API 金鑰</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>ADD</source>
-        <translation type="unfinished">新增</translation>
+        <translation>新增</translation>
     </message>
     <message>
         <source>No results found</source>
@@ -2444,7 +2444,7 @@ ADB 資料免費 — 無需 API 金鑰</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>RECORD</source>
@@ -2467,19 +2467,19 @@ ADB 資料免費 — 無需 API 金鑰</translation>
     </message>
     <message>
         <source>%1 AVAILABLE</source>
-        <translation type="unfinished">%1 可用</translation>
+        <translation>%1 可用</translation>
     </message>
     <message>
         <source>Search widgets...</source>
-        <translation type="unfinished">搜尋小工具...</translation>
+        <translation>搜尋小工具…</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">全部</translation>
+        <translation>全部</translation>
     </message>
 </context>
 <context>
@@ -2566,11 +2566,11 @@ ADB 資料免費 — 無需 API 金鑰</translation>
     </message>
     <message>
         <source>REBALANCE</source>
-        <translation type="unfinished">再平衡</translation>
+        <translation>再平衡</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">風險</translation>
+        <translation>風險</translation>
     </message>
     <message>
         <source>How can I help you?</source>
@@ -2604,7 +2604,7 @@ Select an agent above, or use Auto-Route to let the system decide.</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
     <message>
         <source>Response received (%1ms)</source>
@@ -2774,7 +2774,7 @@ Select an agent above, or use Auto-Route to let the system decide.</source>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">全部</translation>
+        <translation>全部</translation>
     </message>
     <message>
         <source>Running</source>
@@ -2798,7 +2798,7 @@ Select an agent above, or use Auto-Route to let the system decide.</source>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>Select a task to view details</source>
@@ -2830,7 +2830,7 @@ Select an agent above, or use Auto-Route to let the system decide.</source>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>SCHEDULE…</source>
@@ -2842,7 +2842,7 @@ Select an agent above, or use Auto-Route to let the system decide.</source>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">刪除</translation>
+        <translation>刪除</translation>
     </message>
     <message>
         <source>(no plan persisted)</source>
@@ -2973,7 +2973,7 @@ Select an agent above, or use Auto-Route to let the system decide.</source>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>JSON EDITOR</source>
@@ -3005,11 +3005,11 @@ Select an agent above, or use Auto-Route to let the system decide.</source>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">工具</translation>
+        <translation>工具</translation>
     </message>
     <message>
         <source>FEATURES</source>
-        <translation type="unfinished">功能</translation>
+        <translation>功能</translation>
     </message>
     <message>
         <source>Reasoning</source>
@@ -3041,7 +3041,7 @@ Select an agent above, or use Auto-Route to let the system decide.</source>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">刪除</translation>
+        <translation>刪除</translation>
     </message>
     <message>
         <source>APPLY JSON</source>
@@ -3069,7 +3069,7 @@ Select an agent above, or use Auto-Route to let the system decide.</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
     <message>
         <source>Routed → %1 (intent: %2, confidence: %3%)</source>
@@ -3186,7 +3186,7 @@ Conversations are saved automatically.</source>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">市場</translation>
+        <translation>市場</translation>
     </message>
     <message>
         <source>Show me today's top market movers</source>
@@ -3194,7 +3194,7 @@ Conversations are saved automatically.</source>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">新聞</translation>
+        <translation>新聞</translation>
     </message>
     <message>
         <source>Summarize the latest financial news</source>
@@ -3202,7 +3202,7 @@ Conversations are saved automatically.</source>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">投資組合</translation>
+        <translation>投資組合</translation>
     </message>
     <message>
         <source>Analyze my portfolio performance</source>
@@ -3218,7 +3218,7 @@ Conversations are saved automatically.</source>
     </message>
     <message>
         <source>Economics</source>
-        <translation type="unfinished">經濟</translation>
+        <translation>經濟</translation>
     </message>
     <message>
         <source>Current GDP and inflation data</source>
@@ -3286,7 +3286,7 @@ Conversations are saved automatically.</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
     <message>
         <source>(empty response — model returned no content)</source>
@@ -3396,7 +3396,7 @@ to load available endpoints</source>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>START</source>
@@ -3424,7 +3424,7 @@ to load available endpoints</source>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>AKSHARE DATA</source>
@@ -3523,11 +3523,11 @@ to load available endpoints</source>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>買入</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>賣出</translation>
     </message>
     <message>
         <source>Entry Side:</source>
@@ -3673,7 +3673,7 @@ to load available endpoints</source>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">錯誤</translation>
+        <translation>錯誤</translation>
     </message>
     <message>
         <source>ANALYZING...</source>
@@ -3696,121 +3696,121 @@ to load available endpoints</source>
     <name>fincept::screens::AnalyticsSectorsView</name>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">概覽</translation>
+        <translation>概覽</translation>
     </message>
     <message>
         <source>CORRELATION</source>
-        <translation type="unfinished">相關性</translation>
+        <translation>相關性</translation>
     </message>
     <message>
         <source>SECTORS</source>
-        <translation type="unfinished">行業</translation>
+        <translation>行業</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">持倉</translation>
+        <translation>持倉</translation>
     </message>
     <message>
         <source>MARKET VALUE</source>
-        <translation type="unfinished">市值</translation>
+        <translation>市值</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">盈虧</translation>
+        <translation>盈虧</translation>
     </message>
     <message>
         <source>SECTOR ALLOCATION</source>
-        <translation type="unfinished">行業配置</translation>
+        <translation>行業配置</translation>
     </message>
     <message>
         <source>SECTOR BREAKDOWN</source>
-        <translation type="unfinished">行業分佈</translation>
+        <translation>行業分佈</translation>
     </message>
     <message>
         <source>SECTOR</source>
-        <translation type="unfinished">行業</translation>
+        <translation>行業</translation>
     </message>
     <message>
         <source>POS</source>
-        <translation type="unfinished">POS</translation>
+        <translation>持倉</translation>
     </message>
     <message>
         <source>MKT VAL</source>
-        <translation type="unfinished">市值</translation>
+        <translation>市值</translation>
     </message>
     <message>
         <source>WT</source>
-        <translation type="unfinished">WT</translation>
+        <translation>權重</translation>
     </message>
     <message>
         <source>P&amp;L%</source>
-        <translation type="unfinished">盈虧%</translation>
+        <translation>盈虧%</translation>
     </message>
     <message>
         <source>HOLDINGS CORRELATION MATRIX</source>
-        <translation type="unfinished">持倉相關性矩陣</translation>
+        <translation>持倉相關性矩陣</translation>
     </message>
     <message>
         <source>%1
 sectors</source>
-        <translation type="unfinished">%1
+        <translation>%1
 個行業</translation>
     </message>
     <message>
         <source>+%1 more</source>
-        <translation type="unfinished">+另外 %1 個</translation>
+        <translation>+另外 %1 個</translation>
     </message>
     <message>
         <source>LARGEST</source>
-        <translation type="unfinished">最大</translation>
+        <translation>最大</translation>
     </message>
     <message>
         <source>SMALLEST</source>
-        <translation type="unfinished">最小</translation>
+        <translation>最小</translation>
     </message>
     <message>
         <source>BEST</source>
-        <translation type="unfinished">最佳</translation>
+        <translation>最佳</translation>
     </message>
     <message>
         <source>WORST</source>
-        <translation type="unfinished">最差</translation>
+        <translation>最差</translation>
     </message>
     <message>
         <source>%1 positions</source>
-        <translation type="unfinished">%1 個持倉</translation>
+        <translation>%1 個持倉</translation>
     </message>
     <message>
         <source>HHI CONCENTRATION</source>
-        <translation type="unfinished">HHI集中度</translation>
+        <translation>HHI 集中度</translation>
     </message>
     <message>
         <source>Herfindahl index across sectors (lower = more diversified)</source>
-        <translation type="unfinished">跨行業赫芬達爾指數(數值愈低 = 分散度愈高)</translation>
+        <translation>跨行業赫芬達爾指數（數值愈低 = 分散度愈高）</translation>
     </message>
     <message>
         <source>TOP-3 CONCENTRATION</source>
-        <translation type="unfinished">前三大集中度</translation>
+        <translation>首三大集中度</translation>
     </message>
     <message>
         <source>Weight of the three largest sectors (%1)</source>
-        <translation type="unfinished">三大最大行業的權重 (%1)</translation>
+        <translation>三大行業的權重 (%1)</translation>
     </message>
     <message>
         <source>Diversified</source>
-        <translation type="unfinished">已分散</translation>
+        <translation>已分散</translation>
     </message>
     <message>
         <source>Balanced</source>
-        <translation type="unfinished">均衡</translation>
+        <translation>均衡</translation>
     </message>
     <message>
         <source>Concentrated</source>
-        <translation type="unfinished">集中</translation>
+        <translation>集中</translation>
     </message>
     <message>
         <source>Need 2+ holdings for correlation analysis</source>
-        <translation type="unfinished">相關性分析需要2個或以上的持倉</translation>
+        <translation>相關性分析需要 2 個或以上持倉</translation>
     </message>
     <message>
         <source>Top-10 holdings by weight. Pearson correlation of daily returns over the trailing 30 trading days (from real price history).</source>
@@ -3908,7 +3908,7 @@ sectors</source>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>e.g. 000001</source>
@@ -3928,7 +3928,7 @@ sectors</source>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>ASIA MARKETS</source>
@@ -4007,7 +4007,7 @@ sectors</source>
     </message>
     <message>
         <source>STRATEGY</source>
-        <translation type="unfinished">策略</translation>
+        <translation>策略</translation>
     </message>
     <message>
         <source>CATEGORY</source>
@@ -4041,7 +4041,7 @@ Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">摘要</translation>
+        <translation>摘要</translation>
     </message>
     <message>
         <source>EQUITY CURVE</source>
@@ -4049,7 +4049,7 @@ Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">指標</translation>
+        <translation>指標</translation>
     </message>
     <message>
         <source>DETAILS</source>
@@ -4125,11 +4125,11 @@ Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>BENCHMARK</source>
-        <translation type="unfinished">基準</translation>
+        <translation>基準</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>None</source>
@@ -4149,7 +4149,7 @@ Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">就緒</translation>
+        <translation>就緒</translation>
     </message>
     <message>
         <source>Export Backtest Results</source>
@@ -4189,7 +4189,7 @@ Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>METHOD</source>
-        <translation type="unfinished">方法</translation>
+        <translation>方法</translation>
     </message>
     <message>
         <source>MAX ITERATIONS</source>
@@ -4341,7 +4341,7 @@ Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>ANALYSIS TYPE</source>
-        <translation type="unfinished">分析類型</translation>
+        <translation>分析類型</translation>
     </message>
     <message>
         <source>ROLLING WINDOW</source>
@@ -4349,7 +4349,7 @@ Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>METRIC</source>
-        <translation type="unfinished">指標</translation>
+        <translation>指標</translation>
     </message>
     <message>
         <source>SIGNAL GENERATORS</source>
@@ -4425,7 +4425,7 @@ Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>CONDITION</source>
@@ -4485,7 +4485,7 @@ Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Re
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">錯誤</translation>
+        <translation>錯誤</translation>
     </message>
 </context>
 <context>
@@ -4622,7 +4622,7 @@ BIS 數據免費 — 無需 API 金鑰</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">國家/地區</translation>
+        <translation>國家/地區</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -4713,7 +4713,7 @@ Free key at: data.bls.gov/registrationEngine/</source>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>UP</source>
@@ -4729,7 +4729,7 @@ Free key at: data.bls.gov/registrationEngine/</source>
     </message>
     <message>
         <source>OUTPUT</source>
-        <translation type="unfinished">輸出</translation>
+        <translation>輸出</translation>
     </message>
     <message>
         <source>OUTPUT [collapsed]</source>
@@ -4941,11 +4941,11 @@ CFTC 資料免費 — 無需 API key</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">開市</translation>
+        <translation>開啟</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">儲存</translation>
+        <translation>儲存</translation>
     </message>
     <message>
         <source>+ CELL</source>
@@ -4973,7 +4973,7 @@ CFTC 資料免費 — 無需 API key</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">就緒</translation>
+        <translation>就緒</translation>
     </message>
     <message>
         <source>Ctrl+Enter: RUN  |  Shift+Enter: RUN &amp; NEXT  |  Tab: 4 SPACES  |  Ctrl+S: SAVE</source>
@@ -5181,11 +5181,11 @@ This will remove all holdings and transactions.</source>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">刪除</translation>
+        <translation>刪除</translation>
     </message>
 </context>
 <context>
@@ -5208,7 +5208,7 @@ This will remove all holdings and transactions.</source>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">日期</translation>
+        <translation>日期</translation>
     </message>
     <message>
         <source>Lat</source>
@@ -5224,7 +5224,7 @@ This will remove all holdings and transactions.</source>
     </message>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">概覽</translation>
+        <translation>概覽</translation>
     </message>
     <message>
         <source>EVENTS</source>
@@ -5262,7 +5262,7 @@ This will remove all holdings and transactions.</source>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">國家/地區</translation>
+        <translation>國家/地區</translation>
     </message>
     <message>
         <source>CITY</source>
@@ -5270,7 +5270,7 @@ This will remove all holdings and transactions.</source>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">日期</translation>
+        <translation>日期</translation>
     </message>
     <message>
         <source>SOURCE</source>
@@ -5297,7 +5297,7 @@ This will remove all holdings and transactions.</source>
     </message>
     <message>
         <source>CONTACT US</source>
-        <translation type="unfinished">聯絡我們</translation>
+        <translation>聯絡我們</translation>
     </message>
     <message>
         <source>Get in touch with our team</source>
@@ -5345,7 +5345,7 @@ This will remove all holdings and transactions.</source>
     </message>
     <message>
         <source>QUICK ACTIONS</source>
-        <translation type="unfinished">快速操作</translation>
+        <translation>快速操作</translation>
     </message>
     <message>
         <source>Send Email</source>
@@ -5424,7 +5424,7 @@ This will remove all holdings and transactions.</source>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">刪除</translation>
+        <translation>刪除</translation>
     </message>
     <message>
         <source>SKIP</source>
@@ -5559,7 +5559,7 @@ This cannot be undone.</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
     <message>
         <source>Failed</source>
@@ -5619,7 +5619,7 @@ This cannot be undone.</source>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">工具</translation>
+        <translation>工具</translation>
     </message>
     <message>
         <source>TERMINAL TOOLS</source>
@@ -5627,11 +5627,11 @@ This cannot be undone.</source>
     </message>
     <message>
         <source>FEATURES</source>
-        <translation type="unfinished">功能</translation>
+        <translation>功能</translation>
     </message>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">MCP 伺服器</translation>
+        <translation>MCP 伺服器</translation>
     </message>
     <message>
         <source>e.g. My Equity Analyst</source>
@@ -5731,7 +5731,7 @@ This cannot be undone.</source>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>URLs (one per line)</source>
@@ -5942,7 +5942,7 @@ This cannot be undone.</source>
     </message>
     <message>
         <source>SETTINGS</source>
-        <translation type="unfinished">設定</translation>
+        <translation>設定</translation>
     </message>
     <message>
         <source>STAKE</source>
@@ -5950,7 +5950,7 @@ This cannot be undone.</source>
     </message>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">市場</translation>
+        <translation>市場</translation>
     </message>
     <message>
         <source>ROADMAP</source>
@@ -5966,11 +5966,11 @@ This cannot be undone.</source>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">就緒</translation>
+        <translation>就緒</translation>
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">安全</translation>
+        <translation>安全</translation>
     </message>
     <message>
         <source>● CONNECTED</source>
@@ -6013,140 +6013,140 @@ This cannot be undone.</source>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">即時</translation>
+        <translation>即時</translation>
     </message>
     <message>
         <source>OFFLINE</source>
-        <translation type="unfinished">離線</translation>
+        <translation>離線</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::CustomIndexView</name>
     <message>
         <source>CREATE INDEX</source>
-        <translation type="unfinished">建立指數</translation>
+        <translation>建立指數</translation>
     </message>
     <message>
         <source>MY INDICES</source>
-        <translation type="unfinished">我的指數</translation>
+        <translation>我的指數</translation>
     </message>
     <message>
         <source>PERFORMANCE</source>
-        <translation type="unfinished">表現</translation>
+        <translation>表現</translation>
     </message>
     <message>
         <source>CREATE CUSTOM INDEX</source>
-        <translation type="unfinished">建立自訂指數</translation>
+        <translation>建立自訂指數</translation>
     </message>
     <message>
         <source>My Custom Index</source>
-        <translation type="unfinished">我的自訂指數</translation>
+        <translation>我的自訂指數</translation>
     </message>
     <message>
         <source>NAME:</source>
-        <translation type="unfinished">名稱:</translation>
+        <translation>名稱：</translation>
     </message>
     <message>
         <source>METHOD:</source>
-        <translation type="unfinished">方法:</translation>
+        <translation>方法：</translation>
     </message>
     <message>
         <source>BASE:</source>
-        <translation type="unfinished">基準:</translation>
+        <translation>基準：</translation>
     </message>
     <message>
         <source>CONSTITUENTS (from portfolio holdings)</source>
-        <translation type="unfinished">成份股(來自投資組合持倉)</translation>
+        <translation>成份股（來自投資組合持倉）</translation>
     </message>
     <message>
         <source>INCLUDE</source>
-        <translation type="unfinished">包括</translation>
+        <translation>包括</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">權重</translation>
+        <translation>權重</translation>
     </message>
     <message>
         <source>MKT VALUE</source>
-        <translation type="unfinished">市值</translation>
+        <translation>市值</translation>
     </message>
     <message>
         <source>MY CUSTOM INDICES</source>
-        <translation type="unfinished">我的自訂指數</translation>
+        <translation>我的自訂指數</translation>
     </message>
     <message>
         <source>DELETE SELECTED</source>
-        <translation type="unfinished">刪除所選</translation>
+        <translation>刪除所選</translation>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">名稱</translation>
+        <translation>名稱</translation>
     </message>
     <message>
         <source>METHOD</source>
-        <translation type="unfinished">方法</translation>
+        <translation>方法</translation>
     </message>
     <message>
         <source>BASE</source>
-        <translation type="unfinished">基準</translation>
+        <translation>基準</translation>
     </message>
     <message>
         <source>CURRENT VALUE</source>
-        <translation type="unfinished">當前值</translation>
+        <translation>當前值</translation>
     </message>
     <message>
         <source>CHANGE</source>
-        <translation type="unfinished">升跌</translation>
+        <translation>升跌</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">建立日期</translation>
+        <translation>建立日期</translation>
     </message>
     <message>
         <source>No custom indices created yet.
 Go to CREATE INDEX tab to build one from your portfolio.</source>
-        <translation type="unfinished">尚未建立任何自訂指數。
+        <translation>尚未建立任何自訂指數。
 前往「建立指數」分頁,從你的投資組合建立一個。</translation>
     </message>
     <message>
         <source>INDEX PERFORMANCE</source>
-        <translation type="unfinished">指數表現</translation>
+        <translation>指數表現</translation>
     </message>
     <message>
         <source>Select an index from MY INDICES to see its performance.</source>
-        <translation type="unfinished">從「我的指數」選擇一個指數以查看其表現。</translation>
+        <translation>從「我的指數」選擇一個指數以查看其表現。</translation>
     </message>
     <message>
         <source>Base value must be positive.</source>
-        <translation type="unfinished">基準值必須為正數。</translation>
+        <translation>基準值必須為正數。</translation>
     </message>
     <message>
         <source>Select at least one constituent.</source>
-        <translation type="unfinished">請至少選擇一個成份股。</translation>
+        <translation>請至少選擇一個成份股。</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
     <message>
         <source>Index '%1' created successfully.</source>
-        <translation type="unfinished">指數「%1」已成功建立。</translation>
+        <translation>指數「%1」已成功建立。</translation>
     </message>
     <message>
         <source>PERFORMANCE — %1  (no data)</source>
-        <translation type="unfinished">表現 — %1  (無數據)</translation>
+        <translation>表現 — %1  （無數據）</translation>
     </message>
     <message>
         <source>PERFORMANCE — %1</source>
-        <translation type="unfinished">表現 — %1</translation>
+        <translation>表現 — %1</translation>
     </message>
 </context>
 <context>
@@ -6172,7 +6172,7 @@ Go to CREATE INDEX tab to build one from your portfolio.</source>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">狀態</translation>
+        <translation>狀態</translation>
     </message>
     <message>
         <source>No data — select a series</source>
@@ -6191,7 +6191,7 @@ Go to CREATE INDEX tab to build one from your portfolio.</source>
     </message>
     <message>
         <source>COMPARE</source>
-        <translation type="unfinished">比較</translation>
+        <translation>比較</translation>
     </message>
     <message>
         <source>CHART:</source>
@@ -6233,11 +6233,11 @@ Click  + ADD SLOT  in the left panel to begin</source>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>EXPORT CSV</source>
-        <translation type="unfinished">匯出 CSV</translation>
+        <translation>匯出 CSV</translation>
     </message>
     <message>
         <source>SLOT %1</source>
@@ -6281,11 +6281,11 @@ Click  + ADD SLOT  in the left panel to begin</source>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">匯出 CSV</translation>
+        <translation>匯出 CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">CSV 檔案 (*.csv)</translation>
+        <translation>CSV 檔案 (*.csv)</translation>
     </message>
     <message>
         <source>Failed to open file: %1</source>
@@ -6424,7 +6424,7 @@ Click  + ADD SLOT  in the left panel to begin</source>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">載入中...</translation>
+        <translation>載入中…</translation>
     </message>
 </context>
 <context>
@@ -6557,7 +6557,7 @@ Click  + ADD SLOT  in the left panel to begin</source>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>Force-refresh all live data on the dashboard</source>
@@ -6569,7 +6569,7 @@ Click  + ADD SLOT  in the left panel to begin</source>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">儲存</translation>
+        <translation>儲存</translation>
     </message>
     <message>
         <source>RESET</source>
@@ -6612,7 +6612,7 @@ Click  + ADD SLOT  in the left panel to begin</source>
     </message>
     <message>
         <source>CREATE</source>
-        <translation type="unfinished">建立</translation>
+        <translation>建立</translation>
     </message>
     <message>
         <source>API CONFIG</source>
@@ -6676,7 +6676,7 @@ Click  + ADD SLOT  in the left panel to begin</source>
     </message>
     <message>
         <source>SYSTEM</source>
-        <translation type="unfinished">系統</translation>
+        <translation>系統</translation>
     </message>
     <message>
         <source>MAPPING ENGINE</source>
@@ -6688,7 +6688,7 @@ Click  + ADD SLOT  in the left panel to begin</source>
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">安全</translation>
+        <translation>安全</translation>
     </message>
     <message>
         <source>CURRENT MAPPING</source>
@@ -6776,7 +6776,7 @@ Click  + ADD SLOT  in the left panel to begin</source>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>Required</source>
@@ -6846,7 +6846,7 @@ Sensitive data never stored in plaintext.</source>
     </message>
     <message>
         <source>RUN TEST</source>
-        <translation type="unfinished">執行測試</translation>
+        <translation>執行測試</translation>
     </message>
     <message>
         <source>Test results will appear here...</source>
@@ -6866,7 +6866,7 @@ Sensitive data never stored in plaintext.</source>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">刪除</translation>
+        <translation>刪除</translation>
     </message>
     <message>
         <source>+ NEW MAPPING</source>
@@ -7075,7 +7075,7 @@ API 詳情：
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">總額</translation>
+        <translation>總額</translation>
     </message>
     <message>
         <source>ACTIVE</source>
@@ -7099,7 +7099,7 @@ API 詳情：
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>CATEGORY</source>
@@ -7166,7 +7166,7 @@ This cannot be undone. You can re-add them from the full Data Sources screen.</s
     <name>fincept::screens::DeploymentDashboard</name>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">盈虧</translation>
+        <translation>盈虧</translation>
     </message>
     <message>
         <source>LTP</source>
@@ -7174,7 +7174,7 @@ This cannot be undone. You can re-add them from the full Data Sources screen.</s
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">勝率</translation>
+        <translation>勝率</translation>
     </message>
     <message>
         <source>POSITION</source>
@@ -7226,7 +7226,7 @@ This cannot be undone. You can re-add them from the full Data Sources screen.</s
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>STOP ALL</source>
@@ -7489,7 +7489,7 @@ This cannot be undone. You can re-add them from the full Data Sources screen.</s
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">錯誤</translation>
+        <translation>錯誤</translation>
     </message>
     <message>
         <source>DIRTY PRICE</source>
@@ -7643,19 +7643,19 @@ This cannot be undone. You can re-add them from the full Data Sources screen.</s
     </message>
     <message>
         <source>Dashboard</source>
-        <translation type="unfinished">儀表板</translation>
+        <translation>儀表板</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">市場</translation>
+        <translation>市場</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">新聞</translation>
+        <translation>新聞</translation>
     </message>
     <message>
         <source>Watchlist</source>
-        <translation type="unfinished">自選清單</translation>
+        <translation>自選清單</translation>
     </message>
     <message>
         <source>TRADING</source>
@@ -7663,7 +7663,7 @@ This cannot be undone. You can re-add them from the full Data Sources screen.</s
     </message>
     <message>
         <source>Crypto Trading</source>
-        <translation type="unfinished">加密交易</translation>
+        <translation>加密交易</translation>
     </message>
     <message>
         <source>Paper Trading</source>
@@ -7683,7 +7683,7 @@ This cannot be undone. You can re-add them from the full Data Sources screen.</s
     </message>
     <message>
         <source>Equity Research</source>
-        <translation type="unfinished">股票研究</translation>
+        <translation>股票研究</translation>
     </message>
     <message>
         <source>Surface Analytics</source>
@@ -7691,11 +7691,11 @@ This cannot be undone. You can re-add them from the full Data Sources screen.</s
     </message>
     <message>
         <source>Derivatives</source>
-        <translation type="unfinished">衍生品</translation>
+        <translation>衍生品</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">投資組合</translation>
+        <translation>投資組合</translation>
     </message>
     <message>
         <source>M&amp;A Analytics</source>
@@ -7715,7 +7715,7 @@ This cannot be undone. You can re-add them from the full Data Sources screen.</s
     </message>
     <message>
         <source>AI Chat</source>
-        <translation type="unfinished">AI 聊天</translation>
+        <translation>AI 聊天</translation>
     </message>
     <message>
         <source>Agent Studio</source>
@@ -7727,7 +7727,7 @@ This cannot be undone. You can re-add them from the full Data Sources screen.</s
     </message>
     <message>
         <source>DATA SOURCES</source>
-        <translation type="unfinished">資料來源</translation>
+        <translation>資料來源</translation>
     </message>
     <message>
         <source>DBnomics</source>
@@ -7735,7 +7735,7 @@ This cannot be undone. You can re-add them from the full Data Sources screen.</s
     </message>
     <message>
         <source>Economics</source>
-        <translation type="unfinished">經濟</translation>
+        <translation>經濟</translation>
     </message>
     <message>
         <source>AkShare Data</source>
@@ -7751,7 +7751,7 @@ This cannot be undone. You can re-add them from the full Data Sources screen.</s
     </message>
     <message>
         <source>Geopolitics</source>
-        <translation type="unfinished">地緣政治</translation>
+        <translation>地緣政治</translation>
     </message>
     <message>
         <source>Maritime</source>
@@ -7767,7 +7767,7 @@ This cannot be undone. You can re-add them from the full Data Sources screen.</s
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">工具</translation>
+        <translation>工具</translation>
     </message>
     <message>
         <source>Report Builder</source>
@@ -7791,7 +7791,7 @@ This cannot be undone. You can re-add them from the full Data Sources screen.</s
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">MCP 伺服器</translation>
+        <translation>MCP 伺服器</translation>
     </message>
     <message>
         <source>Data Mapping</source>
@@ -7803,11 +7803,11 @@ This cannot be undone. You can re-add them from the full Data Sources screen.</s
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">設定</translation>
+        <translation>設定</translation>
     </message>
     <message>
         <source>Profile</source>
-        <translation type="unfinished">個人資料</translation>
+        <translation>個人資料</translation>
     </message>
     <message>
         <source>DOCUMENTATION</source>
@@ -8079,7 +8079,7 @@ Screenshot (Ctrl+P) — Capture to file</source>
     </message>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">概覽</translation>
+        <translation>概覽</translation>
     </message>
     <message>
         <source>The Dashboard is your primary workspace. It features a draggable widget grid where you can arrange market widgets, a scrolling ticker bar showing live prices, a market pulse panel with sector performance, and a status bar showing connection state.</source>
@@ -8157,7 +8157,7 @@ Screenshot (Ctrl+P) — Capture to file</source>
     </message>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">市場</translation>
+        <translation>市場</translation>
     </message>
     <message>
         <source>Global and regional market overview with auto-refresh</source>
@@ -8693,7 +8693,7 @@ PRO: Custom pricing models, volatility surface calibration, Greeks hedging</sour
     </message>
     <message>
         <source>PORTFOLIO</source>
-        <translation type="unfinished">投資組合</translation>
+        <translation>投資組合</translation>
     </message>
     <message>
         <source>Multi-portfolio management with analytics and AI agent</source>
@@ -8957,7 +8957,7 @@ PRO: Multi-agent workflows, MCP server integration, automated research pipelines
     </message>
     <message>
         <source>AGENT STUDIO</source>
-        <translation type="unfinished">智能體工作室</translation>
+        <translation>智能體工作室</translation>
     </message>
     <message>
         <source>Configure and manage AI agents, teams, and workflows</source>
@@ -9111,7 +9111,7 @@ PRO: Integrate DBnomics data into quantitative macro trading models</source>
     </message>
     <message>
         <source>ECONOMICS</source>
-        <translation type="unfinished">經濟</translation>
+        <translation>經濟</translation>
     </message>
     <message>
         <source>Macroeconomic data and analysis tools</source>
@@ -9601,7 +9601,7 @@ PRO: Automated model updates with live data feeds</source>
     </message>
     <message>
         <source>NOTES</source>
-        <translation type="unfinished">備註</translation>
+        <translation>備註</translation>
     </message>
     <message>
         <source>Persistent note-taking for research and trade journals</source>
@@ -9645,7 +9645,7 @@ PRO: Integrated research workflow with notes linked to positions</source>
     </message>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">MCP 伺服器</translation>
+        <translation>MCP 伺服器</translation>
     </message>
     <message>
         <source>Model Context Protocol server management</source>
@@ -9733,7 +9733,7 @@ PRO: Complex multi-source data pipelines with validation</source>
     </message>
     <message>
         <source>SETTINGS</source>
-        <translation type="unfinished">設定</translation>
+        <translation>設定</translation>
     </message>
     <message>
         <source>Application configuration and preferences</source>
@@ -9865,7 +9865,7 @@ Source: EconDB — macroeconomic data, no API key required</source>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">國家/地區</translation>
+        <translation>國家/地區</translation>
     </message>
     <message>
         <source>Fetching EconDB: %1 — %2…</source>
@@ -9892,7 +9892,7 @@ Source: EconDB — macroeconomic data, no API key required</source>
     </message>
     <message>
         <source>CHANGE</source>
-        <translation type="unfinished">升跌</translation>
+        <translation>升跌</translation>
     </message>
     <message>
         <source>MIN</source>
@@ -9920,7 +9920,7 @@ Source: EconDB — macroeconomic data, no API key required</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
     <message>
         <source>No data returned for this selection</source>
@@ -9932,11 +9932,11 @@ Source: EconDB — macroeconomic data, no API key required</source>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">匯出 CSV</translation>
+        <translation>匯出 CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">CSV 檔案 (*.csv)</translation>
+        <translation>CSV 檔案 (*.csv)</translation>
     </message>
 </context>
 <context>
@@ -9961,7 +9961,7 @@ Source: Forex Factory — global economic calendar (no API key required)</source
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">日期</translation>
+        <translation>日期</translation>
     </message>
     <message>
         <source>IMPACT</source>
@@ -9999,103 +9999,103 @@ Source: Forex Factory — global economic calendar (no API key required)</source
     <name>fincept::screens::EconomicsView</name>
     <message>
         <source>PORTFOLIO ECONOMICS OVERVIEW</source>
-        <translation type="unfinished">投資組合經濟概覽</translation>
+        <translation>投資組合經濟概覽</translation>
     </message>
     <message>
         <source>Per-holding contribution to portfolio value, P&amp;L, and risk</source>
-        <translation type="unfinished">各持倉對投資組合價值、盈虧及風險的貢獻</translation>
+        <translation>各持倉對投資組合價值、盈虧及風險的貢獻</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>SECTOR</source>
-        <translation type="unfinished">行業</translation>
+        <translation>行業</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">權重</translation>
+        <translation>權重</translation>
     </message>
     <message>
         <source>COST BASIS</source>
-        <translation type="unfinished">成本基礎</translation>
+        <translation>成本基礎</translation>
     </message>
     <message>
         <source>MARKET VALUE</source>
-        <translation type="unfinished">市值</translation>
+        <translation>市值</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">盈虧</translation>
+        <translation>盈虧</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">盈虧 %</translation>
+        <translation>盈虧 %</translation>
     </message>
     <message>
         <source>PORTFOLIO FACTOR SENSITIVITY</source>
-        <translation type="unfinished">投資組合因子敏感度</translation>
+        <translation>投資組合因子敏感度</translation>
     </message>
     <message>
         <source>Estimated portfolio impact from macro factor shocks, weighted by holdings</source>
-        <translation type="unfinished">宏觀因子衝擊對投資組合的估計影響,按持倉加權</translation>
+        <translation>宏觀因子衝擊對投資組合的估計影響,按持倉加權</translation>
     </message>
     <message>
         <source>FACTOR SHOCK</source>
-        <translation type="unfinished">因子衝擊</translation>
+        <translation>因子衝擊</translation>
     </message>
     <message>
         <source>SENSITIVITY</source>
-        <translation type="unfinished">敏感度</translation>
+        <translation>敏感度</translation>
     </message>
     <message>
         <source>DIRECTION</source>
-        <translation type="unfinished">方向</translation>
+        <translation>方向</translation>
     </message>
     <message>
         <source>ESTIMATED IMPACT</source>
-        <translation type="unfinished">估計影響</translation>
+        <translation>估計影響</translation>
     </message>
     <message>
         <source>Positive</source>
-        <translation type="unfinished">正向</translation>
+        <translation>正向</translation>
     </message>
     <message>
         <source>Negative</source>
-        <translation type="unfinished">負向</translation>
+        <translation>負向</translation>
     </message>
     <message>
         <source>Interest Rates (+1%)</source>
-        <translation type="unfinished">利率 (+1%)</translation>
+        <translation>利率 (+1%)</translation>
     </message>
     <message>
         <source>GDP Growth (+1%)</source>
-        <translation type="unfinished">GDP增長 (+1%)</translation>
+        <translation>GDP 增長 (+1%)</translation>
     </message>
     <message>
         <source>Inflation / CPI (+1%)</source>
-        <translation type="unfinished">通脹 / CPI (+1%)</translation>
+        <translation>通脹 / CPI (+1%)</translation>
     </message>
     <message>
         <source>USD Strength (+1%)</source>
-        <translation type="unfinished">美元強勢 (+1%)</translation>
+        <translation>美元強勢 (+1%)</translation>
     </message>
     <message>
         <source>Oil Price (+10%)</source>
-        <translation type="unfinished">油價 (+10%)</translation>
+        <translation>油價 (+10%)</translation>
     </message>
     <message>
         <source>Consumer Spending (+1%)</source>
-        <translation type="unfinished">消費開支 (+1%)</translation>
+        <translation>消費開支 (+1%)</translation>
     </message>
     <message>
         <source>Credit Spreads (+50bps)</source>
-        <translation type="unfinished">信用利差 (+50基點)</translation>
+        <translation>信用利差 (+50 基點)</translation>
     </message>
     <message>
         <source>Unemployment (+1%)</source>
-        <translation type="unfinished">失業率 (+1%)</translation>
+        <translation>失業率 (+1%)</translation>
     </message>
     <message>
         <source>CURRENT MACRO CONDITIONS  (LIVE · FRED)</source>
@@ -10125,7 +10125,7 @@ It is stored encrypted and shared with all FRED-backed features.</source>
     </message>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">當前</translation>
+        <translation>目前</translation>
     </message>
     <message>
         <source>AS OF</source>
@@ -10148,7 +10148,7 @@ It is stored encrypted and shared with all FRED-backed features.</source>
     <name>fincept::screens::EditTransactionDialog</name>
     <message>
         <source>Edit Transaction</source>
-        <translation type="unfinished">編輯交易</translation>
+        <translation>編輯交易</translation>
     </message>
     <message>
         <source>EDIT %1 — %2</source>
@@ -10176,11 +10176,11 @@ It is stored encrypted and shared with all FRED-backed features.</source>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">儲存</translation>
+        <translation>儲存</translation>
     </message>
 </context>
 <context>
@@ -10328,7 +10328,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">貝塔</translation>
+        <translation>貝塔</translation>
     </message>
     <message>
         <source>SHORT RATIO</source>
@@ -10355,7 +10355,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>EXPORT CSV</source>
-        <translation type="unfinished">匯出 CSV</translation>
+        <translation>匯出 CSV</translation>
     </message>
     <message>
         <source>Metric</source>
@@ -10658,7 +10658,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>Search for a symbol to load news.</source>
@@ -10693,15 +10693,15 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">開市</translation>
+        <translation>開市</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">最高</translation>
+        <translation>最高</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">最低</translation>
+        <translation>最低</translation>
     </message>
     <message>
         <source>PREV CLOSE</source>
@@ -10709,7 +10709,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">成交量</translation>
+        <translation>成交量</translation>
     </message>
     <message>
         <source>VALUATION</source>
@@ -10741,7 +10741,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">貝塔</translation>
+        <translation>貝塔</translation>
     </message>
     <message>
         <source>SHARE STATS</source>
@@ -10873,7 +10873,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>買入</translation>
     </message>
     <message>
         <source>HOLD</source>
@@ -10881,7 +10881,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>賣出</translation>
     </message>
     <message>
         <source>STRONG SELL</source>
@@ -10924,11 +10924,11 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>P/E</source>
@@ -10984,7 +10984,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">貝塔</translation>
+        <translation>貝塔</translation>
     </message>
 </context>
 <context>
@@ -11043,7 +11043,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">新聞</translation>
+        <translation>新聞</translation>
     </message>
     <message>
         <source>Sentiment</source>
@@ -11051,7 +11051,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">回測</translation>
+        <translation>回測</translation>
     </message>
 </context>
 <context>
@@ -11070,7 +11070,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>Refreshing market sentiment…</source>
@@ -11090,7 +11090,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">摘要</translation>
+        <translation>摘要</translation>
     </message>
     <message>
         <source>AVERAGE BUZZ</source>
@@ -11181,7 +11181,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>LAST</source>
-        <translation type="unfinished">最新</translation>
+        <translation>最新</translation>
     </message>
     <message>
         <source>N/A</source>
@@ -11200,11 +11200,11 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>買入</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>賣出</translation>
     </message>
     <message>
         <source>STRONG SELL</source>
@@ -11212,7 +11212,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">中性</translation>
+        <translation>中性</translation>
     </message>
     <message>
         <source>Deeply oversold — potential reversal zone</source>
@@ -11532,7 +11532,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">數值</translation>
+        <translation>數值</translation>
     </message>
     <message>
         <source>SIGNAL</source>
@@ -11563,7 +11563,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">即時</translation>
+        <translation>即時</translation>
     </message>
     <message>
         <source>⚠ TOKEN EXPIRED — click ACCOUNTS</source>
@@ -11679,7 +11679,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>Currency:</source>
-        <translation type="unfinished">貨幣:</translation>
+        <translation>貨幣：</translation>
     </message>
     <message>
         <source>Loading portfolios...</source>
@@ -11723,7 +11723,7 @@ Free key at: www.eia.gov/opendata/register.php</source>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">匯入</translation>
+        <translation>匯入</translation>
     </message>
     <message>
         <source>(no portfolios yet)</source>
@@ -11749,6 +11749,18 @@ Free key at: www.eia.gov/opendata/register.php</source>
         <source>Imported %1 holdings.</source>
         <translation>已匯入 %1 個持倉。</translation>
     </message>
+    <message>
+        <source>Failed to queue strategy</source>
+        <translation>策略排隊失敗</translation>
+    </message>
+    <message>
+        <source>Order cancelled</source>
+        <translation>訂單已取消</translation>
+    </message>
+    <message>
+        <source>Strategy queued for approval (%1 legs)</source>
+        <translation>策略已排隊等待核准（%1 條腿）</translation>
+    </message>
 </context>
 <context>
     <name>fincept::screens::EurostatPanel</name>
@@ -11764,7 +11776,7 @@ Source: Eurostat — EU statistical office</source>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">國家/地區</translation>
+        <translation>國家/地區</translation>
     </message>
     <message>
         <source>Fetching Eurostat: %1 — %2…</source>
@@ -11783,7 +11795,7 @@ Source: Eurostat — EU statistical office</source>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">匯入</translation>
+        <translation>匯入</translation>
     </message>
     <message>
         <source>Import XLSX/CSV file</source>
@@ -11823,7 +11835,7 @@ Source: Eurostat — EU statistical office</source>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">刪除</translation>
+        <translation>刪除</translation>
     </message>
     <message>
         <source>Delete current sheet</source>
@@ -11871,20 +11883,20 @@ CSV 匯出仍可透過工具列使用。</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">匯出 CSV</translation>
+        <translation>匯出 CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">CSV 檔案 (*.csv)</translation>
+        <translation>CSV 檔案 (*.csv)</translation>
     </message>
     <message>
         <source>Export failed</source>
-        <translation type="unfinished">匯出失敗</translation>
+        <translation>匯出失敗</translation>
     </message>
     <message>
         <source>Could not open file for writing:
 %1</source>
-        <translation type="unfinished">無法以寫入模式開啟檔案：
+        <translation>無法以寫入模式開啟檔案：
 %1</translation>
     </message>
     <message>
@@ -11959,7 +11971,7 @@ No API key required</source>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>UPLOAD FILES</source>
@@ -11971,7 +11983,7 @@ No API key required</source>
     </message>
     <message>
         <source>DELETE SELECTED</source>
-        <translation type="unfinished">刪除所選</translation>
+        <translation>刪除所選</translation>
     </message>
     <message>
         <source>CLEAR SELECTION</source>
@@ -12089,7 +12101,7 @@ from any screen. You can also upload files manually using the button above.</sou
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">儲存</translation>
+        <translation>儲存</translation>
     </message>
     <message>
         <source>DEL</source>
@@ -12121,7 +12133,7 @@ from any screen. You can also upload files manually using the button above.</sou
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
 </context>
 <context>
@@ -12460,7 +12472,7 @@ No API key required</source>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>PUBLISH POST</source>
@@ -12468,7 +12480,7 @@ No API key required</source>
     </message>
     <message>
         <source>EDIT PROFILE</source>
-        <translation type="unfinished">編輯個人資料</translation>
+        <translation>編輯個人資料</translation>
     </message>
     <message>
         <source>DISPLAY NAME</source>
@@ -12519,7 +12531,7 @@ No API key required</source>
     </message>
     <message>
         <source>TODAY</source>
-        <translation type="unfinished">今日</translation>
+        <translation>今日</translation>
     </message>
     <message>
         <source>  ▲  TRENDING POSTS</source>
@@ -12756,7 +12768,7 @@ fred.stlouisfed.org/docs/api/api_key.html</translation>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">國家/地區</translation>
+        <translation>國家/地區</translation>
     </message>
     <message>
         <source>CITY</source>
@@ -12816,11 +12828,11 @@ fred.stlouisfed.org/docs/api/api_key.html</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">就緒</translation>
+        <translation>就緒</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">載入中...</translation>
+        <translation>載入中…</translation>
     </message>
     <message>
         <source>%1 MAPPED / %2 LOADED</source>
@@ -12840,7 +12852,7 @@ API 中的總數：%3</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">錯誤</translation>
+        <translation>錯誤</translation>
     </message>
 </context>
 <context>
@@ -12874,7 +12886,7 @@ No API key required for any source</source>
     <name>fincept::screens::GovDataAustraliaPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← 返回</translation>
+        <translation>← 返回</translation>
     </message>
     <message>
         <source>AGENCIES</source>
@@ -12902,15 +12914,15 @@ No API key required for any source</source>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">名稱</translation>
+        <translation>名稱</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">描述</translation>
+        <translation>描述</translation>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">建立日期</translation>
+        <translation>建立日期</translation>
     </message>
     <message>
         <source>TITLE</source>
@@ -12926,7 +12938,7 @@ No API key required for any source</source>
     </message>
     <message>
         <source>RESOURCES</source>
-        <translation type="unfinished">資源</translation>
+        <translation>資源</translation>
     </message>
     <message>
         <source>MODIFIED</source>
@@ -12942,7 +12954,7 @@ No API key required for any source</source>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">開市</translation>
+        <translation>開啟</translation>
     </message>
     <message>
         <source>Loading Australian Government agencies…</source>
@@ -13018,14 +13030,14 @@ No API key required for any source</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataCongressPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← 返回</translation>
+        <translation>← 返回</translation>
     </message>
     <message>
         <source>BILLS</source>
@@ -13033,7 +13045,7 @@ No API key required for any source</source>
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">摘要</translation>
+        <translation>摘要</translation>
     </message>
     <message>
         <source>FETCH</source>
@@ -13049,7 +13061,7 @@ No API key required for any source</source>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>All Types</source>
@@ -13101,7 +13113,7 @@ No API key required for any source</source>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">日期</translation>
+        <translation>日期</translation>
     </message>
     <message>
         <source>BILL TYPE</source>
@@ -13141,14 +13153,14 @@ No API key required for any source</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataFrancePanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← 返回</translation>
+        <translation>← 返回</translation>
     </message>
     <message>
         <source>DATA SERVICES</source>
@@ -13184,7 +13196,7 @@ No API key required for any source</source>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">名稱</translation>
+        <translation>名稱</translation>
     </message>
     <message>
         <source>VIEWS</source>
@@ -13196,7 +13208,7 @@ No API key required for any source</source>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">建立日期</translation>
+        <translation>建立日期</translation>
     </message>
     <message>
         <source>TITLE</source>
@@ -13220,7 +13232,7 @@ No API key required for any source</source>
     </message>
     <message>
         <source>CODE</source>
-        <translation type="unfinished">區號</translation>
+        <translation>代碼</translation>
     </message>
     <message>
         <source>POSTAL</source>
@@ -13240,7 +13252,7 @@ No API key required for any source</source>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>Loading data services from data.gouv.fr…</source>
@@ -13316,14 +13328,14 @@ No API key required for any source</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataHKPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← 返回</translation>
+        <translation>← 返回</translation>
     </message>
     <message>
         <source>CATEGORIES</source>
@@ -13355,7 +13367,7 @@ No API key required for any source</source>
     </message>
     <message>
         <source>RESOURCES</source>
-        <translation type="unfinished">資源</translation>
+        <translation>資源</translation>
     </message>
     <message>
         <source>MODIFIED</source>
@@ -13363,7 +13375,7 @@ No API key required for any source</source>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">名稱</translation>
+        <translation>名稱</translation>
     </message>
     <message>
         <source>FORMAT</source>
@@ -13455,7 +13467,7 @@ Try searching by name using the search box above.</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
 </context>
 <context>
@@ -13498,7 +13510,7 @@ Try searching by name using the search box above.</source>
     </message>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← 返回</translation>
+        <translation>← 返回</translation>
     </message>
     <message>
         <source>DATASETS</source>
@@ -13534,7 +13546,7 @@ Try searching by name using the search box above.</source>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">名稱</translation>
+        <translation>名稱</translation>
     </message>
     <message>
         <source>FORMAT</source>
@@ -13546,7 +13558,7 @@ Try searching by name using the search box above.</source>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">開市</translation>
+        <translation>開啟</translation>
     </message>
     <message>
         <source>Loading %1…</source>
@@ -13606,15 +13618,15 @@ Try searching by name using the search box above.</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">匯出 CSV</translation>
+        <translation>匯出 CSV</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">CSV 檔案 (*.csv)</translation>
+        <translation>CSV 檔案 (*.csv)</translation>
     </message>
     <message>
         <source>✗ FAILED</source>
@@ -13663,7 +13675,7 @@ The selector shows all CKAN portals covered by the universal provider.</source>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">就緒</translation>
+        <translation>就緒</translation>
     </message>
 </context>
 <context>
@@ -13682,7 +13694,7 @@ The selector shows all CKAN portals covered by the universal provider.</source>
     </message>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">摘要</translation>
+        <translation>摘要</translation>
     </message>
     <message>
         <source>FETCH</source>
@@ -13702,11 +13714,11 @@ The selector shows all CKAN portals covered by the universal provider.</source>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">全部</translation>
+        <translation>全部</translation>
     </message>
     <message>
         <source>Bills</source>
@@ -13714,7 +13726,7 @@ The selector shows all CKAN portals covered by the universal provider.</source>
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">筆記</translation>
+        <translation>備註</translation>
     </message>
     <message>
         <source>Bonds</source>
@@ -13826,14 +13838,14 @@ The selector shows all CKAN portals covered by the universal provider.</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::GovDataUKPanel</name>
     <message>
         <source>← BACK</source>
-        <translation type="unfinished">← 返回</translation>
+        <translation>← 返回</translation>
     </message>
     <message>
         <source>PUBLISHERS</source>
@@ -13861,7 +13873,7 @@ The selector shows all CKAN portals covered by the universal provider.</source>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">名稱</translation>
+        <translation>名稱</translation>
     </message>
     <message>
         <source>TITLE</source>
@@ -13889,7 +13901,7 @@ The selector shows all CKAN portals covered by the universal provider.</source>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">開市</translation>
+        <translation>開啟</translation>
     </message>
     <message>
         <source>Loading UK Government publishers…</source>
@@ -13961,7 +13973,7 @@ The selector shows all CKAN portals covered by the universal provider.</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
 </context>
 <context>
@@ -14004,7 +14016,7 @@ The selector shows all CKAN portals covered by the universal provider.</source>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">日期</translation>
+        <translation>日期</translation>
     </message>
     <message>
         <source>Resources</source>
@@ -14055,7 +14067,7 @@ The selector shows all CKAN portals covered by the universal provider.</source>
     </message>
     <message>
         <source>QUICK ACTIONS</source>
-        <translation type="unfinished">快速操作</translation>
+        <translation>快速操作</translation>
     </message>
     <message>
         <source>Common tasks you can do right now</source>
@@ -14274,7 +14286,7 @@ The selector shows all CKAN portals covered by the universal provider.</source>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">總額</translation>
+        <translation>總額</translation>
     </message>
     <message>
         <source>$FNCPT PRICE</source>
@@ -14321,11 +14333,11 @@ The selector shows all CKAN portals covered by the universal provider.</source>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>COPIED</source>
-        <translation type="unfinished">已複製</translation>
+        <translation>已複製</translation>
     </message>
     <message>
         <source>Solana wallet</source>
@@ -14357,11 +14369,11 @@ The selector shows all CKAN portals covered by the universal provider.</source>
     </message>
     <message>
         <source>CONNECTED</source>
-        <translation type="unfinished">已連線</translation>
+        <translation>已連線</translation>
     </message>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">持倉</translation>
+        <translation>持倉</translation>
     </message>
     <message>
         <source>POLL</source>
@@ -14424,7 +14436,7 @@ All countries: ALL</source>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">國家/地區</translation>
+        <translation>國家/地區</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -14463,7 +14475,7 @@ All countries: ALL</source>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">國家/地區</translation>
+        <translation>國家/地區</translation>
     </message>
     <message>
         <source>Select an indicator</source>
@@ -14579,11 +14591,11 @@ You can now import it using the BROWSE button.</source>
     </message>
     <message>
         <source>Apply</source>
-        <translation type="unfinished">套用</translation>
+        <translation>套用</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>Warning: already used by "%1"</source>
@@ -14633,7 +14645,7 @@ You can now import it using the BROWSE button.</source>
     </message>
     <message>
         <source>New Window</source>
-        <translation type="unfinished">新視窗</translation>
+        <translation>新視窗</translation>
     </message>
     <message>
         <source>Open Saved Layout…</source>
@@ -14814,7 +14826,7 @@ Range 1-200. Raise for long workflows (e.g. populating multi-section reports).</
     </message>
     <message>
         <source>API KEY</source>
-        <translation type="unfinished">API 金鑰</translation>
+        <translation>API 金鑰</translation>
     </message>
     <message>
         <source>BASE URL (custom endpoint)</source>
@@ -15296,7 +15308,7 @@ to reset your PIN and regain access.</source>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">就緒</translation>
+        <translation>就緒</translation>
     </message>
     <message>
         <source>CORPORATE FINANCE TOOLKIT</source>
@@ -16454,7 +16466,7 @@ to reset your PIN and regain access.</source>
     <name>fincept::screens::MaritimeScreen</name>
     <message>
         <source>READY</source>
-        <translation type="unfinished">就緒</translation>
+        <translation>就緒</translation>
     </message>
     <message>
         <source>FINCEPT MARITIME INTELLIGENCE</source>
@@ -16610,7 +16622,7 @@ to reset your PIN and regain access.</source>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>▾ ADVANCED: RAW BBOX</source>
@@ -16780,11 +16792,11 @@ to reset your PIN and regain access.</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">錯誤</translation>
+        <translation>錯誤</translation>
     </message>
     <message>
         <source>No ports found.</source>
@@ -16869,11 +16881,11 @@ to reset your PIN and regain access.</source>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">名稱</translation>
+        <translation>名稱</translation>
     </message>
     <message>
         <source>LAST</source>
-        <translation type="unfinished">最新</translation>
+        <translation>最新</translation>
     </message>
     <message>
         <source>CHG</source>
@@ -16881,15 +16893,15 @@ to reset your PIN and regain access.</source>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">變動%</translation>
+        <translation>變動%</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">最高</translation>
+        <translation>最高</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">最低</translation>
+        <translation>最低</translation>
     </message>
     <message>
         <source>VOL</source>
@@ -16905,7 +16917,7 @@ to reset your PIN and regain access.</source>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">開市</translation>
+        <translation>開市</translation>
     </message>
     <message>
         <source>TICKER</source>
@@ -17173,7 +17185,7 @@ to reset your PIN and regain access.</source>
     <name>fincept::screens::McpServersScreen</name>
     <message>
         <source>MCP SERVERS</source>
-        <translation type="unfinished">MCP 伺服器</translation>
+        <translation>MCP 伺服器</translation>
     </message>
     <message>
         <source>MARKETPLACE</source>
@@ -17185,7 +17197,7 @@ to reset your PIN and regain access.</source>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">工具</translation>
+        <translation>工具</translation>
     </message>
     <message>
         <source>Search...</source>
@@ -17241,7 +17253,7 @@ to reset your PIN and regain access.</source>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">描述</translation>
+        <translation>描述</translation>
     </message>
     <message>
         <source>No servers match the current filter.</source>
@@ -17257,7 +17269,7 @@ to reset your PIN and regain access.</source>
     </message>
     <message>
         <source>ADD</source>
-        <translation type="unfinished">新增</translation>
+        <translation>新增</translation>
     </message>
     <message>
         <source>● RUNNING</source>
@@ -17416,7 +17428,7 @@ Use MARKETPLACE to add one, or click ADD CUSTOM MCP SERVER below.</source>
     </message>
     <message>
         <source>Tools</source>
-        <translation type="unfinished">工具</translation>
+        <translation>工具</translation>
     </message>
     <message>
         <source>%1 internal tools active</source>
@@ -17605,7 +17617,7 @@ Click '+ Add' to add one.</source>
     <name>fincept::screens::NewsCommandBar</name>
     <message>
         <source>Auto-refresh interval</source>
-        <translation type="unfinished">自動重新整理間隔</translation>
+        <translation>自動重新整理間隔</translation>
     </message>
     <message>
         <source>MANUAL</source>
@@ -17681,7 +17693,7 @@ Click '+ Add' to add one.</source>
     </message>
     <message>
         <source>AI</source>
-        <translation type="unfinished">AI</translation>
+        <translation>AI</translation>
     </message>
     <message>
         <source>SRC</source>
@@ -17689,7 +17701,7 @@ Click '+ Add' to add one.</source>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>0 WATCHES</source>
@@ -17697,7 +17709,7 @@ Click '+ Add' to add one.</source>
     </message>
     <message>
         <source>OFFLINE</source>
-        <translation type="unfinished">離線</translation>
+        <translation>離線</translation>
     </message>
     <message>
         <source>...</source>
@@ -17740,7 +17752,7 @@ Click '+ Add' to add one.</source>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">開市</translation>
+        <translation>開啟</translation>
     </message>
     <message>
         <source>COPY URL</source>
@@ -17756,7 +17768,7 @@ Click '+ Add' to add one.</source>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">儲存</translation>
+        <translation>儲存</translation>
     </message>
     <message>
         <source>Save article to File Manager</source>
@@ -17776,7 +17788,7 @@ Click '+ Add' to add one.</source>
     </message>
     <message>
         <source>COPIED</source>
-        <translation type="unfinished">已複製</translation>
+        <translation>已複製</translation>
     </message>
     <message>
         <source>ANALYZING...</source>
@@ -17792,7 +17804,7 @@ Click '+ Add' to add one.</source>
     </message>
     <message>
         <source>AI ANALYSIS</source>
-        <translation type="unfinished">AI 分析</translation>
+        <translation>AI 分析</translation>
     </message>
     <message>
         <source>KEY POINTS</source>
@@ -18075,15 +18087,15 @@ Click '+ Add' to add one.</source>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">刪除</translation>
+        <translation>刪除</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">儲存</translation>
+        <translation>儲存</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>EXPORT</source>
@@ -18281,7 +18293,7 @@ Click '+ Add' to add one.</source>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">國家/地區</translation>
+        <translation>國家/地區</translation>
     </message>
     <message>
         <source>FREQ</source>
@@ -18414,7 +18426,7 @@ Country examples: United States, China, Germany, India, Japan, World</source>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">國家/地區</translation>
+        <translation>國家/地區</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -18441,67 +18453,67 @@ Country examples: United States, China, Germany, India, Japan, World</source>
     <name>fincept::screens::PerformanceRiskView</name>
     <message>
         <source>NAV PERFORMANCE (FROM SNAPSHOTS)</source>
-        <translation type="unfinished">NAV表現(來自快照)</translation>
+        <translation>NAV 表現（來自快照）</translation>
     </message>
     <message>
         <source>  RISK METRICS</source>
-        <translation type="unfinished">  風險指標</translation>
+        <translation>  風險指標</translation>
     </message>
     <message>
         <source>SHARPE RATIO</source>
-        <translation type="unfinished">夏普比率</translation>
+        <translation>夏普比率</translation>
     </message>
     <message>
         <source>Risk-adjusted return (annualised)</source>
-        <translation type="unfinished">風險調整後回報(年化)</translation>
+        <translation>風險調整後回報（年化）</translation>
     </message>
     <message>
         <source>SORTINO RATIO</source>
-        <translation type="unfinished">索提諾比率</translation>
+        <translation>索提諾比率</translation>
     </message>
     <message>
         <source>Downside risk-adjusted return</source>
-        <translation type="unfinished">下行風險調整後回報</translation>
+        <translation>下行風險調整後回報</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">貝塔</translation>
+        <translation>貝塔</translation>
     </message>
     <message>
         <source>Sensitivity vs SPY (snapshot regression)</source>
-        <translation type="unfinished">相對SPY的敏感度(快照回歸)</translation>
+        <translation>相對 SPY 的敏感度（快照回歸）</translation>
     </message>
     <message>
         <source>ALPHA</source>
-        <translation type="unfinished">阿爾法</translation>
+        <translation>阿爾法</translation>
     </message>
     <message>
         <source>VOLATILITY</source>
-        <translation type="unfinished">波幅</translation>
+        <translation>波幅</translation>
     </message>
     <message>
         <source>Annualised from daily returns</source>
-        <translation type="unfinished">由日回報年化得出</translation>
+        <translation>由日回報年化得出</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">最大回撤</translation>
+        <translation>最大回撤</translation>
     </message>
     <message>
         <source>Peak-to-trough from snapshots</source>
-        <translation type="unfinished">由快照得出的峰至谷</translation>
+        <translation>由快照得出的峰至谷</translation>
     </message>
     <message>
         <source>VALUE AT RISK (95%)</source>
-        <translation type="unfinished">風險價值 (VaR) (95%)</translation>
+        <translation>風險價值 (VaR) (95%)</translation>
     </message>
     <message>
         <source>CONDITIONAL VaR</source>
-        <translation type="unfinished">條件VaR</translation>
+        <translation>條件 VaR</translation>
     </message>
     <message>
         <source>Expected shortfall (95%)</source>
-        <translation type="unfinished">預期短缺 (95%)</translation>
+        <translation>預期短缺 (95%)</translation>
     </message>
     <message>
         <source>Jensen's alpha vs benchmark (CAPM)</source>
@@ -18656,7 +18668,7 @@ Country examples: United States, China, Germany, India, Japan, World</source>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>Status</source>
@@ -18664,7 +18676,7 @@ Country examples: United States, China, Germany, India, Japan, World</source>
     </message>
     <message>
         <source>+ ADD</source>
-        <translation type="unfinished">+ 新增</translation>
+        <translation>+ 新增</translation>
     </message>
     <message>
         <source>- REMOVE</source>
@@ -18683,87 +18695,87 @@ Country examples: United States, China, Germany, India, Japan, World</source>
     <name>fincept::screens::PlanningView</name>
     <message>
         <source>RETIREMENT</source>
-        <translation type="unfinished">退休</translation>
+        <translation>退休</translation>
     </message>
     <message>
         <source>GOALS</source>
-        <translation type="unfinished">目標</translation>
+        <translation>目標</translation>
     </message>
     <message>
         <source>SAVINGS</source>
-        <translation type="unfinished">儲蓄</translation>
+        <translation>儲蓄</translation>
     </message>
     <message>
         <source>RETIREMENT CALCULATOR</source>
-        <translation type="unfinished">退休計算機</translation>
+        <translation>退休計算機</translation>
     </message>
     <message>
         <source>Current Age:</source>
-        <translation type="unfinished">現時年齡:</translation>
+        <translation>現時年齡：</translation>
     </message>
     <message>
         <source>Retire Age:</source>
-        <translation type="unfinished">退休年齡:</translation>
+        <translation>退休年齡：</translation>
     </message>
     <message>
         <source>Annual Expense:</source>
-        <translation type="unfinished">年度開支:</translation>
+        <translation>年度開支：</translation>
     </message>
     <message>
         <source>Monthly Savings:</source>
-        <translation type="unfinished">每月儲蓄:</translation>
+        <translation>每月儲蓄：</translation>
     </message>
     <message>
         <source>Exp. Return:</source>
-        <translation type="unfinished">預期回報:</translation>
+        <translation>預期回報：</translation>
     </message>
     <message>
         <source>Inflation:</source>
-        <translation type="unfinished">通脹:</translation>
+        <translation>通脹：</translation>
     </message>
     <message>
         <source>Withdrawal Rate:</source>
-        <translation type="unfinished">提取率:</translation>
+        <translation>提取率：</translation>
     </message>
     <message>
         <source>CALCULATE</source>
-        <translation type="unfinished">計算</translation>
+        <translation>計算</translation>
     </message>
     <message>
         <source>PROJECTION RESULTS</source>
-        <translation type="unfinished">預測結果</translation>
+        <translation>預測結果</translation>
     </message>
     <message>
         <source>YEARS TO RETIREMENT</source>
-        <translation type="unfinished">距離退休年數</translation>
+        <translation>距離退休年數</translation>
     </message>
     <message>
         <source>TARGET NEST EGG</source>
-        <translation type="unfinished">目標退休金</translation>
+        <translation>目標退休金</translation>
     </message>
     <message>
         <source>PROJECTED VALUE</source>
-        <translation type="unfinished">預測值</translation>
+        <translation>預測值</translation>
     </message>
     <message>
         <source>SURPLUS / GAP</source>
-        <translation type="unfinished">盈餘 / 缺口</translation>
+        <translation>盈餘 / 缺口</translation>
     </message>
     <message>
         <source>GOAL-BASED PLANNING</source>
-        <translation type="unfinished">目標為本規劃</translation>
+        <translation>目標為本規劃</translation>
     </message>
     <message>
         <source>SAVINGS RATE ANALYSIS</source>
-        <translation type="unfinished">儲蓄率分析</translation>
+        <translation>儲蓄率分析</translation>
     </message>
     <message>
         <source>✓ On track! Your projected retirement fund of %1 %2 exceeds your target of %1 %3 by %1 %4.</source>
-        <translation type="unfinished">✓ 進度理想!你的預測退休金 %1 %2 超出目標 %1 %3,盈餘 %1 %4。</translation>
+        <translation>✓ 進度理想!你的預測退休金 %1 %2 超出目標 %1 %3,盈餘 %1 %4。</translation>
     </message>
     <message>
         <source>⚠ Shortfall of %1 %2. Consider increasing monthly savings by %1 %3 to close the gap.</source>
-        <translation type="unfinished">⚠ 短缺 %1 %2。建議每月增加儲蓄 %1 %3 以填補缺口。</translation>
+        <translation>⚠ 短缺 %1 %2。建議每月增加儲蓄 %1 %3 以填補缺口。</translation>
     </message>
     <message>
         <source>⚙  OPTIMIZE PORTFOLIO FOR THIS GOAL</source>
@@ -19704,155 +19716,155 @@ Open Settings → LLM Configuration, add a provider with an API key, then try ag
     <name>fincept::screens::PortfolioOptimizationView</name>
     <message>
         <source>OPTIMIZE</source>
-        <translation type="unfinished">優化</translation>
+        <translation>優化</translation>
     </message>
     <message>
         <source>FRONTIER</source>
-        <translation type="unfinished">前沿</translation>
+        <translation>前沿</translation>
     </message>
     <message>
         <source>ALLOCATION</source>
-        <translation type="unfinished">配置</translation>
+        <translation>配置</translation>
     </message>
     <message>
         <source>STRATEGIES</source>
-        <translation type="unfinished">策略</translation>
+        <translation>策略</translation>
     </message>
     <message>
         <source>COMPARE</source>
-        <translation type="unfinished">比較</translation>
+        <translation>比較</translation>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">回測</translation>
+        <translation>回測</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">風險</translation>
+        <translation>風險</translation>
     </message>
     <message>
         <source>STRESS</source>
-        <translation type="unfinished">壓力</translation>
+        <translation>壓力</translation>
     </message>
     <message>
         <source>B-L MODEL</source>
-        <translation type="unfinished">B-L 模型</translation>
+        <translation>B-L 模型</translation>
     </message>
     <message>
         <source>METHOD:</source>
-        <translation type="unfinished">方法:</translation>
+        <translation>方法：</translation>
     </message>
     <message>
         <source>RETURNS:</source>
-        <translation type="unfinished">回報:</translation>
+        <translation>回報：</translation>
     </message>
     <message>
         <source>RISK MODEL:</source>
-        <translation type="unfinished">風險模型:</translation>
+        <translation>風險模型：</translation>
     </message>
     <message>
         <source>▶ RUN OPTIMIZATION</source>
-        <translation type="unfinished">▶ 執行優化</translation>
+        <translation>▶ 執行優化</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>CURRENT WT%</source>
-        <translation type="unfinished">當前 WT%</translation>
+        <translation>當前權重%</translation>
     </message>
     <message>
         <source>OPTIMAL WT%</source>
-        <translation type="unfinished">最佳 WT%</translation>
+        <translation>最佳權重%</translation>
     </message>
     <message>
         <source>CHANGE</source>
-        <translation type="unfinished">升跌</translation>
+        <translation>升跌</translation>
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">操作</translation>
+        <translation>操作</translation>
     </message>
     <message>
         <source>EFFICIENT FRONTIER</source>
-        <translation type="unfinished">有效前沿</translation>
+        <translation>有效前沿</translation>
     </message>
     <message>
         <source>Run optimization on the OPTIMIZE tab to generate the efficient frontier.</source>
-        <translation type="unfinished">在「優化」分頁執行優化,以生成有效前沿。</translation>
+        <translation>在「優化」分頁執行優化,以生成有效前沿。</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">權重</translation>
+        <translation>權重</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">數值</translation>
+        <translation>數值</translation>
     </message>
     <message>
         <source>VS EQUAL WT</source>
-        <translation type="unfinished">對比等權重</translation>
+        <translation>對比等權重</translation>
     </message>
     <message>
         <source>STRATEGY COMPARISON  (populated after optimization)</source>
-        <translation type="unfinished">策略比較  (優化後填入)</translation>
+        <translation>策略比較  （優化後填入）</translation>
     </message>
     <message>
         <source>Run optimization on the OPTIMIZE tab.
 All 5 strategies will be compared automatically.</source>
-        <translation type="unfinished">在「優化」分頁執行優化。
-所有5項策略將自動進行比較。</translation>
+        <translation>在「優化」分頁執行優化。
+所有 5 項策略將自動進行比較。</translation>
     </message>
     <message>
         <source>STRATEGY</source>
-        <translation type="unfinished">策略</translation>
+        <translation>策略</translation>
     </message>
     <message>
         <source>EXP. RETURN</source>
-        <translation type="unfinished">預期回報</translation>
+        <translation>預期回報</translation>
     </message>
     <message>
         <source>VOLATILITY</source>
-        <translation type="unfinished">波幅</translation>
+        <translation>波幅</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">夏普</translation>
+        <translation>夏普</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">描述</translation>
+        <translation>描述</translation>
     </message>
     <message>
         <source>WEIGHT COMPARISON  (all methods, per symbol)</source>
-        <translation type="unfinished">權重比較  (所有方法,逐個代號)</translation>
+        <translation>權重比較  （所有方法,逐個代號）</translation>
     </message>
     <message>
         <source>Run optimization on the OPTIMIZE tab to populate this comparison.</source>
-        <translation type="unfinished">在「優化」分頁執行優化以填入此比較。</translation>
+        <translation>在「優化」分頁執行優化以填入此比較。</translation>
     </message>
     <message>
         <source>BACKTEST RESULTS</source>
-        <translation type="unfinished">回測結果</translation>
+        <translation>回測結果</translation>
     </message>
     <message>
         <source>Run an optimization first, then backtest the optimal weights
 against historical data to evaluate out-of-sample performance.</source>
-        <translation type="unfinished">先執行優化,然後以歷史數據回測最佳權重
+        <translation>先執行優化,然後以歷史數據回測最佳權重
 以評估樣本外表現。</translation>
     </message>
     <message>
         <source>RISK DECOMPOSITION</source>
-        <translation type="unfinished">風險分解</translation>
+        <translation>風險分解</translation>
     </message>
     <message>
         <source>BLACK-LITTERMAN MODEL</source>
-        <translation type="unfinished">Black-Litterman 模型</translation>
+        <translation>Black-Litterman 模型</translation>
     </message>
     <message>
         <source>Running optimization…</source>
-        <translation type="unfinished">正在執行優化…</translation>
+        <translation>正在執行優化…</translation>
     </message>
     <message>
         <source>BACKTEST PORTFOLIO</source>
@@ -19882,7 +19894,7 @@ historical performance, or open the full Backtesting terminal.</source>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">就緒</translation>
+        <translation>就緒</translation>
     </message>
     <message>
         <source>BACK</source>
@@ -19904,7 +19916,7 @@ Run optimization on the OPTIMIZE tab to compute it from the covariance matrix.</
     </message>
     <message>
         <source>RISK CONTRIB</source>
-        <translation type="unfinished">風險貢獻</translation>
+        <translation>風險貢獻</translation>
     </message>
     <message>
         <source>STRESS SCENARIOS</source>
@@ -19918,7 +19930,7 @@ Select a portfolio to see estimated impact per scenario.</source>
     </message>
     <message>
         <source>SCENARIO</source>
-        <translation type="unfinished">情景</translation>
+        <translation>情景</translation>
     </message>
     <message>
         <source>IMPACT</source>
@@ -20475,7 +20487,7 @@ Expected format:
     </message>
     <message>
         <source>SECURITY</source>
-        <translation type="unfinished">安全</translation>
+        <translation>安全</translation>
     </message>
     <message>
         <source>Protect accounts, detect fraud, enforce terms of service, and ensure platform integrity</source>
@@ -20583,7 +20595,7 @@ Expected format:
     </message>
     <message>
         <source>CONTACT US</source>
-        <translation type="unfinished">聯絡我們</translation>
+        <translation>聯絡我們</translation>
     </message>
     <message>
         <source>Privacy Officer: support@fincept.in</source>
@@ -20794,7 +20806,7 @@ Expected format:
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">日期</translation>
+        <translation>日期</translation>
     </message>
     <message>
         <source>REQUESTS</source>
@@ -20834,7 +20846,7 @@ Expected format:
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">狀態</translation>
+        <translation>狀態</translation>
     </message>
     <message>
         <source>SUBSCRIPTION</source>
@@ -20994,7 +21006,7 @@ to edit properties</source>
     </message>
     <message>
         <source>Rows:</source>
-        <translation type="unfinished">行數:</translation>
+        <translation>行數：</translation>
     </message>
     <message>
         <source>Cols:</source>
@@ -21201,7 +21213,7 @@ Heading components.</source>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">全部</translation>
+        <translation>全部</translation>
     </message>
     <message>
         <source>Trading</source>
@@ -21213,7 +21225,7 @@ Heading components.</source>
     </message>
     <message>
         <source>Refresh</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>Install Missing</source>
@@ -21265,7 +21277,7 @@ Heading components.</source>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">確定</translation>
+        <translation>確定</translation>
     </message>
     <message>
         <source>Install</source>
@@ -21390,11 +21402,11 @@ Example: {"spot": 100, "strike": 105, "risk_free_rate": 0.05}</source>
     </message>
     <message>
         <source>(empty response)</source>
-        <translation type="unfinished">(空白回應)</translation>
+        <translation>（空白回應）</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">確定</translation>
+        <translation>確定</translation>
     </message>
     <message>
         <source>Field</source>
@@ -21563,15 +21575,15 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>YES</source>
-        <translation type="unfinished">是</translation>
+        <translation>是</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">否</translation>
+        <translation>否</translation>
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">操作</translation>
+        <translation>操作</translation>
     </message>
     <message>
         <source>CLASS</source>
@@ -21643,7 +21655,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>Quantity</source>
@@ -21791,7 +21803,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>CREATED</source>
-        <translation type="unfinished">建立日期</translation>
+        <translation>建立日期</translation>
     </message>
     <message>
         <source>Schedule created</source>
@@ -21863,7 +21875,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">狀態</translation>
+        <translation>狀態</translation>
     </message>
     <message>
         <source>STAGES</source>
@@ -21967,11 +21979,11 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>SKEWNESS</source>
-        <translation type="unfinished">偏度</translation>
+        <translation>偏度</translation>
     </message>
     <message>
         <source>KURTOSIS</source>
-        <translation type="unfinished">峰度</translation>
+        <translation>峰度</translation>
     </message>
     <message>
         <source>p-VALUE</source>
@@ -21983,7 +21995,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">日期</translation>
+        <translation>日期</translation>
     </message>
     <message>
         <source>IC</source>
@@ -22023,7 +22035,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>Win Rate</source>
-        <translation type="unfinished">勝率</translation>
+        <translation>勝率</translation>
     </message>
     <message>
         <source>L/S Sharpe=%1  spread=%2%</source>
@@ -22031,15 +22043,15 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>VOLATILITY</source>
-        <translation type="unfinished">波幅</translation>
+        <translation>波幅</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">最大回撤</translation>
+        <translation>最大回撤</translation>
     </message>
     <message>
         <source>BETA</source>
-        <translation type="unfinished">貝塔</translation>
+        <translation>貝塔</translation>
     </message>
     <message>
         <source>TRACKING ERROR</source>
@@ -22147,7 +22159,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">夏普</translation>
+        <translation>夏普</translation>
     </message>
     <message>
         <source>MAX DD</source>
@@ -22167,7 +22179,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">勝率</translation>
+        <translation>勝率</translation>
     </message>
     <message>
         <source>BEST DAY</source>
@@ -22179,7 +22191,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>ALPHA</source>
-        <translation type="unfinished">阿爾法</translation>
+        <translation>阿爾法</translation>
     </message>
     <message>
         <source>Annual %1%  Sharpe %2  MaxDD %3%</source>
@@ -22191,11 +22203,11 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">描述</translation>
+        <translation>描述</translation>
     </message>
     <message>
         <source>↓ see below</source>
@@ -22203,7 +22215,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>EXP. RETURN</source>
-        <translation type="unfinished">預期回報</translation>
+        <translation>預期回報</translation>
     </message>
     <message>
         <source>EXP. VOL</source>
@@ -22219,7 +22231,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>REBALANCE</source>
-        <translation type="unfinished">再平衡</translation>
+        <translation>再平衡</translation>
     </message>
     <message>
         <source>ASSETS</source>
@@ -22243,7 +22255,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>BENCHMARK</source>
-        <translation type="unfinished">基準</translation>
+        <translation>基準</translation>
     </message>
     <message>
         <source>ACTIVE SHARE</source>
@@ -22405,11 +22417,11 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>BACKTEST RESULTS</source>
-        <translation type="unfinished">回測結果</translation>
+        <translation>回測結果</translation>
     </message>
     <message>
         <source>TOTAL RETURN</source>
-        <translation type="unfinished">總回報</translation>
+        <translation>總回報</translation>
     </message>
     <message>
         <source>%1 final</source>
@@ -22421,7 +22433,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>SHARPE RATIO</source>
-        <translation type="unfinished">夏普比率</translation>
+        <translation>夏普比率</translation>
     </message>
     <message>
         <source>Excellent</source>
@@ -22449,7 +22461,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">投資組合</translation>
+        <translation>投資組合</translation>
     </message>
     <message>
         <source>EQUITY CURVE</source>
@@ -22629,7 +22641,7 @@ e.g. {"ticker":"AAPL"}</source>
     </message>
     <message>
         <source>DIRECTION</source>
-        <translation type="unfinished">方向</translation>
+        <translation>方向</translation>
     </message>
     <message>
         <source>SLOPE</source>
@@ -22871,7 +22883,7 @@ e.g. "Build a quantitative equity strategy for mid-cap US stocks"</source>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">全部</translation>
+        <translation>全部</translation>
     </message>
     <message>
         <source>running</source>
@@ -22891,7 +22903,7 @@ e.g. "Build a quantitative equity strategy for mid-cap US stocks"</source>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>Task ID...</source>
@@ -22915,7 +22927,7 @@ e.g. "Build a quantitative equity strategy for mid-cap US stocks"</source>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>Status</source>
@@ -23499,7 +23511,7 @@ e.g. "Build a quantitative equity strategy for mid-cap US stocks"</source>
     </message>
     <message>
         <source>Volatility</source>
-        <translation type="unfinished">波幅</translation>
+        <translation>波幅</translation>
     </message>
     <message>
         <source>Option Type</source>
@@ -23827,7 +23839,7 @@ e.g. "Build a quantitative equity strategy for mid-cap US stocks"</source>
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">筆記</translation>
+        <translation>備註</translation>
     </message>
     <message>
         <source>Parametric (Variance-Covariance)</source>
@@ -23971,7 +23983,7 @@ e.g. "Build a quantitative equity strategy for mid-cap US stocks"</source>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>e.g. BTC/USDT, ETH/USDT</source>
@@ -24631,7 +24643,7 @@ e.g. "Build a quantitative equity strategy for mid-cap US stocks"</source>
     </message>
     <message>
         <source>EFFICIENT FRONTIER</source>
-        <translation type="unfinished">有效前沿</translation>
+        <translation>有效前沿</translation>
     </message>
     <message>
         <source>Eff. Frontier</source>
@@ -25097,7 +25109,7 @@ pydantic-ai MCP：%2
     </message>
     <message>
         <source>Complete</source>
-        <translation type="unfinished">完成</translation>
+        <translation>完成</translation>
     </message>
     <message>
         <source>
@@ -26465,11 +26477,11 @@ KPSS：H₀ = 平穩。p ≥ 0.05 ⇒ 平穩。
     </message>
     <message>
         <source>First</source>
-        <translation type="unfinished">名</translation>
+        <translation>名字</translation>
     </message>
     <message>
         <source>Last</source>
-        <translation type="unfinished">姓</translation>
+        <translation>姓氏</translation>
     </message>
     <message>
         <source>FORECAST BY STEP</source>
@@ -26597,7 +26609,7 @@ KPSS：H₀ = 平穩。p ≥ 0.05 ⇒ 平穩。
     </message>
     <message>
         <source>METHOD</source>
-        <translation type="unfinished">方法</translation>
+        <translation>方法</translation>
     </message>
     <message>
         <source>TRAIN</source>
@@ -26621,7 +26633,7 @@ KPSS：H₀ = 平穩。p ≥ 0.05 ⇒ 平穩。
     </message>
     <message>
         <source>FEATURES</source>
-        <translation type="unfinished">功能</translation>
+        <translation>功能</translation>
     </message>
     <message>
         <source>TRAIN / TEST</source>
@@ -26861,7 +26873,7 @@ KPSS：H₀ = 平穩。p ≥ 0.05 ⇒ 平穩。
     </message>
     <message>
         <source>DISTRIBUTION</source>
-        <translation type="unfinished">分佈</translation>
+        <translation>分佈</translation>
     </message>
     <message>
         <source>POP MEAN</source>
@@ -27665,7 +27677,7 @@ KPSS：H₀ = 平穩。p ≥ 0.05 ⇒ 平穩。
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">確定</translation>
+        <translation>確定</translation>
     </message>
     <message>
         <source>Online model created</source>
@@ -27697,7 +27709,7 @@ KPSS：H₀ = 平穩。p ≥ 0.05 ⇒ 平穩。
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">錯誤</translation>
+        <translation>錯誤</translation>
     </message>
     <message>
         <source>ABS ERROR</source>
@@ -27857,7 +27869,7 @@ KPSS：H₀ = 平穩。p ≥ 0.05 ⇒ 平穩。
     </message>
     <message>
         <source>WARNING</source>
-        <translation type="unfinished">警告</translation>
+        <translation>警告</translation>
     </message>
     <message>
         <source>PRESENT</source>
@@ -27881,7 +27893,7 @@ KPSS：H₀ = 平穩。p ≥ 0.05 ⇒ 平穩。
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>%1 instrument(s)  market=%2</source>
@@ -27897,7 +27909,7 @@ KPSS：H₀ = 平穩。p ≥ 0.05 ⇒ 平穩。
     </message>
     <message>
         <source>LAST</source>
-        <translation type="unfinished">最新</translation>
+        <translation>最新</translation>
     </message>
     <message>
         <source>%1 trading day(s)</source>
@@ -27909,7 +27921,7 @@ KPSS：H₀ = 平穩。p ≥ 0.05 ⇒ 平穩。
     </message>
     <message>
         <source>EMPTY</source>
-        <translation type="unfinished">空白</translation>
+        <translation>空白</translation>
     </message>
     <message>
         <source>LOADED</source>
@@ -27921,7 +27933,7 @@ KPSS：H₀ = 平穩。p ≥ 0.05 ⇒ 平穩。
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">總額</translation>
+        <translation>總額</translation>
     </message>
     <message>
         <source>TYPES</source>
@@ -27937,11 +27949,11 @@ KPSS：H₀ = 平穩。p ≥ 0.05 ⇒ 平穩。
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">就緒</translation>
+        <translation>就緒</translation>
     </message>
     <message>
         <source>VERSION</source>
-        <translation type="unfinished">版本</translation>
+        <translation>版本</translation>
     </message>
     <message>
         <source>HANDLERS</source>
@@ -27949,7 +27961,7 @@ KPSS：H₀ = 平穩。p ≥ 0.05 ⇒ 平穩。
     </message>
     <message>
         <source>STRATEGIES</source>
-        <translation type="unfinished">策略</translation>
+        <translation>策略</translation>
     </message>
     <message>
         <source>MODELS AVAIL</source>
@@ -28005,7 +28017,7 @@ KPSS：H₀ = 平穩。p ≥ 0.05 ⇒ 平穩。
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">指標</translation>
+        <translation>指標</translation>
     </message>
     <message>
         <source>Trained: %1</source>
@@ -28160,325 +28172,325 @@ KPSS：H₀ = 平穩。p ≥ 0.05 ⇒ 平穩。
     <name>fincept::screens::QuantStatsView</name>
     <message>
         <source>QUANTSTATS ANALYSIS</source>
-        <translation type="unfinished">QuantStats 分析</translation>
+        <translation>QuantStats 分析</translation>
     </message>
     <message>
         <source>▶ RUN QUANTSTATS</source>
-        <translation type="unfinished">▶ 執行 QUANTSTATS</translation>
+        <translation>▶ 執行 QuantStats</translation>
     </message>
     <message>
         <source>KEY PERFORMANCE INDICATORS</source>
-        <translation type="unfinished">關鍵績效指標</translation>
+        <translation>關鍵績效指標</translation>
     </message>
     <message>
         <source>METRIC</source>
-        <translation type="unfinished">指標</translation>
+        <translation>指標</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">數值</translation>
+        <translation>數值</translation>
     </message>
     <message>
         <source>BENCHMARK</source>
-        <translation type="unfinished">基準</translation>
+        <translation>基準</translation>
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">指標</translation>
+        <translation>指標</translation>
     </message>
     <message>
         <source>Run QuantStats Analysis for return distribution</source>
-        <translation type="unfinished">執行 QuantStats 分析以取得回報分佈</translation>
+        <translation>執行 QuantStats 分析以取得回報分佈</translation>
     </message>
     <message>
         <source>RETURNS</source>
-        <translation type="unfinished">回報</translation>
+        <translation>回報</translation>
     </message>
     <message>
         <source>Run QuantStats Analysis for drawdown metrics</source>
-        <translation type="unfinished">執行 QuantStats 分析以取得回撤指標</translation>
+        <translation>執行 QuantStats 分析以取得回撤指標</translation>
     </message>
     <message>
         <source>DRAWDOWN</source>
-        <translation type="unfinished">回撤</translation>
+        <translation>回撤</translation>
     </message>
     <message>
         <source>Run QuantStats Analysis for rolling metrics</source>
-        <translation type="unfinished">執行 QuantStats 分析以取得滾動指標</translation>
+        <translation>執行 QuantStats 分析以取得滾動指標</translation>
     </message>
     <message>
         <source>ROLLING</source>
-        <translation type="unfinished">滾動</translation>
+        <translation>滾動</translation>
     </message>
     <message>
         <source>MONTE CARLO SIMULATION</source>
-        <translation type="unfinished">蒙地卡羅模擬</translation>
+        <translation>蒙地卡羅模擬</translation>
     </message>
     <message>
         <source>Simulate 1,000 portfolio return paths using GBM to estimate probability
 distributions of future returns, drawdowns, and terminal wealth.</source>
-        <translation type="unfinished">使用GBM模擬1,000條投資組合回報路徑,以估算未來回報、
+        <translation>使用 GBM 模擬 1,000 條投資組合回報路徑,以估算未來回報、
 回撤及最終財富的機率分佈。</translation>
     </message>
     <message>
         <source>▶ RUN MONTE CARLO (1000 paths)</source>
-        <translation type="unfinished">▶ 執行蒙地卡羅 (1000條路徑)</translation>
+        <translation>▶ 執行蒙地卡羅 (1000 條路徑)</translation>
     </message>
     <message>
         <source>Press RUN MONTE CARLO to simulate 1,000 return paths</source>
-        <translation type="unfinished">按「執行蒙地卡羅」以模擬1,000條回報路徑</translation>
+        <translation>按「執行蒙地卡羅」以模擬 1,000 條回報路徑</translation>
     </message>
     <message>
         <source>MONTE CARLO</source>
-        <translation type="unfinished">蒙地卡羅</translation>
+        <translation>蒙地卡羅</translation>
     </message>
     <message>
         <source>PERFORMANCE</source>
-        <translation type="unfinished">表現</translation>
+        <translation>表現</translation>
     </message>
     <message>
         <source>Total Return</source>
-        <translation type="unfinished">總回報</translation>
+        <translation>總回報</translation>
     </message>
     <message>
         <source>Annualized Return</source>
-        <translation type="unfinished">年化回報</translation>
+        <translation>年化回報</translation>
     </message>
     <message>
         <source>Trading Days</source>
-        <translation type="unfinished">交易日數</translation>
+        <translation>交易日數</translation>
     </message>
     <message>
         <source>Best Day</source>
-        <translation type="unfinished">最佳日</translation>
+        <translation>最佳日</translation>
     </message>
     <message>
         <source>Worst Day</source>
-        <translation type="unfinished">最差日</translation>
+        <translation>最差日</translation>
     </message>
     <message>
         <source>Avg Daily Return</source>
-        <translation type="unfinished">平均日回報</translation>
+        <translation>平均日回報</translation>
     </message>
     <message>
         <source>Unrealized P&amp;L %</source>
-        <translation type="unfinished">未實現盈虧 %</translation>
+        <translation>未實現盈虧 %</translation>
     </message>
     <message>
         <source>Day Change %</source>
-        <translation type="unfinished">日變動 %</translation>
+        <translation>日變動 %</translation>
     </message>
     <message>
         <source>Total Positions</source>
-        <translation type="unfinished">總持倉數</translation>
+        <translation>總持倉數</translation>
     </message>
     <message>
         <source>Gainers</source>
-        <translation type="unfinished">上升股</translation>
+        <translation>上升股</translation>
     </message>
     <message>
         <source>Losers</source>
-        <translation type="unfinished">下跌股</translation>
+        <translation>下跌股</translation>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">風險</translation>
+        <translation>風險</translation>
     </message>
     <message>
         <source>Annualized Volatility</source>
-        <translation type="unfinished">年化波幅</translation>
+        <translation>年化波幅</translation>
     </message>
     <message>
         <source>Max Drawdown</source>
-        <translation type="unfinished">最大回撤</translation>
+        <translation>最大回撤</translation>
     </message>
     <message>
         <source>VaR 95% (Daily)</source>
-        <translation type="unfinished">VaR 95% (日)</translation>
+        <translation>VaR 95% (日)</translation>
     </message>
     <message>
         <source>CVaR 95% (Daily)</source>
-        <translation type="unfinished">CVaR 95% (日)</translation>
+        <translation>CVaR 95% (日)</translation>
     </message>
     <message>
         <source>Downside Deviation</source>
-        <translation type="unfinished">下行偏差</translation>
+        <translation>下行偏差</translation>
     </message>
     <message>
         <source>RATIOS</source>
-        <translation type="unfinished">比率</translation>
+        <translation>比率</translation>
     </message>
     <message>
         <source>Sharpe Ratio</source>
-        <translation type="unfinished">夏普比率</translation>
+        <translation>夏普比率</translation>
     </message>
     <message>
         <source>Sortino Ratio</source>
-        <translation type="unfinished">索提諾比率</translation>
+        <translation>索提諾比率</translation>
     </message>
     <message>
         <source>Calmar Ratio</source>
-        <translation type="unfinished">卡瑪比率</translation>
+        <translation>卡瑪比率</translation>
     </message>
     <message>
         <source>Profit Factor</source>
-        <translation type="unfinished">盈利因子</translation>
+        <translation>盈利因子</translation>
     </message>
     <message>
         <source>DISTRIBUTION</source>
-        <translation type="unfinished">分佈</translation>
+        <translation>分佈</translation>
     </message>
     <message>
         <source>Skewness</source>
-        <translation type="unfinished">偏度</translation>
+        <translation>偏度</translation>
     </message>
     <message>
         <source>Kurtosis</source>
-        <translation type="unfinished">峰度</translation>
+        <translation>峰度</translation>
     </message>
     <message>
         <source>Win Rate</source>
-        <translation type="unfinished">勝率</translation>
+        <translation>勝率</translation>
     </message>
     <message>
         <source>Win Days</source>
-        <translation type="unfinished">勝日數</translation>
+        <translation>勝日數</translation>
     </message>
     <message>
         <source>Loss Days</source>
-        <translation type="unfinished">敗日數</translation>
+        <translation>敗日數</translation>
     </message>
     <message>
         <source>Avg Win</source>
-        <translation type="unfinished">平均盈利</translation>
+        <translation>平均盈利</translation>
     </message>
     <message>
         <source>Avg Loss</source>
-        <translation type="unfinished">平均虧損</translation>
+        <translation>平均虧損</translation>
     </message>
     <message>
         <source>Run QuantStats for full metrics →</source>
-        <translation type="unfinished">執行 QuantStats 取得完整指標 →</translation>
+        <translation>執行 QuantStats 取得完整指標 →</translation>
     </message>
     <message>
         <source>RETURN DISTRIBUTION</source>
-        <translation type="unfinished">回報分佈</translation>
+        <translation>回報分佈</translation>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">勝率</translation>
+        <translation>勝率</translation>
     </message>
     <message>
         <source>LOSS RATE</source>
-        <translation type="unfinished">敗率</translation>
+        <translation>敗率</translation>
     </message>
     <message>
         <source>WIN DAYS</source>
-        <translation type="unfinished">勝日數</translation>
+        <translation>勝日數</translation>
     </message>
     <message>
         <source>LOSS DAYS</source>
-        <translation type="unfinished">敗日數</translation>
+        <translation>敗日數</translation>
     </message>
     <message>
         <source>AVG WIN</source>
-        <translation type="unfinished">平均盈利</translation>
+        <translation>平均盈利</translation>
     </message>
     <message>
         <source>AVG LOSS</source>
-        <translation type="unfinished">平均虧損</translation>
+        <translation>平均虧損</translation>
     </message>
     <message>
         <source>SKEWNESS</source>
-        <translation type="unfinished">偏度</translation>
+        <translation>偏度</translation>
     </message>
     <message>
         <source>KURTOSIS</source>
-        <translation type="unfinished">峰度</translation>
+        <translation>峰度</translation>
     </message>
     <message>
         <source>DRAWDOWN &amp; RISK METRICS</source>
-        <translation type="unfinished">回撤及風險指標</translation>
+        <translation>回撤及風險指標</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">最大回撤</translation>
+        <translation>最大回撤</translation>
     </message>
     <message>
         <source>RISK METRIC</source>
-        <translation type="unfinished">風險指標</translation>
+        <translation>風險指標</translation>
     </message>
     <message>
         <source>RISK-ADJUSTED RATIOS &amp; WIN/LOSS BREAKDOWN</source>
-        <translation type="unfinished">風險調整比率及勝/敗明細</translation>
+        <translation>風險調整比率及勝/敗明細</translation>
     </message>
     <message>
         <source>RATIO</source>
-        <translation type="unfinished">比率</translation>
+        <translation>比率</translation>
     </message>
     <message>
         <source>WIN / LOSS BREAKDOWN</source>
-        <translation type="unfinished">勝 / 敗明細</translation>
+        <translation>勝 / 敗明細</translation>
     </message>
     <message>
         <source>Avg Win/Day</source>
-        <translation type="unfinished">平均勝/日</translation>
+        <translation>平均勝/日</translation>
     </message>
     <message>
         <source>Avg Loss/Day</source>
-        <translation type="unfinished">平均敗/日</translation>
+        <translation>平均敗/日</translation>
     </message>
     <message>
         <source>MEDIAN RETURN</source>
-        <translation type="unfinished">中位數回報</translation>
+        <translation>中位數回報</translation>
     </message>
     <message>
         <source>5TH PERCENTILE</source>
-        <translation type="unfinished">第5百分位</translation>
+        <translation>第 5 百分位</translation>
     </message>
     <message>
         <source>95TH PERCENTILE</source>
-        <translation type="unfinished">第95百分位</translation>
+        <translation>第 95 百分位</translation>
     </message>
     <message>
         <source>PROB OF LOSS</source>
-        <translation type="unfinished">虧損機率</translation>
+        <translation>虧損機率</translation>
     </message>
     <message>
         <source>EXP MAX DRAWDOWN</source>
-        <translation type="unfinished">預期最大回撤</translation>
+        <translation>預期最大回撤</translation>
     </message>
     <message>
         <source>Cumulative Return (%)</source>
-        <translation type="unfinished">累積回報 (%)</translation>
+        <translation>累積回報 (%)</translation>
     </message>
     <message>
         <source>Showing %1 of 1000 simulated paths over 252 trading days (GBM). Bright line = median path.</source>
-        <translation type="unfinished">顯示1000條模擬路徑中的%1條,涵蓋252個交易日 (GBM)。亮線 = 中位數路徑。</translation>
+        <translation>顯示 1000 條模擬路徑中的 %1 條,涵蓋 252 個交易日 (GBM)。亮線 = 中位數路徑。</translation>
     </message>
     <message>
         <source>Fetching 1-year price history...</source>
-        <translation type="unfinished">正在取得1年價格歷史…</translation>
+        <translation>正在取得 1 年價格歷史…</translation>
     </message>
     <message>
         <source>QuantStats: %1</source>
-        <translation type="unfinished">QuantStats:%1</translation>
+        <translation>QuantStats:%1</translation>
     </message>
     <message>
         <source>Complete</source>
-        <translation type="unfinished">完成</translation>
+        <translation>完成</translation>
     </message>
     <message>
         <source>Running 1000 simulation paths...</source>
-        <translation type="unfinished">正在執行1000條模擬路徑…</translation>
+        <translation>正在執行 1000 條模擬路徑…</translation>
     </message>
     <message>
         <source>Monte Carlo: %1</source>
-        <translation type="unfinished">蒙地卡羅:%1</translation>
+        <translation>蒙地卡羅:%1</translation>
     </message>
     <message>
         <source>Complete — %1 paths simulated</source>
-        <translation type="unfinished">完成 — 已模擬 %1 條路徑</translation>
+        <translation>完成 — 已模擬 %1 條路徑</translation>
     </message>
 </context>
 <context>
@@ -28656,7 +28668,7 @@ distributions of future returns, drawdowns, and terminal wealth.</source>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">就緒</translation>
+        <translation>就緒</translation>
     </message>
     <message>
         <source>FINCEPT TERMINAL</source>
@@ -28712,11 +28724,11 @@ distributions of future returns, drawdowns, and terminal wealth.</source>
     </message>
     <message>
         <source>Complete</source>
-        <translation type="unfinished">完成</translation>
+        <translation>完成</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
     <message>
         <source>NODE</source>
@@ -28740,7 +28752,7 @@ distributions of future returns, drawdowns, and terminal wealth.</source>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>P/E</source>
@@ -28826,7 +28838,7 @@ distributions of future returns, drawdowns, and terminal wealth.</source>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">儲存</translation>
+        <translation>儲存</translation>
     </message>
     <message>
         <source>Export PDF</source>
@@ -29143,127 +29155,127 @@ distributions of future returns, drawdowns, and terminal wealth.</source>
     <name>fincept::screens::ReportsView</name>
     <message>
         <source>SUMMARY</source>
-        <translation type="unfinished">摘要</translation>
+        <translation>摘要</translation>
     </message>
     <message>
         <source>TRANSACTION HISTORY</source>
-        <translation type="unfinished">交易紀錄</translation>
+        <translation>交易紀錄</translation>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">日期</translation>
+        <translation>日期</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>數量</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">總額</translation>
+        <translation>總額</translation>
     </message>
     <message>
         <source>NOTES</source>
-        <translation type="unfinished">備註</translation>
+        <translation>備註</translation>
     </message>
     <message>
         <source>TRANSACTIONS</source>
-        <translation type="unfinished">交易</translation>
+        <translation>交易</translation>
     </message>
     <message>
         <source>PERFORMANCE ATTRIBUTION</source>
-        <translation type="unfinished">績效歸因</translation>
+        <translation>績效歸因</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">權重</translation>
+        <translation>權重</translation>
     </message>
     <message>
         <source>RETURN</source>
-        <translation type="unfinished">回報</translation>
+        <translation>回報</translation>
     </message>
     <message>
         <source>CONTRIBUTION</source>
-        <translation type="unfinished">貢獻</translation>
+        <translation>貢獻</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">盈虧</translation>
+        <translation>盈虧</translation>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">狀態</translation>
+        <translation>狀態</translation>
     </message>
     <message>
         <source>ATTRIBUTION</source>
-        <translation type="unfinished">歸因</translation>
+        <translation>歸因</translation>
     </message>
     <message>
         <source>PORTFOLIO SUMMARY REPORT</source>
-        <translation type="unfinished">投資組合摘要報告</translation>
+        <translation>投資組合摘要報告</translation>
     </message>
     <message>
         <source>PORTFOLIO</source>
-        <translation type="unfinished">投資組合</translation>
+        <translation>投資組合</translation>
     </message>
     <message>
         <source>TOTAL VALUE</source>
-        <translation type="unfinished">總值</translation>
+        <translation>總值</translation>
     </message>
     <message>
         <source>COST BASIS</source>
-        <translation type="unfinished">成本基礎</translation>
+        <translation>成本基礎</translation>
     </message>
     <message>
         <source>UNREALIZED P&amp;L</source>
-        <translation type="unfinished">未實現盈虧</translation>
+        <translation>未實現盈虧</translation>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">持倉</translation>
+        <translation>持倉</translation>
     </message>
     <message>
         <source>GAINERS</source>
-        <translation type="unfinished">上升股</translation>
+        <translation>上升股</translation>
     </message>
     <message>
         <source>LOSERS</source>
-        <translation type="unfinished">下跌股</translation>
+        <translation>下跌股</translation>
     </message>
     <message>
         <source>HOLDINGS BREAKDOWN</source>
-        <translation type="unfinished">持倉明細</translation>
+        <translation>持倉明細</translation>
     </message>
     <message>
         <source>AVG COST</source>
-        <translation type="unfinished">平均成本</translation>
+        <translation>平均成本</translation>
     </message>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">當前</translation>
+        <translation>目前</translation>
     </message>
     <message>
         <source>OUTPERFORM</source>
-        <translation type="unfinished">跑贏</translation>
+        <translation>跑贏</translation>
     </message>
     <message>
         <source>UNDERPERFORM</source>
-        <translation type="unfinished">跑輸</translation>
+        <translation>跑輸</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">中性</translation>
+        <translation>中性</translation>
     </message>
 </context>
 <context>
@@ -29341,135 +29353,135 @@ distributions of future returns, drawdowns, and terminal wealth.</source>
     </message>
     <message>
         <source>RISK OVERVIEW</source>
-        <translation type="unfinished">風險概覽</translation>
+        <translation>風險概覽</translation>
     </message>
     <message>
         <source>PORTFOLIO STRESS TESTING</source>
-        <translation type="unfinished">投資組合壓力測試</translation>
+        <translation>投資組合壓力測試</translation>
     </message>
     <message>
         <source>Estimated impact of historical and hypothetical market scenarios</source>
-        <translation type="unfinished">歷史及假設市場情景的估計影響</translation>
+        <translation>歷史及假設市場情景的估計影響</translation>
     </message>
     <message>
         <source>SCENARIO</source>
-        <translation type="unfinished">情景</translation>
+        <translation>情景</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">描述</translation>
+        <translation>描述</translation>
     </message>
     <message>
         <source>EQUITY SHOCK</source>
-        <translation type="unfinished">股票衝擊</translation>
+        <translation>股票衝擊</translation>
     </message>
     <message>
         <source>PORTFOLIO IMPACT</source>
-        <translation type="unfinished">投資組合影響</translation>
+        <translation>投資組合影響</translation>
     </message>
     <message>
         <source>LOSS</source>
-        <translation type="unfinished">虧損</translation>
+        <translation>虧損</translation>
     </message>
     <message>
         <source>STRESS TEST</source>
-        <translation type="unfinished">壓力測試</translation>
+        <translation>壓力測試</translation>
     </message>
     <message>
         <source>RISK CONTRIBUTION BY HOLDING</source>
-        <translation type="unfinished">按持倉的風險貢獻</translation>
+        <translation>按持倉的風險貢獻</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">權重</translation>
+        <translation>權重</translation>
     </message>
     <message>
         <source>VOL PROXY</source>
-        <translation type="unfinished">波幅代用</translation>
+        <translation>波幅代用</translation>
     </message>
     <message>
         <source>RISK CONTRIB</source>
-        <translation type="unfinished">風險貢獻</translation>
+        <translation>風險貢獻</translation>
     </message>
     <message>
         <source>VAR CONTRIB</source>
-        <translation type="unfinished">VaR貢獻</translation>
+        <translation>VaR 貢獻</translation>
     </message>
     <message>
         <source>CONCENTRATION</source>
-        <translation type="unfinished">集中度</translation>
+        <translation>集中度</translation>
     </message>
     <message>
         <source>RISK CONTRIBUTION</source>
-        <translation type="unfinished">風險貢獻</translation>
+        <translation>風險貢獻</translation>
     </message>
     <message>
         <source>PORTFOLIO RISK OVERVIEW</source>
-        <translation type="unfinished">投資組合風險概覽</translation>
+        <translation>投資組合風險概覽</translation>
     </message>
     <message>
         <source>PORTFOLIO VALUE</source>
-        <translation type="unfinished">投資組合值</translation>
+        <translation>投資組合值</translation>
     </message>
     <message>
         <source>Total market value</source>
-        <translation type="unfinished">總市值</translation>
+        <translation>總市值</translation>
     </message>
     <message>
         <source>ANNUALIZED VOLATILITY</source>
-        <translation type="unfinished">年化波幅</translation>
+        <translation>年化波幅</translation>
     </message>
     <message>
         <source>Based on day-change proxy</source>
-        <translation type="unfinished">基於日變動代用</translation>
+        <translation>基於日變動代用</translation>
     </message>
     <message>
         <source>VALUE AT RISK (95%)</source>
-        <translation type="unfinished">風險價值 (VaR) (95%)</translation>
+        <translation>風險價值 (VaR) (95%)</translation>
     </message>
     <message>
         <source>1-day parametric</source>
-        <translation type="unfinished">1日參數法</translation>
+        <translation>1 日參數法</translation>
     </message>
     <message>
         <source>CONDITIONAL VaR</source>
-        <translation type="unfinished">條件VaR</translation>
+        <translation>條件 VaR</translation>
     </message>
     <message>
         <source>Expected shortfall</source>
-        <translation type="unfinished">預期短缺</translation>
+        <translation>預期短缺</translation>
     </message>
     <message>
         <source>TOP HOLDING CONC.</source>
-        <translation type="unfinished">最大持倉集中度</translation>
+        <translation>最大持倉集中度</translation>
     </message>
     <message>
         <source>Largest position</source>
-        <translation type="unfinished">最大持倉</translation>
+        <translation>最大持倉</translation>
     </message>
     <message>
         <source>TOP 3 CONCENTRATION</source>
-        <translation type="unfinished">前3大集中度</translation>
+        <translation>首 3 大集中度</translation>
     </message>
     <message>
         <source>Sum of top 3</source>
-        <translation type="unfinished">前3總和</translation>
+        <translation>首 3 總和</translation>
     </message>
     <message>
         <source>TOP 5 CONCENTRATION</source>
-        <translation type="unfinished">前5大集中度</translation>
+        <translation>首 5 大集中度</translation>
     </message>
     <message>
         <source>Sum of top 5</source>
-        <translation type="unfinished">前5總和</translation>
+        <translation>首 5 總和</translation>
     </message>
     <message>
         <source>DIVERSIFICATION</source>
-        <translation type="unfinished">分散度</translation>
+        <translation>分散度</translation>
     </message>
     <message numerus="yes">
         <source>%n holdings</source>
@@ -29479,23 +29491,23 @@ distributions of future returns, drawdowns, and terminal wealth.</source>
     </message>
     <message>
         <source>Well diversified</source>
-        <translation type="unfinished">分散良好</translation>
+        <translation>分散良好</translation>
     </message>
     <message>
         <source>Consider adding more</source>
-        <translation type="unfinished">考慮增加更多</translation>
+        <translation>考慮增加更多</translation>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">最高</translation>
+        <translation>高</translation>
     </message>
     <message>
         <source>MEDIUM</source>
-        <translation type="unfinished">中</translation>
+        <translation>中</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">最低</translation>
+        <translation>低</translation>
     </message>
 </context>
 <context>
@@ -29558,11 +29570,11 @@ distributions of future returns, drawdowns, and terminal wealth.</source>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">儲存</translation>
+        <translation>儲存</translation>
     </message>
     <message>
         <source>✗ Enter a valid URL first.</source>
@@ -29661,7 +29673,7 @@ Save the feed anyway?</source>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>Source</source>
@@ -29884,7 +29896,7 @@ Save the feed anyway?</source>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>SIGNAL</source>
@@ -29924,7 +29936,7 @@ Save the feed anyway?</source>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">中性</translation>
+        <translation>中性</translation>
     </message>
     <message>
         <source>Error [%1]: %2</source>
@@ -29947,11 +29959,11 @@ Save the feed anyway?</source>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">儲存</translation>
+        <translation>儲存</translation>
     </message>
 </context>
 <context>
@@ -30145,11 +30157,11 @@ Save the feed anyway?</source>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>賣出</translation>
     </message>
 </context>
 <context>
@@ -30175,7 +30187,7 @@ Save the feed anyway?</source>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">儲存</translation>
+        <translation>儲存</translation>
     </message>
     <message>
         <source>CLEAR</source>
@@ -30503,7 +30515,7 @@ No API key required — data via vector IDs for reliability</source>
     </message>
     <message>
         <source>Refresh</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>DISK USAGE</source>
@@ -30527,7 +30539,7 @@ No API key required — data via vector IDs for reliability</source>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">總額</translation>
+        <translation>總額</translation>
     </message>
     <message>
         <source>Cache Entries</source>
@@ -30547,7 +30559,7 @@ No API key required — data via vector IDs for reliability</source>
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">操作</translation>
+        <translation>操作</translation>
     </message>
     <message>
         <source>CLR</source>
@@ -30679,7 +30691,7 @@ Continue?</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
     <message>
         <source>OK — %1 row(s) affected</source>
@@ -30786,7 +30798,7 @@ Are you absolutely sure?</source>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">儲存</translation>
+        <translation>儲存</translation>
     </message>
     <message>
         <source>Backtest</source>
@@ -30798,7 +30810,7 @@ Are you absolutely sure?</source>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">回測</translation>
+        <translation>回測</translation>
     </message>
     <message>
         <source>Capital</source>
@@ -30913,7 +30925,7 @@ Are you absolutely sure?</source>
     </message>
     <message>
         <source>Page %1 of %2</source>
-        <translation type="unfinished">第 %1 頁,共 %2 頁</translation>
+        <translation>第 %1 頁,共 %2 頁</translation>
     </message>
     <message>
         <source>NEXT ▶</source>
@@ -30925,7 +30937,7 @@ Are you absolutely sure?</source>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">回測</translation>
+        <translation>回測</translation>
     </message>
     <message>
         <source>DEPLOY</source>
@@ -30933,7 +30945,7 @@ Are you absolutely sure?</source>
     </message>
     <message>
         <source>DELETE</source>
-        <translation type="unfinished">刪除</translation>
+        <translation>刪除</translation>
     </message>
     <message>
         <source>Page %1 of %2  ·  %3 strategies</source>
@@ -30957,7 +30969,7 @@ Are you absolutely sure?</source>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>Start</source>
@@ -31080,7 +31092,7 @@ Are you absolutely sure?</source>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>Submit Ticket →</source>
@@ -31206,7 +31218,7 @@ Create a real ticket and our team will respond within 24 hours.</source>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">開市</translation>
+        <translation>開啟</translation>
     </message>
     <message>
         <source>IN PROGRESS</source>
@@ -31218,7 +31230,7 @@ Create a real ticket and our team will respond within 24 hours.</source>
     </message>
     <message>
         <source>CLOSED</source>
-        <translation type="unfinished">休市</translation>
+        <translation>已關閉</translation>
     </message>
     <message>
         <source>PENDING</source>
@@ -31226,7 +31238,7 @@ Create a real ticket and our team will respond within 24 hours.</source>
     </message>
     <message>
         <source>Support</source>
-        <translation type="unfinished">支援</translation>
+        <translation>支援</translation>
     </message>
     <message>
         <source>Tickets</source>
@@ -31270,7 +31282,7 @@ Create a real ticket and our team will respond within 24 hours.</source>
     </message>
     <message>
         <source>Total</source>
-        <translation type="unfinished">總額</translation>
+        <translation>總計</translation>
     </message>
     <message>
         <source>Done</source>
@@ -31309,11 +31321,11 @@ Create a real ticket and our team will respond within 24 hours.</source>
     </message>
     <message>
         <source>AGENTS</source>
-        <translation type="unfinished">智能體</translation>
+        <translation>智能體</translation>
     </message>
     <message>
         <source>TOOLS</source>
-        <translation type="unfinished">工具</translation>
+        <translation>工具</translation>
     </message>
     <message>
         <source>LLMS</source>
@@ -31333,7 +31345,7 @@ Create a real ticket and our team will respond within 24 hours.</source>
     </message>
     <message>
         <source>AVAILABLE TOOLS</source>
-        <translation type="unfinished">可用工具</translation>
+        <translation>可用工具</translation>
     </message>
     <message>
         <source>Loading tools...</source>
@@ -31400,11 +31412,11 @@ Create a real ticket and our team will respond within 24 hours.</source>
     </message>
     <message>
         <source>FAILED</source>
-        <translation type="unfinished">失敗</translation>
+        <translation>失敗</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">錯誤</translation>
+        <translation>錯誤</translation>
     </message>
     <message>
         <source>Agents coordinate through a leader who delegates and synthesizes results.</source>
@@ -31444,7 +31456,7 @@ Create a real ticket and our team will respond within 24 hours.</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
     <message>
         <source>Default (Global)</source>
@@ -31475,23 +31487,23 @@ Create a real ticket and our team will respond within 24 hours.</source>
     <name>fincept::screens::TemplatePicker</name>
     <message>
         <source>Choose Dashboard Template</source>
-        <translation type="unfinished">選擇儀表板範本</translation>
+        <translation>選擇儀表板範本</translation>
     </message>
     <message>
         <source>CHOOSE TEMPLATE</source>
-        <translation type="unfinished">選擇範本</translation>
+        <translation>選擇範本</translation>
     </message>
     <message>
         <source>Select a template to reset your dashboard. Current layout will be replaced.</source>
-        <translation type="unfinished">選擇範本以重設儀表板。目前版面將被取代。</translation>
+        <translation>選擇範本以重設儀表板。目前版面將被取代。</translation>
     </message>
     <message>
         <source>APPLY</source>
-        <translation type="unfinished">套用</translation>
+        <translation>套用</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
 </context>
 <context>
@@ -31712,7 +31724,7 @@ Create a real ticket and our team will respond within 24 hours.</source>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">描述</translation>
+        <translation>描述</translation>
     </message>
     <message>
         <source>Click a tool to see details...</source>
@@ -31799,7 +31811,7 @@ Create a real ticket and our team will respond within 24 hours.</source>
     </message>
     <message>
         <source>ANALYSIS TYPE</source>
-        <translation type="unfinished">分析類型</translation>
+        <translation>分析類型</translation>
     </message>
     <message>
         <source>Analyzes efficiency gains, consumer benefits, growth effects, and adjustment costs of international trade.</source>
@@ -32015,11 +32027,11 @@ Create a real ticket and our team will respond within 24 hours.</source>
     </message>
     <message>
         <source>YES</source>
-        <translation type="unfinished">是</translation>
+        <translation>是</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">否</translation>
+        <translation>否</translation>
     </message>
     <message>
         <source>Metric</source>
@@ -32102,7 +32114,7 @@ Create a real ticket and our team will respond within 24 hours.</source>
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">設定</translation>
+        <translation>設定</translation>
     </message>
     <message>
         <source>Export</source>
@@ -32258,7 +32270,7 @@ Get a key at: tradingeconomics.com/api</source>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">國家/地區</translation>
+        <translation>國家/地區</translation>
     </message>
     <message>
         <source>Fetching Trading Economics: %1…</source>
@@ -32330,7 +32342,7 @@ Get a key at: tradingeconomics.com/api</source>
     <name>fincept::screens::UnescoPanel</name>
     <message>
         <source>THEME</source>
-        <translation type="unfinished">主題</translation>
+        <translation>主題</translation>
     </message>
     <message>
         <source>Education</source>
@@ -32370,7 +32382,7 @@ UNESCO UIS 數據免費 — 無需 API 密鑰
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">國家/地區</translation>
+        <translation>國家/地區</translation>
     </message>
     <message>
         <source>FROM</source>
@@ -32579,7 +32591,7 @@ Try a different country code or check the indicator is available</source>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">儲存</translation>
+        <translation>儲存</translation>
     </message>
     <message>
         <source>Test Deepgram key</source>
@@ -32793,7 +32805,7 @@ Try a different country code or check the indicator is available</source>
     </message>
     <message>
         <source>BACKTEST</source>
-        <translation type="unfinished">回測</translation>
+        <translation>回測</translation>
     </message>
 </context>
 <context>
@@ -32804,7 +32816,7 @@ Try a different country code or check the indicator is available</source>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">市場</translation>
+        <translation>市場</translation>
     </message>
     <message>
         <source>Major global indices — SPY, QQQ, DIA, IWM</source>
@@ -32896,11 +32908,11 @@ Try a different country code or check the indicator is available</source>
     </message>
     <message>
         <source>Watchlist</source>
-        <translation type="unfinished">自選清單</translation>
+        <translation>自選清單</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">投資組合</translation>
+        <translation>投資組合</translation>
     </message>
     <message>
         <source>Your saved symbols with live prices</source>
@@ -32988,7 +33000,7 @@ Try a different country code or check the indicator is available</source>
     </message>
     <message>
         <source>Tools</source>
-        <translation type="unfinished">工具</translation>
+        <translation>工具</translation>
     </message>
     <message>
         <source>Financial TV — major networks and custom streams</source>
@@ -33072,7 +33084,7 @@ Try a different country code or check the indicator is available</source>
     </message>
     <message>
         <source>Geopolitics</source>
-        <translation type="unfinished">地緣政治</translation>
+        <translation>地緣政治</translation>
     </message>
     <message>
         <source>Live conflict / political events — subscribes to geopolitics:events</source>
@@ -33088,7 +33100,7 @@ Try a different country code or check the indicator is available</source>
     </message>
     <message>
         <source>Notes</source>
-        <translation type="unfinished">筆記</translation>
+        <translation>筆記</translation>
     </message>
     <message>
         <source>Recent / favorite financial notes — click to open Notes screen</source>
@@ -33123,15 +33135,15 @@ Try a different country code or check the indicator is available</source>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>QUERY</source>
-        <translation type="unfinished">查詢</translation>
+        <translation>查詢</translation>
     </message>
     <message>
         <source>OUTPUT</source>
-        <translation type="unfinished">輸出</translation>
+        <translation>輸出</translation>
     </message>
     <message>
         <source>EXECUTION LOG</source>
@@ -33139,19 +33151,19 @@ Try a different country code or check the indicator is available</source>
     </message>
     <message>
         <source>RESULT</source>
-        <translation type="unfinished">結果</translation>
+        <translation>結果</translation>
     </message>
     <message>
         <source>FAILED</source>
-        <translation type="unfinished">失敗</translation>
+        <translation>失敗</translation>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">錯誤</translation>
+        <translation>錯誤</translation>
     </message>
     <message>
         <source>Select a workflow to configure and run.</source>
@@ -33224,7 +33236,7 @@ Source: World Bank — Health &amp; Development indicators</source>
     </message>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">國家/地區</translation>
+        <translation>國家/地區</translation>
     </message>
     <message>
         <source>Fetching WB Health: %1 — %2…</source>
@@ -33239,7 +33251,7 @@ Source: World Bank — Health &amp; Development indicators</source>
     <name>fincept::screens::WorldBankPanel</name>
     <message>
         <source>COUNTRY</source>
-        <translation type="unfinished">國家/地區</translation>
+        <translation>國家/地區</translation>
     </message>
     <message>
         <source>Filter countries…</source>
@@ -33497,7 +33509,7 @@ This cannot be undone.</source>
     </message>
     <message>
         <source>APPLY</source>
-        <translation type="unfinished">套用</translation>
+        <translation>套用</translation>
     </message>
     <message>
         <source>New competition</source>
@@ -33557,7 +33569,7 @@ This cannot be undone.</source>
     </message>
     <message>
         <source>CREATE</source>
-        <translation type="unfinished">建立</translation>
+        <translation>建立</translation>
     </message>
     <message>
         <source>START</source>
@@ -33569,7 +33581,7 @@ This cannot be undone.</source>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">持倉</translation>
+        <translation>持倉</translation>
     </message>
     <message>
         <source>HITL</source>
@@ -33577,7 +33589,7 @@ This cannot be undone.</source>
     </message>
     <message>
         <source>RISK</source>
-        <translation type="unfinished">風險</translation>
+        <translation>風險</translation>
     </message>
     <message>
         <source>AUDIT</source>
@@ -33592,7 +33604,7 @@ This cannot be undone.</source>
     <name>fincept::screens::alpha_arena::AuditPanel</name>
     <message>
         <source>AUDIT LOG</source>
-        <translation type="unfinished">稽核日誌</translation>
+        <translation>稽核日誌</translation>
     </message>
 </context>
 <context>
@@ -33630,11 +33642,11 @@ This cannot be undone.</source>
     </message>
     <message>
         <source>RETURN</source>
-        <translation type="unfinished">回報</translation>
+        <translation>回報</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">夏普</translation>
+        <translation>夏普</translation>
     </message>
     <message>
         <source>MAX DD</source>
@@ -33677,7 +33689,7 @@ This cannot be undone.</source>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>ENABLE LIVE MODE</source>
@@ -33712,7 +33724,7 @@ This cannot be undone.</source>
     <name>fincept::screens::alpha_arena::ModelChatPanel</name>
     <message>
         <source>AGENT</source>
-        <translation type="unfinished">代理</translation>
+        <translation>代理</translation>
     </message>
     <message>
         <source>Tick %1 — %2</source>
@@ -33751,7 +33763,7 @@ Parse error: %3</source>
     </message>
     <message>
         <source>AGENT</source>
-        <translation type="unfinished">代理</translation>
+        <translation>代理</translation>
     </message>
     <message>
         <source>COIN</source>
@@ -33759,7 +33771,7 @@ Parse error: %3</source>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>數量</translation>
     </message>
     <message>
         <source>ENTRY</source>
@@ -33794,7 +33806,7 @@ Parse error: %3</source>
     </message>
     <message>
         <source>AGENT</source>
-        <translation type="unfinished">代理</translation>
+        <translation>代理</translation>
     </message>
     <message>
         <source>STATE</source>
@@ -33829,7 +33841,7 @@ Parse error: %3</source>
     </message>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">持倉</translation>
+        <translation>持倉</translation>
     </message>
     <message>
         <source>ORDERS</source>
@@ -33857,7 +33869,7 @@ Parse error: %3</source>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>Side</source>
@@ -33865,7 +33877,7 @@ Parse error: %3</source>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>數量</translation>
     </message>
     <message>
         <source>Entry</source>
@@ -33877,7 +33889,7 @@ Parse error: %3</source>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">盈虧</translation>
+        <translation>盈虧</translation>
     </message>
     <message>
         <source>Lev</source>
@@ -33885,11 +33897,11 @@ Parse error: %3</source>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>Status</source>
@@ -33983,7 +33995,7 @@ Connect an API key in LIVE mode to populate.</source>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">勝率</translation>
+        <translation>勝率</translation>
     </message>
     <message>
         <source>TOTAL TRADES</source>
@@ -34051,7 +34063,7 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>API KEY</source>
-        <translation type="unfinished">API 金鑰</translation>
+        <translation>API 金鑰</translation>
     </message>
     <message>
         <source>Enter API key</source>
@@ -34113,6 +34125,26 @@ Keys are stored locally in encrypted secure storage.</source>
         <source>CODE: %1</source>
         <translation>代碼：%1</translation>
     </message>
+    <message>
+        <source>Enter private key</source>
+        <translation>輸入私鑰</translation>
+    </message>
+    <message>
+        <source>Enter wallet address (0x…)</source>
+        <translation>輸入錢包地址 (0x…)</translation>
+    </message>
+    <message>
+        <source>PRIVATE KEY</source>
+        <translation>私鑰</translation>
+    </message>
+    <message>
+        <source>WALLET ADDRESS</source>
+        <translation>錢包地址</translation>
+    </message>
+    <message>
+        <source>Wallet address and private key are required</source>
+        <translation>錢包地址及私鑰為必填項</translation>
+    </message>
 </context>
 <context>
     <name>fincept::screens::crypto::CryptoDepthChart</name>
@@ -34157,7 +34189,7 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>數量</translation>
     </message>
     <message>
         <source>ASK</source>
@@ -34173,7 +34205,7 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>ACTION</source>
-        <translation type="unfinished">操作</translation>
+        <translation>操作</translation>
     </message>
     <message>
         <source>IMBALANCE</source>
@@ -34197,15 +34229,15 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>買入</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>賣出</translation>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">中性</translation>
+        <translation>中性</translation>
     </message>
     <message>
         <source>BUY PRESSURE</source>
@@ -34220,7 +34252,7 @@ Keys are stored locally in encrypted secure storage.</source>
     <name>fincept::screens::crypto::CryptoOrderEntry</name>
     <message>
         <source>ORDER ENTRY</source>
-        <translation type="unfinished">下單</translation>
+        <translation>下單</translation>
     </message>
     <message>
         <source>PAPER</source>
@@ -34240,11 +34272,11 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>買入</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>賣出</translation>
     </message>
     <message>
         <source>MARKET</source>
@@ -34284,7 +34316,7 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">總額</translation>
+        <translation>總額</translation>
     </message>
     <message>
         <source>YOU RECEIVE</source>
@@ -34352,7 +34384,7 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">即時</translation>
+        <translation>即時</translation>
     </message>
     <message>
         <source>⚠ Enter a valid quantity</source>
@@ -34390,11 +34422,11 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>%</source>
@@ -34405,7 +34437,7 @@ Keys are stored locally in encrypted secure storage.</source>
     <name>fincept::screens::datasources::DataSourcesScreen</name>
     <message>
         <source>DATA SOURCES</source>
-        <translation type="unfinished">資料來源</translation>
+        <translation>資料來源</translation>
     </message>
     <message>
         <source>%1 CONNECTORS</source>
@@ -34417,7 +34449,7 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">匯入</translation>
+        <translation>匯入</translation>
     </message>
     <message>
         <source>EXPORT</source>
@@ -34437,7 +34469,7 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>ACTIVE</source>
-        <translation type="unfinished">使用中</translation>
+        <translation>使用中</translation>
     </message>
     <message>
         <source>AUTH REQ</source>
@@ -34445,11 +34477,11 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>BROWSE</source>
-        <translation type="unfinished">瀏覽</translation>
+        <translation>瀏覽</translation>
     </message>
     <message>
         <source>CONNECTIONS</source>
-        <translation type="unfinished">連線</translation>
+        <translation>連線</translation>
     </message>
     <message>
         <source>CATEGORY</source>
@@ -34473,11 +34505,11 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">總額</translation>
+        <translation>總額</translation>
     </message>
     <message>
         <source>INSPECTOR</source>
@@ -34525,7 +34557,7 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>+ ADD</source>
-        <translation type="unfinished">+ 新增</translation>
+        <translation>+ 新增</translation>
     </message>
     <message>
         <source>filter connections...</source>
@@ -34545,7 +34577,7 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">名稱</translation>
+        <translation>名稱</translation>
     </message>
     <message>
         <source>PROVIDER</source>
@@ -34553,7 +34585,7 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>STATUS</source>
-        <translation type="unfinished">狀態</translation>
+        <translation>狀態</translation>
     </message>
     <message>
         <source>TAGS</source>
@@ -34625,11 +34657,11 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">開市</translation>
+        <translation>開啟</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished">確定</translation>
+        <translation>確定</translation>
     </message>
     <message>
         <source>ERR</source>
@@ -34751,7 +34783,7 @@ Keys are stored locally in encrypted secure storage.</source>
     </message>
     <message>
         <source>+ ADD</source>
-        <translation type="unfinished">+ 新增</translation>
+        <translation>+ 新增</translation>
     </message>
     <message>
         <source>REMOVE</source>
@@ -34805,7 +34837,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <source>Error: %1</source>
-        <translation type="unfinished">錯誤:%1</translation>
+        <translation>錯誤：%1</translation>
     </message>
     <message>
         <source>Connected as %1</source>
@@ -34841,7 +34873,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <source>API KEY</source>
-        <translation type="unfinished">API 金鑰</translation>
+        <translation>API 金鑰</translation>
     </message>
     <message>
         <source>Enter API Key...</source>
@@ -34873,7 +34905,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <source>PASSWORD</source>
-        <translation type="unfinished">密碼</translation>
+        <translation>密碼</translation>
     </message>
     <message>
         <source>Zerodha login password</source>
@@ -35135,6 +35167,18 @@ This action cannot be undone.</source>
         <source>Connected</source>
         <translation>已連接</translation>
     </message>
+    <message>
+        <source>Auto — execute immediately</source>
+        <translation>自動 — 立即執行</translation>
+    </message>
+    <message>
+        <source>Order Approval:</source>
+        <translation>訂單核准：</translation>
+    </message>
+    <message>
+        <source>Semi-Auto — require approval</source>
+        <translation>半自動 — 需要核准</translation>
+    </message>
 </context>
 <context>
     <name>fincept::screens::equity::BroadcastOrderDialog</name>
@@ -35148,11 +35192,11 @@ This action cannot be undone.</source>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>買入</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>賣出</translation>
     </message>
     <message>
         <source>Select All</source>
@@ -35168,7 +35212,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>PLACE BUY</source>
@@ -35200,18 +35244,26 @@ This action cannot be undone.</source>
     </message>
     <message>
         <source>DONE</source>
-        <translation type="unfinished">完成</translation>
+        <translation>完成</translation>
+    </message>
+    <message>
+        <source>%1 order(s) queued for approval</source>
+        <translation>%1 張訂單已排隊等待核准</translation>
+    </message>
+    <message>
+        <source>Placing %1 order(s); %2 queued for approval...</source>
+        <translation>正在下達 %1 張訂單；%2 張已排隊等待核准...</translation>
     </message>
 </context>
 <context>
     <name>fincept::screens::equity::EquityBottomPanel</name>
     <message>
         <source>POSITIONS</source>
-        <translation type="unfinished">持倉</translation>
+        <translation>持倉</translation>
     </message>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">持倉</translation>
+        <translation>持倉</translation>
     </message>
     <message>
         <source>ORDERS</source>
@@ -35239,7 +35291,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>Opened</source>
@@ -35251,7 +35303,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>數量</translation>
     </message>
     <message>
         <source>Avg Price</source>
@@ -35263,11 +35315,11 @@ This action cannot be undone.</source>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">盈虧</translation>
+        <translation>盈虧</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">盈虧 %</translation>
+        <translation>盈虧 %</translation>
     </message>
     <message>
         <source>Invested</source>
@@ -35283,11 +35335,11 @@ This action cannot be undone.</source>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>Status</source>
@@ -35303,7 +35355,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">日期</translation>
+        <translation>日期</translation>
     </message>
     <message>
         <source>Size</source>
@@ -35355,7 +35407,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <source>CURRENT</source>
-        <translation type="unfinished">當前</translation>
+        <translation>目前</translation>
     </message>
     <message>
         <source>TOTAL P&amp;L</source>
@@ -35387,7 +35439,7 @@ This action cannot be undone.</source>
     </message>
     <message>
         <source>Win Rate</source>
-        <translation type="unfinished">勝率</translation>
+        <translation>勝率</translation>
     </message>
     <message>
         <source>Total Trades</source>
@@ -35439,7 +35491,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>數量</translation>
     </message>
     <message>
         <source>LIMIT PRICE</source>
@@ -35451,11 +35503,11 @@ Are you sure?</source>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">開市</translation>
+        <translation>未平倉</translation>
     </message>
     <message>
         <source>CLOSE</source>
@@ -35509,11 +35561,11 @@ Are you sure?</source>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>數量</translation>
     </message>
     <message>
         <source>ORDERS</source>
@@ -35524,7 +35576,7 @@ Are you sure?</source>
     <name>fincept::screens::equity::EquityOrderEntry</name>
     <message>
         <source>ORDER ENTRY</source>
-        <translation type="unfinished">下單</translation>
+        <translation>下單</translation>
     </message>
     <message>
         <source>PAPER</source>
@@ -35532,11 +35584,11 @@ Are you sure?</source>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>買入</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>賣出</translation>
     </message>
     <message>
         <source>MKT</source>
@@ -35580,11 +35632,11 @@ Are you sure?</source>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>數量</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>Limit price</source>
@@ -35624,7 +35676,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>STRATEGY</source>
-        <translation type="unfinished">策略</translation>
+        <translation>策略</translation>
     </message>
     <message>
         <source>None</source>
@@ -35728,7 +35780,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">即時</translation>
+        <translation>即時</translation>
     </message>
     <message>
         <source>Est: %1%2</source>
@@ -35763,7 +35815,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>LTP</source>
@@ -35771,7 +35823,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">變動%</translation>
+        <translation>變動%</translation>
     </message>
 </context>
 <context>
@@ -35821,7 +35873,7 @@ Are you sure?</source>
     <name>fincept::screens::fno::BuilderSubTab</name>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">儲存</translation>
+        <translation>儲存</translation>
     </message>
     <message>
         <source>LOAD</source>
@@ -36012,11 +36064,11 @@ Are you sure?</source>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>Date</source>
-        <translation type="unfinished">日期</translation>
+        <translation>日期</translation>
     </message>
     <message>
         <source>FII Buy</source>
@@ -36063,7 +36115,7 @@ Are you sure?</source>
     <name>fincept::screens::fno::FnoHeaderBar</name>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>Broker:</source>
@@ -36196,11 +36248,11 @@ Are you sure?</source>
     <name>fincept::screens::fno::LegEditorModel</name>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>買入</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>賣出</translation>
     </message>
     <message>
         <source>On</source>
@@ -36212,7 +36264,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>Strike</source>
@@ -36240,7 +36292,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">盈虧</translation>
+        <translation>盈虧</translation>
     </message>
 </context>
 <context>
@@ -36269,7 +36321,7 @@ Are you sure?</source>
     <name>fincept::screens::fno::MultiStraddleSubTab</name>
     <message>
         <source>Type</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>Anchor</source>
@@ -36277,7 +36329,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>ADD</source>
-        <translation type="unfinished">新增</translation>
+        <translation>新增</translation>
     </message>
     <message>
         <source>Double-click an entry to remove it.</source>
@@ -36408,7 +36460,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>B/S</source>
@@ -36416,11 +36468,11 @@ Are you sure?</source>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>數量</translation>
     </message>
     <message>
         <source>Type</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>Entry</source>
@@ -36444,7 +36496,7 @@ Are you sure?</source>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>PLACE PAPER ORDERS</source>
@@ -36452,11 +36504,11 @@ Are you sure?</source>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>買入</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>賣出</translation>
     </message>
     <message>
         <source>Broker %1 not registered</source>
@@ -36611,7 +36663,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">即時</translation>
+        <translation>即時</translation>
     </message>
     <message>
         <source>LOCKED</source>
@@ -36627,7 +36679,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">權重</translation>
+        <translation>權重</translation>
     </message>
     <message>
         <source>YIELD (LIFETIME)</source>
@@ -36635,7 +36687,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">總額</translation>
+        <translation>總額</translation>
     </message>
     <message>
         <source>DEMO</source>
@@ -36670,7 +36722,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">即時</translation>
+        <translation>即時</translation>
     </message>
     <message>
         <source>THIS EPOCH</source>
@@ -36804,7 +36856,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>USD VALUE</source>
@@ -36931,7 +36983,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>WEIGHT</source>
-        <translation type="unfinished">權重</translation>
+        <translation>權重</translation>
     </message>
     <message>
         <source>EST. YIELD</source>
@@ -36954,11 +37006,11 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>YES</source>
-        <translation type="unfinished">是</translation>
+        <translation>是</translation>
     </message>
     <message>
         <source>NO</source>
-        <translation type="unfinished">否</translation>
+        <translation>否</translation>
     </message>
     <message>
         <source>24h VOL</source>
@@ -36978,7 +37030,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">市場</translation>
+        <translation>市場</translation>
     </message>
     <message>
         <source>DEMO</source>
@@ -36986,7 +37038,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>ERROR</source>
-        <translation type="unfinished">錯誤</translation>
+        <translation>錯誤</translation>
     </message>
     <message>
         <source>● LIVE</source>
@@ -37009,7 +37061,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">即時</translation>
+        <translation>即時</translation>
     </message>
     <message>
         <source>DEMO</source>
@@ -37198,7 +37250,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>LIVE</source>
-        <translation type="unfinished">即時</translation>
+        <translation>即時</translation>
     </message>
     <message>
         <source>USDC RESERVES</source>
@@ -37233,7 +37285,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>TYPE</source>
-        <translation type="unfinished">類型</translation>
+        <translation>類型</translation>
     </message>
     <message>
         <source>SIDE</source>
@@ -37241,7 +37293,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>SIZE</source>
@@ -37252,7 +37304,7 @@ Target P/L: %3</source>
     <name>fincept::screens::polymarket::PolymarketBrowsePanel</name>
     <message>
         <source>MARKETS</source>
-        <translation type="unfinished">市場</translation>
+        <translation>市場</translation>
     </message>
     <message>
         <source>MARKETS  %1</source>
@@ -37264,7 +37316,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">載入中...</translation>
+        <translation>載入中…</translation>
     </message>
 </context>
 <context>
@@ -37287,7 +37339,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">成交量</translation>
+        <translation>成交量</translation>
     </message>
     <message>
         <source>LIQUIDITY</source>
@@ -37295,7 +37347,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">日期</translation>
+        <translation>日期</translation>
     </message>
     <message>
         <source>↻</source>
@@ -37303,7 +37355,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>Refresh</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>ALL SERIES</source>
@@ -37342,7 +37394,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>OVERVIEW</source>
-        <translation type="unfinished">概覽</translation>
+        <translation>概覽</translation>
     </message>
     <message>
         <source>ORDER BOOK</source>
@@ -37378,7 +37430,7 @@ Target P/L: %3</source>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">成交量</translation>
+        <translation>成交量</translation>
     </message>
     <message>
         <source>LIQUIDITY</source>
@@ -37424,11 +37476,11 @@ to place orders</source>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>買入</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>賣出</translation>
     </message>
     <message>
         <source>OUTCOME</source>
@@ -37515,11 +37567,11 @@ to place orders</source>
     </message>
     <message>
         <source>PNL</source>
-        <translation type="unfinished">PNL</translation>
+        <translation>盈虧</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">成交量</translation>
+        <translation>成交量</translation>
     </message>
     <message>
         <source>TRADES</source>
@@ -37568,7 +37620,7 @@ to place orders</source>
     <name>fincept::screens::polymarket::PolymarketOrderBook</name>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>SIZE</source>
@@ -37576,7 +37628,7 @@ to place orders</source>
     </message>
     <message>
         <source>TOTAL</source>
-        <translation type="unfinished">總額</translation>
+        <translation>總額</translation>
     </message>
     <message>
         <source>SPREAD %1</source>
@@ -37693,7 +37745,7 @@ to place orders</source>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">儲存</translation>
+        <translation>儲存</translation>
     </message>
     <message>
         <source>Test Connection</source>
@@ -37859,19 +37911,19 @@ to place orders</source>
     <name>fincept::screens::widgets::BaseWidget</name>
     <message>
         <source>Configure widget</source>
-        <translation type="unfinished">設定小工具</translation>
+        <translation>設定小工具</translation>
     </message>
     <message>
         <source>Refresh widget data</source>
-        <translation type="unfinished">重新整理小工具資料</translation>
+        <translation>重新整理小工具資料</translation>
     </message>
     <message>
         <source>Close widget</source>
-        <translation type="unfinished">關閉小工具</translation>
+        <translation>關閉小工具</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">載入中...</translation>
+        <translation>載入中…</translation>
     </message>
     <message>
         <source>No data yet — click refresh to retry</source>
@@ -37882,15 +37934,15 @@ to place orders</source>
     <name>fincept::screens::widgets::BrokerHoldingsWidget</name>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">持倉</translation>
+        <translation>持倉</translation>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>數量</translation>
     </message>
     <message>
         <source>Avg</source>
@@ -37902,7 +37954,7 @@ to place orders</source>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">盈虧 %</translation>
+        <translation>盈虧 %</translation>
     </message>
     <message>
         <source>No active account — click gear to configure</source>
@@ -37963,7 +38015,7 @@ to place orders</source>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
 </context>
 <context>
@@ -37982,7 +38034,7 @@ to place orders</source>
     </message>
     <message>
         <source>DATE</source>
-        <translation type="unfinished">日期</translation>
+        <translation>日期</translation>
     </message>
     <message>
         <source>REF</source>
@@ -38022,7 +38074,7 @@ to place orders</source>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">最高</translation>
+        <translation>高</translation>
     </message>
     <message>
         <source>MED</source>
@@ -38030,7 +38082,7 @@ to place orders</source>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">最低</translation>
+        <translation>低</translation>
     </message>
 </context>
 <context>
@@ -38107,7 +38159,7 @@ to place orders</source>
     </message>
     <message>
         <source>Total</source>
-        <translation type="unfinished">總額</translation>
+        <translation>總額</translation>
     </message>
     <message>
         <source>Collateral</source>
@@ -38204,7 +38256,7 @@ to place orders</source>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">載入中...</translation>
+        <translation>載入中…</translation>
     </message>
     <message>
         <source>-- BULL</source>
@@ -38236,7 +38288,7 @@ to place orders</source>
     </message>
     <message>
         <source>NEUTRAL</source>
-        <translation type="unfinished">中性</translation>
+        <translation>中性</translation>
     </message>
     <message>
         <source>BEARISH</source>
@@ -38293,7 +38345,7 @@ to place orders</source>
     <name>fincept::screens::widgets::NotesWidget</name>
     <message>
         <source>NOTES</source>
-        <translation type="unfinished">備註</translation>
+        <translation>備註</translation>
     </message>
     <message>
         <source>NOTES — FAVORITES</source>
@@ -38348,11 +38400,11 @@ to place orders</source>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>數量</translation>
     </message>
     <message>
         <source>Avg</source>
@@ -38364,7 +38416,7 @@ to place orders</source>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">盈虧</translation>
+        <translation>盈虧</translation>
     </message>
     <message>
         <source>No active account — click gear to configure</source>
@@ -38387,7 +38439,7 @@ to place orders</source>
     </message>
     <message>
         <source>Symbol</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>Side</source>
@@ -38395,11 +38447,11 @@ to place orders</source>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>數量</translation>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>Status</source>
@@ -38474,7 +38526,7 @@ to place orders</source>
     </message>
     <message>
         <source>TODAY</source>
-        <translation type="unfinished">今日</translation>
+        <translation>今日</translation>
     </message>
 </context>
 <context>
@@ -38497,7 +38549,7 @@ to place orders</source>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">市場</translation>
+        <translation>市場</translation>
     </message>
 </context>
 <context>
@@ -38508,7 +38560,7 @@ to place orders</source>
     </message>
     <message>
         <source>TOTAL VALUE</source>
-        <translation type="unfinished">總值</translation>
+        <translation>總值</translation>
     </message>
     <message>
         <source>DAY P&amp;L</source>
@@ -38520,7 +38572,7 @@ to place orders</source>
     </message>
     <message>
         <source>HOLDINGS</source>
-        <translation type="unfinished">持倉</translation>
+        <translation>持倉</translation>
     </message>
     <message>
         <source>SYM</source>
@@ -38532,15 +38584,15 @@ to place orders</source>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>VALUE</source>
-        <translation type="unfinished">數值</translation>
+        <translation>數值</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">盈虧</translation>
+        <translation>盈虧</translation>
     </message>
     <message>
         <source>No portfolios yet.
@@ -38564,7 +38616,7 @@ Add positions from the Portfolio tab.</source>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">投資組合</translation>
+        <translation>投資組合</translation>
     </message>
 </context>
 <context>
@@ -38591,11 +38643,11 @@ Add positions from the Portfolio tab.</source>
     </message>
     <message>
         <source>BUY</source>
-        <translation type="unfinished">BUY</translation>
+        <translation>買入</translation>
     </message>
     <message>
         <source>SELL</source>
-        <translation type="unfinished">SELL</translation>
+        <translation>賣出</translation>
     </message>
     <message>
         <source>SHORT</source>
@@ -38615,11 +38667,11 @@ Add positions from the Portfolio tab.</source>
     </message>
     <message>
         <source>QTY</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>數量</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>market</source>
@@ -38684,11 +38736,11 @@ Order sent to trading engine.</source>
     <name>fincept::screens::widgets::QuoteTableWidget</name>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>CHG</source>
@@ -38696,7 +38748,23 @@ Order sent to trading engine.</source>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">變動%</translation>
+        <translation>變動%</translation>
+    </message>
+    <message>
+        <source>COMMODITIES</source>
+        <translation>商品</translation>
+    </message>
+    <message>
+        <source>CRYPTOCURRENCY</source>
+        <translation>加密貨幣</translation>
+    </message>
+    <message>
+        <source>FOREX - MAJOR PAIRS</source>
+        <translation>外匯 - 主要貨幣對</translation>
+    </message>
+    <message>
+        <source>GLOBAL INDICES</source>
+        <translation>全球指數</translation>
     </message>
 </context>
 <context>
@@ -38758,7 +38826,7 @@ Order sent to trading engine.</source>
     </message>
     <message>
         <source>EXTREME FEAR</source>
-        <translation type="unfinished">極度恐懼</translation>
+        <translation>極度恐懼</translation>
     </message>
 </context>
 <context>
@@ -38793,23 +38861,23 @@ Order sent to trading engine.</source>
     </message>
     <message>
         <source>%1 symbols</source>
-        <translation type="unfinished">%1 個代號</translation>
+        <translation>%1 個代號</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">變動%</translation>
+        <translation>變動%</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">成交量</translation>
+        <translation>成交量</translation>
     </message>
     <message>
         <source>FILTER:</source>
@@ -38898,7 +38966,7 @@ Order sent to trading engine.</source>
     </message>
     <message>
         <source>OPEN</source>
-        <translation type="unfinished">開市</translation>
+        <translation>開市</translation>
     </message>
     <message>
         <source>PREV CLOSE</source>
@@ -38906,15 +38974,15 @@ Order sent to trading engine.</source>
     </message>
     <message>
         <source>HIGH</source>
-        <translation type="unfinished">最高</translation>
+        <translation>最高</translation>
     </message>
     <message>
         <source>LOW</source>
-        <translation type="unfinished">最低</translation>
+        <translation>最低</translation>
     </message>
     <message>
         <source>VOLUME</source>
-        <translation type="unfinished">成交量</translation>
+        <translation>成交量</translation>
     </message>
 </context>
 <context>
@@ -38933,7 +39001,7 @@ Order sent to trading engine.</source>
     </message>
     <message>
         <source>Positions</source>
-        <translation type="unfinished">持倉</translation>
+        <translation>持倉</translation>
     </message>
     <message>
         <source>No active account — click gear to configure</source>
@@ -38952,27 +39020,27 @@ Order sent to trading engine.</source>
     <name>fincept::screens::widgets::TopMoversWidget</name>
     <message>
         <source>TOP MOVERS</source>
-        <translation type="unfinished">升跌最大</translation>
+        <translation>升跌最大</translation>
     </message>
     <message>
         <source>GAINERS</source>
-        <translation type="unfinished">上升股</translation>
+        <translation>上升股</translation>
     </message>
     <message>
         <source>LOSERS</source>
-        <translation type="unfinished">下跌股</translation>
+        <translation>下跌股</translation>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">變動%</translation>
+        <translation>變動%</translation>
     </message>
 </context>
 <context>
@@ -38987,7 +39055,7 @@ Order sent to trading engine.</source>
     </message>
     <message>
         <source>Price</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>Size</source>
@@ -39091,7 +39159,7 @@ Build with Qt6 Multimedia for inline playback.</source>
     </message>
     <message>
         <source>SYMBOLS:</source>
-        <translation type="unfinished">代號：</translation>
+        <translation>代號：</translation>
     </message>
     <message>
         <source>GO</source>
@@ -39099,11 +39167,11 @@ Build with Qt6 Multimedia for inline playback.</source>
     </message>
     <message>
         <source>SYMBOL</source>
-        <translation type="unfinished">代號</translation>
+        <translation>代號</translation>
     </message>
     <message>
         <source>PRICE</source>
-        <translation type="unfinished">價格</translation>
+        <translation>價格</translation>
     </message>
     <message>
         <source>CHG</source>
@@ -39111,7 +39179,7 @@ Build with Qt6 Multimedia for inline playback.</source>
     </message>
     <message>
         <source>CHG%</source>
-        <translation type="unfinished">變動%</translation>
+        <translation>變動%</translation>
     </message>
 </context>
 <context>
@@ -39254,11 +39322,11 @@ X-API-Key: xyz</translation>
     <name>fincept::surface::SurfaceAnalyticsScreen</name>
     <message>
         <source>IMPORT CSV</source>
-        <translation type="unfinished">匯入 CSV</translation>
+        <translation>匯入 CSV</translation>
     </message>
     <message>
         <source>REFRESH</source>
-        <translation type="unfinished">重新整理</translation>
+        <translation>重新整理</translation>
     </message>
     <message>
         <source>3D</source>
@@ -39278,7 +39346,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>CSV Files (*.csv)</source>
-        <translation type="unfinished">CSV 檔案 (*.csv)</translation>
+        <translation>CSV 檔案 (*.csv)</translation>
     </message>
     <message>
         <source>No Databento API key configured</source>
@@ -39401,7 +39469,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>METRICS</source>
-        <translation type="unfinished">指標</translation>
+        <translation>指標</translation>
     </message>
     <message>
         <source>count</source>
@@ -39452,7 +39520,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>EXPORT CSV</source>
-        <translation type="unfinished">匯出 CSV</translation>
+        <translation>匯出 CSV</translation>
     </message>
     <message>
         <source>LINEAGE</source>
@@ -39512,7 +39580,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Export CSV</source>
-        <translation type="unfinished">匯出 CSV</translation>
+        <translation>匯出 CSV</translation>
     </message>
     <message>
         <source>CSV files (*.csv)</source>
@@ -39523,26 +39591,26 @@ X-API-Key: xyz</translation>
     <name>fincept::surface::SurfaceLineWidget</name>
     <message>
         <source>No data</source>
-        <translation type="unfinished">無數據</translation>
+        <translation>無數據</translation>
     </message>
 </context>
 <context>
     <name>fincept::ui::CommandBar</name>
     <message>
         <source>Dashboard</source>
-        <translation type="unfinished">儀表板</translation>
+        <translation>儀表板</translation>
     </message>
     <message>
         <source>Markets</source>
-        <translation type="unfinished">市場</translation>
+        <translation>市場</translation>
     </message>
     <message>
         <source>News</source>
-        <translation type="unfinished">新聞</translation>
+        <translation>新聞</translation>
     </message>
     <message>
         <source>Portfolio</source>
-        <translation type="unfinished">投資組合</translation>
+        <translation>投資組合</translation>
     </message>
     <message>
         <source>Backtesting</source>
@@ -39550,15 +39618,15 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Watchlist</source>
-        <translation type="unfinished">自選清單</translation>
+        <translation>自選清單</translation>
     </message>
     <message>
         <source>Crypto Trading</source>
-        <translation type="unfinished">加密交易</translation>
+        <translation>加密交易</translation>
     </message>
     <message>
         <source>AI Chat</source>
-        <translation type="unfinished">AI 聊天</translation>
+        <translation>AI 聊天</translation>
     </message>
     <message>
         <source>Notes</source>
@@ -39566,19 +39634,19 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Profile</source>
-        <translation type="unfinished">個人資料</translation>
+        <translation>個人資料</translation>
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">設定</translation>
+        <translation>設定</translation>
     </message>
     <message>
         <source>Forum</source>
-        <translation type="unfinished">論壇</translation>
+        <translation>論壇</translation>
     </message>
     <message>
         <source>Equity Trading</source>
-        <translation type="unfinished">股票交易</translation>
+        <translation>股票交易</translation>
     </message>
     <message>
         <source>Algo Trading</source>
@@ -39598,7 +39666,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Derivatives</source>
-        <translation type="unfinished">衍生品</translation>
+        <translation>衍生品</translation>
     </message>
     <message>
         <source>F&amp;O</source>
@@ -39606,7 +39674,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Equity Research</source>
-        <translation type="unfinished">股票研究</translation>
+        <translation>股票研究</translation>
     </message>
     <message>
         <source>Screener</source>
@@ -39626,7 +39694,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Economics</source>
-        <translation type="unfinished">經濟</translation>
+        <translation>經濟</translation>
     </message>
     <message>
         <source>GOVT Data</source>
@@ -39642,11 +39710,11 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Asia Markets</source>
-        <translation type="unfinished">亞洲市場</translation>
+        <translation>亞洲市場</translation>
     </message>
     <message>
         <source>Geopolitics</source>
-        <translation type="unfinished">地緣政治</translation>
+        <translation>地緣政治</translation>
     </message>
     <message>
         <source>Maritime</source>
@@ -39670,7 +39738,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">MCP 伺服器</translation>
+        <translation>MCP 伺服器</translation>
     </message>
     <message>
         <source>Node Editor</source>
@@ -39690,7 +39758,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Data Sources</source>
-        <translation type="unfinished">資料來源</translation>
+        <translation>資料來源</translation>
     </message>
     <message>
         <source>Data Mapping</source>
@@ -39702,11 +39770,11 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>About</source>
-        <translation type="unfinished">關於</translation>
+        <translation>關於</translation>
     </message>
     <message>
         <source>Support</source>
-        <translation type="unfinished">支援</translation>
+        <translation>支援</translation>
     </message>
     <message>
         <source>Stock</source>
@@ -39750,7 +39818,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Crypto</source>
-        <translation type="unfinished">加密貨幣</translation>
+        <translation>加密貨幣</translation>
     </message>
     <message>
         <source>Search cryptocurrencies</source>
@@ -39812,7 +39880,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>All</source>
-        <translation type="unfinished">全部</translation>
+        <translation>全部</translation>
     </message>
     <message numerus="yes">
         <source>%n component(s)</source>
@@ -39885,11 +39953,11 @@ X-API-Key: xyz</translation>
     <name>fincept::ui::NavigationBar</name>
     <message>
         <source> LIVE</source>
-        <translation type="unfinished"> 即時</translation>
+        <translation> 即時</translation>
     </message>
     <message>
         <source>LOGOUT</source>
-        <translation type="unfinished">登出</translation>
+        <translation>登出</translation>
     </message>
 </context>
 <context>
@@ -39944,19 +40012,19 @@ X-API-Key: xyz</translation>
     <name>fincept::ui::StatusBadge</name>
     <message>
         <source>CONNECTED</source>
-        <translation type="unfinished">已連線</translation>
+        <translation>已連線</translation>
     </message>
     <message>
         <source>OFFLINE</source>
-        <translation type="unfinished">離線</translation>
+        <translation>離線</translation>
     </message>
     <message>
         <source>LOADING...</source>
-        <translation type="unfinished">載入中...</translation>
+        <translation>載入中…</translation>
     </message>
     <message>
         <source>READY</source>
-        <translation type="unfinished">就緒</translation>
+        <translation>就緒</translation>
     </message>
 </context>
 <context>
@@ -40226,7 +40294,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>MCP Servers</source>
-        <translation type="unfinished">MCP 伺服器</translation>
+        <translation>MCP 伺服器</translation>
     </message>
     <message>
         <source>Data Mapping</source>
@@ -40234,7 +40302,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Data Sources</source>
-        <translation type="unfinished">資料來源</translation>
+        <translation>資料來源</translation>
     </message>
     <message>
         <source>Report Builder</source>
@@ -40258,7 +40326,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Crypto Trading</source>
-        <translation type="unfinished">加密交易</translation>
+        <translation>加密交易</translation>
     </message>
     <message>
         <source>Algo Trading</source>
@@ -40342,7 +40410,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Trademarks</source>
-        <translation type="unfinished">商標</translation>
+        <translation>商標</translation>
     </message>
     <message>
         <source>Check for Updates</source>
@@ -40361,11 +40429,11 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>TOTAL RETURN</source>
-        <translation type="unfinished">總回報</translation>
+        <translation>總回報</translation>
     </message>
     <message>
         <source>SHARPE</source>
-        <translation type="unfinished">夏普</translation>
+        <translation>夏普</translation>
     </message>
     <message>
         <source>SORTINO</source>
@@ -40373,7 +40441,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>MAX DRAWDOWN</source>
-        <translation type="unfinished">最大回撤</translation>
+        <translation>最大回撤</translation>
     </message>
     <message>
         <source>CALMAR</source>
@@ -40381,7 +40449,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>WIN RATE</source>
-        <translation type="unfinished">勝率</translation>
+        <translation>勝率</translation>
     </message>
     <message>
         <source>PROFIT FACTOR</source>
@@ -40441,15 +40509,15 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Qty</source>
-        <translation type="unfinished">QTY</translation>
+        <translation>數量</translation>
     </message>
     <message>
         <source>P&amp;L</source>
-        <translation type="unfinished">盈虧</translation>
+        <translation>盈虧</translation>
     </message>
     <message>
         <source>P&amp;L %</source>
-        <translation type="unfinished">盈虧 %</translation>
+        <translation>盈虧 %</translation>
     </message>
     <message>
         <source>Bars</source>
@@ -40672,7 +40740,7 @@ X-API-Key: xyz</translation>
     <name>fincept::ui::algo::RiskManagementPanel</name>
     <message>
         <source>RISK MANAGEMENT</source>
-        <translation type="unfinished">風險管理</translation>
+        <translation>風險管理</translation>
     </message>
     <message>
         <source>Stop Loss %</source>
@@ -40723,7 +40791,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>cancelled by user</source>
@@ -40770,7 +40838,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>Browser opened. Approve the transaction in your wallet. The terminal is waiting on a single-use loopback bridge — this dialog will close automatically when the wallet returns the signature.</source>
@@ -40793,7 +40861,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>DESCRIPTION</source>
-        <translation type="unfinished">描述</translation>
+        <translation>描述</translation>
     </message>
     <message>
         <source>Describe what this workflow does...</source>
@@ -40801,7 +40869,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>SAVE DRAFT</source>
@@ -40839,7 +40907,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>COPY</source>
-        <translation type="unfinished">複製</translation>
+        <translation>複製</translation>
     </message>
     <message>
         <source>Copy all results to clipboard</source>
@@ -41032,7 +41100,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>SAVE</source>
-        <translation type="unfinished">儲存</translation>
+        <translation>儲存</translation>
     </message>
     <message>
         <source>Save workflow to database</source>
@@ -41052,7 +41120,7 @@ X-API-Key: xyz</translation>
     </message>
     <message>
         <source>IMPORT</source>
-        <translation type="unfinished">匯入</translation>
+        <translation>匯入</translation>
     </message>
     <message>
         <source>EXPORT</source>
@@ -41119,7 +41187,7 @@ to edit properties</source>
     </message>
     <message>
         <source>NAME</source>
-        <translation type="unfinished">名稱</translation>
+        <translation>名稱</translation>
     </message>
     <message>
         <source>PARAMETERS</source>
@@ -41127,7 +41195,7 @@ to edit properties</source>
     </message>
     <message>
         <source>SETTINGS</source>
-        <translation type="unfinished">設定</translation>
+        <translation>設定</translation>
     </message>
     <message>
         <source>Disabled</source>
@@ -41136,6 +41204,46 @@ to edit properties</source>
     <message>
         <source>Continue on Fail</source>
         <translation>失敗時繼續</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::screens::OrderConfirmDialog</name>
+    <message>
+        <source>Confirm Order</source>
+        <translation>確認訂單</translation>
+    </message>
+    <message>
+        <source>Est. value</source>
+        <translation>估計價值</translation>
+    </message>
+    <message>
+        <source>Send Order</source>
+        <translation>傳送訂單</translation>
+    </message>
+    <message>
+        <source>⚠  SEMI-AUTO — review before sending</source>
+        <translation>⚠  半自動 — 傳送前請檢視</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::screens::PendingOrdersBadge</name>
+    <message>
+        <source>Orders awaiting approval — click to review</source>
+        <translation>訂單正在等待核准 — 按一下以檢視</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::screens::PendingOrdersPanel</name>
+    <message>
+        <source>PENDING ORDERS</source>
+        <translation>待處理訂單</translation>
+    </message>
+</context>
+<context>
+    <name>fincept::ui::PhoneCodeComboBox</name>
+    <message>
+        <source>Search country…</source>
+        <translation>搜尋國家…</translation>
     </message>
 </context>
 </TS>

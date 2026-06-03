@@ -1,31 +1,26 @@
 #include "services/economics/MacroCalendarService.h"
 
+#include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "datahub/TopicPolicy.h"
+#include "network/http/HttpClient.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonParseError>
 #include <QJsonValue>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
-#include <QNetworkRequest>
 #include <QPointer>
-#include <QUrl>
 
 namespace fincept::services {
 
 namespace {
 constexpr const char* kTopic = "econ:fincept:upcoming_events";
-constexpr const char* kUrl = "https://api.fincept.in/macro/upcoming-events?limit=25";
 
-// Endpoint-specific API key. The shared HttpClient singleton attaches the
-// signed-in user's session key to same-host requests; this endpoint requires
-// an explicit user-issued key separate from session auth, so we hand-build
-// the request via a private QNetworkAccessManager rather than polluting
-// HttpClient's global api_key_ state.
-constexpr const char* kApiKey = "fk_user_IYchlC3isi4NG5jtjkrNWX4nF3iPHgsFTT5rZ9TkpTQ";
+// Path appended to AppConfig::api_base_url(). Requests go through the shared
+// HttpClient, which attaches the signed-in user's session key (X-API-Key /
+// X-Session-Token) to same-host api.fincept.in requests — so no endpoint key
+// is baked into the binary.
+constexpr const char* kPath = "/macro/upcoming-events?limit=25";
 
 QJsonArray parse_events(const QJsonDocument& doc) {
     if (doc.isArray())
@@ -55,9 +50,7 @@ MacroCalendarService& MacroCalendarService::instance() {
     return s;
 }
 
-MacroCalendarService::MacroCalendarService(QObject* parent) : QObject(parent) {
-    nam_ = new QNetworkAccessManager(this);
-}
+MacroCalendarService::MacroCalendarService(QObject* parent) : QObject(parent) {}
 
 void MacroCalendarService::ensure_registered_with_hub() {
     if (hub_registered_)
@@ -85,38 +78,29 @@ void MacroCalendarService::refresh(const QStringList& topics) {
     if (!topics.contains(QString::fromLatin1(kTopic)))
         return;
 
-    QNetworkRequest req{QUrl(QString::fromLatin1(kUrl))};
-    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    req.setHeader(QNetworkRequest::UserAgentHeader, "FinceptTerminal/4.0");
-    req.setRawHeader("X-API-Key", QByteArray(kApiKey));
+    // Route through the shared HttpClient so the signed-in user's session key
+    // is attached automatically (same-host auth), matching the other Fincept
+    // data services (Geopolitics/Maritime/Forum). Host comes from AppConfig so
+    // staging / self-host overrides apply uniformly.
+    const QString url = AppConfig::instance().api_base_url() + QString::fromLatin1(kPath);
 
     QPointer<MacroCalendarService> self = this;
-    QNetworkReply* reply = nam_->get(req);
-    connect(reply, &QNetworkReply::finished, this, [self, reply]() {
-        reply->deleteLater();
-        if (!self)
-            return;
-        auto& hub = fincept::datahub::DataHub::instance();
-
-        if (reply->error() != QNetworkReply::NoError) {
-            const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-            const QString msg = QStringLiteral("HTTP %1: %2").arg(status).arg(reply->errorString());
-            LOG_WARN("MacroCalendarService", msg);
-            hub.publish_error(QString::fromLatin1(kTopic), msg);
-            return;
-        }
-
-        QJsonParseError perr{};
-        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll(), &perr);
-        if (perr.error != QJsonParseError::NoError) {
-            const QString msg = QStringLiteral("Parse error: %1").arg(perr.errorString());
-            LOG_WARN("MacroCalendarService", msg);
-            hub.publish_error(QString::fromLatin1(kTopic), msg);
-            return;
-        }
-        const QJsonArray events = parse_events(doc);
-        hub.publish(QString::fromLatin1(kTopic), QVariant::fromValue(events));
-    });
+    HttpClient::instance().get(
+        url,
+        [self](Result<QJsonDocument> result) {
+            if (!self)
+                return;
+            auto& hub = fincept::datahub::DataHub::instance();
+            if (!result.is_ok()) {
+                const QString msg = QString::fromStdString(result.error());
+                LOG_WARN("MacroCalendarService", msg);
+                hub.publish_error(QString::fromLatin1(kTopic), msg);
+                return;
+            }
+            const QJsonArray events = parse_events(result.value());
+            hub.publish(QString::fromLatin1(kTopic), QVariant::fromValue(events));
+        },
+        this);
 }
 
 } // namespace fincept::services

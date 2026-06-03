@@ -71,6 +71,13 @@ def _respond(req_id, success, data=None, error=None, code=None):
         pass
 
 
+def _require_cap(req_id, ex, cap, exchange_id):
+    if not ex.has.get(cap):
+        _respond(req_id, False, error=f"{exchange_id} does not support {cap}", code="NOT_SUPPORTED")
+        return False
+    return True
+
+
 # ── Exchange instance pool ──────────────────────────────────────────────────
 # Keyed by (exchange_id, has_credentials) — reuse across requests.
 # ccxt instances with credentials differ from public ones.
@@ -102,6 +109,10 @@ def _get_exchange(exchange_id, need_auth=False):
             config["secret"] = creds["secret"]
         if creds.get("password"):
             config["password"] = creds["password"]
+        if creds.get("wallet_address"):
+            config["walletAddress"] = creds["wallet_address"]
+        if creds.get("private_key"):
+            config["privateKey"] = creds["private_key"]
 
     exchange_class = getattr(ccxt, exchange_id)
     exchange = exchange_class(config)
@@ -271,6 +282,7 @@ def _handle_fetch_trades(req_id, exchange_id, args):
 
 def _handle_fetch_funding_rate(req_id, exchange_id, args):
     ex = _get_exchange(exchange_id)
+    if not _require_cap(req_id, ex, 'fetchFundingRate', exchange_id): return
     symbol = args["symbol"]
     fr = ex.fetch_funding_rate(symbol)
     _respond(req_id, True, {
@@ -285,6 +297,7 @@ def _handle_fetch_funding_rate(req_id, exchange_id, args):
 
 def _handle_fetch_open_interest(req_id, exchange_id, args):
     ex = _get_exchange(exchange_id)
+    if not _require_cap(req_id, ex, 'fetchOpenInterest', exchange_id): return
     symbol = args["symbol"]
     oi = ex.fetch_open_interest(symbol)
     _respond(req_id, True, {
@@ -381,6 +394,7 @@ def _handle_cancel_order(req_id, exchange_id, args):
 
 def _handle_fetch_positions(req_id, exchange_id, args):
     ex = _get_exchange(exchange_id, need_auth=True)
+    if not _require_cap(req_id, ex, 'fetchPositions', exchange_id): return
     symbol = args.get("symbol")
     positions = ex.fetch_positions([symbol] if symbol else None)
     result = [p for p in positions if abs(p.get("contracts", 0)) > 0]
@@ -439,6 +453,7 @@ def _handle_fetch_trading_fees(req_id, exchange_id, args):
     ex = _get_exchange(exchange_id)
     symbol = args.get("symbol")
     if symbol:
+        if not _require_cap(req_id, ex, 'fetchTradingFee', exchange_id): return
         fee = ex.fetch_trading_fee(symbol)
         _respond(req_id, True, {
             "symbol": symbol,
@@ -447,6 +462,7 @@ def _handle_fetch_trading_fees(req_id, exchange_id, args):
             "percentage": fee.get("percentage", True),
         })
     else:
+        if not _require_cap(req_id, ex, 'fetchTradingFees', exchange_id): return
         fees = ex.fetch_trading_fees()
         result = []
         for sym, fee in list(fees.items())[:50]:
@@ -461,6 +477,7 @@ def _handle_fetch_trading_fees(req_id, exchange_id, args):
 
 def _handle_set_leverage(req_id, exchange_id, args):
     ex = _get_exchange(exchange_id, need_auth=True)
+    if not _require_cap(req_id, ex, 'setLeverage', exchange_id): return
     symbol = args["symbol"]
     leverage = int(args["leverage"])
     # Pass defaultType via params so we don't mutate the shared pooled instance
@@ -470,6 +487,7 @@ def _handle_set_leverage(req_id, exchange_id, args):
 
 def _handle_set_margin_mode(req_id, exchange_id, args):
     ex = _get_exchange(exchange_id, need_auth=True)
+    if not _require_cap(req_id, ex, 'setMarginMode', exchange_id): return
     symbol = args["symbol"]
     mode = args["mode"]  # "cross" or "isolated"
     result = ex.set_margin_mode(mode, symbol, params={"defaultType": "swap"})

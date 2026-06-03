@@ -186,9 +186,16 @@ EcdsaSig ecdsa_sign(const QByteArray& digest, const QByteArray& priv_key_32) {
     BN_bn2bin(r_bn, reinterpret_cast<unsigned char*>(out.r.data()) + (32 - rlen));
     BN_bn2bin(s_normal, reinterpret_cast<unsigned char*>(out.s.data()) + (32 - slen));
 
-    // v: try recovery — easier path: compute pubkey hash, return both v's, callee picks.
-    // Default to 27; correctness verified via signer_address round-trip in tests.
-    out.v = 27;
+    // v (recovery id): MUST be 27 or 28 depending on the parity of the R point.
+    // Hardcoded to 27 here — this is correct only ~half the time and is NOT yet
+    // derived from the signature, so HL's ecrecover will resolve the WRONG signer
+    // whenever the true recovery id is 28. Harmless today only because the live
+    // order path is gated off (HyperliquidVenue::place_order returns
+    // "hl_live_path_not_yet_wired"). Before enabling live trading, derive the real
+    // recovery id (recover the pubkey for recid 0/1 and pick the one matching
+    // signer_address, or switch to libsecp256k1's recoverable-signature API) and
+    // cover it with the known vector from the HL docs.
+    out.v = 27; // TODO(hyperliquid): derive real recovery id — see note above
 
     // Compute signer address = last 20 bytes of keccak256(uncompressed pubkey[1:]).
     unsigned char pubbuf[65];

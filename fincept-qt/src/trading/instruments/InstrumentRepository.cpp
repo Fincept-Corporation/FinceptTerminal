@@ -57,22 +57,29 @@ fincept::Result<void> InstrumentRepository::replace_all(const QString& broker_id
                         " expiry, strike, lot_size, instrument_type, tick_size, broker_id, broker_token) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
+    // A default-constructed QString is *null*, and QtSql binds a null QString as
+    // SQL NULL. Every text column here is NOT NULL, so a null bind (e.g. an unset
+    // broker_token, which numeric-token brokers like Fyers never populate) makes
+    // INSERT OR IGNORE silently drop the row — the whole catalog vanishes while the
+    // transaction still "succeeds". Coalesce nulls to "" so the row persists.
+    auto nn = [](const QString& s) { return s.isNull() ? QStringLiteral("") : s; };
+
     for (const auto& inst : instruments) {
         auto ri = exec_write(sql, {
                                       inst.instrument_token,
                                       inst.exchange_token,
-                                      inst.symbol,
-                                      inst.brsymbol,
-                                      inst.name,
-                                      inst.exchange,
-                                      inst.brexchange,
-                                      inst.expiry,
+                                      nn(inst.symbol),
+                                      nn(inst.brsymbol),
+                                      nn(inst.name),
+                                      nn(inst.exchange),
+                                      nn(inst.brexchange),
+                                      nn(inst.expiry),
                                       inst.strike,
                                       inst.lot_size,
                                       QString(instrument_type_str(inst.instrument_type)),
                                       inst.tick_size,
                                       broker_id,
-                                      inst.broker_token,
+                                      nn(inst.broker_token),
                                   });
         if (ri.is_err()) {
             db().rollback();
@@ -86,7 +93,23 @@ fincept::Result<void> InstrumentRepository::replace_all(const QString& broker_id
         return rc2;
     }
 
-    LOG_INFO("InstrumentRepo", QString("Replaced %1 instruments for %2").arg(instruments.size()).arg(broker_id));
+    // Verify the write actually persisted on the same connection. INSERT OR IGNORE
+    // returns success even when every row is dropped, so a "successful" commit can
+    // still leave the table empty. Surface that loudly — but do NOT fail the
+    // refresh: the caller still builds the in-memory cache from `instruments`,
+    // which is what powers symbol search and resolution this session.
+    const int persisted = count(broker_id);
+    if (persisted == 0 && !instruments.isEmpty()) {
+        LOG_ERROR("InstrumentRepo",
+                  QString("replace_all persisted 0 rows for %1 despite %2 parsed instruments — "
+                          "commit succeeded but nothing landed on disk (in-memory cache still used)")
+                      .arg(broker_id)
+                      .arg(instruments.size()));
+    } else {
+        LOG_INFO("InstrumentRepo",
+                 QString("Replaced %1 instruments for %2 (verified %3 rows persisted)")
+                     .arg(instruments.size()).arg(broker_id).arg(persisted));
+    }
     return fincept::Result<void>::ok();
 }
 

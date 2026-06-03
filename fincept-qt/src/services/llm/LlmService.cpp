@@ -332,7 +332,7 @@ QString LlmService::get_endpoint_url() const {
 
     // Fincept sync chat endpoint (async lives in fincept_async_request).
     if (p == "fincept") {
-        return "https://api.fincept.in/research/chat";
+        return fincept::AppConfig::instance().api_base_url() + "/research/chat";
     }
 
     // Custom base_url wins over hard-coded defaults.

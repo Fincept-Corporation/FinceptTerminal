@@ -26,6 +26,7 @@
 #include "ui/charts/layers/BollingerLayer.h"
 #include "ui/charts/layers/SupportResistanceLayer.h"
 #include "ui/charts/layers/PivotLayer.h"
+#include "ui/charts/HorizontalLineLayer.h"
 
 #include "ui/theme/Theme.h"
 
@@ -405,6 +406,30 @@ void EquityChart::clear() {
     if (last_tag_bg_) last_tag_bg_->setVisible(false);
     if (last_tag_txt_) last_tag_txt_->setVisible(false);
     on_hover_leave();
+}
+
+void EquityChart::set_position_line(double price, const QColor& color, const QString& label) {
+    if (!overlay_mgr_ || price <= 0.0)
+        return;
+    if (!pos_line_) {
+        pos_line_ = new fincept::ui::HorizontalLineLayer(QStringLiteral("__position"),
+                                                         QStringLiteral("Position"));
+        overlay_mgr_->add_layer(pos_line_);
+    }
+    fincept::ui::HorizontalLevel lvl;
+    lvl.price = price;
+    lvl.label = label;
+    lvl.color = color;
+    lvl.style = Qt::DashLine;
+    pos_line_->set_levels({lvl});
+    overlay_mgr_->reposition_all();
+}
+
+void EquityChart::clear_position_line() {
+    if (pos_line_)
+        pos_line_->set_levels({});
+    if (overlay_mgr_)
+        overlay_mgr_->reposition_all();
 }
 
 void EquityChart::update_axes(double min_price, double max_price, qint64 min_time, qint64 max_time) {

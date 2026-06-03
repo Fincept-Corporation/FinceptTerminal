@@ -14,6 +14,7 @@
 #include "core/logging/Logger.h"
 #include "mcp/ToolSchemaBuilder.h"
 #include "trading/AccountManager.h"
+#include "trading/ActionCenter.h"
 #include "trading/BrokerInterface.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/TradingTypes.h"
@@ -192,6 +193,20 @@ std::vector<ToolDef> get_live_trading_tools() {
             order.price = args["price"].toDouble(0.0);
             order.stop_price = args["trigger_price"].toDouble(0.0);
             order.product_type = parse_product(args["product"].toString("MIS"));
+
+            // Semi-Auto gate (headless): the AI is placing a live order, so in
+            // Semi-Auto mode queue it for human approval (surfaces in the
+            // status-bar Pending Orders popover) instead of sending it.
+            if (ActionCenter::instance().should_queue(account_id, "placeorder")) {
+                const QString pid = ActionCenter::instance().queue_order(
+                    account_id, "placeorder", ActionCenter::serialize_unified_order(order));
+                if (pid.isEmpty())
+                    return ToolResult::fail("Failed to queue order for approval");
+                return ToolResult::ok("Order queued for approval",
+                                      QJsonObject{{"pending_id", pid},
+                                                  {"account_id", account_id},
+                                                  {"status", "queued_for_approval"}});
+            }
 
             auto resp = UnifiedTrading::instance().place_order(account_id, order);
             if (!resp.success)

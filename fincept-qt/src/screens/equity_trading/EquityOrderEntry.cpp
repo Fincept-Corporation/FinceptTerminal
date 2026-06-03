@@ -715,7 +715,7 @@ void EquityOrderEntry::on_place_strategy() {
     if (!product_types_.isEmpty() && prod_idx >= 0 && prod_idx < product_types_.size())
         product = product_types_[prod_idx].value;
 
-    trading::BasketOrderRequest basket = trading::OptionsStrategyBuilder::to_basket_order(strat, product);
+    trading::BasketOrderRequest basket = trading::OptionsStrategyBuilder::to_basket_order(strat, product, broker_id_);
     emit strategy_order_submitted(basket);
 }
 

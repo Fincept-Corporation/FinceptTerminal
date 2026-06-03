@@ -1,6 +1,7 @@
 #include "screens/chat_mode/ChatModeService.h"
 
 #include "auth/AuthManager.h"
+#include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 
 #include <QDateTime>
@@ -12,8 +13,6 @@
 #include <QUrlQuery>
 
 namespace fincept::chat_mode {
-
-static constexpr const char* API_BASE = "https://api.fincept.in";
 
 // ── Singleton ─────────────────────────────────────────────────────────────────
 
@@ -30,7 +29,7 @@ ChatModeService::ChatModeService(QObject* parent) : QObject(parent) {
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
 QString ChatModeService::base_url() const {
-    return QString::fromLatin1(API_BASE);
+    return fincept::AppConfig::instance().api_base_url();
 }
 
 QString ChatModeService::api_key() const {

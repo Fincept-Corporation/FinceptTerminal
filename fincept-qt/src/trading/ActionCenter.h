@@ -116,6 +116,11 @@ class ActionCenter : public QObject {
     static QJsonObject serialize_unified_order(const UnifiedOrder& order);
     static UnifiedOrder deserialize_unified_order(const QJsonObject& json);
 
+    // Serialize a basket into the order_data form stored for a "basketorder"
+    // pending row. Round-trips with the basketorder branch of execute_pending()
+    // ({"strategy": name, "orders": [serialize_unified_order(leg)...]}).
+    static QJsonObject serialize_basket_order(const BasketOrderRequest& basket);
+
   signals:
     void pending_order_created(const fincept::trading::PendingOrder& order);
     void order_approved(const QString& pending_id, const QString& broker_order_id);

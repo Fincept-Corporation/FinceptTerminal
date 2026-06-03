@@ -13,6 +13,9 @@
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QSplitter>
+#include <QStackedWidget>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QtConcurrent>
 
@@ -28,6 +31,9 @@ EquityBottomPanel::EquityBottomPanel(QWidget* parent) : QWidget(parent) {
     tabs_ = new QTabWidget;
     tabs_->setObjectName("eqBottomTabs");
     tabs_->setDocumentMode(true);
+    // Show full tab labels; scroll (don't truncate) when they overflow the width.
+    tabs_->setElideMode(Qt::ElideNone);
+    tabs_->setUsesScrollButtons(true);
 
     setup_positions_tab();
     setup_holdings_tab();
@@ -38,7 +44,58 @@ EquityBottomPanel::EquityBottomPanel(QWidget* parent) : QWidget(parent) {
     setup_auctions_tab();
     setup_calendar_tab();
 
+    // Collapse toggle pinned to the tab-bar corner. Collapsing leaves only the
+    // tab-bar header and returns the vertical space to the chart above.
+    collapse_btn_ = new QToolButton;
+    collapse_btn_->setObjectName("eqBottomCollapseBtn");
+    collapse_btn_->setCursor(Qt::PointingHandCursor);
+    collapse_btn_->setAutoRaise(true);
+    collapse_btn_->setText(QStringLiteral("▾")); // ▾ (click to collapse)
+    collapse_btn_->setToolTip(tr("Collapse panel"));
+    collapse_btn_->setStyleSheet(
+        "QToolButton{background:transparent;border:none;color:#808080;font-size:12px;padding:0 10px;}"
+        "QToolButton:hover{color:#e5e5e5;}");
+    connect(collapse_btn_, &QToolButton::clicked, this, &EquityBottomPanel::toggle_collapsed);
+    tabs_->setCornerWidget(collapse_btn_, Qt::TopRightCorner);
+
+    // Clicking any tab while collapsed expands the sheet to that tab.
+    connect(tabs_, &QTabWidget::tabBarClicked, this, [this](int) {
+        if (collapsed_)
+            toggle_collapsed();
+    });
+
+    // QTabWidget's page stack — hidden while collapsed so the panel shrinks to
+    // the tab-bar height without fighting the pages' minimum heights.
+    tab_content_ = tabs_->findChild<QStackedWidget*>();
+
     layout->addWidget(tabs_);
+}
+
+void EquityBottomPanel::toggle_collapsed() {
+    collapsed_ = !collapsed_;
+    apply_collapsed();
+}
+
+void EquityBottomPanel::apply_collapsed() {
+    auto* splitter = qobject_cast<QSplitter*>(parentWidget());
+    const int header_h = tabs_->tabBar()->sizeHint().height();
+    if (collapsed_) {
+        if (splitter)
+            saved_split_sizes_ = splitter->sizes();
+        if (tab_content_)
+            tab_content_->hide();
+        setMaximumHeight(header_h);
+        collapse_btn_->setText(QStringLiteral("▴")); // ▴ (click to expand)
+        collapse_btn_->setToolTip(tr("Expand panel"));
+    } else {
+        setMaximumHeight(QWIDGETSIZE_MAX);
+        if (tab_content_)
+            tab_content_->show();
+        collapse_btn_->setText(QStringLiteral("▾")); // ▾
+        collapse_btn_->setToolTip(tr("Collapse panel"));
+        if (splitter && !saved_split_sizes_.isEmpty())
+            splitter->setSizes(saved_split_sizes_);
+    }
 }
 
 void EquityBottomPanel::changeEvent(QEvent* event) {
@@ -384,6 +441,7 @@ void EquityBottomPanel::set_account_id(const QString& account_id) {
 }
 
 void EquityBottomPanel::set_paper_positions(const QVector<trading::PtPosition>& positions) {
+    last_paper_positions_ = positions; // keep row-aligned for live-quote patching
     positions_table_->setRowCount(positions.size());
     for (int i = 0; i < positions.size(); ++i) {
         const auto& p = positions[i];
@@ -486,6 +544,7 @@ void EquityBottomPanel::set_paper_stats(const trading::PtStats& stats) {
 }
 
 void EquityBottomPanel::set_positions(const QVector<trading::BrokerPosition>& positions) {
+    last_positions_ = positions; // keep row-aligned for live-quote patching
     positions_table_->setRowCount(positions.size());
     for (int i = 0; i < positions.size(); ++i) {
         const auto& p = positions[i];
@@ -505,6 +564,61 @@ void EquityBottomPanel::set_positions(const QVector<trading::BrokerPosition>& po
         pct_item->setText(QString("%1%").arg(p.pnl_pct, 0, 'f', 2));
         pct_item->setForeground(p.pnl_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE())
                                                : QColor(fincept::ui::colors::NEGATIVE()));
+    }
+}
+
+void EquityBottomPanel::update_quote(const QString& symbol, const trading::BrokerQuote& quote) {
+    const double ltp = quote.ltp;
+    if (ltp <= 0.0 || symbol.isEmpty())
+        return; // ignore empty / zero-price ticks — keep the last good values
+
+    const QColor pos_color(fincept::ui::colors::POSITIVE());
+    const QColor neg_color(fincept::ui::colors::NEGATIVE());
+
+    auto paint = [&](int row, double pnl, double pnl_pct) {
+        ensure_item(positions_table_, row, 5)->setText(QString::number(ltp, 'f', 2));
+        auto* pnl_item = ensure_item(positions_table_, row, 6);
+        pnl_item->setText(QString::number(pnl, 'f', 2));
+        pnl_item->setForeground(pnl >= 0 ? pos_color : neg_color);
+        auto* pct_item = ensure_item(positions_table_, row, 7);
+        pct_item->setText(QString("%1%").arg(pnl_pct, 0, 'f', 2));
+        pct_item->setForeground(pnl_pct >= 0 ? pos_color : neg_color);
+    };
+
+    if (is_paper_) {
+        // Paper engine convention: positive quantity + side ("long"/"short").
+        // Mirror PaperTradingRepository::update_position_price exactly so the row
+        // and the engine never diverge.
+        for (int i = 0; i < last_paper_positions_.size(); ++i) {
+            auto& p = last_paper_positions_[i];
+            if (p.symbol != symbol)
+                continue;
+            p.current_price = ltp;
+            p.unrealized_pnl = (p.side == QLatin1String("long"))
+                                   ? (ltp - p.entry_price) * p.quantity
+                                   : (p.entry_price - ltp) * p.quantity;
+            const double notional = p.entry_price * p.quantity;
+            const double pct = notional != 0.0 ? (p.unrealized_pnl / notional) * 100.0 : 0.0;
+            paint(i, p.unrealized_pnl, pct);
+        }
+        return;
+    }
+
+    // Live broker positions. Quantity may be signed (e.g. Fyers netQty < 0 for
+    // shorts) or positive-with-side; honor the side flag so direction is correct
+    // regardless of broker convention.
+    for (int i = 0; i < last_positions_.size(); ++i) {
+        auto& p = last_positions_[i];
+        if (p.symbol != symbol)
+            continue;
+        double signed_qty = p.quantity;
+        if (p.quantity > 0 && p.side.startsWith(QLatin1Char('s'), Qt::CaseInsensitive))
+            signed_qty = -p.quantity; // broker reports a short as +qty with "sell"/"short"
+        p.ltp = ltp;
+        p.pnl = (ltp - p.avg_price) * signed_qty;
+        const double notional = p.avg_price * qAbs(p.quantity);
+        p.pnl_pct = notional > 0.0 ? (p.pnl / notional) * 100.0 : 0.0;
+        paint(i, p.pnl, p.pnl_pct);
     }
 }
 

@@ -20,6 +20,9 @@ public:
     void update_candle(const QJsonObject& candle);
     void add_indicator(const QString& name, const QString& pane_id = QString());
     void remove_indicator(const QString& name, const QString& pane_id = QString());
+    // Draw/clear a locked dashed horizontal line at an open position's entry price.
+    void set_position_line(double price, const QString& label, const QString& color_hex);
+    void clear_position_line();
     void clear();
 
     bool is_available() const;

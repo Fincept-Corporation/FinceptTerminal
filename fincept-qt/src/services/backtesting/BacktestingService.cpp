@@ -3,9 +3,11 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "services/backtesting/BacktestBrokerData.h"
 #include "storage/cache/CacheManager.h"
 
 #include <QHash>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointer>
 
@@ -22,6 +24,47 @@ BacktestingService& BacktestingService::instance() {
 BacktestingService::BacktestingService(QObject* parent) : QObject(parent) {}
 
 void BacktestingService::execute(const QString& provider, const QString& command, const QJsonObject& args) {
+    const QJsonArray symbols = args.value("symbols").toArray();
+
+    // Broker data is wired for VectorBT only (v1). Skip for metadata calls
+    // (get_indicators sends empty args → no symbols) and when no Indian broker
+    // is connected — those paths are byte-for-byte the original behaviour.
+    const bool wants_broker = provider == QLatin1String("vectorbt") && !symbols.isEmpty() &&
+                              BacktestBrokerData::has_active_indian_broker();
+    if (!wants_broker) {
+        dispatch_python(provider, command, args);
+        return;
+    }
+
+    QStringList syms;
+    syms.reserve(symbols.size());
+    for (const auto& s : symbols)
+        syms << s.toString();
+    const QString start = args.value("startDate").toString();
+    const QString end = args.value("endDate").toString();
+    const QString interval = args.value("interval").toString(QStringLiteral("1d"));
+
+    QPointer<BacktestingService> self = this;
+    BacktestBrokerData::fetch(
+        this, syms, start, end, interval,
+        [self, provider, command, args](QJsonObject candles, QString broker_id) {
+            if (!self)
+                return;
+            QJsonObject enriched = args;
+            if (!candles.isEmpty()) {
+                enriched["brokerCandles"] = candles;
+                enriched["brokerDataSource"] = broker_id;
+                LOG_INFO("Backtesting", QString("Using %1 broker data for %2 symbol(s)")
+                                            .arg(broker_id)
+                                            .arg(candles.size()));
+            } else {
+                LOG_INFO("Backtesting", "No broker candles resolved — using yfinance");
+            }
+            self->dispatch_python(provider, command, enriched);
+        });
+}
+
+void BacktestingService::dispatch_python(const QString& provider, const QString& command, const QJsonObject& args) {
     // Build script path: Analytics/backtesting/{provider}/{provider}_provider.py
     auto script = QString("Analytics/backtesting/%1/%1_provider.py").arg(provider);
     auto json_str = QJsonDocument(args).toJson(QJsonDocument::Compact);

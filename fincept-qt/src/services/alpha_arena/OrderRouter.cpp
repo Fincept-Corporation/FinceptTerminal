@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "services/alpha_arena/AlphaArenaJson.h"
+#include "storage/repositories/SettingsRepository.h"
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -13,8 +14,33 @@ namespace fincept::services::alpha_arena {
 
 namespace {
 
-constexpr double kHitlNotionalThreshold = 1000.0;
-constexpr int kHitlLeverageThreshold = 10;
+// HITL trip points — an autonomous trade at/above either threshold requires
+// human confirmation. User-tunable via SettingsRepository (keys below); the
+// literals are the safe defaults applied when unset.
+constexpr double kDefaultHitlNotionalUsd = 1000.0;
+constexpr int kDefaultHitlMaxLeverage = 10;
+
+double hitl_notional_threshold() {
+    auto r = fincept::SettingsRepository::instance().get(QStringLiteral("alpha_arena.hitl.notional_usd"));
+    bool ok = false;
+    if (r.is_ok()) {
+        const double d = r.value().toDouble(&ok);
+        if (ok)
+            return d;
+    }
+    return kDefaultHitlNotionalUsd;
+}
+
+int hitl_leverage_threshold() {
+    auto r = fincept::SettingsRepository::instance().get(QStringLiteral("alpha_arena.hitl.max_leverage"));
+    bool ok = false;
+    if (r.is_ok()) {
+        const int v = r.value().toInt(&ok);
+        if (ok)
+            return v;
+    }
+    return kDefaultHitlMaxLeverage;
+}
 
 QString verdict_reason_json(const QVector<RiskVerdict>& verdicts) {
     QJsonArray arr;
@@ -104,7 +130,7 @@ bool OrderRouter::needs_hitl(const ProposedAction& a, const AgentRuntimeState& a
     if (!agent.live_mode) return false;
     if (a.signal != Signal::BuyToEnter && a.signal != Signal::SellToEnter) return false;
     const double notional = a.quantity * (venue_ ? venue_->last_mark(a.coin) : 0.0);
-    return notional >= kHitlNotionalThreshold || a.leverage >= kHitlLeverageThreshold;
+    return notional >= hitl_notional_threshold() || a.leverage >= hitl_leverage_threshold();
 }
 
 void OrderRouter::on_decision(QString decision_id, QString agent_id,

@@ -7,9 +7,14 @@
 #include "trading/instruments/InstrumentService.h"
 #include "ui/theme/Theme.h"
 
+#include <QAction>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QInputDialog>
+#include <QMenu>
+#include <QMessageBox>
 #include <QMutexLocker>
+#include <QSignalBlocker>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -54,17 +59,30 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    // Header
+    // Header — named-watchlist switcher (combo) + manage menu + symbol count
     auto* header = new QWidget(this);
     header->setObjectName("eqWatchlistHeader");
-    header->setFixedHeight(28);
+    header->setFixedHeight(30);
     auto* h_layout = new QHBoxLayout(header);
-    h_layout->setContentsMargins(8, 0, 8, 0);
+    h_layout->setContentsMargins(6, 2, 6, 2);
+    h_layout->setSpacing(4);
 
-    title_label_ = new QLabel(tr("WATCHLIST"));
-    title_label_->setObjectName("eqWatchlistTitle");
-    h_layout->addWidget(title_label_);
-    h_layout->addStretch();
+    wl_combo_ = new QComboBox;
+    wl_combo_->setObjectName("eqWatchlistCombo");
+    wl_combo_->setToolTip(tr("Active watchlist"));
+    wl_combo_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    connect(wl_combo_, qOverload<int>(&QComboBox::activated), this,
+            &EquityWatchlist::on_watchlist_combo_activated);
+    h_layout->addWidget(wl_combo_, 1);
+
+    wl_menu_btn_ = new QToolButton;
+    wl_menu_btn_->setObjectName("eqWatchlistMenuBtn");
+    wl_menu_btn_->setText(QStringLiteral("⋯"));
+    wl_menu_btn_->setCursor(Qt::PointingHandCursor);
+    wl_menu_btn_->setAutoRaise(true);
+    wl_menu_btn_->setToolTip(tr("New / Rename / Delete watchlist"));
+    connect(wl_menu_btn_, &QToolButton::clicked, this, &EquityWatchlist::on_watchlist_menu);
+    h_layout->addWidget(wl_menu_btn_);
 
     count_label_ = new QLabel("0");
     count_label_->setObjectName("eqWatchlistCount");
@@ -94,11 +112,19 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     connect(add_edit_, &QLineEdit::textChanged, this, &EquityWatchlist::on_add_text_changed);
     connect(add_edit_, &QLineEdit::returnPressed, this, &EquityWatchlist::on_add_symbol_entered);
 
-    // Completer backed by InstrumentService::search()
-    completer_model_ = new QStringListModel(this);
-    completer_ = new QCompleter(completer_model_, this);
+    // Completer backed by InstrumentService::search_all(). The model already holds
+    // server-side-filtered results, so use UnfilteredPopupCompletion — otherwise
+    // the completer re-filters them against the typed text and hides name-based
+    // matches (e.g. typing "infosys" finds symbol "INFY", whose display string
+    // doesn't contain "infosys", so a MatchContains filter would drop it).
+    // Parent the completer to the edit and the model to the completer so teardown
+    // frees the completer (and its internal QCompletionModel) before the source
+    // model — avoiding a QCompletionModel::filter crash on a half-destroyed model.
+    completer_ = new QCompleter(add_edit_);
+    completer_model_ = new QStringListModel(completer_);
+    completer_->setModel(completer_model_);
     completer_->setCaseSensitivity(Qt::CaseInsensitive);
-    completer_->setFilterMode(Qt::MatchContains);
+    completer_->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
     completer_->setMaxVisibleItems(8);
     add_edit_->setCompleter(completer_);
 
@@ -115,6 +141,22 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     // Table
     table_ = new QTableWidget;
     table_->setObjectName("eqWatchlistTable");
+    // Pin the monospace data font explicitly (like every other terminal table).
+    // The global `*{font-family}` rule is the lowest-specificity selector and
+    // item-view delegates don't reliably honour it for cell text, so without this
+    // the LTP/CHG numbers fall back to a proportional font and render uneven.
+    table_->setStyleSheet(
+        QString("QTableWidget { background:%1; color:%2; border:none; gridline-color:%3;"
+                " font-size:%4px; font-family:%5; }"
+                "QTableWidget::item { padding:1px 4px; border:none; }"
+                "QTableWidget::item:selected { background:%6; color:%2; }"
+                "QHeaderView::section { background:%7; color:%8; font-size:%4px; font-weight:700;"
+                " font-family:%5; border:none; border-bottom:1px solid %3; padding:2px 4px; }")
+            .arg(fincept::ui::colors::BG_BASE(), fincept::ui::colors::TEXT_PRIMARY(),
+                 fincept::ui::colors::BORDER_DIM())
+            .arg(fincept::ui::fonts::SMALL)
+            .arg(fincept::ui::fonts::DATA_FAMILY(), fincept::ui::colors::BG_HOVER(),
+                 fincept::ui::colors::BG_RAISED(), fincept::ui::colors::TEXT_TERTIARY()));
     table_->setColumnCount(3);
     table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("LTP"), tr("CHG%")});
     table_->verticalHeader()->setVisible(false);
@@ -123,16 +165,103 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setShowGrid(false);
     table_->setFocusPolicy(Qt::NoFocus);
-    table_->horizontalHeader()->setStretchLastSection(true);
+    // SYMBOL (col 0) is the SOLE stretch column so it claims all leftover width and
+    // shows full names; LTP/CHG stay fixed and compact. stretchLastSection must be
+    // OFF — with it on, the last column (CHG%) overrides its fixed width and steals
+    // room from SYMBOL, which is what truncated the names.
+    table_->horizontalHeader()->setStretchLastSection(false);
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
-    table_->setColumnWidth(1, 80);
-    table_->setColumnWidth(2, 60);
+    table_->horizontalHeader()->setMinimumSectionSize(48);
+    table_->setColumnWidth(1, 84); // LTP — fits up to "24500.50" without eliding
+    table_->setColumnWidth(2, 64); // CHG% — fits "+12.34%"
     table_->verticalHeader()->setDefaultSectionSize(24);
 
     connect(table_, &QTableWidget::cellClicked, this, &EquityWatchlist::on_cell_clicked);
+    table_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(table_, &QTableWidget::customContextMenuRequested, this,
+            &EquityWatchlist::on_table_context_menu);
     layout->addWidget(table_, 1);
+}
+
+void EquityWatchlist::set_watchlists(const QVector<QPair<QString, QString>>& lists,
+                                     const QString& active_id) {
+    if (!wl_combo_)
+        return;
+    QSignalBlocker block(wl_combo_); // programmatic — don't emit watchlist_selected
+    wl_combo_->clear();
+    int active_idx = 0;
+    for (int i = 0; i < lists.size(); ++i) {
+        wl_combo_->addItem(lists[i].second, lists[i].first); // (name, id)
+        if (lists[i].first == active_id)
+            active_idx = i;
+    }
+    if (wl_combo_->count() > 0)
+        wl_combo_->setCurrentIndex(active_idx);
+}
+
+void EquityWatchlist::on_watchlist_combo_activated(int index) {
+    if (index < 0 || !wl_combo_)
+        return;
+    const QString id = wl_combo_->itemData(index).toString();
+    if (!id.isEmpty())
+        emit watchlist_selected(id);
+}
+
+void EquityWatchlist::on_watchlist_menu() {
+    QMenu menu(this);
+    QAction* new_act = menu.addAction(tr("New watchlist…"));
+    QAction* rename_act = menu.addAction(tr("Rename…"));
+    QAction* delete_act = menu.addAction(tr("Delete"));
+
+    const int idx = wl_combo_ ? wl_combo_->currentIndex() : -1;
+    const QString cur_id = (idx >= 0) ? wl_combo_->itemData(idx).toString() : QString();
+    const QString cur_name = (idx >= 0) ? wl_combo_->itemText(idx) : QString();
+    rename_act->setEnabled(!cur_id.isEmpty());
+    delete_act->setEnabled(!cur_id.isEmpty());
+
+    QAction* chosen = menu.exec(wl_menu_btn_->mapToGlobal(QPoint(0, wl_menu_btn_->height())));
+    if (!chosen)
+        return;
+
+    if (chosen == new_act) {
+        bool ok = false;
+        const QString name =
+            QInputDialog::getText(this, tr("New Watchlist"), tr("Name:"), QLineEdit::Normal, {}, &ok)
+                .trimmed();
+        if (ok && !name.isEmpty())
+            emit watchlist_create_requested(name);
+    } else if (chosen == rename_act && !cur_id.isEmpty()) {
+        bool ok = false;
+        const QString name = QInputDialog::getText(this, tr("Rename Watchlist"), tr("Name:"),
+                                                   QLineEdit::Normal, cur_name, &ok)
+                                 .trimmed();
+        if (ok && !name.isEmpty())
+            emit watchlist_rename_requested(cur_id, name);
+    } else if (chosen == delete_act && !cur_id.isEmpty()) {
+        const auto btn = QMessageBox::question(this, tr("Delete Watchlist"),
+                                               tr("Delete \"%1\"?").arg(cur_name));
+        if (btn == QMessageBox::Yes)
+            emit watchlist_delete_requested(cur_id);
+    }
+}
+
+void EquityWatchlist::on_table_context_menu(const QPoint& pos) {
+    const int row = table_->rowAt(pos.y());
+    if (row < 0)
+        return;
+    auto* item = table_->item(row, 0);
+    if (!item)
+        return;
+    const QString sym = item->data(Qt::UserRole).toString();
+    if (sym.isEmpty())
+        return;
+
+    QMenu menu(this);
+    QAction* remove_act = menu.addAction(tr("Remove %1").arg(sym));
+    if (menu.exec(table_->viewport()->mapToGlobal(pos)) == remove_act)
+        emit symbol_removed(sym);
 }
 
 void EquityWatchlist::changeEvent(QEvent* event) {

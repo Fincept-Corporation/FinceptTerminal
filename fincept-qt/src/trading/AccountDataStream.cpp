@@ -125,14 +125,18 @@ void AccountDataStream::resume() {
 
 void AccountDataStream::subscribe_symbols(const QStringList& symbols) {
     watchlist_symbols_ = symbols;
-    if (ws_active())
+    // Resubscribe whenever the socket is connected — NOT gated on ws_active(),
+    // which also requires ticks. On an account switch-back the socket is
+    // connected but may have 0 ticks (it was subscribed to 0 symbols while
+    // unfocused), so an ws_active() gate would never re-push the watchlist.
+    if (ws_connected())
         ws_resubscribe();
 }
 
 void AccountDataStream::set_selected_symbol(const QString& symbol, const QString& exchange) {
     selected_symbol_ = symbol;
     selected_exchange_ = exchange;
-    if (ws_active())
+    if (ws_connected())
         ws_resubscribe();
 }
 
@@ -247,6 +251,8 @@ void AccountDataStream::async_fetch_quote() {
         auto result = broker->get_quotes(creds, {symbol});
         if (self) self->quote_fetching_ = false;
         if (!result.success || !result.data || result.data->isEmpty()) {
+            LOG_WARN(ADS_TAG, QString("async_fetch_quote failed for %1/%2 [%3]: %4")
+                                  .arg(bid, acct_id, symbol, result.error));
             if (self)
                 self->check_token_expiry(result.error);
             return;
@@ -273,6 +279,8 @@ void AccountDataStream::async_fetch_positions() {
         if (!broker) return;
         auto result = broker->get_positions(creds);
         if (!result.success || !result.data) {
+            LOG_WARN(ADS_TAG, QString("async_fetch_positions failed for %1/%2: %3")
+                                  .arg(bid, acct_id, result.error));
             if (self)
                 self->check_token_expiry(result.error);
             return;
@@ -298,6 +306,8 @@ void AccountDataStream::async_fetch_holdings() {
         if (!broker) return;
         auto result = broker->get_holdings(creds);
         if (!result.success || !result.data) {
+            LOG_WARN(ADS_TAG, QString("async_fetch_holdings failed for %1/%2: %3")
+                                  .arg(bid, acct_id, result.error));
             if (self)
                 self->check_token_expiry(result.error);
             return;
@@ -323,6 +333,8 @@ void AccountDataStream::async_fetch_orders() {
         if (!broker) return;
         auto result = broker->get_orders(creds);
         if (!result.success || !result.data) {
+            LOG_WARN(ADS_TAG, QString("async_fetch_orders failed for %1/%2: %3")
+                                  .arg(bid, acct_id, result.error));
             if (self)
                 self->check_token_expiry(result.error);
             return;
@@ -348,6 +360,8 @@ void AccountDataStream::async_fetch_funds() {
         if (!broker) return;
         auto result = broker->get_funds(creds);
         if (!result.success || !result.data) {
+            LOG_WARN(ADS_TAG, QString("async_fetch_funds failed for %1/%2: %3")
+                                  .arg(bid, acct_id, result.error));
             if (self)
                 self->check_token_expiry(result.error);
             return;
@@ -376,6 +390,8 @@ void AccountDataStream::async_fetch_watchlist_quotes() {
         if (!broker) return;
         auto result = broker->get_quotes(creds, symbols.toVector());
         if (!result.success || !result.data) {
+            LOG_WARN(ADS_TAG, QString("async_fetch_watchlist_quotes failed for %1/%2 (%3 syms): %4")
+                                  .arg(bid, acct_id).arg(symbols.size()).arg(result.error));
             if (self)
                 self->check_token_expiry(result.error);
             return;
@@ -413,18 +429,21 @@ void AccountDataStream::fetch_candles(const QString& symbol, const QString& time
         // Build date range
         const QString to_dt = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm");
         QString from_dt;
+        // Look-back windows kept within both Kite (1m=60d, intraday=100d,
+        // day=2000d) and Fyers (intraday ~100d/req, chunked) single-request
+        // limits, while loading enough bars to scroll back meaningfully.
         if (timeframe == "1d" || timeframe == "D" || timeframe == "1w" || timeframe == "W")
-            from_dt = QDate::currentDate().addYears(-2).toString("yyyy-MM-dd") + " 00:00";
+            from_dt = QDate::currentDate().addYears(-3).toString("yyyy-MM-dd") + " 00:00";
         else if (timeframe == "1h" || timeframe == "60")
-            from_dt = QDate::currentDate().addDays(-30).toString("yyyy-MM-dd") + " 00:00";
+            from_dt = QDate::currentDate().addDays(-60).toString("yyyy-MM-dd") + " 00:00";
         else if (timeframe == "30m")
-            from_dt = QDate::currentDate().addDays(-10).toString("yyyy-MM-dd") + " 00:00";
+            from_dt = QDate::currentDate().addDays(-45).toString("yyyy-MM-dd") + " 00:00";
         else if (timeframe == "15m")
-            from_dt = QDate::currentDate().addDays(-7).toString("yyyy-MM-dd") + " 00:00";
+            from_dt = QDate::currentDate().addDays(-30).toString("yyyy-MM-dd") + " 00:00";
         else if (timeframe == "5m")
-            from_dt = QDate::currentDate().addDays(-5).toString("yyyy-MM-dd") + " 00:00";
+            from_dt = QDate::currentDate().addDays(-15).toString("yyyy-MM-dd") + " 00:00";
         else
-            from_dt = QDate::currentDate().addDays(-5).toString("yyyy-MM-dd") + " 00:00";
+            from_dt = QDate::currentDate().addDays(-7).toString("yyyy-MM-dd") + " 00:00";
 
         auto result = broker->get_history(creds, symbol, timeframe, from_dt, to_dt);
         if (self) self->candles_fetching_ = false;
@@ -672,7 +691,17 @@ void AccountDataStream::ws_init() {
         connect(fws, &FyersWebSocket::depth_received, this,
                 [this](const QString& symbol, const QVector<QPair<double, double>>& bids,
                        const QVector<QPair<double, double>>& asks) {
-            Q_UNUSED(symbol);
+            // The WS streams depth for every subscribed watchlist symbol, but the
+            // depth table is single-symbol. Drop ticks that aren't for the selected
+            // symbol, else every watchlist symbol's book overwrites the table.
+            auto bare = [](QString s) {
+                const int colon = s.lastIndexOf(QLatin1Char(':'));
+                if (colon >= 0) s = s.mid(colon + 1);
+                if (s.endsWith(QLatin1String("-EQ"))) s.chop(3);
+                return s;
+            };
+            if (bare(symbol).compare(bare(selected_symbol_), Qt::CaseInsensitive) != 0)
+                return;
             if (bids.isEmpty() && asks.isEmpty()) return;
             const double best_bid = bids.isEmpty() ? 0 : bids.first().first;
             const double best_ask = asks.isEmpty() ? 0 : asks.first().first;
@@ -1048,6 +1077,20 @@ bool AccountDataStream::ws_active() const {
         return aws->is_connected() && ws_tick_count_ > 0;
     if (auto* b = qobject_cast<BrokerWebSocketBase*>(ws_))
         return b->is_connected() && ws_tick_count_ > 0;
+    return false;
+}
+
+bool AccountDataStream::ws_connected() const {
+    // Like ws_active() but without the tick-count requirement — used to decide
+    // whether a (re)subscribe can be sent right now.
+    if (!ws_)
+        return false;
+    if (auto* fws = qobject_cast<FyersWebSocket*>(ws_))
+        return fws->is_connected();
+    if (auto* aws = qobject_cast<AlpacaWebSocket*>(ws_))
+        return aws->is_connected();
+    if (auto* b = qobject_cast<BrokerWebSocketBase*>(ws_))
+        return b->is_connected();
     return false;
 }
 

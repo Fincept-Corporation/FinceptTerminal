@@ -6,8 +6,9 @@
 //     InstrumentService, fetches quotes via the broker's IBroker::get_quotes,
 //     enriches each strike with OI/IV/Greeks, and publishes the assembled
 //     OptionChain on `option:chain:<broker>:<underlying>:<expiry>`.
-//   - Greeks/IV computation is stubbed in Phase 1 (returns 0). Wired to the
-//     PythonWorker `option_greeks_batch` action in Phase 3.
+//   - Greeks/IV are computed during chain assembly (see enrich_with_greeks):
+//     an IV solver + per-leg greeks, throttled and cached. Brokers that supply
+//     greeks in their quotes (e.g. Fyers) are used directly.
 //   - WebSocket OI fan-out is wired in Phase 3; Phase 1 ships polled
 //     refresh through DataHub.
 //

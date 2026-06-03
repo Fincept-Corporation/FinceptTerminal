@@ -18,11 +18,15 @@ class CryptoCredentials : public QDialog {
     QString api_key() const;
     QString api_secret() const;
     QString password() const;
+    QString wallet_address() const;
+    QString private_key() const;
 
-    void set_values(const QString& key, const QString& secret, const QString& password);
+    void set_values(const QString& key, const QString& secret, const QString& password,
+                    const QString& wallet_address, const QString& private_key);
 
   signals:
-    void credentials_saved(const QString& api_key, const QString& api_secret, const QString& password);
+    void credentials_saved(const QString& api_key, const QString& api_secret, const QString& password,
+                           const QString& wallet_address, const QString& private_key);
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -40,6 +44,8 @@ class CryptoCredentials : public QDialog {
     QLineEdit* key_edit_ = nullptr;
     QLineEdit* secret_edit_ = nullptr;
     QLineEdit* password_edit_ = nullptr;
+    QLineEdit* wallet_edit_ = nullptr;
+    QLineEdit* private_key_edit_ = nullptr;
     QLabel* status_label_ = nullptr;
     QString exchange_id_;
 
@@ -49,6 +55,8 @@ class CryptoCredentials : public QDialog {
     QLabel* key_field_label_ = nullptr;
     QLabel* secret_field_label_ = nullptr;
     QLabel* password_field_label_ = nullptr;
+    QLabel* wallet_field_label_ = nullptr;
+    QLabel* private_key_field_label_ = nullptr;
     QLabel* totp_field_label_ = nullptr;
     QPushButton* clear_btn_ = nullptr;
     QPushButton* save_btn_ = nullptr;
