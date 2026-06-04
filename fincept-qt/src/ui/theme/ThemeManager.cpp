@@ -102,6 +102,16 @@ QStringList ThemeManager::build_font_chain(const QString& preferred) {
             if (name.endsWith('\'') || name.endsWith('"'))
                 name.chop(1);
             name = name.trimmed();
+            // Reject private/system families (macOS exposes hidden families
+            // prefixed with '.', e.g. ".Apple Color Emoji UI",
+            // ".AppleSystemUIFont") and emoji/symbol fonts. The emoji font in
+            // particular *does* carry ASCII digit glyphs (keycap-emoji bases)
+            // but renders them grossly letter-spaced, so if it lands first in
+            // the chain every number in the UI renders mangled while letters
+            // fall through to the next family. Never let one poison the data
+            // font, even if a stale setting asks for it.
+            if (name.startsWith('.') || name.contains("emoji", Qt::CaseInsensitive))
+                continue;
             if (!name.isEmpty() && !chain.contains(name, Qt::CaseInsensitive))
                 chain.append(name);
         }

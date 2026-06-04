@@ -27,7 +27,8 @@ static QWidget* make_faq(const QString& question, const QString& answer, const Q
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    auto* q_btn = new QPushButton(QString("  %1  %2").arg(icon, question));
+    auto* q_btn = new QPushButton(icon.isEmpty() ? QString("  %1").arg(question)
+                                                  : QString("  %1  %2").arg(icon, question));
     q_btn->setCursor(Qt::PointingHandCursor);
     q_btn->setStyleSheet(QString("QPushButton { color: %1; background: %2; border: 1px solid %3;"
                                  " padding: 11px 14px; text-align: left;"
@@ -49,7 +50,8 @@ static QWidget* make_faq(const QString& question, const QString& answer, const Q
         bool show = !a_lbl->isVisible();
         a_lbl->setVisible(show);
         QString arrow = show ? "▾" : "▸";
-        q_btn->setText(QString("  %1  %2").arg(icon, question));
+        q_btn->setText(icon.isEmpty() ? QString("  %1").arg(question)
+                                      : QString("  %1  %2").arg(icon, question));
         // tint open state
         q_btn->setStyleSheet(
             QString("QPushButton { color: %1; background: %2; border: 1px solid %3;"
@@ -165,13 +167,13 @@ QWidget* HelpScreen::build_page() {
         auto make_chip = [](const QString& icon, const QString& text, const QString& color,
                             const QString& url = {}) -> QWidget* {
             if (url.isEmpty()) {
-                auto* chip = new QLabel(QString("%1  %2").arg(icon, text));
+                auto* chip = new QLabel(icon.isEmpty() ? text : QString("%1  %2").arg(icon, text));
                 chip->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;"
                                             " font-family:'Consolas','Courier New',monospace;")
                                         .arg(color));
                 return chip;
             }
-            auto* chip = new QPushButton(QString("%1  %2").arg(icon, text));
+            auto* chip = new QPushButton(icon.isEmpty() ? text : QString("%1  %2").arg(icon, text));
             chip->setFlat(true);
             chip->setCursor(Qt::PointingHandCursor);
             chip->setStyleSheet(QString("QPushButton { color: %1; font-size: 11px; background: transparent;"
@@ -186,8 +188,8 @@ QWidget* HelpScreen::build_page() {
         // Business-hours label IS translated.
         chips_vl->addWidget(make_chip("✉", "support@fincept.in", colors::CYAN, "mailto:support@fincept.in"));
         chips_vl->addWidget(
-            make_chip("💬", "discord.gg/ae87a8ygbN", colors::POSITIVE, "https://discord.gg/ae87a8ygbN"));
-        chips_vl->addWidget(make_chip("🕐", tr("Mon-Fri  9AM–6PM EST"), colors::TEXT_TERTIARY));
+            make_chip("", "discord.gg/ae87a8ygbN", colors::POSITIVE, "https://discord.gg/ae87a8ygbN"));
+        chips_vl->addWidget(make_chip("", tr("Mon-Fri  9AM–6PM EST"), colors::TEXT_TERTIARY));
         hl->addLayout(chips_vl);
 
         vl->addWidget(hero);
@@ -212,12 +214,12 @@ QWidget* HelpScreen::build_page() {
             QString desc;
         };
         const Action actions[] = {
-            {"👤", "create_account",  tr("Create Account"),    tr("Register for full access")},
-            {"🔑", "reset_password",  tr("Reset Password"),    tr("Recover your account")},
-            {"📖", "documentation",   tr("Documentation"),     tr("Guides, tutorials & API ref")},
-            {"🐛", "report_bug",      tr("Report a Bug"),      tr("Open a bug report ticket")},
-            {"💬", "join_discord",    tr("Join Discord"),      tr("Community & live support")},
-            {"🎟", "support_tickets", tr("Support Tickets"),   tr("View or open a support ticket")},
+            {"", "create_account",  tr("Create Account"),    tr("Register for full access")},
+            {"", "reset_password",  tr("Reset Password"),    tr("Recover your account")},
+            {"", "documentation",   tr("Documentation"),     tr("Guides, tutorials & API ref")},
+            {"", "report_bug",      tr("Report a Bug"),      tr("Open a bug report ticket")},
+            {"", "join_discord",    tr("Join Discord"),      tr("Community & live support")},
+            {"", "support_tickets", tr("Support Tickets"),   tr("View or open a support ticket")},
         };
 
         int col = 0, row = 0;
@@ -237,13 +239,15 @@ QWidget* HelpScreen::build_page() {
 
             auto* top = new QHBoxLayout;
             top->setSpacing(7);
-            auto* icon_lbl = new QLabel(QString::fromUtf8(a.icon));
-            icon_lbl->setStyleSheet("background: transparent; font-size: 14px;");
+            if (a.icon[0]) {
+                auto* icon_lbl = new QLabel(QString::fromUtf8(a.icon));
+                icon_lbl->setStyleSheet("background: transparent; font-size: 14px;");
+                top->addWidget(icon_lbl);
+            }
             auto* name_lbl = new QLabel(a.label);
             name_lbl->setStyleSheet(QString("background: transparent; color: %1; font-size: 12px;"
                                             " font-weight: bold; %2")
                                         .arg(colors::TEXT_PRIMARY(), MF));
-            top->addWidget(icon_lbl);
             top->addWidget(name_lbl);
             top->addStretch();
             bl->addLayout(top);
@@ -284,41 +288,41 @@ QWidget* HelpScreen::build_page() {
             QString a;
         };
         const FAQ faqs[] = {
-            {"🔑", tr("How do I reset my password?"),
+            {"", tr("How do I reset my password?"),
              tr("Click \"Forgot Password\" on the login screen. Enter your email address and we'll "
                 "send you a reset link. The link expires in 24 hours.")},
 
-            {"👤", tr("What is Guest Access?"),
+            {"", tr("What is Guest Access?"),
              tr("Guest access lets you explore the terminal without creating an account. "
                 "Features like trading, portfolio management, and AI analytics require a "
                 "registered account.")},
 
-            {"💳", tr("What is a Credit?"),
+            {"", tr("What is a Credit?"),
              tr("Credits are the in-app currency used for premium features such as AI analysis, "
                 "advanced data feeds, and quantitative analytics. Free accounts receive a limited "
                 "number of credits on signup. Additional credits can be purchased in Settings → Billing.")},
 
-            {"📊", tr("How do I connect a broker?"),
+            {"", tr("How do I connect a broker?"),
              tr("Navigate to Settings → Brokers, select your broker from the list, and enter your "
                 "API key and secret. Fincept supports 18+ brokers including Zerodha, Angel One, "
                 "Upstox, Interactive Brokers, and more.")},
 
-            {"🐍", tr("Why does Python install at first launch?"),
+            {"", tr("Why does Python install at first launch?"),
              tr("Fincept embeds Python for 1300+ analytics scripts covering equity, "
                 "portfolio, derivatives, and quant analysis. The one-time install is ~150 MB and "
                 "happens automatically in the background.")},
 
-            {"💻", tr("What are the system requirements?"),
+            {"", tr("What are the system requirements?"),
              tr("Windows 10+ (x64), macOS 12+, or Linux (glibc 2.31+). 8 GB RAM recommended. "
                 "Active internet required for data feeds. Python 3.11 is installed automatically "
                 "during first-time setup.")},
 
-            {"🔒", tr("Is my data secure?"),
+            {"", tr("Is my data secure?"),
              tr("Credentials are stored encrypted via SecureStorage (OS keychain on each platform). "
                 "API keys are never logged or sent to Fincept servers — they are used only for "
                 "direct broker connections from your machine.")},
 
-            {"🐛", tr("How do I report a bug?"),
+            {"", tr("How do I report a bug?"),
              tr("Open a support ticket with category \"bug report\" (Help → Support Tickets → "
                 "+ New Ticket). Include your OS, version, steps to reproduce, and any error "
                 "messages you see. Screenshots are helpful.")},
@@ -409,9 +413,9 @@ QWidget* HelpScreen::build_page() {
         };
         const Contact contacts[] = {
             {"✉",  tr("Email Support"),   "support@fincept.in",                       "mailto:support@fincept.in"},
-            {"💬", tr("Discord Server"),  "discord.gg/ae87a8ygbN",                    "https://discord.gg/ae87a8ygbN"},
-            {"🌐", tr("Website"),         "fincept.in",                               "https://fincept.in"},
-            {"📦", tr("GitHub"),          "github.com/Fincept-Corporation/FinceptTerminal",
+            {"", tr("Discord Server"),  "discord.gg/ae87a8ygbN",                    "https://discord.gg/ae87a8ygbN"},
+            {"", tr("Website"),         "fincept.in",                               "https://fincept.in"},
+            {"", tr("GitHub"),          "github.com/Fincept-Corporation/FinceptTerminal",
              "https://github.com/Fincept-Corporation/FinceptTerminal"},
         };
 
@@ -424,9 +428,11 @@ QWidget* HelpScreen::build_page() {
             cl->setContentsMargins(14, 12, 14, 12);
             cl->setSpacing(10);
 
-            auto* ico = new QLabel(QString::fromUtf8(c.icon));
-            ico->setStyleSheet("background: transparent; font-size: 18px;");
-            cl->addWidget(ico);
+            if (c.icon[0]) {
+                auto* ico = new QLabel(QString::fromUtf8(c.icon));
+                ico->setStyleSheet("background: transparent; font-size: 18px;");
+                cl->addWidget(ico);
+            }
 
             auto* tvl = new QVBoxLayout;
             tvl->setSpacing(2);

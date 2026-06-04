@@ -8,7 +8,7 @@ class SMSProvider final : public BaseProvider {
   public:
     QString provider_id() const override { return "sms"; }
     QString display_name() const override { return "SMS (Twilio)"; }
-    QString icon() const override { return "💬"; }
+    QString icon() const override { return ""; }
     bool is_configured() const override {
         return !account_sid_.isEmpty() && !auth_token_.isEmpty() && !from_number_.isEmpty() && !to_number_.isEmpty();
     }

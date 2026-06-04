@@ -40,7 +40,7 @@ inline const QStringList NIFTY50_WATCHLIST = {
     "ITC",        "JIOFIN",     "JSWSTEEL",   "KOTAKBANK",  "LT",
     "M&M",        "MARUTI",     "NESTLEIND",  "NTPC",       "ONGC",
     "POWERGRID",  "RELIANCE",   "SBILIFE",    "SBIN",       "SHRIRAMFIN",
-    "SUNPHARMA",  "TATACONSUM", "TATAMOTORS", "TATASTEEL",  "TCS",
+    "SUNPHARMA",  "TATACONSUM", "TATASTEEL",  "TCS",
     "TECHM",      "TITAN",      "TRENT",      "ULTRACEMCO", "WIPRO",
 };
 

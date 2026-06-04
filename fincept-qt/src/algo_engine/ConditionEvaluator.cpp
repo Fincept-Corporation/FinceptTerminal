@@ -15,7 +15,10 @@ constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 
 bool op_needs_prev(const QString& op) {
     return op == "crosses_above" || op == "crosses_below" ||
-           op == "rising" || op == "falling";
+           op == "rising" || op == "falling" ||
+           // "==" is a level *touch*: it needs the previous sample to detect the
+           // price passing through the target between two (polled) ticks.
+           op == "==";
 }
 } // namespace
 
@@ -136,6 +139,24 @@ ConditionResult ConditionEvaluator::evaluate_single(
     } else if (condition.op == "between") {
         result.met = !std::isnan(lhs_curr) && lhs_curr >= condition.value && lhs_curr <= condition.value2;
         result.target_value = condition.value2;
+    } else if (condition.op == "==") {
+        // Level touch / equality cross. A live price polled every few seconds skips
+        // the exact value (280.35 → 280.45 never equals 280.40), so plain float ==
+        // never fires. Instead, trigger when the operands meet OR cross between the
+        // previous and current sample — i.e. lhs−rhs is ~0 now, or changed sign
+        // since the last sample (passed through equality, from either direction).
+        double tol = std::abs(rhs_curr) * 1e-7;
+        if (tol < 1e-9) tol = 1e-9;
+        const double curr_diff = lhs_curr - rhs_curr;
+        const double prev_diff = lhs_prev - rhs_prev; // NaN on the first sample
+        if (std::isnan(lhs_curr) || std::isnan(rhs_curr))
+            result.met = false;
+        else if (std::abs(curr_diff) <= tol)
+            result.met = true; // sitting on the level (within float tolerance)
+        else if (!std::isnan(prev_diff) && ((prev_diff < 0) != (curr_diff < 0)))
+            result.met = true; // crossed through the level since the last sample
+        else
+            result.met = false;
     } else {
         result.met = apply_comparison(lhs_curr, condition.op, rhs_curr);
     }

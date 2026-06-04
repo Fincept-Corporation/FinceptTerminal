@@ -7,7 +7,7 @@ class OpsgenieProvider final : public BaseProvider {
   public:
     QString provider_id() const override { return "opsgenie"; }
     QString display_name() const override { return "Opsgenie"; }
-    QString icon() const override { return "🔴"; }
+    QString icon() const override { return ""; }
     bool is_configured() const override { return !api_key_.isEmpty(); }
 
     void send(const NotificationRequest& req, std::function<void(bool, QString)> cb) override;

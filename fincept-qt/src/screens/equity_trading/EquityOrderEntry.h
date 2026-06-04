@@ -95,6 +95,7 @@ class EquityOrderEntry : public QWidget {
     QPushButton* place_strategy_btn_ = nullptr;
 
     // Labels
+    QLabel* symbol_label_ = nullptr; // "SYMBOL · EXCHANGE" context line
     QLabel* balance_label_ = nullptr;
     QLabel* market_price_label_ = nullptr;
     QLabel* cost_label_ = nullptr;

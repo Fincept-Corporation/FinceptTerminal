@@ -33,7 +33,9 @@ class EquityWatchlist : public QWidget {
     explicit EquityWatchlist(QWidget* parent = nullptr);
 
     void set_symbols(const QStringList& symbols);
-    void update_quotes(const QVector<trading::BrokerQuote>& quotes);
+    // Patch a single symbol's row in place. No-op if the symbol isn't tracked.
+    // Per-tick hot path — must stay O(entries + rows), never a full rebuild.
+    void update_quote(const trading::BrokerQuote& quote);
     void set_active_symbol(const QString& symbol);
     void set_broker_id(const QString& broker_id);
     void add_symbol(const QString& symbol);

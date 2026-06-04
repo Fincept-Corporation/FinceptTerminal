@@ -371,9 +371,10 @@ QWidget* PricingScreen::create_plan_card(const auth::SubscriptionPlan& plan, int
                                  .arg(MF));
         vl->addWidget(price);
     } else {
-        // Symbol-only (values are stored USD; not FX-converted). Preserve the
+        // Plan prices are intrinsically USD (not FX-converted), so pin the symbol
+        // to USD rather than following the global currency preference. Preserve the
         // whole-number format used for plan prices.
-        auto* price = new QLabel(cur::symbol() + QString::number(plan.price_usd, 'f', 0));
+        auto* price = new QLabel(cur::symbol_for("USD") + QString::number(plan.price_usd, 'f', 0));
         price->setAlignment(Qt::AlignCenter);
         price->setStyleSheet(QString("color: %1; font-size: 28px; font-weight: 700; "
                                      "background: transparent; %2")

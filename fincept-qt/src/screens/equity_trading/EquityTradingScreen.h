@@ -122,9 +122,18 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void update_account_menu();
     void update_connection_status();
     void async_modify_order(const QString& order_id, double qty, double price);
+
+    // Chart right-click trading: pop a confirm ticket (qty + limit price) at the
+    // clicked price, then route through on_order_submitted(). Watchlist-add reuses
+    // the existing on_watchlist_symbol_added() slot for the charted symbol.
+    void on_chart_buy_requested(double price);
+    void on_chart_sell_requested(double price);
+    void on_chart_add_to_watchlist();
+    void open_chart_order_ticket(bool is_buy, double price);
     // Re-reads the focused account's paper portfolio into the panels. No-op for
     // live accounts (their data flows from AccountDataStream via the hub).
     void refresh_paper_panels();
+    void flush_paper_prices(); // persist buffered paper position prices to SQLite
 
     // DataHub subscription helpers (D4 migration)
     void hub_subscribe_streaming();
@@ -184,6 +193,17 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
 
     // Paper trading (derived from focused account)
     int fill_cb_id_ = -1; // OrderMatcher fill callback
+    // Cached focused-account trading context. Refreshed on every focus / symbol /
+    // mode change (hub_subscribe_streaming) and on every paper refresh, so the
+    // per-tick quote handler avoids a mutex-locked BrokerAccount copy per tick.
+    bool focused_is_paper_ = false;
+    QString focused_paper_portfolio_id_;
+    // Paper engine price persistence is coalesced off the per-tick GUI hot path:
+    // the latest LTP per symbol is buffered here and flushed to SQLite on a timer
+    // (and synchronously before refresh_paper_panels reads), instead of one DB
+    // UPDATE per tick. SL/TP + limit matching still run every tick (in-memory).
+    QHash<QString, double> pending_paper_prices_;
+    bool paper_flush_armed_ = false;
 
     // Async guards
     std::atomic<bool> token_expired_shown_{false};
@@ -196,7 +216,6 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
 
     bool initialized_ = false;
     bool hub_active_ = false;
-    QHash<QString, trading::BrokerQuote> watchlist_quote_cache_;
 
     // Symbol group link — SymbolGroup::None when unlinked.
     SymbolGroup link_group_ = SymbolGroup::None;

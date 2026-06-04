@@ -128,6 +128,15 @@ void EquityTradingScreen::showEvent(QShowEvent* event) {
             if (sym != selected_symbol_)
                 on_symbol_selected(sym);
         }
+        // Fallback: if no valid account was restored (empty/stale persisted state,
+        // a deleted account, or first run), default to the first active broker so
+        // the screen loads ready-to-trade instead of stranding the user on
+        // "NO ACCOUNT" while configured brokers exist in the DB.
+        if (focused_account_id_.isEmpty()) {
+            const auto accts = AccountManager::instance().active_accounts();
+            if (!accts.isEmpty())
+                on_account_changed(accts.first().account_id);
+        }
     }
 
     // Start all active account data streams
@@ -366,6 +375,10 @@ void EquityTradingScreen::setup_ui() {
         if (stream)
             stream->fetch_candles(selected_symbol_, tf);
     });
+    connect(chart_, &EquityChartPanel::buy_requested, this, &EquityTradingScreen::on_chart_buy_requested);
+    connect(chart_, &EquityChartPanel::sell_requested, this, &EquityTradingScreen::on_chart_sell_requested);
+    connect(chart_, &EquityChartPanel::add_to_watchlist_requested, this,
+            &EquityTradingScreen::on_chart_add_to_watchlist);
     connect(chart_, &EquityChartPanel::exit_position_requested, this,
             &EquityTradingScreen::on_chart_exit_position);
 }

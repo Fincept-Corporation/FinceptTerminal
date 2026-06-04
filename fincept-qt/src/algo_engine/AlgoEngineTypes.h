@@ -174,6 +174,31 @@ struct AlgoOrderSignal {
     double price = 0;
     double trigger_price = 0;
     QString reason;
+    QString mode = "paper"; // paper | live — paper simulates the fill, live routes to the broker
+};
+
+// ── Live dashboard snapshot ───────────────────────────────────────────────────
+// Pushed from the runner to the Dashboard on every tick (throttled) so the UI can
+// show real-time price, P&L, position, and per-condition status without re-reading
+// the DB. Each AlgoConditionStatus is one entry/exit leaf with its live computed
+// value vs its target, so the user can see exactly why a rule is or isn't firing.
+
+struct AlgoConditionStatus {
+    QString label;       // human label, e.g. "CLOSE crosses above 1205"
+    QString op;          // raw operator (>, crosses_above, …) — UI derives hints from it
+    QString section;     // "entry" | "exit"
+    double computed = 0; // current value of the LHS operand
+    double target = 0;   // the threshold / RHS value
+    bool met = false;    // did this leaf evaluate true this tick
+};
+
+struct AlgoLiveSnapshot {
+    QString deployment_id;
+    double current_price = 0;
+    int64_t last_update_ms = 0;
+    AlgoMetrics metrics;
+    QVector<AlgoConditionStatus> conditions; // entry rows then exit rows
+    QString note;                            // short activity line, e.g. "entry not met"
 };
 
 } // namespace fincept::algo
@@ -181,3 +206,5 @@ struct AlgoOrderSignal {
 Q_DECLARE_METATYPE(fincept::algo::AlgoMetrics)
 Q_DECLARE_METATYPE(fincept::algo::AlgoTradeRecord)
 Q_DECLARE_METATYPE(fincept::algo::OhlcvCandle)
+Q_DECLARE_METATYPE(fincept::algo::AlgoConditionStatus)
+Q_DECLARE_METATYPE(fincept::algo::AlgoLiveSnapshot)

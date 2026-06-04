@@ -851,6 +851,7 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v036_instrument_broker_token.cpp
     src/storage/sqlite/migrations/v037_cloud_sync.cpp
     src/storage/sqlite/migrations/v038_notebooks.cpp
+    src/storage/sqlite/migrations/v039_algo_schema_fix.cpp
 
     # Historical OHLCV data store (Historify, Phase 3 §13)
     src/storage/HistoricalDataStore.cpp
@@ -2294,6 +2295,7 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v036_instrument_broker_token.cpp
     src/storage/sqlite/migrations/v037_cloud_sync.cpp
     src/storage/sqlite/migrations/v038_notebooks.cpp
+    src/storage/sqlite/migrations/v039_algo_schema_fix.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp

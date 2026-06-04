@@ -41,6 +41,7 @@
 #include <QDateTime>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QHash>
@@ -48,11 +49,13 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPointer>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QRadioButton>
 #include <QScrollBar>
 #include <QSplitter>
@@ -476,6 +479,87 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
     }
 }
 
+void EquityTradingScreen::on_chart_buy_requested(double price) {
+    open_chart_order_ticket(true, price);
+}
+
+void EquityTradingScreen::on_chart_sell_requested(double price) {
+    open_chart_order_ticket(false, price);
+}
+
+void EquityTradingScreen::on_chart_add_to_watchlist() {
+    if (!selected_symbol_.isEmpty())
+        on_watchlist_symbol_added(selected_symbol_);
+}
+
+// Kite-style chart trading: a compact confirm ticket (qty + limit price,
+// prefilled at the clicked level), then route through the normal placement path
+// so paper/live handling, balances and status all behave exactly like the order
+// panel. For live accounts on_order_submitted() still applies its own pre-send
+// gate; for paper this ticket is the single confirmation.
+void EquityTradingScreen::open_chart_order_ticket(bool is_buy, double price) {
+    if (focused_account_id_.isEmpty()) {
+        order_entry_->show_order_status(tr("No account selected — add one via ACCOUNTS"), false);
+        return;
+    }
+    if (price <= 0)
+        price = current_price_; // cursor price unavailable — fall back to last traded
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(is_buy ? tr("Buy %1").arg(selected_symbol_) : tr("Sell %1").arg(selected_symbol_));
+    auto* form = new QFormLayout(&dlg);
+
+    auto* hdr = new QLabel(
+        QStringLiteral("%1  %2 · %3").arg(is_buy ? tr("BUY") : tr("SELL"), selected_symbol_, selected_exchange_), &dlg);
+    hdr->setStyleSheet(QString("font-weight:700;font-size:13px;color:%1;")
+                           .arg(is_buy ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
+    form->addRow(hdr);
+
+    auto* type_combo = new QComboBox(&dlg);
+    type_combo->addItems({tr("Market"), tr("Limit")});
+    type_combo->setCurrentIndex(0); // default to Market
+    form->addRow(tr("Type"), type_combo);
+
+    auto* qty_spin = new QSpinBox(&dlg);
+    qty_spin->setRange(1, 10000000);
+    qty_spin->setValue(1);
+    form->addRow(tr("Qty"), qty_spin);
+
+    auto* px_spin = new QDoubleSpinBox(&dlg);
+    px_spin->setRange(0.01, 1.0e9);
+    px_spin->setDecimals(2);
+    px_spin->setValue(price > 0 ? price : 0.01);
+    form->addRow(tr("Limit price"), px_spin);
+
+    // A Market order needs no price (it fills at the LTP), so the limit-price
+    // row (label + field) is hidden entirely unless Limit is selected.
+    auto sync_type = [form, px_spin](int idx) { form->setRowVisible(px_spin, idx == 1); }; // 1 = Limit
+    connect(type_combo, qOverload<int>(&QComboBox::currentIndexChanged), &dlg, sync_type);
+    sync_type(type_combo->currentIndex());
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, &dlg);
+    QPushButton* ok = buttons->addButton(is_buy ? tr("Buy") : tr("Sell"), QDialogButtonBox::AcceptRole);
+    ok->setDefault(true);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    form->addRow(buttons);
+
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    UnifiedOrder order;
+    order.symbol = selected_symbol_;
+    order.exchange = selected_exchange_;
+    order.side = is_buy ? OrderSide::Buy : OrderSide::Sell;
+    const bool is_market = (type_combo->currentIndex() == 0);
+    order.order_type = is_market ? OrderType::Market : OrderType::Limit;
+    order.quantity = qty_spin->value();
+    order.price = is_market ? 0.0 : px_spin->value();
+    order.product_type = ProductType::Intraday;
+    order.validity = QStringLiteral("DAY");
+    on_order_submitted(order);
+}
+
 void EquityTradingScreen::on_cancel_order(const QString& order_id) {
     auto account = AccountManager::instance().get_account(focused_account_id_);
 
@@ -549,10 +633,30 @@ void EquityTradingScreen::async_modify_order(const QString& order_id, double qty
     });
 }
 
+void EquityTradingScreen::flush_paper_prices() {
+    paper_flush_armed_ = false;
+    if (pending_paper_prices_.isEmpty() || focused_paper_portfolio_id_.isEmpty()) {
+        pending_paper_prices_.clear();
+        return;
+    }
+    // Persist each symbol's latest buffered LTP. Coalesced off the per-tick hot
+    // path; recomputes the position's unrealized P&L in the same SQLite UPDATE.
+    for (auto it = pending_paper_prices_.cbegin(); it != pending_paper_prices_.cend(); ++it)
+        pt_update_position_price(focused_paper_portfolio_id_, it.key(), it.value());
+    pending_paper_prices_.clear();
+}
+
 void EquityTradingScreen::refresh_paper_panels() {
     auto account = AccountManager::instance().get_account(focused_account_id_);
+    // Keep the per-tick quote handler's cached context fresh — this also fires on
+    // paper order events, where the portfolio id may have just been assigned.
+    focused_is_paper_ = account.trading_mode == "paper";
+    focused_paper_portfolio_id_ = focused_is_paper_ ? account.paper_portfolio_id : QString();
     if (account.trading_mode != "paper" || account.paper_portfolio_id.isEmpty())
         return; // live data flows from AccountDataStream via the hub
+    // Persist any buffered tick prices first so the positions/funds snapshot below
+    // reflects the latest LTP at this refresh/order moment, not a coalesce window ago.
+    flush_paper_prices();
     try {
         auto portfolio = pt_get_portfolio(account.paper_portfolio_id);
         auto positions = pt_get_positions(account.paper_portfolio_id);

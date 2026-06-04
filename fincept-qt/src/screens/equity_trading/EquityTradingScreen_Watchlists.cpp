@@ -84,12 +84,22 @@ void EquityTradingScreen::load_watchlists() {
                 nifty_id = cr.value().id;
                 for (const auto& s : equity::NIFTY50_WATCHLIST)
                     repo.add_stock(nifty_id, s, {}, selected_exchange_);
-                active_watchlist_id_ = nifty_id; // newly created → default to it
                 auto r3 = repo.list_all();
                 if (r3.is_ok())
                     lists = r3.value();
             }
         }
+        // No user-selected watchlist yet → default Indian brokers to Nifty 50,
+        // even when other lists exist. A present active_watchlist_id_ means the
+        // user already picked a list, so leave their choice untouched.
+        bool indian_active_present = false;
+        for (const auto& w : lists)
+            if (w.id == active_watchlist_id_) {
+                indian_active_present = true;
+                break;
+            }
+        if (!indian_active_present && !nifty_id.isEmpty())
+            active_watchlist_id_ = nifty_id;
     }
 
     // Pick the active list: keep the current one if still present, else the

@@ -34,6 +34,7 @@
 #include <QCandlestickSet>
 #include <QChart>
 #include <QChartView>
+#include <QContextMenuEvent>
 #include <QDateTime>
 #include <QDateTimeAxis>
 #include <QEnterEvent>
@@ -47,6 +48,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineSeries>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPen>
@@ -145,6 +147,15 @@ class HoverEquityChartView : public QChartView {
             y->setRange(mid - span / 2.0, mid + span / 2.0);
         }
         e->accept();
+    }
+    void contextMenuEvent(QContextMenuEvent* e) override {
+        if (host_ && chart()) {
+            const QPointF v = chart()->mapToValue(e->pos());
+            host_->show_trade_menu(v.y(), e->globalPos());
+            e->accept();
+            return;
+        }
+        QChartView::contextMenuEvent(e);
     }
 
   private:
@@ -725,6 +736,23 @@ void EquityChart::on_hover_leave() {
     // Bring the always-visible last-price tag back now that the cursor's
     // gone -- recompute in case anything moved while we were hovering.
     update_last_price_marker();
+}
+
+void EquityChart::show_trade_menu(double price, const QPoint& global_pos) {
+    const QString pstr = price > 0 ? QString::number(price, 'f', 2) : QString();
+    QMenu menu(this);
+    QAction* buy_act = menu.addAction(price > 0 ? tr("Buy @ %1").arg(pstr) : tr("Buy"));
+    QAction* sell_act = menu.addAction(price > 0 ? tr("Sell @ %1").arg(pstr) : tr("Sell"));
+    menu.addSeparator();
+    QAction* wl_act = menu.addAction(tr("Add to watchlist"));
+
+    QAction* chosen = menu.exec(global_pos);
+    if (chosen == buy_act)
+        emit buy_requested(price);
+    else if (chosen == sell_act)
+        emit sell_requested(price);
+    else if (chosen == wl_act)
+        emit add_to_watchlist_requested();
 }
 
 } // namespace fincept::screens::equity

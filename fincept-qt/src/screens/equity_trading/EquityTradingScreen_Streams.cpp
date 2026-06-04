@@ -27,12 +27,19 @@
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
 
+#include <QTimer>
+
 namespace fincept::screens {
 
 using namespace fincept::trading;
 using namespace fincept::screens::equity;
 
 static const QString TAG = "EquityTrading";
+
+// Paper position prices are persisted to SQLite at most once per this window per
+// burst of ticks (coalesced), instead of one UPDATE per tick. The in-memory table
+// and chart card still update on every tick; only the DB write is throttled.
+static constexpr int kPaperPriceFlushMs = 1000;
 
 // ============================================================================
 // DataHub subscription helpers (D4)
@@ -48,7 +55,6 @@ void EquityTradingScreen::hub_subscribe_streaming() {
     auto& hub = datahub::DataHub::instance();
     hub.unsubscribe(this);
     hub_active_ = false;
-    watchlist_quote_cache_.clear();
 
     const QString bid = broker_id_for_focused();
     if (bid.isEmpty() || focused_account_id_.isEmpty())
@@ -59,8 +65,18 @@ void EquityTradingScreen::hub_subscribe_streaming() {
     // Paper accounts must NOT show live broker positions/holdings/orders/balance —
     // that data comes from the paper engine (pt_* / OrderMatcher). Only live mode
     // subscribes to the live broker portfolio topics. Quotes flow in both modes.
-    const bool is_paper =
-        AccountManager::instance().get_account(aid).trading_mode == QLatin1String("paper");
+    //
+    // Cache the trading mode + paper portfolio id once here. This runs on every
+    // focus / symbol / mode change, so the cache stays fresh, and it keeps the
+    // per-tick quote handler off AccountManager::get_account() — which locks a
+    // mutex and copies the whole BrokerAccount struct on every single tick.
+    const auto focused_account = AccountManager::instance().get_account(aid);
+    const bool is_paper = focused_account.trading_mode == QLatin1String("paper");
+    focused_is_paper_ = is_paper;
+    focused_paper_portfolio_id_ = is_paper ? focused_account.paper_portfolio_id : QString();
+    // Drop any prices buffered for a previous account/portfolio. An in-flight flush
+    // timer simply finds the map empty (or the new portfolio's prices) and no-ops.
+    pending_paper_prices_.clear();
 
     if (!is_paper) {
         // ── Positions ──
@@ -135,9 +151,6 @@ void EquityTradingScreen::hub_subscribe_quotes() {
                 return;
             const auto quote = v.value<BrokerQuote>();
 
-            // Cache for watchlist rebuild
-            watchlist_quote_cache_[sym] = quote;
-
             // Open-positions table (bottom sheet): patch LTP / P&L from the SAME
             // quote that feeds the ticker bar, so the header and the position row
             // never show different prices. Live & paper both handled inside.
@@ -154,24 +167,34 @@ void EquityTradingScreen::hub_subscribe_quotes() {
                 chart_->update_pnl(quote.ltp); // live P&L on the chart's position card
             }
 
-            // Rebuild watchlist from cache
-            QVector<BrokerQuote> wl_quotes;
-            wl_quotes.reserve(watchlist_quote_cache_.size());
-            for (auto it = watchlist_quote_cache_.cbegin(); it != watchlist_quote_cache_.cend(); ++it)
-                wl_quotes.append(it.value());
-            watchlist_->update_quotes(wl_quotes);
+            // Repaint only this symbol's watchlist row (a no-op if it isn't in the
+            // active list). Rebuilding the entire watchlist from a cache on every
+            // tick was O(rows×entries) of GUI-thread work per tick — the dominant
+            // cost on an unthrottled quote feed.
+            watchlist_->update_quote(quote);
 
-            // Feed paper trading engine
-            auto account = AccountManager::instance().get_account(focused_account_id_);
-            if (account.trading_mode == "paper" && !account.paper_portfolio_id.isEmpty() && quote.ltp > 0) {
-                pt_update_position_price(account.paper_portfolio_id, sym, quote.ltp);
+            // Feed paper trading engine. Mode + portfolio id are cached at subscribe
+            // time (hub_subscribe_streaming) so this hot path never copies a
+            // BrokerAccount under AccountManager's mutex on every tick.
+            if (focused_is_paper_ && !focused_paper_portfolio_id_.isEmpty() && quote.ltp > 0) {
+                // Buffer the latest price and coalesce the SQLite persist onto a
+                // timer — one UPDATE per symbol per window instead of per tick.
+                // flush_paper_prices() also runs synchronously before
+                // refresh_paper_panels reads, so order/funds snapshots stay exact.
+                pending_paper_prices_[sym] = quote.ltp;
+                if (!paper_flush_armed_) {
+                    paper_flush_armed_ = true;
+                    QTimer::singleShot(kPaperPriceFlushMs, this, [this]() { flush_paper_prices(); });
+                }
+                // SL/TP + limit matching must see EVERY tick — run on the live
+                // price against in-memory order/trigger tables (no DB per tick).
                 PriceData pd;
                 pd.last = quote.ltp;
                 pd.bid = quote.bid;
                 pd.ask = quote.ask;
                 pd.timestamp = quote.timestamp;
-                OrderMatcher::instance().check_orders(sym, pd, account.paper_portfolio_id);
-                OrderMatcher::instance().check_sl_tp_triggers(account.paper_portfolio_id, sym, quote.ltp);
+                OrderMatcher::instance().check_orders(sym, pd, focused_paper_portfolio_id_);
+                OrderMatcher::instance().check_sl_tp_triggers(focused_paper_portfolio_id_, sym, quote.ltp);
             }
         });
     }

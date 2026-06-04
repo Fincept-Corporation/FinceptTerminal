@@ -282,6 +282,21 @@
     try { chart.setStyles({ yAxis: { type: type } }); } catch (e) { log('scale err: ' + e.message); }
   };
 
+  // Price under a vertical viewport coordinate (used by chart right-click
+  // trading). `clientY` is relative to the web view's top-left; we subtract the
+  // chart container's offset (toolbar height) before asking KLineChart to map
+  // the pixel to a y-axis value on the candle pane.
+  window.priceAtY = function(clientY) {
+    try {
+      var el = document.getElementById('chart');
+      var rect = el.getBoundingClientRect();
+      var y = clientY - rect.top;
+      var r = chart.convertFromPixel({ x: 0, y: y }, { paneId: 'candle_pane' });
+      var v = Array.isArray(r) ? (r[0] && r[0].value) : (r && r.value);
+      return (typeof v === 'number' && isFinite(v)) ? v : null;
+    } catch (e) { return null; }
+  };
+
   // Edit an active indicator's calc params (e.g. MA periods "5,10,20,60").
   window.editIndicatorParams = function(name) {
     var paneId = activeIndicators[name];

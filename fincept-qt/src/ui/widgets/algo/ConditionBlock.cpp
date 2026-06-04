@@ -55,6 +55,11 @@ void ConditionBlock::build_ui() {
     remove_btn_->setObjectName(QStringLiteral("condBlockRemove"));
     remove_btn_->setFixedSize(24, 24);
     remove_btn_->setToolTip(tr("Remove condition"));
+    // Icon/close button: never take keyboard focus. Otherwise clicking it focuses
+    // the button, and when this block is deleted Qt hands focus to the next widget —
+    // the neighbouring row's editable indicator combo — which then shows a text
+    // caret, making "close" look like it opened a text field instead of removing.
+    remove_btn_->setFocusPolicy(Qt::NoFocus);
     line1->addWidget(remove_btn_);
     main_layout->addLayout(line1);
 

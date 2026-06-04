@@ -234,15 +234,11 @@ QWidget* PolymarketDetailPanel::create_trade_page() {
     auto* nal = new QVBoxLayout(no_acct);
     nal->setAlignment(Qt::AlignCenter);
     nal->setSpacing(8);
-    auto* icon_lbl = new QLabel("🔒");
-    icon_lbl->setAlignment(Qt::AlignCenter);
-    icon_lbl->setStyleSheet("font-size: 28px; background: transparent;");
     no_acct_msg_lbl_ = new QLabel(tr("Connect an account\nto place orders"));
     auto* msg_lbl = no_acct_msg_lbl_;
     msg_lbl->setAlignment(Qt::AlignCenter);
     msg_lbl->setStyleSheet(
         QString("color: %1; font-size: 11px; background: transparent;").arg(colors::TEXT_DIM()));
-    nal->addWidget(icon_lbl);
     nal->addWidget(msg_lbl);
     ticket_stack_->addWidget(no_acct); // index 0
 

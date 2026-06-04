@@ -8,7 +8,7 @@
 //   ┌─ Header (title + subtitle "not saved" + voice / clear / close) ─┐
 //   │  ...messages, scrollable                                        │
 //   │  ────────────────────────────────────────────────────────────── │
-//   │  [ input box .................. ] 🎤  [Send]                    │
+//   │  [ input box .................. ] [MIC]  [Send]                 │
 //   │  status strip (one line, hidden when idle)                      │
 //   └──────────────────────────────────────────────────────────────────┘
 
@@ -321,13 +321,13 @@ QWidget* AiChatBubble::build_input_row() {
     input_box_->installEventFilter(this);
     hl->addWidget(input_box_, 1);
 
-    mic_btn_ = new QPushButton("🎤");
+    mic_btn_ = new QPushButton("MIC");
     mic_btn_->setFixedSize(38, 38);
     mic_btn_->setCursor(Qt::PointingHandCursor);
     mic_btn_->setToolTip(tr("Push-to-talk: click to dictate one message"));
     // No setCheckable — listening state is rendered via property + opacity.
     mic_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                                    "border-radius:0px;font-size:18px;}"
+                                    "border-radius:0px;font-size:11px;font-weight:700;letter-spacing:0.5px;}"
                                     "QPushButton:hover{border-color:%3;}"
                                     "QPushButton[listening=\"true\"]{background:%4;border-color:%3;color:%5;}")
                                 .arg(col::TEXT_PRIMARY(), col::BORDER_MED(), col::AMBER(),

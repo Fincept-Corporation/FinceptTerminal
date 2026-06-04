@@ -68,7 +68,7 @@ static QWidget* makePanel() {
 }
 
 static QLabel* makePanelHeader(const QString& icon, const QString& title, const QString& iconColor) {
-    auto* lbl = new QLabel(QString("%1  %2").arg(icon, title));
+    auto* lbl = new QLabel(icon.isEmpty() ? title : QString("%1  %2").arg(icon, title));
     lbl->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; "
                                "background: %2; padding: 10px 14px; border-bottom: 1px solid %3; "
                                "font-family: 'Consolas','Courier New',monospace;")
@@ -87,7 +87,7 @@ static QLabel* makeBullet(const QString& text) {
 
 // Re-apply icon + title to a panel header (mirrors makePanelHeader's text format).
 static void setPanelHeaderText(QLabel* lbl, const QString& icon, const QString& title) {
-    if (lbl) lbl->setText(QString("%1  %2").arg(icon, title));
+    if (lbl) lbl->setText(icon.isEmpty() ? title : QString("%1  %2").arg(icon, title));
 }
 
 // Re-apply bullet text (mirrors makeBullet's "■  %1" format).
@@ -205,7 +205,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
             auto* pvl = new QVBoxLayout(panel);
             pvl->setContentsMargins(0, 0, 0, 0);
             pvl->setSpacing(0);
-            oss_header_ = makePanelHeader("📄", tr("OPEN SOURCE LICENSE"), ui::colors::POSITIVE);
+            oss_header_ = makePanelHeader("", tr("OPEN SOURCE LICENSE"), ui::colors::POSITIVE);
             pvl->addWidget(oss_header_);
 
             auto* body = new QWidget(this);
@@ -320,7 +320,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         auto* pvl = new QVBoxLayout(panel);
         pvl->setContentsMargins(0, 0, 0, 0);
         pvl->setSpacing(0);
-        trademarks_header_ = makePanelHeader("🛡", tr("TRADEMARKS"), ui::colors::AMBER);
+        trademarks_header_ = makePanelHeader("", tr("TRADEMARKS"), ui::colors::AMBER);
         pvl->addWidget(trademarks_header_);
 
         auto* body = new QWidget(this);
@@ -352,7 +352,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         auto* pvl = new QVBoxLayout(panel);
         pvl->setContentsMargins(0, 0, 0, 0);
         pvl->setSpacing(0);
-        resources_header_ = makePanelHeader("🌐", tr("RESOURCES"), ui::colors::AMBER);
+        resources_header_ = makePanelHeader("", tr("RESOURCES"), ui::colors::AMBER);
         pvl->addWidget(resources_header_);
 
         auto* body = new QWidget(this);
@@ -458,7 +458,7 @@ void AboutScreen::retranslateUi() {
     if (copyright_) copyright_->setText(tr("© 2024-2026 Fincept Corporation. All rights reserved."));
 
     // Open source license — bullet 0 is the SPDX identifier (untranslated).
-    setPanelHeaderText(oss_header_, "📄", tr("OPEN SOURCE LICENSE"));
+    setPanelHeaderText(oss_header_, "", tr("OPEN SOURCE LICENSE"));
     if (oss_bullets_.size() == 4) {
         setBulletText(oss_bullets_[1], tr("Free for personal & educational use"));
         setBulletText(oss_bullets_[2], tr("Share modifications under same license"));
@@ -480,7 +480,7 @@ void AboutScreen::retranslateUi() {
     if (open_folder_btn_)   open_folder_btn_->setText(tr("Open Folder"));
 
     // Trademarks
-    setPanelHeaderText(trademarks_header_, "🛡", tr("TRADEMARKS"));
+    setPanelHeaderText(trademarks_header_, "", tr("TRADEMARKS"));
     if (trademarks_desc_)
         trademarks_desc_->setText(tr("\"Fincept\", \"Fincept Terminal\", and associated logos are trademarks of "
                                      "Fincept Corporation. Use of these marks requires explicit written permission."));
@@ -489,7 +489,7 @@ void AboutScreen::retranslateUi() {
                                      "affiliation with or endorsement by Fincept Corporation without prior written consent."));
 
     // Resources
-    setPanelHeaderText(resources_header_, "🌐", tr("RESOURCES"));
+    setPanelHeaderText(resources_header_, "", tr("RESOURCES"));
     if (resource_btns_.size() == 6) {
         resource_btns_[0]->setText(tr("GitHub Repository"));
         resource_btns_[1]->setText(tr("License (AGPL-3.0)"));

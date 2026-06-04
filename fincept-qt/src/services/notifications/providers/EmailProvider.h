@@ -10,7 +10,7 @@ class EmailProvider final : public BaseProvider {
   public:
     QString provider_id() const override { return "email"; }
     QString display_name() const override { return "Email"; }
-    QString icon() const override { return "📧"; }
+    QString icon() const override { return ""; }
     bool is_configured() const override { return !smtp_host_.isEmpty() && !to_addr_.isEmpty(); }
 
     void send(const NotificationRequest& req, std::function<void(bool, QString)> cb) override;

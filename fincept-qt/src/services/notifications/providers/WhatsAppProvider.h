@@ -8,7 +8,7 @@ class WhatsAppProvider final : public BaseProvider {
   public:
     QString provider_id() const override { return "whatsapp"; }
     QString display_name() const override { return "WhatsApp"; }
-    QString icon() const override { return "📱"; }
+    QString icon() const override { return ""; }
     bool is_configured() const override {
         return !account_sid_.isEmpty() && !auth_token_.isEmpty() && !from_number_.isEmpty() && !to_number_.isEmpty();
     }

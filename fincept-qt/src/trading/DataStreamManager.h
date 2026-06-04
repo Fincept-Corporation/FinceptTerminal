@@ -26,6 +26,10 @@ class DataStreamManager : public QObject
     AccountDataStream* stream_for(const QString& account_id);
     void start_stream(const QString& account_id);
     void stop_stream(const QString& account_id);
+    // Tear down and recreate a stream so AccountDataStream::ws_init() reloads the
+    // latest credentials. Use after a token re-auth/refresh — plain start_stream()
+    // only resume()s an existing stream and would keep the stale cached token.
+    void restart_stream(const QString& account_id);
     void start_all_active();
     void stop_all();
 

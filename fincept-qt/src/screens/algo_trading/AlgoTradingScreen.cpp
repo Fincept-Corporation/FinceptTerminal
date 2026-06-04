@@ -89,6 +89,10 @@ void AlgoTradingScreen::build_ui() {
                 builder_->load_and_backtest(s, symbol, start, end);
             });
 
+    // Deploying from the Builder jumps to the Dashboard (tab 3); on_tab_changed(3)
+    // refreshes list_deployments() so the just-persisted row shows immediately.
+    connect(builder_, &StrategyBuilderPanel::deployed, this, [this]() { on_tab_changed(3); });
+
     root->addWidget(build_status_bar());
     setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 }

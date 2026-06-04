@@ -7,6 +7,7 @@
 #include "trading/instruments/InstrumentService.h"
 #include "ui/theme/Theme.h"
 
+#include <QAbstractItemView>
 #include <QAction>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -128,6 +129,40 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     completer_->setMaxVisibleItems(8);
     add_edit_->setCompleter(completer_);
 
+    // Style the completer's popup explicitly. It is a separate top-level QListView
+    // that no global stylesheet rule covers, so without this it renders with a
+    // transparent background and the watchlist behind it shows through. (The combo
+    // popups, e.g. #eqOeCombo QAbstractItemView, are styled the same way.)
+    if (auto* popup = completer_->popup()) {
+        popup->setObjectName("eqWatchlistCompleterPopup");
+        popup->setStyleSheet(
+            QString("QListView { background:%1; color:%2; border:1px solid %3; outline:none;"
+                    " font-family:%4; font-size:%5px; }"
+                    "QListView::item { padding:4px 8px; border:none; }"
+                    "QListView::item:selected { background:%6; color:%2; }")
+                .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(),
+                     fincept::ui::colors::BORDER_MED(), fincept::ui::fonts::DATA_FAMILY())
+                .arg(fincept::ui::fonts::SMALL)
+                .arg(fincept::ui::colors::BG_HOVER()));
+    }
+
+    // Picking a suggestion (mouse click, Enter, or Arrow+Enter) must add the
+    // symbol — not merely paste "SYMBOL  ·  EXCH  ·  Broker" into the edit, which
+    // is all QCompleter does by default. Wire activated() to add + clear. This
+    // slot is connected after setCompleter(), so it runs after QCompleter's own
+    // text insertion; clearing here leaves the edit empty, so a trailing
+    // returnPressed becomes a harmless no-op (no double add).
+    connect(completer_, QOverload<const QString&>::of(&QCompleter::activated), this,
+            [this](const QString& choice) {
+        QString sym = choice.section(QStringLiteral("  ·  "), 0, 0).trimmed().toUpper();
+        if (sym.contains(':'))
+            sym = sym.section(':', 1);
+        if (sym.isEmpty())
+            return;
+        add_symbol(sym);
+        add_edit_->clear();
+    });
+
     add_btn_ = new QPushButton("+");
     add_btn_->setObjectName("eqWatchlistAddBtn");
     add_btn_->setFixedSize(22, 22);
@@ -171,11 +206,13 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     // room from SYMBOL, which is what truncated the names.
     table_->horizontalHeader()->setStretchLastSection(false);
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
-    table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
-    table_->horizontalHeader()->setMinimumSectionSize(48);
-    table_->setColumnWidth(1, 84); // LTP — fits up to "24500.50" without eliding
-    table_->setColumnWidth(2, 64); // CHG% — fits "+12.34%"
+    // LTP/CHG auto-size to their widest value (+ header) so neither ever elides —
+    // a fixed 64px proved too tight once the data font resolved to Menlo, cutting
+    // "+12.34%" down to "+1.1…". ResizeToContents recomputes on each data change;
+    // SYMBOL (the Stretch column) still absorbs all leftover width.
+    table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    table_->horizontalHeader()->setMinimumSectionSize(40);
     table_->verticalHeader()->setDefaultSectionSize(24);
 
     connect(table_, &QTableWidget::cellClicked, this, &EquityWatchlist::on_cell_clicked);
@@ -290,39 +327,40 @@ void EquityWatchlist::set_symbols(const QStringList& symbols) {
     rebuild_table();
 }
 
-void EquityWatchlist::update_quotes(const QVector<trading::BrokerQuote>& quotes) {
+void EquityWatchlist::update_quote(const trading::BrokerQuote& quote) {
     QMutexLocker lock(&mutex_);
-    for (const auto& q : quotes) {
-        for (auto& e : entries_) {
-            if (e.symbol == q.symbol) {
-                e.ltp = q.ltp;
-                e.change_pct = q.change_pct;
-                e.volume = q.volume;
-                e.has_data = true;
-                break;
-            }
+
+    // Update the cached entry for this symbol. Bail early if we don't track it —
+    // position symbols stream quotes too but may not be in the active watchlist.
+    WatchlistEntry* entry = nullptr;
+    for (auto& e : entries_) {
+        if (e.symbol == quote.symbol) {
+            entry = &e;
+            break;
         }
     }
-    // Update visible rows without full rebuild
+    if (!entry)
+        return;
+    entry->ltp = quote.ltp;
+    entry->change_pct = quote.change_pct;
+    entry->volume = quote.volume;
+    entry->has_data = true;
+
+    // Repaint only this symbol's row. setText / setForeground are no-ops when the
+    // value is unchanged (Qt early-returns), so identical ticks cost nothing.
     for (int row = 0; row < table_->rowCount(); ++row) {
         auto* sym_item = table_->item(row, 0);
-        if (!sym_item)
+        if (!sym_item || sym_item->data(Qt::UserRole).toString() != quote.symbol)
             continue;
-        const QString sym = sym_item->data(Qt::UserRole).toString();
-        for (const auto& e : entries_) {
-            if (e.symbol == sym && e.has_data) {
-                auto* ltp_item = table_->item(row, 1);
-                auto* chg_item = table_->item(row, 2);
-                if (ltp_item)
-                    ltp_item->setText(QString::number(e.ltp, 'f', 2));
-                if (chg_item) {
-                    chg_item->setText(QString("%1%2%").arg(e.change_pct >= 0 ? "+" : "").arg(e.change_pct, 0, 'f', 2));
-                    chg_item->setForeground(e.change_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE())
-                                                              : QColor(fincept::ui::colors::NEGATIVE()));
-                }
-                break;
-            }
+        if (auto* ltp_item = table_->item(row, 1))
+            ltp_item->setText(QString::number(entry->ltp, 'f', 2));
+        if (auto* chg_item = table_->item(row, 2)) {
+            chg_item->setText(
+                QString("%1%2%").arg(entry->change_pct >= 0 ? "+" : "").arg(entry->change_pct, 0, 'f', 2));
+            chg_item->setForeground(entry->change_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE())
+                                                           : QColor(fincept::ui::colors::NEGATIVE()));
         }
+        break;
     }
 }
 

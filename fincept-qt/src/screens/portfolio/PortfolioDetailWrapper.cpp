@@ -240,7 +240,7 @@ void PortfolioDetailWrapper::changeEvent(QEvent* event) {
 void PortfolioDetailWrapper::retranslateUi() {
     if (back_btn_)    back_btn_->setText(tr("← BACK"));
     if (title_label_) title_label_->setText(view_title(current_view_));
-    // portfolio_label_ holds "💼 NAME | CURRENCY" — pure portfolio data, no
+    // portfolio_label_ holds "NAME | CURRENCY" — pure portfolio data, no
     // translation needed.
 }
 

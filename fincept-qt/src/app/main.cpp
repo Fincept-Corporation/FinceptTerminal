@@ -699,6 +699,7 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v036();
     fincept::register_migration_v037();
     fincept::register_migration_v038();
+    fincept::register_migration_v039();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
@@ -708,6 +709,14 @@ int main(int argc, char* argv[]) {
         // DB unavailable — apply theme with built-in defaults so the UI is at least styled
         fincept::ui::apply_global_stylesheet();
     } else {
+        // Load broker accounts now that the DB is open. The AccountManager
+        // singleton loads eagerly in its constructor on first access; if anything
+        // touched it before this point (before open()), it found an unusable DB
+        // and loaded nothing. This explicit main-thread reload guarantees the
+        // account map is populated from the now-open DB, so configured brokers
+        // survive restarts instead of vanishing.
+        fincept::trading::AccountManager::instance().reload_from_db();
+
         // Prune news articles older than 30 days — deferred to run after the event loop
         // starts so the startup critical path is not blocked.
         // NewsArticleRepository uses the main-thread DB connection (not thread-safe),

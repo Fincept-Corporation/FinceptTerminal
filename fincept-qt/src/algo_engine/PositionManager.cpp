@@ -137,6 +137,32 @@ double PositionManager::record_exit(double qty, double price, int64_t time_ms) {
     return pnl;
 }
 
+void PositionManager::restore_state(PositionSide side, double qty, double entry_price,
+                                    double total_pnl, int total_trades, double win_rate,
+                                    double max_drawdown) {
+    QMutexLocker lock(&mutex_);
+    position_.side = side;
+    position_.quantity = qty;
+    position_.entry_price = entry_price;
+    position_.highest_since_entry = entry_price; // trailing-stop baseline resets on resume
+    position_.lowest_since_entry = entry_price;
+
+    metrics_.total_pnl = total_pnl;
+    metrics_.total_trades = total_trades;
+    metrics_.win_rate = win_rate;
+    metrics_.winning_trades = static_cast<int>(std::lround(win_rate * total_trades / 100.0));
+    metrics_.losing_trades = total_trades - metrics_.winning_trades;
+    if (metrics_.losing_trades < 0)
+        metrics_.losing_trades = 0;
+    metrics_.max_drawdown = max_drawdown;
+    metrics_.current_position_qty = qty;
+    metrics_.current_position_side = position_side_to_string(side);
+    metrics_.current_position_entry = entry_price;
+
+    risk_.max_drawdown = max_drawdown;
+    risk_.peak_equity = total_pnl > 0 ? total_pnl : 0;
+}
+
 void PositionManager::update_price(double price) {
     QMutexLocker lock(&mutex_);
     metrics_.current_price = price;

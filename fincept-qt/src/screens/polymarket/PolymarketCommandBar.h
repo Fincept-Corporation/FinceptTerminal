@@ -45,7 +45,7 @@ class PolymarketCommandBar : public QWidget {
 
     /// Update the account chip shown next to the exchange combo.
     /// `connected == false` renders "⚪ No account" (clickable CTA);
-    /// `connected == true` renders "🟢 <label>" in green.
+    /// `connected == true` renders "<label>" in green.
     void set_account_status(bool connected, const QString& label);
 
   signals:

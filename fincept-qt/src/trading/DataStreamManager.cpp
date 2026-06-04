@@ -44,6 +44,21 @@ DataStreamManager::DataStreamManager() {
     connect(expiry_check_timer_, &QTimer::timeout, this,
             &DataStreamManager::check_indian_token_expiry);
     expiry_check_timer_->start();
+
+    // When an account's token is re-authenticated or silently refreshed, rebuild
+    // its live stream so the WebSocket adapter (which captures the token at
+    // construction with no setter) reconnects with the fresh token. Without this,
+    // a stream started with a now-expired token keeps getting HTTP 401 on
+    // resolve/subscribe and never streams ticks. Only rebuild streams that
+    // already exist — don't spin up streams for accounts the user hasn't opened.
+    connect(&AccountManager::instance(), &AccountManager::credentials_changed,
+            this, [this](const QString& account_id) {
+        if (!streams_.contains(account_id))
+            return;
+        LOG_INFO(DSM_TAG, QString("Credentials changed for %1 — rebuilding stream "
+                                  "with fresh token").arg(account_id));
+        restart_stream(account_id);
+    });
 }
 
 void DataStreamManager::check_indian_token_expiry() {
@@ -117,6 +132,15 @@ void DataStreamManager::stop_stream(const QString& account_id) {
     streams_.erase(it);
 
     LOG_INFO(DSM_TAG, QString("Stopped data stream for account %1").arg(account_id));
+}
+
+void DataStreamManager::restart_stream(const QString& account_id) {
+    // stop_stream() tears down the old AccountDataStream (and its WebSocket, which
+    // caches the access token at construction); start_stream() then rebuilds it so
+    // ws_init() reloads the latest credentials from AccountManager. If no stream
+    // exists yet, stop_stream() is a no-op and start_stream() creates a fresh one.
+    stop_stream(account_id);
+    start_stream(account_id);
 }
 
 void DataStreamManager::start_all_active() {

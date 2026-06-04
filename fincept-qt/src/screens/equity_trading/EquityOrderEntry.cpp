@@ -7,9 +7,12 @@
 #include "trading/OptionsStrategyBuilder.h"
 #include "ui/theme/Theme.h"
 
+#include <QFrame>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QMetaObject>
 #include <QPointer>
+#include <QScrollArea>
 #include <QStyle>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -28,12 +31,12 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    // Header
+    // ── Header ─────────────────────────────────────────────────────────────────
     auto* header = new QWidget(this);
     header->setObjectName("eqOeHeader");
-    header->setFixedHeight(30);
+    header->setFixedHeight(32);
     auto* h_layout = new QHBoxLayout(header);
-    h_layout->setContentsMargins(8, 0, 8, 0);
+    h_layout->setContentsMargins(10, 0, 10, 0);
 
     title_label_ = new QLabel(tr("ORDER ENTRY"));
     title_label_->setObjectName("eqOeTitle");
@@ -47,11 +50,29 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
 
     layout->addWidget(header);
 
-    // Content
-    auto* content = new QWidget(this);
+    // ── Scrollable content — a tall ticket never clips in the narrow column ──────
+    auto* scroll = new QScrollArea(this);
+    scroll->setObjectName("eqOeScroll");
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    layout->addWidget(scroll, 1);
+
+    auto* content = new QWidget;
+    content->setObjectName("eqOeContent");
+    scroll->setWidget(content);
     auto* form = new QVBoxLayout(content);
-    form->setContentsMargins(8, 6, 8, 6);
-    form->setSpacing(4);
+    form->setContentsMargins(10, 10, 10, 10);
+    form->setSpacing(8);
+
+    // Thin section separator — groups the ticket into scannable blocks.
+    auto make_sep = [content]() {
+        auto* line = new QFrame(content);
+        line->setObjectName("eqOeSep");
+        line->setFrameShape(QFrame::HLine);
+        line->setFixedHeight(1);
+        return line;
+    };
 
     // BUY / SELL tabs
     auto* side_row = new QHBoxLayout;
@@ -61,7 +82,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     buy_tab_->setObjectName("eqBuyTab");
     buy_tab_->setProperty("active", true);
     buy_tab_->setCursor(Qt::PointingHandCursor);
-    buy_tab_->setFixedHeight(28);
+    buy_tab_->setFixedHeight(36);
     connect(buy_tab_, &QPushButton::clicked, this, [this]() { set_buy_side(true); });
     side_row->addWidget(buy_tab_, 1);
 
@@ -69,19 +90,19 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     sell_tab_->setObjectName("eqSellTab");
     sell_tab_->setProperty("active", false);
     sell_tab_->setCursor(Qt::PointingHandCursor);
-    sell_tab_->setFixedHeight(28);
+    sell_tab_->setFixedHeight(36);
     connect(sell_tab_, &QPushButton::clicked, this, [this]() { set_buy_side(false); });
     side_row->addWidget(sell_tab_, 1);
     form->addLayout(side_row);
 
     // Order type toggle buttons
     auto* type_row = new QHBoxLayout;
-    type_row->setSpacing(2);
+    type_row->setSpacing(4);
     const QString type_labels[] = {tr("MKT"), tr("LMT"), tr("SL"), tr("SL-L")};
     for (int i = 0; i < 4; ++i) {
         type_btns_[i] = new QPushButton(type_labels[i]);
         type_btns_[i]->setObjectName("eqOeTypeBtn");
-        type_btns_[i]->setFixedHeight(20);
+        type_btns_[i]->setFixedHeight(26);
         type_btns_[i]->setCursor(Qt::PointingHandCursor);
         if (i == 0)
             type_btns_[i]->setProperty("active", true);
@@ -90,89 +111,117 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     }
     form->addLayout(type_row);
 
-    // Product type
+    // ── Symbol context ──────────────────────────────────────────────────────────
+    symbol_label_ = new QLabel(QStringLiteral("%1 · %2").arg(current_symbol_, current_exchange_));
+    symbol_label_->setObjectName("eqOeSymbol");
+    symbol_label_->setAlignment(Qt::AlignCenter);
+    form->addWidget(symbol_label_);
+
+    // ── Live info: LTP (left) · Balance (right) ─────────────────────────────────
+    auto* info_box = new QWidget(content);
+    info_box->setObjectName("eqOeInfo");
+    auto* info_row = new QHBoxLayout(info_box);
+    info_row->setContentsMargins(8, 5, 8, 5);
+    info_row->setSpacing(6);
+
+    market_price_label_ = new QLabel(tr("LTP --"));
+    market_price_label_->setObjectName("eqOeMarketPrice");
+    info_row->addWidget(market_price_label_);
+    info_row->addStretch();
+
+    balance_label_ = new QLabel(tr("Bal --"));
+    balance_label_->setObjectName("eqOeBalance");
+    balance_label_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    info_row->addWidget(balance_label_);
+    form->addWidget(info_box);
+
+    form->addWidget(make_sep());
+
+    // ── Order parameters — aligned label + field rows ───────────────────────────
+    auto* params = new QGridLayout;
+    params->setHorizontalSpacing(8);
+    params->setVerticalSpacing(6);
+    params->setColumnStretch(0, 0);
+    params->setColumnStretch(1, 1);
+    int prow = 0;
+
     product_title_ = new QLabel(tr("PRODUCT"));
     product_title_->setObjectName("eqOeLabel");
-    form->addWidget(product_title_);
-
     product_combo_ = new QComboBox;
     product_combo_->setObjectName("eqOeCombo");
     product_combo_->addItems({tr("Intraday (MIS)"), tr("Delivery (CNC)"), tr("Margin (NRML)")});
-    product_combo_->setFixedHeight(26);
-    form->addWidget(product_combo_);
+    product_combo_->setFixedHeight(28);
+    params->addWidget(product_title_, prow, 0);
+    params->addWidget(product_combo_, prow, 1);
+    ++prow;
 
-    // Exchange
     exchange_title_ = new QLabel(tr("EXCHANGE"));
     exchange_title_->setObjectName("eqOeLabel");
-    form->addWidget(exchange_title_);
-
     exchange_combo_ = new QComboBox;
     exchange_combo_->setObjectName("eqOeCombo");
     // Exchange codes (NSE/BSE/…) are market identifiers — data, not translated.
     exchange_combo_->addItems({"NSE", "BSE", "NYSE", "NASDAQ"});
-    exchange_combo_->setFixedHeight(26);
-    form->addWidget(exchange_combo_);
+    exchange_combo_->setFixedHeight(28);
+    connect(exchange_combo_, &QComboBox::currentTextChanged, this, [this](const QString& ex) {
+        current_exchange_ = ex;
+        if (symbol_label_)
+            symbol_label_->setText(QStringLiteral("%1 · %2").arg(current_symbol_, ex));
+    });
+    params->addWidget(exchange_title_, prow, 0);
+    params->addWidget(exchange_combo_, prow, 1);
+    ++prow;
 
-    // Brokerage info
-    brokerage_label_ = new QLabel("");
-    brokerage_label_->setObjectName("eqOeBrokerage");
-    brokerage_label_->setStyleSheet(QString("color: %1; font-size: 10px;").arg(colors::TEXT_TERTIARY()));
-    form->addWidget(brokerage_label_);
-
-    form->addSpacing(2);
-
-    // Balance
-    balance_label_ = new QLabel("--");
-    balance_label_->setObjectName("eqOeBalance");
-    form->addWidget(balance_label_);
-
-    // Market price
-    market_price_label_ = new QLabel(tr("MKT: --"));
-    market_price_label_->setObjectName("eqOeMarketPrice");
-    form->addWidget(market_price_label_);
-
-    // Quantity
     qty_title_ = new QLabel(tr("QTY"));
     qty_title_->setObjectName("eqOeLabel");
-    form->addWidget(qty_title_);
-
     qty_edit_ = new QLineEdit;
     qty_edit_->setObjectName("eqOeInput");
     qty_edit_->setPlaceholderText("0");
-    qty_edit_->setFixedHeight(26);
+    qty_edit_->setFixedHeight(28);
+    qty_edit_->setAlignment(Qt::AlignRight);
     connect(qty_edit_, &QLineEdit::textChanged, this, [this]() { update_cost_preview(); });
-    form->addWidget(qty_edit_);
+    params->addWidget(qty_title_, prow, 0);
+    params->addWidget(qty_edit_, prow, 1);
+    ++prow;
 
-    // Price
     price_title_ = new QLabel(tr("PRICE"));
     price_title_->setObjectName("eqOeLabel");
-    form->addWidget(price_title_);
-
     price_edit_ = new QLineEdit;
     price_edit_->setObjectName("eqOeInput");
     price_edit_->setPlaceholderText(tr("Limit price"));
     price_edit_->setEnabled(false);
-    price_edit_->setFixedHeight(26);
+    price_edit_->setFixedHeight(28);
+    price_edit_->setAlignment(Qt::AlignRight);
     connect(price_edit_, &QLineEdit::textChanged, this, [this]() { update_cost_preview(); });
-    form->addWidget(price_edit_);
+    params->addWidget(price_title_, prow, 0);
+    params->addWidget(price_edit_, prow, 1);
+    ++prow;
 
-    // Trigger/Stop price
     trigger_title_ = new QLabel(tr("TRIGGER"));
     trigger_title_->setObjectName("eqOeLabel");
-    form->addWidget(trigger_title_);
-
     stop_price_edit_ = new QLineEdit;
     stop_price_edit_->setObjectName("eqOeInput");
     stop_price_edit_->setPlaceholderText(tr("Trigger price"));
     stop_price_edit_->setEnabled(false);
-    stop_price_edit_->setFixedHeight(26);
-    form->addWidget(stop_price_edit_);
+    stop_price_edit_->setFixedHeight(28);
+    stop_price_edit_->setAlignment(Qt::AlignRight);
+    params->addWidget(trigger_title_, prow, 0);
+    params->addWidget(stop_price_edit_, prow, 1);
+    ++prow;
+
+    form->addLayout(params);
+
+    // Brokerage / fee note
+    brokerage_label_ = new QLabel("");
+    brokerage_label_->setObjectName("eqOeBrokerage");
+    brokerage_label_->setWordWrap(true);
+    form->addWidget(brokerage_label_);
 
     // Advanced toggle
+    form->addWidget(make_sep());
     advanced_toggle_ = new QPushButton(tr("+ ADVANCED"));
     advanced_toggle_->setObjectName("eqAdvToggle");
     advanced_toggle_->setCursor(Qt::PointingHandCursor);
-    advanced_toggle_->setFixedHeight(18);
+    advanced_toggle_->setFixedHeight(22);
     form->addWidget(advanced_toggle_);
 
     // SL/TP section
@@ -212,7 +261,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     strategy_toggle_ = new QPushButton(tr("+ OPTIONS STRATEGY"));
     strategy_toggle_->setObjectName("eqAdvToggle");
     strategy_toggle_->setCursor(Qt::PointingHandCursor);
-    strategy_toggle_->setFixedHeight(18);
+    strategy_toggle_->setFixedHeight(22);
     form->addWidget(strategy_toggle_);
 
     strategy_section_ = new QWidget(this);
@@ -275,7 +324,7 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
 
     strategy_preview_ = new QLabel(tr("Select a strategy"));
     strategy_preview_->setObjectName("eqOeBrokerage");
-    strategy_preview_->setStyleSheet(QString("color: %1; font-size: 10px;").arg(colors::TEXT_TERTIARY()));
+    strategy_preview_->setStyleSheet(QString("color: %1; font-size: 11px;").arg(colors::TEXT_SECONDARY()));
     strategy_preview_->setWordWrap(true);
     strategy_preview_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     strat_layout->addWidget(strategy_preview_);
@@ -303,16 +352,26 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     connect(strat_lot_edit_, &QLineEdit::textChanged, this, [this]() { refresh_strategy_preview(); });
     connect(strat_width_edit_, &QLineEdit::textChanged, this, [this]() { refresh_strategy_preview(); });
 
-    // Cost preview
+    // ── Cost / margin summary ───────────────────────────────────────────────────
+    form->addWidget(make_sep());
+
+    auto* summary = new QWidget(content);
+    summary->setObjectName("eqOeSummary");
+    auto* sum_layout = new QVBoxLayout(summary);
+    sum_layout->setContentsMargins(8, 6, 8, 6);
+    sum_layout->setSpacing(3);
+
     cost_label_ = new QLabel(tr("Est: --"));
     cost_label_->setObjectName("eqOeCost");
-    form->addWidget(cost_label_);
+    sum_layout->addWidget(cost_label_);
 
     // Required margin (live broker only)
     margin_label_ = new QLabel("");
     margin_label_->setObjectName("eqOeMargin");
     margin_label_->hide();
-    form->addWidget(margin_label_);
+    sum_layout->addWidget(margin_label_);
+
+    form->addWidget(summary);
 
     // Submit row: main submit + broadcast
     auto* submit_row = new QHBoxLayout;
@@ -320,19 +379,20 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
 
     submit_btn_ = new QPushButton(tr("BUY %1").arg(current_symbol_));
     submit_btn_->setObjectName("eqBuySubmit");
-    submit_btn_->setFixedHeight(34);
+    submit_btn_->setFixedHeight(40);
     submit_btn_->setCursor(Qt::PointingHandCursor);
     connect(submit_btn_, &QPushButton::clicked, this, &EquityOrderEntry::on_submit);
     submit_row->addWidget(submit_btn_, 3);
 
     broadcast_btn_ = new QPushButton(tr("ALL"));
     broadcast_btn_->setObjectName("eqBroadcastBtn");
-    broadcast_btn_->setFixedHeight(34);
+    broadcast_btn_->setFixedHeight(40);
     broadcast_btn_->setCursor(Qt::PointingHandCursor);
     broadcast_btn_->setToolTip(tr("Broadcast this order to multiple accounts"));
     broadcast_btn_->setStyleSheet(
-        QString("QPushButton { background: %1; color: %2; font-weight: 700; font-size: 11px; border-radius: 2px; }"
-                "QPushButton:hover { background: %3; }")
+        QString("QPushButton { background: %1; color: %2; font-weight: 700; font-size: 12px; "
+                "  border: 1px solid %3; border-radius: 4px; }"
+                "QPushButton:hover { background: %3; color: %2; }")
             .arg(colors::BG_RAISED(), colors::AMBER(), colors::BORDER_MED()));
     connect(broadcast_btn_, &QPushButton::clicked, this, [this]() {
         const double qty = qty_edit_->text().toDouble();
@@ -370,7 +430,6 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     form->addWidget(status_label_);
 
     form->addStretch();
-    layout->addWidget(content, 1);
 
     // Debounce timer: fetch margin 600ms after last qty/price change (live broker only)
     margin_timer_ = new QTimer(this);
@@ -450,13 +509,13 @@ void EquityOrderEntry::set_order_type(int idx) {
 
 void EquityOrderEntry::set_balance(double balance) {
     balance_ = balance;
-    balance_label_->setText(QString("%1%2").arg(currency_symbol(current_currency_)).arg(balance, 0, 'f', 2));
+    balance_label_->setText(tr("Bal %1%2").arg(currency_symbol(current_currency_)).arg(balance, 0, 'f', 2));
     update_cost_preview();
 }
 
 void EquityOrderEntry::set_current_price(double price) {
     current_price_ = price;
-    market_price_label_->setText(tr("MKT: %1%2").arg(currency_symbol(current_currency_)).arg(price, 0, 'f', 2));
+    market_price_label_->setText(tr("LTP %1%2").arg(currency_symbol(current_currency_)).arg(price, 0, 'f', 2));
     update_cost_preview();
 }
 
@@ -471,10 +530,14 @@ void EquityOrderEntry::set_mode(bool is_paper) {
 void EquityOrderEntry::set_symbol(const QString& symbol) {
     current_symbol_ = symbol;
     submit_btn_->setText(is_buy_side_ ? tr("BUY %1").arg(symbol) : tr("SELL %1").arg(symbol));
+    if (symbol_label_)
+        symbol_label_->setText(QStringLiteral("%1 · %2").arg(symbol, current_exchange_));
 }
 
 void EquityOrderEntry::set_exchange(const QString& exchange) {
     current_exchange_ = exchange;
+    if (symbol_label_)
+        symbol_label_->setText(QStringLiteral("%1 · %2").arg(current_symbol_, exchange));
     for (int i = 0; i < exchange_combo_->count(); ++i) {
         if (exchange_combo_->itemText(i) == exchange) {
             exchange_combo_->setCurrentIndex(i);

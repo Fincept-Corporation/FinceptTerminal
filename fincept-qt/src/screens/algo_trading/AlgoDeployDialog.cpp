@@ -8,6 +8,7 @@
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QMessageBox>
+#include <QUuid>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -35,6 +36,15 @@ AlgoDeployDialog::AlgoDeployDialog(const AlgoStrategy& strategy, QWidget* parent
     result_.strategy_id = strategy.id;
     result_.strategy_name = strategy.name;
     result_.timeframe = strategy.timeframe;
+    // Match the dialog's timeframe to the strategy so the deployment evaluates on
+    // the same bars the strategy was designed/backtested on (build_ui already ran).
+    if (timeframe_combo_ && !strategy.timeframe.isEmpty())
+        timeframe_combo_->setCurrentText(strategy.timeframe);
+}
+
+void AlgoDeployDialog::set_symbol(const QString& symbol) {
+    if (symbol_edit_)
+        symbol_edit_->setText(symbol.trimmed().toUpper());
 }
 
 void AlgoDeployDialog::build_ui() {
@@ -138,13 +148,20 @@ void AlgoDeployDialog::build_ui() {
 }
 
 void AlgoDeployDialog::on_mode_changed(int index) {
-    bool is_live = (mode_combo_->itemData(index).toString() == "live");
-    account_label_->setVisible(is_live);
-    account_combo_->setVisible(is_live);
-    exchange_label_->setVisible(is_live);
-    exchange_combo_->setVisible(is_live);
-    product_type_label_->setVisible(is_live);
-    product_type_combo_->setVisible(is_live);
+    // The broker/account is shown in BOTH modes: it is the real market-data source
+    // for the deployment (warm-up history + live quotes). Live additionally routes
+    // real orders through it; paper simulates fills against the same data. Hiding it
+    // for paper is what made users ask "which broker is it even using?".
+    Q_UNUSED(index);
+    account_label_->setVisible(true);
+    account_combo_->setVisible(true);
+    exchange_label_->setVisible(true);
+    exchange_combo_->setVisible(true);
+    product_type_label_->setVisible(true);
+    product_type_combo_->setVisible(true);
+
+    const bool is_live = (mode_combo_->currentData().toString() == "live");
+    account_label_->setText(is_live ? tr("Broker (orders + data):") : tr("Broker (data source):"));
 }
 
 void AlgoDeployDialog::populate_accounts() {
@@ -208,6 +225,10 @@ void AlgoDeployDialog::on_ok() {
         }
     }
 
+    // Mint a stable id for this deployment — used as the runner key, the
+    // algo_deployments primary key, and the WHERE of every status UPDATE.
+    if (result_.id.isEmpty())
+        result_.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     result_.strategy_id = strategy_id_;
     result_.strategy_name = strategy_name_;
     result_.strategy_kind = kind_to_string(kind_from_id(strategy_id_));
@@ -219,18 +240,20 @@ void AlgoDeployDialog::on_ok() {
     result_.max_order_value = max_order_spin_->value();
     result_.max_daily_loss = max_loss_spin_->value();
 
-    if (mode == "live") {
-        auto account_id = account_combo_->currentData().toString();
+    // Attach the chosen connected account in BOTH modes — it's the market-data
+    // source. Live additionally routes real orders through it (backend=equity_broker);
+    // paper simulates fills (backend=paper) but still sources real data from it.
+    const QString account_id = account_combo_->currentData().toString();
+    if (!account_id.isEmpty()) {
         auto account = AccountManager::instance().get_account(account_id);
-        result_.backend = backend_to_string(TradingBackend::EquityBroker);
         result_.broker_id = account.broker_id;
         result_.broker_account_id = account_id;
         result_.exchange = exchange_combo_->currentText();
         int pt_index = product_type_combo_->currentData().toInt();
         result_.product_type = product_type_str(static_cast<trading::ProductType>(pt_index));
-    } else {
-        result_.backend = backend_to_string(TradingBackend::Paper);
     }
+    result_.backend = backend_to_string(mode == "live" ? TradingBackend::EquityBroker
+                                                       : TradingBackend::Paper);
 
     accept();
 }
