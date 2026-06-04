@@ -19,6 +19,9 @@
 #include "services/llm/LlmService.h"
 #include "mcp/McpTypes.h"
 
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QSet>
 #include <QString>
 #include <functional>
 
@@ -85,6 +88,47 @@ inline mcp::ToolFilter apply_request_policy(const mcp::ToolFilter& base) {
     if (should_hide_navigation() && !out.exclude_categories.contains(QStringLiteral("navigation")))
         out.exclude_categories.append(QStringLiteral("navigation"));
     return out;
+}
+
+// ── Tool RAG activation ──────────────────────────────────────────────────
+//
+// When Tool RAG is on, the model is only sent the ~7 Tier-0 tools each turn and
+// discovers the rest via tool_list / tool_describe. Those meta-tools hand back
+// the discovered tool as *text* — but a structured function-calling model
+// (Kimi, OpenAI, Groq, …) can only emit a tool_call for a function actually
+// DECLARED in the request's `tools` array. Without re-declaring what it found,
+// the model stalls right after tool_describe ("I don't have that tool loaded"),
+// which is exactly the failure mode that breaks agentic actions like
+// create_portfolio.
+//
+// This mirrors Anthropic's Tool Search Tool: the discovered tool definition
+// must be injected into the active tool set. We accumulate the bare names the
+// model surfaces (via tool_list) or commits to (via tool_describe) across the
+// turn, and feed them back into format_tools_for_openai so they become real,
+// callable functions on the next round.
+inline void note_tool_activations(const QString& bare_tool_name,
+                                  const QJsonObject& args,
+                                  const mcp::ToolResult& result,
+                                  QSet<QString>& activated) {
+    if (!result.success)
+        return;
+    if (bare_tool_name == QLatin1String("tool_list")) {
+        // Activate every candidate the search surfaced — the model may pick any.
+        const QJsonArray rows = result.data.toObject().value("tools").toArray();
+        for (const auto& row : rows) {
+            const QString name = row.toObject().value("name").toString();
+            if (!name.isEmpty())
+                activated.insert(name);
+        }
+    } else if (bare_tool_name == QLatin1String("tool_describe")) {
+        // The model committed to one tool — prefer the canonical name echoed in
+        // the result, fall back to the name it asked about.
+        QString name = result.data.toObject().value("name").toString();
+        if (name.isEmpty())
+            name = args.value("name").toString();
+        if (!name.isEmpty())
+            activated.insert(name);
+    }
 }
 
 } // namespace fincept::ai_chat::detail

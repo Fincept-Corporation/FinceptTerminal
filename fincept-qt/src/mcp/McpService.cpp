@@ -262,6 +262,11 @@ static bool tool_rag_enabled() {
 }
 
 QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter) {
+    return format_tools_for_openai(filter, QSet<QString>{});
+}
+
+QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter,
+                                               const QSet<QString>& extra_tool_names) {
     QMutexLocker lock(&mutex_);
     cached_tools_locked();
 
@@ -277,9 +282,21 @@ QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter) {
                                 filter.max_tools == 0;
     const bool use_rag = default_filter && tool_rag_enabled();
 
-    const QByteArray key = use_rag
-        ? QByteArrayLiteral("__tier0__")
-        : filter_signature(filter);
+    QByteArray key;
+    if (use_rag) {
+        key = QByteArrayLiteral("__tier0__");
+        // Activated tools widen the Tier-0 set, so they must vary the cache key
+        // — otherwise round 2 would be served round 1's cached 7-tool array and
+        // the model would never see the tool it just discovered.
+        if (!extra_tool_names.isEmpty()) {
+            QStringList sorted(extra_tool_names.constBegin(), extra_tool_names.constEnd());
+            sorted.sort();
+            key += '|';
+            key += sorted.join(QLatin1Char(',')).toUtf8();
+        }
+    } else {
+        key = filter_signature(filter);
+    }
 
     auto cached = openai_format_cache_.constFind(key);
     if (cached != openai_format_cache_.constEnd()) {
@@ -294,7 +311,7 @@ QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter) {
     if (use_rag) {
         const auto& tier0 = tier_0_tool_names();
         for (const auto& t : cached_tools_) {
-            if (tier0.contains(t.name))
+            if (tier0.contains(t.name) || extra_tool_names.contains(t.name))
                 tools.push_back(t);
         }
     } else {
@@ -330,8 +347,8 @@ QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter) {
 
     if (use_rag) {
         LOG_INFO(TAG, QString("format_tools_for_openai: %1/%2 tools sent to LLM "
-                              "(tier-0 / Tool RAG mode, fresh)")
-                          .arg(result.size()).arg(total_seen));
+                              "(tier-0 + %3 activated / Tool RAG mode, fresh)")
+                          .arg(result.size()).arg(total_seen).arg(extra_tool_names.size()));
     } else if (total_seen != result.size()) {
         LOG_INFO(TAG, QString("format_tools_for_openai: %1/%2 tools sent to LLM (filtered, fresh)")
                           .arg(result.size()).arg(total_seen));

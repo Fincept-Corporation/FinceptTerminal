@@ -8,8 +8,11 @@
 
 #include <QHash>
 #include <QObject>
+#include <QPointer>
 #include <QString>
 #include <QTimer>
+
+#include <functional>
 
 #    include "datahub/Producer.h"
 
@@ -44,6 +47,17 @@ class DataStreamManager : public QObject
     // --- DataHub producer wiring (Phase 7) ---
     // Registers with the hub + installs broker:* policies. Idempotent.
     void ensure_registered_with_hub();
+
+    // --- Shared quote feed (thread-safe; callable from any thread) ---
+    // Give `consumer_id` a live feed of `symbol` on `account_id`: ensures the
+    // account stream is started + subscribed (so the symbol streams and is
+    // published to broker:<id>:<acct>:quote:<symbol>), then forwards every quote
+    // to `cb`. `cb` is invoked on `owner`'s thread (queued). `owner` is the
+    // lifetime guard. All stream/DataHub mutation happens on the main thread.
+    void open_quote_feed(QObject* owner, const QString& consumer_id,
+                         const QString& account_id, const QString& symbol,
+                         std::function<void(const BrokerQuote&)> cb);
+    void close_quote_feed(const QString& consumer_id, const QString& account_id);
 
     // fincept::datahub::Producer
     QStringList topic_patterns() const override;
@@ -91,6 +105,14 @@ class DataStreamManager : public QObject
     bool hub_registered_ = false;
 
     QHash<QString, AccountDataStream*> streams_; // account_id -> stream (parent = this)
+
+    // Open shared quote feeds (Stage 2): consumer_id -> feed handle.
+    struct QuoteFeed {
+        QString account_id;
+        QString topic;
+        QPointer<QObject> owner;
+    };
+    QHash<QString, QuoteFeed> quote_feeds_;
 };
 
 } // namespace fincept::trading

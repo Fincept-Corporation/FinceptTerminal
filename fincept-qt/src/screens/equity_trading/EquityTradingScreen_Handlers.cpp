@@ -144,7 +144,7 @@ void EquityTradingScreen::on_account_changed(const QString& account_id) {
         auto* stream = dsm.stream_for(account_id);
         if (stream) {
             stream->set_selected_symbol(selected_symbol_, selected_exchange_);
-            stream->subscribe_symbols(watchlist_symbols_);
+            stream->subscribe_symbols(QStringLiteral("equity:watchlist"), watchlist_symbols_);
             stream->fetch_candles(selected_symbol_, chart_->current_timeframe());
             stream->fetch_orderbook(selected_symbol_);
             stream->fetch_time_sales(selected_symbol_);
@@ -347,7 +347,7 @@ void EquityTradingScreen::on_accounts_clicked() {
         auto* stream = DataStreamManager::instance().stream_for(account_id);
         if (stream && account_id == focused_account_id_) {
             stream->set_selected_symbol(selected_symbol_, selected_exchange_);
-            stream->subscribe_symbols(watchlist_symbols_);
+            stream->subscribe_symbols(QStringLiteral("equity:watchlist"), watchlist_symbols_);
         }
         AccountManager::instance().set_connection_state(account_id, ConnectionState::Connected);
         update_connection_status();

@@ -151,7 +151,7 @@ static const CatalogEntry kCatalog[] = {
     {"quant_reporting", "check_status", "quant_reporting_status",
      "Check the quant-reporting service status."},
     {"quant_reporting", "ic_analysis", "quant_reporting_ic",
-     "IC analysis report."},
+     "Information Coefficient (IC) analysis report — measures a factor's predictive power on forward returns over time."},
     {"quant_reporting", "model_performance", "quant_reporting_model_perf",
      "Model performance report."},
     {"quant_reporting", "cumulative_returns", "quant_reporting_cumret",

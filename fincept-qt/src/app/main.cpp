@@ -23,6 +23,7 @@
 #include "core/symbol/SymbolRef.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "mcp/McpInit.h"
+#include "mcp/ToolSelfTest.h"
 #include "network/http/HttpClient.h"
 #include "python/PythonSetupManager.h"
 #include "screens/launchpad/LaunchpadScreen.h"
@@ -45,6 +46,7 @@
 #include "services/options/OptionChainService.h"
 #include "services/alpha_arena/AlphaArenaEngine.h"
 #include "services/news/NewsService.h"
+#include "services/notebooks/NotebookLibraryService.h"
 #include "services/polymarket/PolymarketWebSocket.h"
 #include "services/prediction/PredictionCredentialStore.h"
 #include "services/prediction/PredictionExchangeRegistry.h"
@@ -606,6 +608,11 @@ int main(int argc, char* argv[]) {
 
     fincept::Logger::instance().set_file(fincept::AppPaths::logs() + "/fincept.log");
 
+    // Seed the prebuilt Fincept Notebook library into the File Manager on first
+    // run (idempotent — guarded by a marker file). Makes the curated notebooks
+    // appear in both the Notebook Library and the File Manager out of the box.
+    fincept::services::NotebookLibraryService::instance().seed_into_files();
+
     // P3.18 — route Qt's own qDebug/qWarning/qCritical messages into our log
     // file so framework/3rd-party warnings are visible in Release builds.
     qInstallMessageHandler([](QtMsgType type, const QMessageLogContext& ctx, const QString& msg) {
@@ -842,6 +849,18 @@ int main(int argc, char* argv[]) {
     // Initialize MCP tool system — registers all internal tools and starts
     // external MCP servers in the background (non-blocking).
     fincept::mcp::initialize_all_tools();
+
+    // ── Headless tool-system self-test / catalog dump ────────────────────────
+    // Runs after the real tool registration above but before any window or
+    // network init, so it exercises exactly what ships. Exits without starting
+    // the GUI — used by the dev loop and CI to measure tool retrieval recall
+    // and registry integrity (no LLM / API key required).
+    for (int i = 1; i < argc; ++i) {
+        if (qstrcmp(argv[i], "--selftest-tools") == 0)
+            return fincept::mcp::run_tool_selftest();
+        if (qstrcmp(argv[i], "--dump-tools") == 0)
+            return fincept::mcp::dump_tools_json();
+    }
 
     // ── Python environment check ─────────────────────────────────────────────
     // check_status() fast path (sentinel + markers present) is synchronous and

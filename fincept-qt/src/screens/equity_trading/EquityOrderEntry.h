@@ -51,6 +51,11 @@ class EquityOrderEntry : public QWidget {
     void set_buy_side(bool is_buy);
     void set_order_type(int idx);
 
+    // Resolve the current form selections into trading enums (dedups the
+    // order-type / product-type mapping repeated across submit/broadcast/margin).
+    trading::OrderType selected_order_type() const;
+    trading::ProductType selected_product_type() const;
+
     // Options strategy helpers
     bool build_strategy(trading::OptionsStrategy& out) const; // returns false when strategy == None or inputs invalid
     void refresh_strategy_preview();

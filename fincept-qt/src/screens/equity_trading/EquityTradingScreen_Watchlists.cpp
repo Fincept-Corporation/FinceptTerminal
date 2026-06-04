@@ -154,7 +154,7 @@ void EquityTradingScreen::apply_active_watchlist(bool resubscribe) {
 
     auto* stream = trading::DataStreamManager::instance().stream_for(focused_account_id_);
     if (stream) {
-        stream->subscribe_symbols(eff);
+        stream->subscribe_symbols(QStringLiteral("equity:watchlist"), eff);
         stream->fetch_orderbook(selected_symbol_);
     }
     if (isVisible() && hub_active_)

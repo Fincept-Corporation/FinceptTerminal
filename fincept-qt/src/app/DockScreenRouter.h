@@ -76,6 +76,12 @@ class DockScreenRouter : public QObject {
     /// Find an existing dock widget by screen id, or nullptr.
     ads::CDockWidget* find_dock_widget(const QString& id) const;
 
+    /// Return the materialized screen widget for a route id, or nullptr if the
+    /// screen has not been created yet. This is the raw screen (not the ADS
+    /// dock-widget wrapper), so callers can qobject_cast it to the concrete type
+    /// to hand it a payload after navigate() (e.g. a notebook path to open).
+    QWidget* screen_widget(const QString& id) const { return screens_.value(id); }
+
     /// Returns all registered screen IDs (both eager and factory).
     QStringList all_screen_ids() const;
 

@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "brand": "Fincept Notebook",
+  "notebooks": [
+    {
+      "id": "finance-time-value-of-money",
+      "title": "Time Value of Money",
+      "category": "Finance",
+      "difficulty": "Beginner",
+      "est_minutes": 10,
+      "requires": "stdlib",
+      "summary": "Present value, future value, NPV and IRR from first principles — the math behind every valuation, using only the Python standard library.",
+      "file": "finance_time_value_of_money.ipynb"
+    },
+    {
+      "id": "finance-financial-ratios",
+      "title": "Financial Statement Ratios",
+      "category": "Finance",
+      "difficulty": "Intermediate",
+      "est_minutes": 18,
+      "requires": "pandas + numpy",
+      "summary": "Turn an income statement and balance sheet into liquidity, profitability and leverage ratios with a tidy pandas DataFrame.",
+      "file": "finance_financial_ratios.ipynb"
+    },
+    {
+      "id": "economics-inflation-real-returns",
+      "title": "Inflation & Real Returns",
+      "category": "Economics",
+      "difficulty": "Beginner",
+      "est_minutes": 12,
+      "requires": "stdlib",
+      "summary": "Read a CPI series, compute inflation, and learn why nominal returns lie — real vs nominal and the Rule of 72.",
+      "file": "economics_inflation_real_returns.ipynb"
+    },
+    {
+      "id": "economics-yield-curve",
+      "title": "Yield Curve & Recession Signal",
+      "category": "Economics",
+      "difficulty": "Hard",
+      "est_minutes": 30,
+      "requires": "pandas + numpy",
+      "summary": "Build a Treasury yield curve, interpolate missing tenors with numpy, and detect the 10y-2y inversion that precedes recessions.",
+      "file": "economics_yield_curve.ipynb"
+    },
+    {
+      "id": "trading-first-watchlist",
+      "title": "Your First Watchlist & Returns",
+      "category": "Trading",
+      "difficulty": "Beginner",
+      "est_minutes": 12,
+      "requires": "stdlib",
+      "summary": "Build a watchlist, compute daily returns and volatility, and rank winners and losers — pure standard library.",
+      "file": "trading_first_watchlist.ipynb"
+    },
+    {
+      "id": "trading-sma-crossover-backtest",
+      "title": "Moving Average Crossover Backtest",
+      "category": "Trading",
+      "difficulty": "Intermediate",
+      "est_minutes": 22,
+      "requires": "pandas + numpy",
+      "summary": "Backtest a fast/slow SMA crossover strategy on a price series, build the equity curve, and measure return, drawdown and Sharpe.",
+      "file": "trading_sma_crossover_backtest.ipynb"
+    },
+    {
+      "id": "investing-dollar-cost-averaging",
+      "title": "Dollar-Cost Averaging Simulator",
+      "category": "Investing",
+      "difficulty": "Beginner",
+      "est_minutes": 12,
+      "requires": "stdlib",
+      "summary": "Simulate dollar-cost averaging vs a lump-sum investment over a volatile market and see which wins and why.",
+      "file": "investing_dollar_cost_averaging.ipynb"
+    },
+    {
+      "id": "investing-dividend-compounding",
+      "title": "Dividend Growth & DRIP Compounding",
+      "category": "Investing",
+      "difficulty": "Intermediate",
+      "est_minutes": 18,
+      "requires": "pandas + numpy",
+      "summary": "Model a dividend reinvestment plan (DRIP) with growing dividends and watch compounding snowball over decades with pandas.",
+      "file": "investing_dividend_compounding.ipynb"
+    },
+    {
+      "id": "portfolio-weights-returns",
+      "title": "Portfolio Weights & Returns",
+      "category": "Portfolio",
+      "difficulty": "Beginner",
+      "est_minutes": 12,
+      "requires": "stdlib",
+      "summary": "Allocate weights across assets, compute the weighted portfolio return, and see how drift forces rebalancing.",
+      "file": "portfolio_weights_returns.ipynb"
+    },
+    {
+      "id": "portfolio-mean-variance-optimization",
+      "title": "Mean-Variance Optimization",
+      "category": "Portfolio",
+      "difficulty": "Hard",
+      "est_minutes": 35,
+      "requires": "pandas + numpy",
+      "summary": "Build the efficient frontier: covariance, thousands of simulated portfolios with numpy, and the max-Sharpe and min-volatility picks.",
+      "file": "portfolio_mean_variance_optimization.ipynb"
+    },
+    {
+      "id": "quant-monte-carlo-gbm",
+      "title": "Monte Carlo Price Simulation",
+      "category": "Quant",
+      "difficulty": "Intermediate",
+      "est_minutes": 22,
+      "requires": "pandas + numpy",
+      "summary": "Simulate thousands of Geometric Brownian Motion price paths with numpy, build a percentile cone, and estimate Value at Risk.",
+      "file": "quant_monte_carlo_gbm.ipynb"
+    },
+    {
+      "id": "quant-pairs-trading-zscore",
+      "title": "Pairs Trading: Spread Z-Score",
+      "category": "Quant",
+      "difficulty": "Hard",
+      "est_minutes": 32,
+      "requires": "pandas + numpy",
+      "summary": "Estimate a hedge ratio by least squares, build the spread z-score, and generate mean-reversion entry/exit signals with a simple P&L.",
+      "file": "quant_pairs_trading_zscore.ipynb"
+    }
+  ]
+}

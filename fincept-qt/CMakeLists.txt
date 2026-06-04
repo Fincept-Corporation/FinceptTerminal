@@ -904,6 +904,7 @@ set(MCP_SOURCES
     src/mcp/McpInit.cpp
     src/mcp/SchemaValidator.cpp
     src/mcp/ToolRetriever.cpp
+    src/mcp/ToolSelfTest.cpp
     src/mcp/TerminalMcpBridge.cpp
 
     # Tool modules
@@ -971,6 +972,7 @@ set(TRADING_SOURCES
     src/trading/AccountManager.cpp
     src/trading/AccountDataStream.cpp
     src/trading/DataStreamManager.cpp
+    src/trading/HistoricalDataService.cpp
     src/trading/ExchangeService.cpp
     src/trading/ExchangeSession.cpp
     src/trading/ExchangeSessionManager.cpp
@@ -1153,6 +1155,7 @@ set(SERVICE_SOURCES
     src/services/agents/AgentService_Workflows.cpp
     src/services/agents/AgentService_Repositories.cpp
     src/services/file_manager/FileManagerService.cpp
+    src/services/notebooks/NotebookLibraryService.cpp
 
     # Wallet (Phase 1 — Solana wallet identity + balance display)
     src/services/wallet/Ed25519Verifier.cpp
@@ -1541,10 +1544,11 @@ set(SCREEN_SOURCES
     src/screens/dbnomics/DBnomicsSelectionPanel.cpp
     src/screens/dbnomics/DBnomicsScreen.cpp
 
-    # Code Editor (Python Colab) — partial-class split: see header comment.
+    # Code Editor (Fincept Notebook) — partial-class split: see header comment.
     src/screens/code_editor/CodeEditorScreen.cpp
     src/screens/code_editor/CodeEditorScreen_Cells.cpp
     src/screens/code_editor/CodeEditorScreen_Navigator.cpp
+    src/screens/code_editor/CodeEditorScreen_Library.cpp
 
     # Excel Spreadsheet
     src/screens/excel/ExcelScreen.cpp
@@ -1927,6 +1931,8 @@ set_source_files_properties(
     src/screens/code_editor/CodeEditorScreen.cpp
     src/screens/code_editor/CodeEditorScreen_Cells.cpp
     src/screens/code_editor/CodeEditorScreen_Navigator.cpp
+    src/screens/code_editor/CodeEditorScreen_Library.cpp
+    src/services/notebooks/NotebookLibraryService.cpp
     src/screens/crypto_trading/CryptoBottomPanel.cpp
     src/screens/crypto_trading/CryptoChart.cpp
     src/screens/crypto_trading/CryptoCredentials.cpp
@@ -2397,6 +2403,7 @@ set_source_files_properties(
     src/mcp/McpInit.cpp
     src/mcp/SchemaValidator.cpp
     src/mcp/ToolRetriever.cpp
+    src/mcp/ToolSelfTest.cpp
     src/mcp/TerminalMcpBridge.cpp
     src/mcp/tools/NavigationTools.cpp
     src/mcp/tools/MarketsTools.cpp
@@ -3154,6 +3161,10 @@ add_custom_command(TARGET FinceptTerminal POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/resources/charts/vendor"
         "$<TARGET_FILE_DIR:FinceptTerminal>/resources/charts/vendor"
+    # Prebuilt Fincept Notebook library (manifest + .ipynb files).
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/notebooks"
+        "$<TARGET_FILE_DIR:FinceptTerminal>/resources/notebooks"
     COMMENT "Copying requirements files to build output..."
 )
 
@@ -3223,6 +3234,9 @@ if(WIN32)
             "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy1.txt"
             "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy2.txt"
             DESTINATION "resources" COMPONENT core)
+    # Prebuilt Fincept Notebook library (bundled + seeded into the File Manager).
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resources/notebooks/"
+            DESTINATION "resources/notebooks" COMPONENT core)
 
 elseif(APPLE)
     # macOS: install the .app bundle
@@ -3232,6 +3246,9 @@ elseif(APPLE)
             "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy1.txt"
             "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy2.txt"
             DESTINATION "FinceptTerminal.app/Contents/Resources/resources" COMPONENT core)
+    # Prebuilt Fincept Notebook library (bundled + seeded into the File Manager).
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resources/notebooks/"
+            DESTINATION "FinceptTerminal.app/Contents/Resources/resources/notebooks" COMPONENT core)
 
 else()
     # Linux: FHS-compliant layout. Architecture-neutral — works for x86_64
@@ -3269,6 +3286,10 @@ else()
             DESTINATION "share/fincept-terminal/scripts"
             USE_SOURCE_PERMISSIONS COMPONENT scripts
             REGEX "(\\.deleted\\.|\\.pytest_cache|\\.benchmarks|__pycache__|\\.pyc$|\\.db$|\\.sqlite$|\\.sqlite3$|\\.bak$|\\.orig$)" EXCLUDE)
+
+    # Prebuilt Fincept Notebook library (bundled + seeded into the File Manager).
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resources/notebooks/"
+            DESTINATION "share/fincept-terminal/resources/notebooks" COMPONENT core)
 
     # App icon (PNG required for hicolor theme; convert .ico → .png in CI)
     set(_ICON_PNG "${CMAKE_CURRENT_SOURCE_DIR}/resources/fincept.png")

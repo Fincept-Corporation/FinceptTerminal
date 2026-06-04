@@ -197,9 +197,9 @@ std::vector<ToolDef> get_markets_tools() {
     {
         ToolDef t;
         t.name = "get_history";
-        t.description = "Fetch historical OHLCV bars for a stock/ETF/crypto symbol. "
-                        "Returns an array of {date, timestamp, open, high, low, close, volume}. "
-                        "Backed by yfinance.";
+        t.description = "Fetch historical daily/weekly price history (OHLCV bars) for a stock/ETF/crypto "
+                        "symbol over a date range. Returns an array of {date, timestamp, open, high, low, "
+                        "close, volume}. Backed by yfinance.";
         t.category = "markets";
         t.input_schema.properties = QJsonObject{
             {"symbol", QJsonObject{{"type", "string"},

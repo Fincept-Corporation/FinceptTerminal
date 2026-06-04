@@ -181,7 +181,8 @@ void CellWidget::build_ui() {
     editor_->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     editor_->setLineWrapMode(QTextEdit::NoWrap);
     editor_->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:none;"
-                                   " font-family:%3; font-size:%4px; padding:2px 6px;"
+                                   " font-family:%3, 'Menlo', 'SF Mono', 'Courier New', monospace;"
+                                   " font-size:%4px; padding:8px 12px;"
                                    " selection-background-color:%5; }"
                                    "QScrollBar:vertical { background:%1; width:5px; }"
                                    "QScrollBar::handle:vertical { background:%6; min-height:20px; }"
@@ -327,14 +328,39 @@ void CellWidget::retranslateUi() {
 }
 
 void CellWidget::adjust_editor_height() {
-    if (!editor_->isVisible())
+    // Markdown cells showing the rendered preview hide the editor — its height
+    // is irrelevant. For everything else, size to fit even while the cell's
+    // stack page is still hidden (cells are built on the Editor page while the
+    // Library page is showing), so the cell isn't stuck at a tiny default.
+    if (cell_type_ == "markdown" && !md_editing_)
         return;
-    // Exact content height from the layout engine + CSS padding (2+2)
-    int doc_h = static_cast<int>(editor_->document()->size().height());
-    int target = doc_h + 6;
-    int max_h = (cell_type_ == "code") ? 600 : 300;
-    int h = qBound(28, target, max_h);
-    editor_->setFixedHeight(h);
+
+    // adjustSize() below re-emits documentSizeChanged (this slot is connected to
+    // it) — guard against the infinite recursion that would otherwise overflow
+    // the stack.
+    if (adjusting_height_)
+        return;
+    adjusting_height_ = true;
+
+    // Grow the editor to fit ALL its lines so the cell expands with the amount
+    // of code it holds — no inner scrollbar for code. The outer notebook scroll
+    // area handles overall scrolling. Height comes from the document layout, so
+    // it is accurate regardless of current visibility.
+    editor_->document()->adjustSize();
+    const int doc_h = static_cast<int>(editor_->document()->size().height());
+    const int target = doc_h + 8; // editor CSS padding (2+2) + breathing room
+    const int min_h = 40;
+    const int max_h = (cell_type_ == "code") ? 100000 : 800; // code grows freely
+    editor_->setFixedHeight(qBound(min_h, target, max_h));
+
+    adjusting_height_ = false;
+}
+
+void CellWidget::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    // Re-measure now that the stylesheet font has been polished (QSS is applied
+    // on show); construction-time sizing may use the wrong default font metrics.
+    adjust_editor_height();
 }
 
 void CellWidget::set_cell_data(const NotebookCell& cell) {
@@ -423,7 +449,7 @@ void CellWidget::set_outputs(const QVector<CellOutput>& outputs, int exec_count)
             QString fg = (out.name == "stderr") ? colors::WARNING : colors::TEXT_PRIMARY;
             output_view->setStyleSheet(
                 QString("QTextEdit { background:transparent; color:%1; border:none;"
-                        " font-family:%2; font-size:%3px; padding:2px 0; }"
+                        " font-family:%2, 'Menlo', 'SF Mono', monospace; font-size:%3px; padding:2px 0; }"
                         "QScrollBar:vertical { background:transparent; width:4px; }"
                         "QScrollBar::handle:vertical { background:%4; }"
                         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
@@ -462,7 +488,7 @@ void CellWidget::set_outputs(const QVector<CellOutput>& outputs, int exec_count)
                 tb_view->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
                 tb_view->setStyleSheet(
                     QString("QTextEdit { background:transparent; color:%1; border:none;"
-                            " font-family:%2; font-size:%3px; }"
+                            " font-family:%2, 'Menlo', 'SF Mono', monospace; font-size:%3px; }"
                             "QScrollBar:vertical { background:transparent; width:4px; }"
                             "QScrollBar::handle:vertical { background:%4; }"
                             "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")

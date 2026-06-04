@@ -8,6 +8,7 @@
 #    include "trading/BrokerTopic.h"
 
 #include <QDateTime>
+#include <QPointer>
 #include <QSet>
 #include <QVariant>
 
@@ -362,6 +363,67 @@ void DataStreamManager::on_quote_for_hub(const QString& account_id, const QStrin
     if (!stream) return;
     const QString topic = broker_topic(stream->broker_id(), account_id, QStringLiteral("quote"), symbol);
     fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(quote));
+}
+
+// ── Shared quote feed (Stage 2) ─────────────────────────────────────────────
+
+void DataStreamManager::open_quote_feed(QObject* owner, const QString& consumer_id,
+                                        const QString& account_id, const QString& symbol,
+                                        std::function<void(const BrokerQuote&)> cb) {
+    // This singleton + DataHub live on the main thread; callers (DeploymentRunner)
+    // run on the algo engine thread. Marshal all stream/DataHub mutation here.
+    QPointer<QObject> guard(owner);
+    QMetaObject::invokeMethod(this, [this, guard, consumer_id, account_id, symbol, cb]() {
+        if (!guard)
+            return;
+        ensure_registered_with_hub();
+        if (!has_stream(account_id))
+            start_stream(account_id);
+        auto* stream = stream_for(account_id);
+        if (!stream) {
+            LOG_WARN(DSM_TAG, QString("open_quote_feed: no stream for account %1").arg(account_id));
+            return;
+        }
+        // Join the account stream as an independent consumer + request fast (3s)
+        // polling on non-WS brokers so the feed stays timely for algos.
+        stream->subscribe_symbols(consumer_id, {symbol});
+        stream->set_active_feed(consumer_id, {symbol});
+
+        // Replace any prior feed registered under this consumer id.
+        if (auto old = quote_feeds_.find(consumer_id); old != quote_feeds_.end()) {
+            if (old->owner)
+                fincept::datahub::DataHub::instance().unsubscribe(old->owner, old->topic);
+            quote_feeds_.erase(old);
+        }
+
+        const QString topic = broker_topic(stream->broker_id(), account_id,
+                                            QStringLiteral("quote"), symbol);
+        // DataHub fans out on the MAIN thread; marshal each quote to the owner's
+        // (engine) thread before invoking cb so on_tick_data runs there.
+        fincept::datahub::DataHub::instance().subscribe<BrokerQuote>(
+            guard, topic, [guard, cb](const BrokerQuote& q) {
+                QMetaObject::invokeMethod(guard, [guard, cb, q]() {
+                    if (guard) cb(q);
+                }, Qt::QueuedConnection);
+            });
+        quote_feeds_.insert(consumer_id, QuoteFeed{account_id, topic, guard});
+        LOG_INFO(DSM_TAG, QString("Opened quote feed '%1' for %2 on account %3")
+                              .arg(consumer_id, symbol, account_id));
+    }, Qt::QueuedConnection);
+}
+
+void DataStreamManager::close_quote_feed(const QString& consumer_id, const QString& account_id) {
+    QMetaObject::invokeMethod(this, [this, consumer_id, account_id]() {
+        if (auto it = quote_feeds_.find(consumer_id); it != quote_feeds_.end()) {
+            if (it->owner)
+                fincept::datahub::DataHub::instance().unsubscribe(it->owner, it->topic);
+            quote_feeds_.erase(it);
+        }
+        if (auto* stream = stream_for(account_id)) {
+            stream->unsubscribe_consumer(consumer_id);
+            stream->set_active_feed(consumer_id, {});
+        }
+    }, Qt::QueuedConnection);
 }
 
 } // namespace fincept::trading

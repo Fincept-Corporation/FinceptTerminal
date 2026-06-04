@@ -20,11 +20,26 @@
 #include "services/backtesting/BacktestingService.h"
 #include "services/equity/EquityResearchService.h"
 #include "ui/theme/Theme.h"
+#include "python/PythonRunner.h"
 
 #include <QApplication>
+#include <QComboBox>
+#include <QDateTime>
+#include <QDialog>
 #include <QEvent>
+#include <QFile>
+#include <QFileDialog>
+#include <QFormLayout>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QMessageBox>
+#include <QPointer>
+#include <QPushButton>
+#include <QTextStream>
+#include <QTimeZone>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -183,6 +198,21 @@ QWidget* EquityResearchScreen::build_title_bar() {
     });
     hl->addWidget(backtest_btn);
 
+    auto* csv_btn = new QPushButton(tr("↓ CSV"), container);
+    csv_btn->setCursor(Qt::PointingHandCursor);
+    csv_btn->setFixedHeight(24);
+    csv_btn->setToolTip(tr("Download price history (CSV) from Yahoo Finance"));
+    csv_btn->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                "padding:0 10px; font-size:%3px; font-family:%4; font-weight:700; letter-spacing:0.5px; }"
+                "QPushButton:hover { background:%5; color:%6; }")
+            .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM())
+            .arg(ui::fonts::TINY)
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::colors::AMBER(), ui::colors::BG_BASE()));
+    connect(csv_btn, &QPushButton::clicked, this, &EquityResearchScreen::on_download_csv_clicked);
+    hl->addWidget(csv_btn);
+
     hl->addStretch();
 
     hint_label_ = new QLabel;
@@ -237,6 +267,20 @@ void EquityResearchScreen::on_info_loaded(services::equity::StockInfo info) {
     if (info.symbol != current_symbol_)
         return;
     current_currency_ = info.currency;
+
+    // Populate the title-bar MKT CAP. The value comes straight from yfinance's
+    // `info` (the Overview tab renders the same StockInfo::market_cap); the title
+    // bar simply was never wired to it, so it sat at the "—" placeholder.
+    if (mktcap_label_) {
+        if (info.market_cap > 0) {
+            const QString cs =
+                EquityOverviewTab::currency_symbol(info.currency.isEmpty() ? "USD" : info.currency);
+            mktcap_label_->setText(
+                tr("MKT CAP: %1%2").arg(cs, EquityOverviewTab::fmt_large(info.market_cap)));
+        } else {
+            mktcap_label_->setText(tr("MKT CAP: %1").arg(QStringLiteral("—")));
+        }
+    }
 }
 
 void EquityResearchScreen::on_tab_changed(int index) {
@@ -353,6 +397,155 @@ void EquityResearchScreen::update_quote_bar(const services::equity::QuoteData& q
 
     vol_label_->setText(tr("VOL: %1").arg(fmt_vol(q.volume)));
     hl_label_->setText(tr("H:%1%2  L:%1%3").arg(cs).arg(q.high, 0, 'f', 2).arg(q.low, 0, 'f', 2));
+}
+
+// ── CSV price-data download (yfinance) ───────────────────────────────────────
+// current_symbol_ is already in yfinance form on this screen (the quote/info/
+// historical loads all pass it straight through), so it is handed to
+// historical_period unchanged — no exchange-suffix resolution needed here.
+
+void EquityResearchScreen::on_download_csv_clicked() {
+    const QString symbol = current_symbol_.trimmed();
+    if (symbol.isEmpty()) {
+        QMessageBox::information(this, tr("Download Price Data"), tr("Load a symbol first."));
+        return;
+    }
+
+    auto* dlg = new QDialog(this);
+    dlg->setWindowTitle(tr("Download Price Data — %1").arg(symbol));
+    dlg->setModal(true);
+    dlg->setMinimumWidth(380);
+
+    auto* root = new QVBoxLayout(dlg);
+    root->setContentsMargins(16, 16, 16, 16);
+    root->setSpacing(10);
+
+    auto* title = new QLabel(
+        tr("Export Yahoo Finance price history for <b>%1</b> as CSV.").arg(symbol), dlg);
+    title->setWordWrap(true);
+    root->addWidget(title);
+
+    auto* form = new QFormLayout();
+    form->setSpacing(8);
+
+    auto* period_combo = new QComboBox(dlg);
+    period_combo->addItems({"1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "max"});
+    period_combo->setCurrentText("1y");
+    form->addRow(tr("Period:"), period_combo);
+
+    auto* interval_combo = new QComboBox(dlg);
+    interval_combo->addItems({"1m", "5m", "15m", "30m", "1h", "1d", "1wk", "1mo"});
+    interval_combo->setCurrentText("1d");
+    form->addRow(tr("Interval:"), interval_combo);
+    root->addLayout(form);
+
+    auto* note = new QLabel(
+        tr("Note: intraday intervals (below 1d) are only available for roughly the last 60 days."),
+        dlg);
+    note->setWordWrap(true);
+    note->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
+    root->addWidget(note);
+
+    auto* status = new QLabel(dlg);
+    status->setWordWrap(true);
+    status->setVisible(false);
+    root->addWidget(status);
+
+    auto* buttons = new QHBoxLayout();
+    buttons->addStretch();
+    auto* cancel_btn = new QPushButton(tr("Cancel"), dlg);
+    auto* download_btn = new QPushButton(tr("Download"), dlg);
+    download_btn->setDefault(true);
+    buttons->addWidget(cancel_btn);
+    buttons->addWidget(download_btn);
+    root->addLayout(buttons);
+
+    connect(cancel_btn, &QPushButton::clicked, dlg, &QDialog::reject);
+
+    connect(download_btn, &QPushButton::clicked, dlg,
+            [dlg, symbol, period_combo, interval_combo, status, download_btn, cancel_btn]() {
+                const QString period = period_combo->currentText();
+                const QString interval = interval_combo->currentText();
+
+                auto set_busy = [=](bool busy) {
+                    download_btn->setEnabled(!busy);
+                    cancel_btn->setEnabled(!busy);
+                    period_combo->setEnabled(!busy);
+                    interval_combo->setEnabled(!busy);
+                };
+                set_busy(true);
+                status->setVisible(true);
+                status->setStyleSheet(
+                    QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
+                status->setText(tr("Fetching from Yahoo Finance…"));
+
+                // Terminal step: write the OHLCV array to a user-chosen CSV file.
+                auto finish = [=](const QJsonArray& candles) {
+                    if (candles.isEmpty()) {
+                        status->setStyleSheet(
+                            QString("color:%1; font-size:11px;").arg(ui::colors::NEGATIVE()));
+                        status->setText(tr("No data returned for %1 (%2). Try a longer period "
+                                           "or a daily interval.")
+                                            .arg(symbol, interval));
+                        set_busy(false);
+                        return;
+                    }
+
+                    QString safe;
+                    for (const QChar ch : symbol)
+                        safe += ch.isLetterOrNumber() ? ch : QChar('_');
+                    const QString suggested =
+                        QStringLiteral("%1_%2_%3.csv").arg(safe, period, interval);
+                    const QString path = QFileDialog::getSaveFileName(
+                        dlg, tr("Save Price Data"), suggested, tr("CSV Files (*.csv)"));
+                    if (path.isEmpty()) {
+                        status->setText(tr("Save cancelled."));
+                        set_busy(false);
+                        return;
+                    }
+
+                    QFile file(path);
+                    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+                        QMessageBox::warning(
+                            dlg, tr("Export failed"),
+                            tr("Could not open the file for writing:\n%1").arg(file.errorString()));
+                        set_busy(false);
+                        return;
+                    }
+                    QTextStream out(&file);
+                    out.setEncoding(QStringConverter::Utf8);
+                    out << "datetime,timestamp,open,high,low,close,volume\n";
+                    for (const auto& v : candles) {
+                        const QJsonObject c = v.toObject();
+                        const auto ts = static_cast<qint64>(c.value("timestamp").toDouble());
+                        const QString dt = QDateTime::fromSecsSinceEpoch(ts, QTimeZone::UTC)
+                                               .toString("yyyy-MM-dd HH:mm:ss");
+                        out << dt << ',' << ts << ',' << c.value("open").toDouble() << ','
+                            << c.value("high").toDouble() << ',' << c.value("low").toDouble() << ','
+                            << c.value("close").toDouble() << ','
+                            << static_cast<qint64>(c.value("volume").toDouble()) << '\n';
+                    }
+                    file.close();
+                    QMessageBox::information(
+                        dlg, tr("Download complete"),
+                        tr("Saved %1 rows for %2 to:\n%3").arg(candles.size()).arg(symbol, path));
+                    dlg->accept();
+                };
+
+                // historical_period is daemon-routed in PythonRunner, so this is fast.
+                QPointer<QDialog> guard(dlg);
+                python::PythonRunner::instance().run(
+                    "yfinance_data.py", {"historical_period", symbol, period, interval},
+                    [guard, finish](python::PythonResult res) {
+                        if (!guard)
+                            return;
+                        finish(QJsonDocument::fromJson(python::extract_json(res.output).toUtf8())
+                                   .array());
+                    });
+            });
+
+    dlg->exec();
+    dlg->deleteLater();
 }
 
 // ── Re-translation ───────────────────────────────────────────────────────────

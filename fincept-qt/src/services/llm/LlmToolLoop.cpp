@@ -28,7 +28,8 @@ namespace fincept::ai_chat {
 namespace { constexpr const char* kLlmToolLoopTag = "LlmService"; }
 
 LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& url,
-                                     const QMap<QString, QString>& headers) {
+                                     const QMap<QString, QString>& headers,
+                                     QSet<QString> activated_tools) {
     LlmResponse resp;
     // MiniMax-style models spend 3 rounds per action (tool_list → tool_describe
     // → actual call), so the default 40 gives ~13 real actions — enough for a
@@ -43,7 +44,8 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         // Temperature intentionally omitted — provider default.
         fu["max_tokens"] = resolved_max_tokens();
 
-        QJsonArray tools = mcp::McpService::instance().format_tools_for_openai(detail::apply_request_policy(tool_filter_));
+        QJsonArray tools = mcp::McpService::instance().format_tools_for_openai(
+            detail::apply_request_policy(tool_filter_), activated_tools);
         if (!tools.isEmpty())
             fu["tools"] = tools;
 
@@ -92,6 +94,9 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                 LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP r%1: %2 -> %3 (msg=%4 err=%5)")
                                   .arg(round).arg(fname,
                                        tr.success ? "OK" : "FAIL", tr.message.left(120), tr.error.left(120)));
+                // If this was a discovery call (tool_list / tool_describe), declare
+                // what it surfaced so the model can actually call it next round.
+                detail::note_tool_activations(display, fa, tr, activated_tools);
                 loop_messages.append(QJsonObject{
                     {"role", "tool"},
                     {"tool_call_id", cid},
@@ -147,8 +152,10 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         fu["max_tokens"] = resolved_max_tokens();
         // Keep tools available so structured tool_calls still work. Stripping
         // them used to force text-markup mode (raw <minimax:tool_call> blobs)
-        // which leaked into the chat bubble.
-        QJsonArray tools = mcp::McpService::instance().format_tools_for_openai(detail::apply_request_policy(tool_filter_));
+        // which leaked into the chat bubble. Carry the activated set so a
+        // last-ditch tool call can still reference a discovered tool.
+        QJsonArray tools = mcp::McpService::instance().format_tools_for_openai(
+            detail::apply_request_policy(tool_filter_), activated_tools);
         if (!tools.isEmpty())
             fu["tools"] = tools;
 

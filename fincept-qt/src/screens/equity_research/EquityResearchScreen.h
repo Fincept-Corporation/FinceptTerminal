@@ -49,6 +49,9 @@ class EquityResearchScreen : public QWidget, public IStatefulScreen, public IGro
     void on_quote_loaded(services::equity::QuoteData quote);
     void on_info_loaded(services::equity::StockInfo info);
     void on_tab_changed(int index);
+    // Opens the "Download Price Data (CSV)" dialog and exports yfinance OHLCV
+    // history for current_symbol_ to a user-chosen file.
+    void on_download_csv_clicked();
 
   private:
     void build_ui();

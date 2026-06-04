@@ -405,19 +405,13 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
         order.symbol = current_symbol_;
         order.exchange = exchange_combo_->currentText();
         order.side = is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell;
-        static const trading::OrderType type_map[] = {trading::OrderType::Market, trading::OrderType::Limit,
-                                                      trading::OrderType::StopLoss, trading::OrderType::StopLossLimit};
-        order.order_type = type_map[active_type_];
+        order.order_type = selected_order_type();
         order.quantity = qty;
         order.price = price_edit_->text().toDouble();
         order.stop_price = stop_price_edit_->text().toDouble();
         order.stop_loss = sl_edit_ ? sl_edit_->text().toDouble() : 0.0;
         order.take_profit = tp_edit_ ? tp_edit_->text().toDouble() : 0.0;
-        const int prod_idx = product_combo_->currentIndex();
-        if (!product_types_.isEmpty() && prod_idx >= 0 && prod_idx < product_types_.size())
-            order.product_type = product_types_[prod_idx].value;
-        else
-            order.product_type = trading::ProductType::Intraday;
+        order.product_type = selected_product_type();
         emit broadcast_requested(order);
     });
     submit_row->addWidget(broadcast_btn_, 1);
@@ -546,6 +540,20 @@ void EquityOrderEntry::set_exchange(const QString& exchange) {
     }
 }
 
+trading::OrderType EquityOrderEntry::selected_order_type() const {
+    static const trading::OrderType type_map[] = {trading::OrderType::Market, trading::OrderType::Limit,
+                                                  trading::OrderType::StopLoss, trading::OrderType::StopLossLimit};
+    const int idx = (active_type_ >= 0 && active_type_ < 4) ? active_type_ : 0;
+    return type_map[idx];
+}
+
+trading::ProductType EquityOrderEntry::selected_product_type() const {
+    const int prod_idx = product_combo_->currentIndex();
+    if (!product_types_.isEmpty() && prod_idx >= 0 && prod_idx < product_types_.size())
+        return product_types_[prod_idx].value;
+    return trading::ProductType::Intraday;
+}
+
 void EquityOrderEntry::on_submit() {
     const double qty = qty_edit_->text().toDouble();
     if (qty <= 0) {
@@ -559,21 +567,13 @@ void EquityOrderEntry::on_submit() {
     order.exchange = exchange_combo_->currentText();
     order.side = is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell;
 
-    static const trading::OrderType type_map[] = {trading::OrderType::Market, trading::OrderType::Limit,
-                                                  trading::OrderType::StopLoss, trading::OrderType::StopLossLimit};
-    order.order_type = type_map[active_type_];
+    order.order_type = selected_order_type();
     order.quantity = qty;
     order.price = price_edit_->text().toDouble();
     order.stop_price = stop_price_edit_->text().toDouble();
     order.stop_loss = sl_edit_ ? sl_edit_->text().toDouble() : 0.0;
     order.take_profit = tp_edit_ ? tp_edit_->text().toDouble() : 0.0;
-
-    // Product type from profile-driven combo
-    const int prod_idx = product_combo_->currentIndex();
-    if (!product_types_.isEmpty() && prod_idx >= 0 && prod_idx < product_types_.size())
-        order.product_type = product_types_[prod_idx].value;
-    else
-        order.product_type = trading::ProductType::Intraday;
+    order.product_type = selected_product_type();
 
     emit order_submitted(order);
 }
@@ -624,13 +624,8 @@ void EquityOrderEntry::fetch_margin_async() {
     order.quantity = qty;
     order.price = price_edit_->text().toDouble();
     order.stop_price = stop_price_edit_->text().toDouble();
-    static const trading::OrderType type_map[] = {trading::OrderType::Market, trading::OrderType::Limit,
-                                                  trading::OrderType::StopLoss, trading::OrderType::StopLossLimit};
-    order.order_type = type_map[active_type_];
-    const int prod_idx = product_combo_->currentIndex();
-    order.product_type = (!product_types_.isEmpty() && prod_idx >= 0 && prod_idx < product_types_.size())
-                             ? product_types_[prod_idx].value
-                             : trading::ProductType::Intraday;
+    order.order_type = selected_order_type();
+    order.product_type = selected_product_type();
 
     const QString bid = broker_id_;
     QPointer<EquityOrderEntry> self = this;

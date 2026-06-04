@@ -279,7 +279,17 @@ void WindowFrame::setup_dock_screens() {
     dock_router_->register_factory("file_manager", [this]() {
         auto* fm = new screens::FileManagerScreen;
         connect(fm, &screens::FileManagerScreen::open_file_in_screen, this,
-                [this](const QString& route_id, const QString& /*file_path*/) { dock_router_->navigate(route_id); });
+                [this](const QString& route_id, const QString& file_path) {
+                    dock_router_->navigate(route_id);
+                    // Notebooks open into the editor with the file loaded — hand
+                    // the path to the live CodeEditorScreen after it materializes.
+                    if (route_id == "code_editor" && !file_path.isEmpty()) {
+                        dock_router_->materialize_now(route_id);
+                        if (auto* nb =
+                                qobject_cast<screens::CodeEditorScreen*>(dock_router_->screen_widget(route_id)))
+                            nb->open_notebook_path(file_path);
+                    }
+                });
         return fm;
     });
     dock_router_->register_factory("excel", []() { return new screens::ExcelScreen; });

@@ -11,6 +11,7 @@ using fincept::Database;
 #include "trading/BrokerInterface.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/BrokerTopic.h"
+#include "trading/DataStreamManager.h"
 #include "trading/TradingTypes.h"
 
 #include <QDateTime>
@@ -48,12 +49,6 @@ DeploymentRunner::DeploymentRunner(const services::algo::AlgoDeployment& deploym
     heartbeat_timer_ = new QTimer(this);
     heartbeat_timer_->setInterval(5000);
     connect(heartbeat_timer_, &QTimer::timeout, this, &DeploymentRunner::on_heartbeat);
-
-    // Poll the broker for a fresh quote every 3s while running. Lives on the engine
-    // thread (the runner is moved there before start()), so the timer fires there.
-    quote_timer_ = new QTimer(this);
-    quote_timer_->setInterval(3000);
-    connect(quote_timer_, &QTimer::timeout, this, &DeploymentRunner::poll_quote);
 }
 
 DeploymentRunner::~DeploymentRunner() {
@@ -138,48 +133,26 @@ void DeploymentRunner::start_market_data() {
                      .arg(deployment_.id));
         return;
     }
-    LOG_INFO("AlgoEngine", QString("Deployment %1: polling %2 quotes from broker '%3' every 3s")
+    LOG_INFO("AlgoEngine", QString("Deployment %1: subscribing to shared %2 feed on '%3'")
                                .arg(deployment_.id, deployment_.symbol, deployment_.broker_id));
-    quote_timer_->start();
-    poll_quote(); // fire the first one immediately rather than waiting 3s
+    // Subscribe to the shared per-account quote feed. The symbol joins the account
+    // stream (WS tick or fast REST poll), is published to broker:<id>:<acct>:quote:
+    // <symbol>, and each quote is delivered here on the engine thread via
+    // on_tick_data — the same entry point a WS tick used. One connection per
+    // (account, symbol) is shared across the Equity watchlist and every algo.
+    QPointer<DeploymentRunner> self = this;
+    trading::DataStreamManager::instance().open_quote_feed(
+        this, QStringLiteral("algo:") + deployment_.id,
+        deployment_.broker_account_id, deployment_.symbol,
+        [self](const trading::BrokerQuote& q) {
+            if (self && self->running_.load() && !self->paused_.load())
+                self->on_tick_data(QVariant::fromValue(q));
+        });
 }
 
 void DeploymentRunner::stop_market_data() {
-    if (quote_timer_)
-        quote_timer_->stop();
-}
-
-void DeploymentRunner::poll_quote() {
-    if (!running_.load() || paused_.load())
-        return;
-    const QString broker_id = deployment_.broker_id;
-    const QString account_id = deployment_.broker_account_id;
-    const QString symbol = deployment_.symbol;
-    if (broker_id.isEmpty() || account_id.isEmpty())
-        return;
-
-    // Hit the broker's quote REST endpoint off-thread; deliver the result back on
-    // the engine thread via on_tick_data (same entry point a WS tick would use).
-    QPointer<DeploymentRunner> self = this;
-    QtConcurrent::run([self, broker_id, account_id, symbol]() {
-        auto* broker = trading::BrokerRegistry::instance().get(broker_id);
-        if (!broker)
-            return;
-        auto creds = trading::AccountManager::instance().load_credentials(account_id);
-        auto resp = broker->get_quotes(creds, {symbol});
-        if (!resp.success || !resp.data.has_value() || resp.data->isEmpty())
-            return;
-        const trading::BrokerQuote quote = resp.data->first();
-        if (!self)
-            return;
-        QMetaObject::invokeMethod(
-            self,
-            [self, quote]() {
-                if (self && self->running_.load())
-                    self->on_tick_data(QVariant::fromValue(quote));
-            },
-            Qt::QueuedConnection);
-    });
+    trading::DataStreamManager::instance().close_quote_feed(
+        QStringLiteral("algo:") + deployment_.id, deployment_.broker_account_id);
 }
 
 void DeploymentRunner::on_tick_data(const QVariant& data) {

@@ -138,7 +138,8 @@ std::vector<ToolDef> get_portfolio_tools() {
     {
         ToolDef t;
         t.name = "list_portfolios";
-        t.description = "List all named investment portfolios.";
+        t.description = "Show all my portfolios — lists every named investment portfolio I created to "
+                        "track real holdings (not paper-trading accounts).";
         t.category = "portfolio";
         t.handler = [](const QJsonObject&) -> ToolResult {
             auto r = PortfolioRepository::instance().list_portfolios();

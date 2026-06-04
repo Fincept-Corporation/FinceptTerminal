@@ -90,23 +90,28 @@ QJsonObject LlmService::build_anthropic_request(const QString& user_message,
         req["stream"] = true;
 
     // Anthropic tools: bare {name, description, input_schema} — no OpenAI-style "type":"function" wrapper.
-    if (detail::effective_tools_enabled(tools_enabled_)) {
-        QJsonArray ant_tools;
-        auto all_tools = mcp::McpService::instance().get_all_tools(detail::apply_request_policy(tool_filter_));
-        for (const auto& tool : all_tools) {
-            QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
-            QJsonObject schema = tool.input_schema;
-            if (schema.isEmpty()) {
-                schema["type"]       = "object";
-                schema["properties"] = QJsonObject();
-            }
-            ant_tools.append(
-                QJsonObject{{"name", fn_name}, {"description", tool.description}, {"input_schema", schema}});
-        }
-        if (!ant_tools.isEmpty())
-            req["tools"] = ant_tools;
-    }
+    QJsonArray ant_tools = build_anthropic_tools();
+    if (!ant_tools.isEmpty())
+        req["tools"] = ant_tools;
     return req;
+}
+
+QJsonArray LlmService::build_anthropic_tools() {
+    QJsonArray ant_tools;
+    if (!detail::effective_tools_enabled(tools_enabled_))
+        return ant_tools;
+    auto all_tools = mcp::McpService::instance().get_all_tools(detail::apply_request_policy(tool_filter_));
+    for (const auto& tool : all_tools) {
+        QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
+        QJsonObject schema = tool.input_schema;
+        if (schema.isEmpty()) {
+            schema["type"]       = "object";
+            schema["properties"] = QJsonObject();
+        }
+        ant_tools.append(
+            QJsonObject{{"name", fn_name}, {"description", tool.description}, {"input_schema", schema}});
+    }
+    return ant_tools;
 }
 
 QJsonObject LlmService::build_gemini_request(const QString& user_message,
@@ -131,25 +136,30 @@ QJsonObject LlmService::build_gemini_request(const QString& user_message,
     }
 
     // Gemini tools: tools[{functionDeclarations:[{name, description, parameters}]}].
-    auto all_tools = detail::effective_tools_enabled(tools_enabled_)
-                         ? mcp::McpService::instance().get_all_tools(detail::apply_request_policy(tool_filter_))
-                         : std::vector<mcp::UnifiedTool>{};
-    if (!all_tools.empty()) {
-        QJsonArray fn_decls;
-        for (const auto& tool : all_tools) {
-            QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
-            QJsonObject schema = tool.input_schema;
-            if (schema.isEmpty()) {
-                schema["type"]       = "object";
-                schema["properties"] = QJsonObject();
-            }
-            fn_decls.append(QJsonObject{{"name", fn_name}, {"description", tool.description}, {"parameters", schema}});
-        }
-        if (!fn_decls.isEmpty())
-            req["tools"] = QJsonArray{QJsonObject{{"functionDeclarations", fn_decls}}};
-    }
+    QJsonArray gem_tools = build_gemini_tools();
+    if (!gem_tools.isEmpty())
+        req["tools"] = gem_tools;
 
     return req;
+}
+
+QJsonArray LlmService::build_gemini_tools() {
+    if (!detail::effective_tools_enabled(tools_enabled_))
+        return {};
+    auto all_tools = mcp::McpService::instance().get_all_tools(detail::apply_request_policy(tool_filter_));
+    QJsonArray fn_decls;
+    for (const auto& tool : all_tools) {
+        QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
+        QJsonObject schema = tool.input_schema;
+        if (schema.isEmpty()) {
+            schema["type"]       = "object";
+            schema["properties"] = QJsonObject();
+        }
+        fn_decls.append(QJsonObject{{"name", fn_name}, {"description", tool.description}, {"parameters", schema}});
+    }
+    if (fn_decls.isEmpty())
+        return {};
+    return QJsonArray{QJsonObject{{"functionDeclarations", fn_decls}}};
 }
 
 QJsonObject LlmService::build_fincept_request(const QString& user_message,

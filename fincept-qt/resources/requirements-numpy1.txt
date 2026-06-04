@@ -2,6 +2,9 @@
 # These libraries are incompatible with NumPy 2.x
 
 # Core dependencies
+# numpy + pandas also power the prebuilt Fincept Notebook library
+# (Intermediate/Hard notebooks under resources/notebooks/). Beginner notebooks
+# use the Python standard library only and need no packages.
 numpy>=1.26.4,<2.0
 pandas>=2.0.0,<2.3.0
 

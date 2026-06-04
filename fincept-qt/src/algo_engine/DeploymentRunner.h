@@ -51,13 +51,12 @@ private slots:
     void on_heartbeat();
 
 private:
-    // Live market data: poll the connected broker's quote REST endpoint on a timer
-    // and feed each BrokerQuote into on_tick_data(). Self-contained — does NOT touch
-    // the shared AccountDataStream/WebSocket (whose single-symbol subscription is
-    // owned by the Equity screen), so it can't clobber other consumers.
+    // Live market data: subscribe to the shared per-account quote feed via
+    // DataStreamManager (the same feed the Equity watchlist uses). Quotes arrive
+    // on the engine thread via on_tick_data(). No private broker polling — one
+    // connection per (account, symbol) is shared across all consumers.
     void start_market_data();
     void stop_market_data();
-    void poll_quote();
     // Builds the candle window used for live (per-tick) evaluation: the closed
     // history plus the previous and current tick as the last two bars, so a
     // crossover is detected tick-to-tick against the live price.
@@ -87,7 +86,6 @@ private:
     std::atomic<bool> running_{false};
     std::atomic<bool> paused_{false};
     QTimer* heartbeat_timer_ = nullptr;
-    QTimer* quote_timer_ = nullptr;     // drives poll_quote()
     int64_t last_heartbeat_ms_ = 0;
     bool first_tick_logged_ = false;    // log the first live quote once, for trackability
     bool live_mode_ = false;            // timeframe == "live" → evaluate per tick

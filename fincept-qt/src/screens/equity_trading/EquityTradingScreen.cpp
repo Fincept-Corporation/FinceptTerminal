@@ -493,7 +493,7 @@ void EquityTradingScreen::on_instruments_ready(const QString& broker_id) {
     auto* stream = DataStreamManager::instance().stream_for(focused_account_id_);
     if (stream) {
         stream->set_selected_symbol(selected_symbol_, selected_exchange_);
-        stream->subscribe_symbols(watchlist_symbols_);
+        stream->subscribe_symbols(QStringLiteral("equity:watchlist"), watchlist_symbols_);
         stream->fetch_candles(selected_symbol_, chart_->current_timeframe());
         stream->fetch_orderbook(selected_symbol_);
         stream->fetch_time_sales(selected_symbol_);
@@ -593,7 +593,7 @@ void EquityTradingScreen::init_focused_account() {
     auto* stream = dsm.stream_for(focused_account_id_);
     if (stream) {
         stream->set_selected_symbol(selected_symbol_, selected_exchange_);
-        stream->subscribe_symbols(watchlist_symbols_);
+        stream->subscribe_symbols(QStringLiteral("equity:watchlist"), watchlist_symbols_);
         stream->fetch_candles(selected_symbol_, chart_->current_timeframe());
         stream->fetch_orderbook(selected_symbol_);
         stream->fetch_time_sales(selected_symbol_);
