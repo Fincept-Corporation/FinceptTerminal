@@ -1,5 +1,6 @@
 // src/screens/algo_trading/AlgoTradingScreen.h
 #pragma once
+#include "screens/algo_trading/AlertsPanel.h"
 #include "screens/common/IStatefulScreen.h"
 #include "services/algo_trading/AlgoTradingTypes.h"
 
@@ -19,8 +20,8 @@ class StrategyListPanel;
 class ScannerPanel;
 class DeploymentDashboard;
 
-/// Algo Trading screen — 4-tab trading system builder.
-/// Tabs: Builder, My Strategies, Scanner, Dashboard
+/// Algo Trading screen — 5-tab trading system builder.
+/// Tabs: Builder, My Strategies, Scanner, Alerts, Dashboard
 class AlgoTradingScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
@@ -50,6 +51,7 @@ class AlgoTradingScreen : public QWidget, public IStatefulScreen {
     StrategyBuilderPanel* builder_ = nullptr;
     StrategyListPanel* strategies_ = nullptr;
     ScannerPanel* scanner_ = nullptr;
+    AlertsPanel* alerts_ = nullptr;
     DeploymentDashboard* dashboard_ = nullptr;
 
     QVector<QPushButton*> tab_buttons_;

@@ -6,14 +6,18 @@
 #include "services/maritime/MaritimeTypes.h"
 #include "ui/theme/Theme.h"
 
+#include <QComboBox>
+#include <QCompleter>
 #include <QDoubleSpinBox>
 #include <QEvent>
+#include <QHash>
 #include <QHideEvent>
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QShowEvent>
+#include <QStringListModel>
 #include <QTableWidget>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -71,10 +75,13 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     void connect_service();
     void rebuild_routes_from_vessels(const QVector<services::maritime::VesselData>& vessels);
     void populate_routes_table();
-    void update_intelligence(int vessel_count);
+    void update_intelligence(int region_total, int loaded);
     void update_credits(int remaining);
     void update_map(const QVector<services::maritime::VesselData>& vessels);
     void apply_theme();
+    /// Re-issue the most recent load (bbox if one is set, else global sample).
+    /// Shared by the manual refresh button and the auto-refresh timer.
+    void do_refresh();
     void set_status(const QString& text, const ui::ColorToken& color);
     /// Issue a world-bbox search and flag the result for spatial downsampling
     /// so the map fans out instead of clustering on whatever bbox the user
@@ -106,14 +113,18 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     QWidget* right_panel_ = nullptr;
     QWidget* status_bar_ = nullptr;
 
-    // Left panel
-    QLabel* stat_vessels_ = nullptr;
-    QLabel* stat_displayed_ = nullptr;
+    // Left panel — fleet stats (all computed from the loaded vessel set).
+    QLabel* stat_vessels_ = nullptr;    // LOADED   — vessels rendered on the map
+    QLabel* stat_displayed_ = nullptr;  // IN REGION — server-reported area total
+    QLabel* stat_moving_ = nullptr;     // MOVING    — speed > 0.5 kn
+    QLabel* stat_speed_ = nullptr;      // AVG SPEED — mean speed of moving vessels
     QLabel* stat_routes_ = nullptr;
     QLabel* stat_ports_ = nullptr;
 
     // Center
     fincept::ui::WorldMapWidget* map_widget_ = nullptr;
+    QPushButton* refresh_btn_ = nullptr;       // manual refresh
+    QPushButton* auto_refresh_btn_ = nullptr;  // AUTO-refresh toggle (off by default)
     fincept::ui::LoadingOverlay* map_loader_ = nullptr;
     QTableWidget* vessels_table_ = nullptr;
     QTableWidget* routes_table_ = nullptr;
@@ -136,6 +147,10 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     QTableWidget* place_table_      = nullptr;
     QLabel*       place_status_     = nullptr;
     QVector<services::maritime::GeoPlace> place_results_;
+    // Live typeahead: debounced geocoder search feeds a completer popup.
+    QCompleter*       place_completer_       = nullptr;
+    QStringListModel* place_completer_model_ = nullptr;
+    QTimer*           place_debounce_        = nullptr;
 
     // Right panel - area search (raw lat/long). Kept behind an "Advanced"
     // expander; place search / map-draw are the primary inputs now.
@@ -150,6 +165,13 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     QTableWidget* ports_table_      = nullptr;
     QLabel*       ports_status_     = nullptr;
     QVector<services::maritime::PortRecord> port_results_;
+    QCompleter*       ports_completer_       = nullptr;
+    QStringListModel* ports_completer_model_ = nullptr;
+    QTimer*           ports_debounce_        = nullptr;
+    // Voyage endpoint port resolution: maps the expected PortsCatalog context
+    // ("name:<port>") to the pin label to plot when its results arrive, so
+    // these lookups don't leak into the user-facing ports table.
+    QHash<QString, QString> voyage_port_ctx_;
 
     // Route detail
     QWidget* route_detail_ = nullptr;
@@ -186,10 +208,14 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     QLabel* routes_title_ = nullptr;
     QLabel* stat_vessels_cap_ = nullptr;
     QLabel* stat_displayed_cap_ = nullptr;
+    QLabel* stat_moving_cap_ = nullptr;
+    QLabel* stat_speed_cap_ = nullptr;
     QLabel* stat_routes_cap_ = nullptr;
     QLabel* stat_ports_cap_ = nullptr;
     // Center.
     QLabel* center_title_ = nullptr;
+    QLabel* basemap_cap_ = nullptr;        // "BASEMAP" caption in the map toolbar
+    QComboBox* map_type_combo_ = nullptr;  // basemap selector
     // Right panel buttons + titles + field captions.
     QLabel* search_title_ = nullptr;
     QLabel* imo_cap_ = nullptr;

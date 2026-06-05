@@ -48,6 +48,23 @@ inline QString spinbox_ss() {
         .arg(ui::colors::BORDER_BRIGHT());
 }
 
+inline QString dateedit_ss() {
+    return QString("QDateEdit { background:%1; color:%2; border:1px solid %3;"
+                   "padding:4px 6px; border-radius:2px; }"
+                   "QDateEdit:focus { border-color:%4; }"
+                   "QDateEdit::drop-down { border:none; width:18px; }"
+                   "QCalendarWidget QWidget { background:%1; color:%2; }"
+                   "QCalendarWidget QAbstractItemView { background:%1; color:%2;"
+                   "selection-background-color:%5; selection-color:%2; }"
+                   "QCalendarWidget QToolButton { background:%1; color:%2; }"
+                   "QCalendarWidget QToolButton:hover { background:%5; }")
+        .arg(ui::colors::BG_RAISED())
+        .arg(ui::colors::TEXT_PRIMARY())
+        .arg(ui::colors::BORDER_MED())
+        .arg(ui::colors::BORDER_BRIGHT())
+        .arg(ui::colors::BG_HOVER());
+}
+
 inline QString tab_ss(const QString& accent) {
     return QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
                    "QTabBar::tab { background:%3; color:%4; padding:6px 14px;"

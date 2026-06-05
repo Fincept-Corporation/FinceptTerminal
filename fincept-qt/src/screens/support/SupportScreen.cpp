@@ -88,8 +88,6 @@ SupportScreen::SupportScreen(QWidget* parent) : QWidget(parent) {
         bl->setSpacing(10);
 
         // Title (text set in retranslateUi)
-        auto* icon_lbl = lbl("🎟", ui::colors::AMBER(), 14);
-        bl->addWidget(icon_lbl);
         title_lbl_ = lbl(QString(), ui::colors::TEXT_PRIMARY(), 14, true);
         bl->addWidget(title_lbl_);
 
@@ -231,7 +229,7 @@ void SupportScreen::retranslateUi() {
 
     // ── Sidebar header ────────────────────────────────────────────────────────
     if (new_ticket_btn_) new_ticket_btn_->setText(tr("＋  New Ticket"));
-    if (search_input_)   search_input_->setPlaceholderText(tr("🔍  Search tickets…"));
+    if (search_input_)   search_input_->setPlaceholderText(tr("Search tickets…"));
 
     // Filter combo — preserve current row across the rebuild.
     if (filter_combo_) {

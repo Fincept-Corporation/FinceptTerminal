@@ -340,7 +340,8 @@ std::vector<ToolDef> get_news_tools() {
         ToolDef t;
         t.name = "add_news_monitor";
         t.description =
-            "Create a keyword monitor that highlights articles matching specific keywords in the News screen.";
+            "Create a news alert: a keyword monitor that notifies you of, and highlights, breaking articles "
+            "matching specific keywords or topics in the News screen.";
         t.category = "news";
         t.input_schema.properties =
             QJsonObject{{"label", QJsonObject{{"type", "string"}, {"description", "Monitor name"}}},

@@ -93,8 +93,31 @@ void AppearanceSection::build_ui() {
     vl->addWidget(font_size_row);
 
     app_font_family_ = new QComboBox;
-    app_font_family_->addItems(QFontDatabase::families());
-    app_font_family_->setCurrentText(kDefaultFontFamily);
+    // QFontDatabase::families() on macOS includes hidden system families
+    // prefixed with '.' (".Apple Color Emoji UI", ".AppleSystemUIFont", …).
+    // Offering them is a trap: the emoji font carries ASCII digit glyphs
+    // (keycap-emoji bases) that render grossly letter-spaced, so picking it
+    // mangles every number in the UI. Exclude private and emoji families.
+    {
+        QStringList fams;
+        for (const QString& f : QFontDatabase::families())
+            if (!f.startsWith('.') && !f.contains("emoji", Qt::CaseInsensitive))
+                fams << f;
+        app_font_family_->addItems(fams);
+    }
+    // setCurrentText() is a no-op when the default isn't installed (Consolas is
+    // Windows-only), which previously left the combo on item 0 — and with the
+    // '.'-prefixed fonts sorted to the top, item 0 was the emoji font, so a save
+    // persisted it. Fall back to the first available monospace instead.
+    if (app_font_family_->findText(kDefaultFontFamily) >= 0) {
+        app_font_family_->setCurrentText(kDefaultFontFamily);
+    } else {
+        for (const char* mono : {"Menlo", "SF Mono", "Monaco", "Cascadia Mono",
+                                  "DejaVu Sans Mono", "Courier New"}) {
+            int idx = app_font_family_->findText(QString::fromLatin1(mono));
+            if (idx >= 0) { app_font_family_->setCurrentIndex(idx); break; }
+        }
+    }
     app_font_family_->setStyleSheet(combo_ss());
     auto* font_family_row = make_row(tr("Font Family"), app_font_family_);
     capture_row_labels(font_family_row, &font_family_label_);

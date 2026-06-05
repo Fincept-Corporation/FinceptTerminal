@@ -42,17 +42,10 @@ MaritimeScreen::MaritimeScreen(QWidget* parent) : QWidget(parent) {
 
     refresh_timer_ = new QTimer(this);
     refresh_timer_->setInterval(5 * 60 * 1000); // 5 min
-    // Auto-refresh re-issues whichever mode produced the most recent set: a
-    // bbox load if the user had typed one, otherwise the global sample. This
-    // avoids a no-op refresh after a first-show global view (the bbox
-    // spinners stay at zero in that case).
-    connect(refresh_timer_, &QTimer::timeout, this, [this]() {
-        const bool valid_bbox = area_min_lat_ && area_max_lat_ && area_min_lng_ && area_max_lng_
-                             && area_max_lat_->value() > area_min_lat_->value()
-                             && area_max_lng_->value() > area_min_lng_->value();
-        if (valid_bbox) on_load_vessels();
-        else            load_global_sample();
-    });
+    // Auto-refresh is opt-in (the AUTO toggle in the map toolbar), so it never
+    // silently burns API credits. The timer and the manual button share
+    // do_refresh().
+    connect(refresh_timer_, &QTimer::timeout, this, &MaritimeScreen::do_refresh);
 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this](const ui::ThemeTokens&) { apply_theme(); });
@@ -62,7 +55,9 @@ MaritimeScreen::MaritimeScreen(QWidget* parent) : QWidget(parent) {
 
 void MaritimeScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
-    refresh_timer_->start();
+    // Only resume auto-refresh if the user had it enabled (off by default).
+    if (auto_refresh_btn_ && auto_refresh_btn_->isChecked())
+        refresh_timer_->start();
     if (first_show_) {
         first_show_ = false;
         // Default first-show action: globally-spread sample so the map looks
@@ -120,28 +115,28 @@ void MaritimeScreen::apply_theme() {
         brand_label_->setStyleSheet(
             QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:2px;")
                 .arg(ui::colors::AMBER())
-                .arg(ui::fonts::TINY)
+                .arg(ui::fonts::DATA)
                 .arg(ui::fonts::DATA_FAMILY));
 
     if (classified_label_)
-        classified_label_->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2; letter-spacing:1px;")
-                                             .arg(ui::colors::TEXT_TERTIARY())
+        classified_label_->setStyleSheet(QString("color:%1; font-size:11px; font-family:%2; letter-spacing:1px;")
+                                             .arg(ui::colors::TEXT_SECONDARY())
                                              .arg(ui::fonts::DATA_FAMILY));
 
     if (credits_label_)
         credits_label_->setStyleSheet(
-            QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
-                    "padding:3px 10px; background:%3; border:1px solid %4; border-radius:2px;")
-                .arg(ui::colors::TEXT_TERTIARY())
+            QString("color:%1; font-size:11px; font-weight:700; font-family:%2;"
+                    "padding:4px 10px; background:%3; border:1px solid %4; border-radius:2px;")
+                .arg(ui::colors::TEXT_SECONDARY())
                 .arg(ui::fonts::DATA_FAMILY)
                 .arg(ui::colors::BG_SURFACE())
                 .arg(ui::colors::BORDER_MED()));
 
     if (vessel_count_label_)
         vessel_count_label_->setStyleSheet(
-            QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
-                    "padding:3px 10px; background:%3; border:1px solid %4; border-radius:2px;")
-                .arg(ui::colors::INFO())
+            QString("color:%1; font-size:11px; font-weight:700; font-family:%2;"
+                    "padding:4px 10px; background:%3; border:1px solid %4; border-radius:2px;")
+                .arg(ui::colors::AMBER())
                 .arg(ui::fonts::DATA_FAMILY)
                 .arg(ui::colors::BG_SURFACE())
                 .arg(ui::colors::BORDER_MED()));
@@ -166,17 +161,39 @@ void MaritimeScreen::apply_theme() {
     if (status_label_)
         set_status(tr("READY"), ui::colors::POSITIVE);
 
+    // Both cards scope their border to the container objectName so the border
+    // doesn't cascade onto every child label (which made each row look boxed).
     if (route_detail_)
         route_detail_->setStyleSheet(
-            QString("background:%1; border:1px solid %2; border-left:3px solid %2; border-radius:2px;")
+            QString("#mtRouteCard { background:%1; border:1px solid %2; border-left:3px solid %2;"
+                    " border-radius:2px; }")
                 .arg(C(ui::colors::BG_SURFACE), C(ui::colors::AMBER)));
 
     if (search_result_card_)
-        search_result_card_->setStyleSheet(QString("background:%1; border:1px solid %2; border-radius:2px;")
-                                               .arg(C(ui::colors::BG_SURFACE), C(ui::colors::INFO)));
+        search_result_card_->setStyleSheet(
+            QString("#mtSearchCard { background:%1; border:1px solid %2; border-left:3px solid %2;"
+                    " border-radius:2px; }")
+                .arg(C(ui::colors::BG_SURFACE), C(ui::colors::AMBER)));
 
     if (imo_edit_)
         imo_edit_->setStyleSheet(input_ss());
+
+    if (basemap_cap_)
+        basemap_cap_->setStyleSheet(tiny_label_ss());
+    if (map_type_combo_)
+        map_type_combo_->setStyleSheet(combo_ss());
+}
+
+void MaritimeScreen::do_refresh() {
+    // Re-issue whichever mode produced the most recent set: a bbox load if the
+    // user had typed/selected one, otherwise the global sample.
+    const bool valid_bbox = area_min_lat_ && area_max_lat_ && area_min_lng_ && area_max_lng_
+                         && area_max_lat_->value() > area_min_lat_->value()
+                         && area_max_lng_->value() > area_min_lng_->value();
+    if (valid_bbox)
+        on_load_vessels();
+    else
+        load_global_sample();
 }
 
 void MaritimeScreen::changeEvent(QEvent* event) {
@@ -201,16 +218,19 @@ void MaritimeScreen::retranslateUi() {
     if (sq_btn_)       sq_btn_->setText(tr("◻ SQUARE"));
     if (ci_btn_)       ci_btn_->setText(tr("◯ CIRCLE"));
     if (clr_btn_)      clr_btn_->setText(tr("✕ CLEAR"));
-    if (intel_title_)  intel_title_->setText(tr("INTELLIGENCE"));
-    if (stat_vessels_cap_)   stat_vessels_cap_->setText(tr("TOTAL IN AREA"));
-    if (stat_displayed_cap_) stat_displayed_cap_->setText(tr("DISPLAYED"));
+    if (intel_title_)  intel_title_->setText(tr("FLEET INTELLIGENCE"));
+    if (stat_vessels_cap_)   stat_vessels_cap_->setText(tr("LOADED"));
+    if (stat_displayed_cap_) stat_displayed_cap_->setText(tr("IN REGION"));
+    if (stat_moving_cap_)    stat_moving_cap_->setText(tr("MOVING"));
+    if (stat_speed_cap_)     stat_speed_cap_->setText(tr("AVG SPEED"));
     if (stat_routes_cap_)    stat_routes_cap_->setText(tr("ROUTES"));
-    if (stat_ports_cap_)     stat_ports_cap_->setText(tr("PORTS"));
+    if (stat_ports_cap_)     stat_ports_cap_->setText(tr("DEST PORTS"));
     if (routes_title_) routes_title_->setText(tr("TRADE CORRIDORS"));
     if (routes_table_) routes_table_->setHorizontalHeaderLabels({tr("Route"), tr("Vessels"), tr("Status")});
 
     // Center
-    if (center_title_) center_title_->setText(tr("VESSEL TRACKING"));
+    if (center_title_) center_title_->setText(tr("LIVE VESSEL MAP"));
+    if (basemap_cap_)  basemap_cap_->setText(tr("BASEMAP"));
     if (vessels_table_)
         vessels_table_->setHorizontalHeaderLabels(
             {tr("Name"), tr("IMO"), tr("Lat"), tr("Lng"), tr("Speed (kn)"), tr("Angle"),
@@ -247,8 +267,8 @@ void MaritimeScreen::retranslateUi() {
     // Status bar
     if (sb_source_cap_)  sb_source_cap_->setText(tr("SOURCE:"));
     if (sb_records_cap_) sb_records_cap_->setText(tr("RECORDS:"));
-    if (sb_refresh_cap_) sb_refresh_cap_->setText(tr("REFRESH:"));
-    if (sb_refresh_val_) sb_refresh_val_->setText(tr("5 MIN"));
+    if (sb_refresh_cap_) sb_refresh_cap_->setText(tr("UPDATED:"));
+    // sb_refresh_val_ holds the live last-update clock — don't reset it here.
     // status_label_ reflects the last operation; re-apply the idle READY label.
     if (status_label_) set_status(tr("READY"), ui::colors::POSITIVE);
 

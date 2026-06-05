@@ -22,6 +22,10 @@ public:
     void stop_deployment(const QString& deployment_id);
     void pause_deployment(const QString& deployment_id);
     void resume_deployment(const QString& deployment_id);
+    // Permanently delete a deployment and all its rows (deployments, metrics,
+    // heartbeat, order signals, trades), stopping the runner first if live. Then
+    // refreshes the deployment list. This is what the Dashboard's REMOVE invokes.
+    void remove_deployment(const QString& deployment_id);
     void stop_all();
 
     bool is_running(const QString& deployment_id) const;
@@ -31,6 +35,10 @@ public:
 
     void list_deployments();
     void recover_orphaned();
+    // True if a running/starting deployment with the same strategy+symbol+mode+side
+    // already exists — used to confirm before deploying an exact duplicate.
+    bool has_active_duplicate(const QString& strategy_id, const QString& symbol,
+                              const QString& mode, const QString& entry_side) const;
 
 signals:
     void deployment_started(const QString& deployment_id);
@@ -40,6 +48,8 @@ signals:
     void trade_executed(const fincept::algo::AlgoTradeRecord& trade);
     void metrics_updated(const QString& deployment_id, const fincept::algo::AlgoMetrics& metrics);
     void error_occurred(const QString& deployment_id, const QString& error);
+    // Real-time per-tick snapshot relayed from each runner to the Dashboard.
+    void live_update(const QString& deployment_id, const fincept::algo::AlgoLiveSnapshot& snap);
 
 private slots:
     void on_order_requested(const fincept::algo::AlgoOrderSignal& signal);
@@ -50,6 +60,13 @@ private:
     Q_DISABLE_COPY(AlgoEngine)
 
     void execute_order(const AlgoOrderSignal& signal);
+    // Writes the deployment row to algo_deployments so the Dashboard (which reads
+    // that table) can see it. Without this the runner starts in memory only and
+    // the deploy is invisible to the UI.
+    void persist_deployment(const fincept::services::algo::AlgoDeployment& deployment);
+    // Loads a full AlgoStrategy (incl. parsed entry/exit conditions) from the
+    // algo_strategies table — used to resume deployments after an app restart.
+    fincept::services::algo::AlgoStrategy load_strategy(const QString& strategy_id);
 
     QThread engine_thread_;
     mutable QMutex mutex_;

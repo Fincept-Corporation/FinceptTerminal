@@ -1,6 +1,9 @@
 // src/ui/widgets/algo/OperandEditor.cpp
 #include "ui/widgets/algo/OperandEditor.h"
 
+#include "ui/theme/Theme.h"
+
+#include <QAbstractItemView>
 #include <QCompleter>
 #include <QLineEdit>
 #include <QVBoxLayout>
@@ -76,10 +79,26 @@ void OperandEditor::build_ui() {
     indicator_combo_->setEditable(true);
     indicator_combo_->setInsertPolicy(QComboBox::NoInsert);
     indicator_combo_->lineEdit()->setPlaceholderText(tr("Search indicator…"));
+    // The drop-down view and the type-to-search completer popup are separate
+    // top-level list widgets the global stylesheet never reaches, so by default
+    // their rows render with near-invisible, vertically-clipped text. Style both
+    // to the dark theme explicitly: opaque background, readable row height, and
+    // clear hover/selection states.
+    const QString list_qss =
+        QString("QAbstractItemView { background:%1; color:%2; border:1px solid %3; "
+                "outline:0; selection-background-color:%4; selection-color:%5; }"
+                "QAbstractItemView::item { min-height:22px; padding:3px 8px; border:0; }"
+                "QAbstractItemView::item:hover { background:%6; }")
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
+            .arg(ui::colors::ACCENT_BG(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER());
+    if (auto* view = indicator_combo_->view())
+        view->setStyleSheet(list_qss);
     if (auto* c = indicator_combo_->completer()) {
         c->setCompletionMode(QCompleter::PopupCompletion);
         c->setFilterMode(Qt::MatchContains);
         c->setCaseSensitivity(Qt::CaseInsensitive);
+        if (auto* popup = c->popup())
+            popup->setStyleSheet(list_qss);
     }
     row->addWidget(indicator_combo_);
 

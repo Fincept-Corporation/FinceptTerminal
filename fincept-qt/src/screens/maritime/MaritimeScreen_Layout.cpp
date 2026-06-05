@@ -66,22 +66,22 @@ void MaritimeScreen::build_ui() {
 // ── Top Bar ──────────────────────────────────────────────────────────────────
 QWidget* MaritimeScreen::build_top_bar() {
     auto* bar = new QWidget(this);
-    bar->setFixedHeight(44);
+    bar->setFixedHeight(46);
 
     auto* hl = new QHBoxLayout(bar);
-    hl->setContentsMargins(12, 0, 12, 0);
-    hl->setSpacing(12);
+    hl->setContentsMargins(14, 0, 14, 0);
+    hl->setSpacing(10);
+
+    // Leading amber accent bar.
+    auto* accent = new QLabel(bar);
+    accent->setFixedSize(4, 18);
+    accent->setStyleSheet(QString("background:%1; border-radius:2px;").arg(C(ui::colors::AMBER)));
+    hl->addWidget(accent);
 
     brand_label_ = new QLabel(tr("FINCEPT MARITIME INTELLIGENCE"), bar);
     hl->addWidget(brand_label_);
 
-    classified_label_ = new QLabel(tr("VESSEL TRACKING // FINCEPT MARINE API"), bar);
-    hl->addWidget(classified_label_);
-
     hl->addStretch(1);
-
-    credits_label_ = new QLabel(tr("CREDITS: —"), bar);
-    hl->addWidget(credits_label_);
 
     vessel_count_label_ = new QLabel(tr("— VESSELS"), bar);
     hl->addWidget(vessel_count_label_);
@@ -116,9 +116,7 @@ QWidget* MaritimeScreen::build_left_panel() {
     // each finalized shape triggers on_shapes_changed which loads the union
     // bbox and filters returned vessels to those inside any drawn shape.
     draw_title_ = new QLabel(tr("DRAW AREA ON MAP"), panel);
-    draw_title_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2; letter-spacing:1px;")
-                                  .arg(ui::colors::AMBER())
-                                  .arg(ui::fonts::DATA_FAMILY));
+    draw_title_->setStyleSheet(section_label_ss());
     vl->addWidget(draw_title_);
 
     auto* draw_row = new QHBoxLayout;
@@ -163,10 +161,8 @@ QWidget* MaritimeScreen::build_left_panel() {
         }
     });
 
-    intel_title_ = new QLabel(tr("INTELLIGENCE"), panel);
-    intel_title_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2; letter-spacing:1px;")
-                                   .arg(ui::colors::AMBER())
-                                   .arg(ui::fonts::DATA_FAMILY));
+    intel_title_ = new QLabel(tr("FLEET INTELLIGENCE"), panel);
+    intel_title_->setStyleSheet(section_label_ss());
     vl->addWidget(intel_title_);
 
     auto* grid = new QGridLayout;
@@ -178,17 +174,19 @@ QWidget* MaritimeScreen::build_left_panel() {
     auto make_stat = [&](const QString& label, const QString& obj_key, const QString& value,
                          const ui::ColorToken& val_color, QLabel** cap_out, QLabel** val_out) {
         auto* box = new QWidget(panel);
-        box->setStyleSheet(QString("background:%1; border:1px solid %2; border-radius:2px;")
-                               .arg(C(ui::colors::BG_BASE), C(ui::colors::BORDER_DIM)));
+        box->setObjectName(QStringLiteral("mtStatBox"));
+        // Scope to the box so the border doesn't cascade onto the child labels.
+        box->setStyleSheet(QString("#mtStatBox { background:%1; border:1px solid %2; border-radius:2px; }")
+                               .arg(C(ui::colors::BG_BASE), C(ui::colors::BORDER_MED)));
         auto* bvl = new QVBoxLayout(box);
-        bvl->setContentsMargins(8, 6, 8, 6);
-        bvl->setSpacing(2);
+        bvl->setContentsMargins(10, 8, 10, 8);
+        bvl->setSpacing(3);
         auto* lbl = new QLabel(label, box);
-        lbl->setStyleSheet(QString("color:%1; font-size:7px; font-family:%2;")
-                               .arg(ui::colors::TEXT_TERTIARY())
+        lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; font-family:%2; letter-spacing:0.5px;")
+                               .arg(ui::colors::TEXT_SECONDARY())
                                .arg(ui::fonts::DATA_FAMILY));
         auto* val = new QLabel(value, box);
-        val->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700; font-family:%2;")
+        val->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700; font-family:%2;")
                                .arg(C(val_color))
                                .arg(ui::fonts::DATA_FAMILY));
         val->setObjectName(obj_key);
@@ -199,25 +197,29 @@ QWidget* MaritimeScreen::build_left_panel() {
         return box;
     };
 
-    // All stats start at "—" and are populated from the loaded vessel set.
-    // No hardcoded trade-volume, route count, or satellite numbers — the API
-    // does not expose those, so we don't fabricate them.
-    grid->addWidget(make_stat(tr("TOTAL IN AREA"), QStringLiteral("stat_vessels"), "—",
-                              ui::colors::INFO, &stat_vessels_cap_, &stat_vessels_), 0, 0);
-    grid->addWidget(make_stat(tr("DISPLAYED"), QStringLiteral("stat_displayed"), "—",
-                              ui::colors::POSITIVE, &stat_displayed_cap_, &stat_displayed_), 0, 1);
+    // All stats start at "—" and are computed from the loaded vessel set only.
+    // No hardcoded trade-volume / satellite figures — the API doesn't expose
+    // those, so we don't fabricate them. LOADED = vessels actually on the map;
+    // IN REGION = the server's reported total for the searched area (these
+    // differ, so they're labelled distinctly to avoid the "200 vs 5.2K" confusion).
+    grid->addWidget(make_stat(tr("LOADED"), QStringLiteral("stat_vessels"), "—",
+                              ui::colors::AMBER, &stat_vessels_cap_, &stat_vessels_), 0, 0);
+    grid->addWidget(make_stat(tr("IN REGION"), QStringLiteral("stat_displayed"), "—",
+                              ui::colors::TEXT_PRIMARY, &stat_displayed_cap_, &stat_displayed_), 0, 1);
+    grid->addWidget(make_stat(tr("MOVING"), QStringLiteral("stat_moving"), "—",
+                              ui::colors::POSITIVE, &stat_moving_cap_, &stat_moving_), 1, 0);
+    grid->addWidget(make_stat(tr("AVG SPEED"), QStringLiteral("stat_speed"), "—",
+                              ui::colors::TEXT_PRIMARY, &stat_speed_cap_, &stat_speed_), 1, 1);
     grid->addWidget(make_stat(tr("ROUTES"), QStringLiteral("stat_routes"), "—",
-                              ui::colors::INFO, &stat_routes_cap_, &stat_routes_), 1, 0);
-    grid->addWidget(make_stat(tr("PORTS"), QStringLiteral("stat_ports"), "—",
-                              ui::colors::WARNING, &stat_ports_cap_, &stat_ports_), 1, 1);
+                              ui::colors::TEXT_PRIMARY, &stat_routes_cap_, &stat_routes_), 2, 0);
+    grid->addWidget(make_stat(tr("DEST PORTS"), QStringLiteral("stat_ports"), "—",
+                              ui::colors::TEXT_PRIMARY, &stat_ports_cap_, &stat_ports_), 2, 1);
 
     vl->addLayout(grid);
 
     vl->addSpacing(8);
     routes_title_ = new QLabel(tr("TRADE CORRIDORS"), panel);
-    routes_title_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2; letter-spacing:1px;")
-                                    .arg(ui::colors::AMBER())
-                                    .arg(ui::fonts::DATA_FAMILY));
+    routes_title_->setStyleSheet(section_label_ss());
     vl->addWidget(routes_title_);
 
     routes_table_ = new QTableWidget(panel);
@@ -242,19 +244,65 @@ QWidget* MaritimeScreen::build_center_panel() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
+    // ── Map toolbar ─────────────────────────────────────────────────────────
+    // Command-bar styled header above the map: accent + title on the left, a
+    // BASEMAP selector on the right. The combo is populated once the map widget
+    // exists (below) so its current basemap drives the initial selection.
     auto* header = new QWidget(panel);
+    header->setObjectName("mtMapToolbar");
     header->setFixedHeight(36);
-    header->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(C(ui::colors::BG_RAISED), C(ui::colors::BORDER_DIM)));
+    // Flat, even background matching the panels (no lighter "raised" strip) with
+    // a single hairline rule separating it from the map. WA_StyledBackground
+    // guarantees the whole rect fills uniformly.
+    header->setAttribute(Qt::WA_StyledBackground, true);
+    header->setStyleSheet(QString("#mtMapToolbar { background:%1; border-bottom:1px solid %2; }")
+                              .arg(C(ui::colors::BG_BASE), C(ui::colors::BORDER_DIM)));
     auto* hhl = new QHBoxLayout(header);
-    hhl->setContentsMargins(16, 0, 16, 0);
-    center_title_ = new QLabel(tr("VESSEL TRACKING"), header);
+    hhl->setContentsMargins(12, 0, 12, 0);
+    hhl->setSpacing(8);
+
+    auto* accent = new QLabel(header);
+    accent->setFixedSize(3, 14);
+    accent->setStyleSheet(QString("background:%1; border-radius:1px;").arg(C(ui::colors::AMBER)));
+    hhl->addWidget(accent);
+
+    center_title_ = new QLabel(tr("LIVE VESSEL MAP"), header);
     center_title_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
                              .arg(ui::colors::AMBER())
                              .arg(ui::fonts::TINY)
                              .arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(center_title_);
     hhl->addStretch();
+
+    // Manual refresh + visible AUTO-refresh toggle (off by default so it never
+    // silently burns API credits — the user opts in).
+    refresh_btn_ = new QPushButton(tr("⟳ REFRESH"), header);
+    refresh_btn_->setCursor(Qt::PointingHandCursor);
+    refresh_btn_->setStyleSheet(toolbar_btn_ss());
+    connect(refresh_btn_, &QPushButton::clicked, this, [this]() { do_refresh(); });
+    hhl->addWidget(refresh_btn_);
+
+    auto_refresh_btn_ = new QPushButton(tr("AUTO ⟳ OFF"), header);
+    auto_refresh_btn_->setCursor(Qt::PointingHandCursor);
+    auto_refresh_btn_->setCheckable(true);
+    auto_refresh_btn_->setStyleSheet(toolbar_btn_ss());
+    connect(auto_refresh_btn_, &QPushButton::toggled, this, [this](bool on) {
+        auto_refresh_btn_->setText(on ? tr("AUTO ⟳ 5m") : tr("AUTO ⟳ OFF"));
+        if (on) refresh_timer_->start();
+        else    refresh_timer_->stop();
+    });
+    hhl->addWidget(auto_refresh_btn_);
+
+    basemap_cap_ = new QLabel(tr("BASEMAP"), header);
+    basemap_cap_->setStyleSheet(tiny_label_ss());
+    hhl->addWidget(basemap_cap_);
+
+    map_type_combo_ = new QComboBox(header);
+    map_type_combo_->setCursor(Qt::PointingHandCursor);
+    map_type_combo_->setFixedWidth(132);
+    map_type_combo_->setStyleSheet(combo_ss());
+    hhl->addWidget(map_type_combo_);
+
     vl->addWidget(header);
 
     auto* splitter = new QSplitter(Qt::Vertical, panel);
@@ -267,6 +315,17 @@ QWidget* MaritimeScreen::build_center_panel() {
     // Overlay sits on top of the map and follows its size; it consumes mouse
     // events while visible so the user can't pan a half-loaded map.
     map_loader_ = new fincept::ui::LoadingOverlay(map_widget_);
+
+    // Populate + wire the basemap selector now that the map exists. The map
+    // defaults to SATELLITE; switching is instant and preserves camera/pins.
+    if (map_type_combo_) {
+        map_type_combo_->addItems(fincept::ui::WorldMapWidget::basemap_labels());
+        map_type_combo_->setCurrentIndex(map_widget_->current_basemap_index());
+        connect(map_type_combo_, &QComboBox::currentIndexChanged, this, [this](int idx) {
+            if (map_widget_)
+                map_widget_->set_basemap(idx);
+        });
+    }
 
     // Drawn-shape changes → load vessels for the union bbox and filter to
     // those inside the shapes.
@@ -373,7 +432,7 @@ QWidget* MaritimeScreen::build_right_panel() {
         auto imo = imo_edit_->text().trimmed();
         if (imo.isEmpty())
             return;
-        set_status(tr("LOADING HISTORY..."), ui::colors::WARNING);
+        set_status(tr("LOADING HISTORY..."), ui::colors::AMBER);
         show_map_loading(tr("LOADING HISTORY"));
         MaritimeService::instance().get_vessel_history(imo);
     });
@@ -381,14 +440,15 @@ QWidget* MaritimeScreen::build_right_panel() {
 
     // Search result card
     search_result_card_ = new QWidget(content);
+    search_result_card_->setObjectName(QStringLiteral("mtSearchCard"));
     search_result_card_->setVisible(false);
     auto* srvl = new QVBoxLayout(search_result_card_);
     srvl->setContentsMargins(10, 10, 10, 10);
     srvl->setSpacing(4);
 
     sr_name_ = new QLabel(search_result_card_);
-    sr_name_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; font-family:%2;")
-                                .arg(ui::colors::INFO())
+    sr_name_->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700; font-family:%2;")
+                                .arg(ui::colors::AMBER())
                                 .arg(ui::fonts::DATA_FAMILY));
     srvl->addWidget(sr_name_);
     sr_imo_ = new QLabel(search_result_card_);
@@ -439,6 +499,45 @@ QWidget* MaritimeScreen::build_right_panel() {
         services::maritime::GeocodingService::instance().search(q);
     };
     connect(place_query_edit_, &QLineEdit::returnPressed, this, run_place_search);
+
+    // Live typeahead: a completer popup fed by debounced geocoder results.
+    place_completer_model_ = new QStringListModel(this);
+    place_completer_ = new QCompleter(place_completer_model_, this);
+    place_completer_->setCaseSensitivity(Qt::CaseInsensitive);
+    place_completer_->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
+    place_completer_->setMaxVisibleItems(8);
+    place_query_edit_->setCompleter(place_completer_);
+    if (auto* popup = place_completer_->popup()) {
+        popup->setStyleSheet(QString("background:%1; color:%2; border:1px solid %3;"
+                                     "font-family:%4; font-size:%5px; outline:0;"
+                                     "selection-background-color:%6; selection-color:%7;")
+                                 .arg(C(ui::colors::BG_RAISED), C(ui::colors::TEXT_PRIMARY),
+                                      C(ui::colors::BORDER_MED), F(ui::fonts::DATA_FAMILY))
+                                 .arg(ui::fonts::SMALL)
+                                 .arg(C(ui::colors::BG_HOVER), C(ui::colors::AMBER)));
+    }
+    // Picking a suggestion loads vessels for that place's bbox.
+    connect(place_completer_, QOverload<const QString&>::of(&QCompleter::activated), this,
+            [this](const QString& text) {
+                for (const auto& p : place_results_) {
+                    if (p.display_name == text) {
+                        run_area_search(p.min_lat, p.max_lat, p.min_lng, p.max_lng);
+                        return;
+                    }
+                }
+            });
+    place_debounce_ = new QTimer(this);
+    place_debounce_->setSingleShot(true);
+    place_debounce_->setInterval(350);
+    connect(place_debounce_, &QTimer::timeout, this, [this]() {
+        const QString q = place_query_edit_->text().trimmed();
+        if (q.size() < 3) return;
+        if (place_status_) place_status_->setText(tr("Searching…"));
+        services::maritime::GeocodingService::instance().search(q);
+    });
+    // textEdited (not textChanged) so programmatic fills don't trigger searches.
+    connect(place_query_edit_, &QLineEdit::textEdited, this,
+            [this](const QString&) { place_debounce_->start(); });
     vl->addWidget(place_query_edit_);
 
     place_btn_ = new QPushButton(tr("SEARCH PLACES"), content);
@@ -550,6 +649,53 @@ QWidget* MaritimeScreen::build_right_panel() {
         PortsCatalog::instance().search_by_name(q);
     };
     connect(ports_query_edit_, &QLineEdit::returnPressed, this, run_name_search);
+
+    // Live typeahead for ports — same pattern as place search.
+    ports_completer_model_ = new QStringListModel(this);
+    ports_completer_ = new QCompleter(ports_completer_model_, this);
+    ports_completer_->setCaseSensitivity(Qt::CaseInsensitive);
+    ports_completer_->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
+    ports_completer_->setMaxVisibleItems(8);
+    ports_query_edit_->setCompleter(ports_completer_);
+    if (auto* popup = ports_completer_->popup()) {
+        popup->setStyleSheet(QString("background:%1; color:%2; border:1px solid %3;"
+                                     "font-family:%4; font-size:%5px; outline:0;"
+                                     "selection-background-color:%6; selection-color:%7;")
+                                 .arg(C(ui::colors::BG_RAISED), C(ui::colors::TEXT_PRIMARY),
+                                      C(ui::colors::BORDER_MED), F(ui::fonts::DATA_FAMILY))
+                                 .arg(ui::fonts::SMALL)
+                                 .arg(C(ui::colors::BG_HOVER), C(ui::colors::AMBER)));
+    }
+    // Picking a port suggestion plots it on the map (amber pin) and flies there.
+    connect(ports_completer_, QOverload<const QString&>::of(&QCompleter::activated), this,
+            [this](const QString& text) {
+                if (!map_widget_) return;
+                for (const auto& p : port_results_) {
+                    if (p.name == text) {
+                        fincept::ui::MapPin pin;
+                        pin.latitude  = p.latitude;
+                        pin.longitude = p.longitude;
+                        pin.label     = QString("%1 (%2)").arg(p.name, p.locode.isEmpty() ? p.country : p.locode);
+                        pin.color     = QColor(ui::colors::AMBER.get());
+                        pin.radius    = 6.0;
+                        pin.id        = -1;
+                        map_widget_->add_pin(pin);
+                        map_widget_->fly_to(p.latitude, p.longitude);
+                        return;
+                    }
+                }
+            });
+    ports_debounce_ = new QTimer(this);
+    ports_debounce_->setSingleShot(true);
+    ports_debounce_->setInterval(350);
+    connect(ports_debounce_, &QTimer::timeout, this, [this]() {
+        const QString q = ports_query_edit_->text().trimmed();
+        if (q.size() < 3) return;
+        if (ports_status_) ports_status_->setText(tr("Searching…"));
+        PortsCatalog::instance().search_by_name(q);
+    });
+    connect(ports_query_edit_, &QLineEdit::textEdited, this,
+            [this](const QString&) { ports_debounce_->start(); });
     vl->addWidget(ports_query_edit_);
 
     ports_btn_ = new QPushButton(tr("SEARCH PORTS"), content);
@@ -592,7 +738,7 @@ QWidget* MaritimeScreen::build_right_panel() {
     ports_table_->horizontalHeader()->setStretchLastSection(true);
     ports_table_->setMinimumHeight(160);
     ports_table_->setStyleSheet(table_ss());
-    // Click → drop a CYAN pin on the existing world map to distinguish from
+    // Click → drop an AMBER pin on the existing world map to distinguish from
     // the green vessel pins, then re-fit the camera.
     connect(ports_table_, &QTableWidget::currentCellChanged, this,
             [this](int row, int, int, int) {
@@ -604,7 +750,7 @@ QWidget* MaritimeScreen::build_right_panel() {
         pin.latitude  = p.latitude;
         pin.longitude = p.longitude;
         pin.label     = QString("%1 (%2)").arg(p.name, p.locode.isEmpty() ? p.country : p.locode);
-        pin.color     = QColor(ui::colors::CYAN.get());
+        pin.color     = QColor(ui::colors::AMBER.get());
         pin.radius    = 6.0;
         pin.id        = -1;
         map_widget_->add_pin(pin);
@@ -615,6 +761,7 @@ QWidget* MaritimeScreen::build_right_panel() {
     // ── Route Detail ───────────────────────────────────────────────────────
     vl->addSpacing(8);
     route_detail_ = new QWidget(content);
+    route_detail_->setObjectName(QStringLiteral("mtRouteCard"));
     route_detail_->setVisible(false);
     auto* rdvl = new QVBoxLayout(route_detail_);
     rdvl->setContentsMargins(10, 10, 10, 10);
@@ -627,8 +774,8 @@ QWidget* MaritimeScreen::build_right_panel() {
     rdvl->addWidget(rd_title_);
 
     rd_name_ = new QLabel(route_detail_);
-    rd_name_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; font-family:%2;")
-                                .arg(ui::colors::INFO())
+    rd_name_->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700; font-family:%2;")
+                                .arg(ui::colors::AMBER())
                                 .arg(ui::fonts::DATA_FAMILY));
     rdvl->addWidget(rd_name_);
     rd_value_ = new QLabel(route_detail_);
@@ -647,9 +794,9 @@ QWidget* MaritimeScreen::build_right_panel() {
     not_found_label_ = new QLabel(content);
     not_found_label_->setVisible(false);
     not_found_label_->setWordWrap(true);
-    not_found_label_->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2;"
+    not_found_label_->setStyleSheet(QString("color:%1; font-size:11px; font-family:%2;"
                                             "padding:6px; border:1px solid %3; background:%4; border-radius:2px;")
-                                        .arg(ui::colors::WARNING())
+                                        .arg(ui::colors::AMBER())
                                         .arg(ui::fonts::DATA_FAMILY)
                                         .arg(ui::colors::BORDER_MED())
                                         .arg(ui::colors::BG_SURFACE()));
@@ -668,9 +815,9 @@ QWidget* MaritimeScreen::build_right_panel() {
     classified_footer_ = new QLabel(tr("CLASSIFIED — AUTHORIZED PERSONNEL ONLY"), content);
     classified_footer_->setWordWrap(true);
     classified_footer_->setAlignment(Qt::AlignCenter);
-    classified_footer_->setStyleSheet(QString("color:%1; font-size:8px; font-family:%2; font-weight:700;"
+    classified_footer_->setStyleSheet(QString("color:%1; font-size:10px; font-family:%2; font-weight:700;"
                                "padding:8px; border:1px solid %3; background:%4; border-radius:2px;")
-                           .arg(ui::colors::WARNING())
+                           .arg(ui::colors::TEXT_TERTIARY())
                            .arg(ui::fonts::DATA_FAMILY)
                            .arg(ui::colors::BORDER_MED())
                            .arg(ui::colors::BG_SURFACE()));
@@ -688,15 +835,15 @@ QWidget* MaritimeScreen::build_right_panel() {
 // ── Status Bar ───────────────────────────────────────────────────────────────
 QWidget* MaritimeScreen::build_status_bar() {
     auto* bar = new QWidget(this);
-    bar->setFixedHeight(24);
+    bar->setFixedHeight(26);
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(16);
 
     auto s =
-        QString("color:%1; font-size:8px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY()).arg(ui::fonts::DATA_FAMILY);
-    auto sv = QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
+        QString("color:%1; font-size:10px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY()).arg(ui::fonts::DATA_FAMILY);
+    auto sv = QString("color:%1; font-size:10px; font-weight:700; font-family:%2;")
                   .arg(ui::colors::TEXT_PRIMARY())
                   .arg(ui::fonts::DATA_FAMILY);
 
@@ -714,9 +861,11 @@ QWidget* MaritimeScreen::build_status_bar() {
     hl->addWidget(sb_records_cap_);
     hl->addWidget(records_value_);
 
-    sb_refresh_cap_ = new QLabel(tr("REFRESH:"), bar);
+    // Real last-update clock (set on each successful load) — replaces the old
+    // hardcoded "5 MIN" refresh label.
+    sb_refresh_cap_ = new QLabel(tr("UPDATED:"), bar);
     sb_refresh_cap_->setStyleSheet(s);
-    sb_refresh_val_ = new QLabel(tr("5 MIN"), bar);
+    sb_refresh_val_ = new QLabel(QStringLiteral("—"), bar);
     sb_refresh_val_->setStyleSheet(sv);
     hl->addWidget(sb_refresh_cap_);
     hl->addWidget(sb_refresh_val_);
@@ -735,7 +884,7 @@ void MaritimeScreen::populate_routes_table() {
     for (int i = 0; i < routes_.size(); ++i) {
         const auto& r = routes_[i];
         auto* name_item = new QTableWidgetItem(r.name);
-        name_item->setForeground(QBrush(QColor(ui::colors::INFO.get())));
+        name_item->setForeground(QBrush(QColor(ui::colors::AMBER.get())));
         routes_table_->setItem(i, 0, name_item);
         // The API doesn't expose trade-volume in $ — repurpose the middle
         // column for the live vessel count derived from the loaded set.

@@ -21,6 +21,10 @@ class AlgoDeployDialog : public QDialog {
     fincept::services::algo::AlgoDeployment result() const;
     fincept::services::algo::AlgoDeployment deployment() const { return result_; }
 
+    // Prefill the symbol field (the builder's selected symbol isn't part of
+    // AlgoStrategy, so it's pushed in after construction).
+    void set_symbol(const QString& symbol);
+
   protected:
     void changeEvent(QEvent* event) override;
 

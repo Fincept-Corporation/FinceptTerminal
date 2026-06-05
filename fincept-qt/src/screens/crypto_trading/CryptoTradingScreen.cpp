@@ -28,6 +28,7 @@
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
 
+#include <QAbstractItemView>
 #include <QCompleter>
 #include <QDateTime>
 #include <QHBoxLayout>
@@ -176,6 +177,25 @@ void CryptoTradingScreen::setup_ui() {
     completer->setCaseSensitivity(Qt::CaseInsensitive);
     completer->setFilterMode(Qt::MatchContains);
     symbol_input_->setCompleter(completer);
+
+    // The completer popup is an unstyled top-level QListView — give it a solid
+    // background (it would otherwise render transparent over the screen) and wire
+    // activated() so a mouse click / Enter / Arrow+Enter on a suggestion selects
+    // the symbol, not merely pastes it into the box.
+    if (auto* popup = completer->popup()) {
+        popup->setObjectName("cryptoSymbolCompleterPopup");
+        popup->setStyleSheet(
+            QString("QListView { background:%1; color:%2; border:1px solid %3; outline:none;"
+                    " font-family:%4; font-size:%5px; }"
+                    "QListView::item { padding:4px 8px; border:none; }"
+                    "QListView::item:selected { background:%6; color:%2; }")
+                .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(),
+                     fincept::ui::colors::BORDER_MED(), fincept::ui::fonts::DATA_FAMILY())
+                .arg(fincept::ui::fonts::SMALL)
+                .arg(fincept::ui::colors::BG_HOVER()));
+    }
+    connect(completer, QOverload<const QString&>::of(&QCompleter::activated), this,
+            [this](const QString& choice) { on_symbol_selected(choice.trimmed().toUpper()); });
     connect(symbol_input_, &QLineEdit::returnPressed, this,
             [this]() { on_symbol_selected(symbol_input_->text().trimmed().toUpper()); });
     cmd_layout->addWidget(symbol_input_);

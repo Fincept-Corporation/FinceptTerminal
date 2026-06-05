@@ -33,6 +33,11 @@ public:
     void load_and_backtest(const services::algo::AlgoStrategy& strategy, const QString& symbol,
                            const QString& start_date, const QString& end_date);
 
+signals:
+    // Emitted after a strategy is successfully deployed, so the parent screen can
+    // switch to the Dashboard tab and refresh the deployment list.
+    void deployed();
+
 protected:
     void changeEvent(QEvent* event) override;
 

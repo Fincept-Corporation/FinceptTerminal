@@ -41,6 +41,36 @@ namespace fincept::screens {
 
 using namespace fincept::ui;
 
+namespace {
+// Build a clean, human-readable cell name from raw cell source: take the first
+// non-empty line and strip markdown header/list/quote markers, code-fence
+// backticks, and any leading emoji/symbol — so a banner like
+// "# 📘 Fincept Notebook — Time Value of Money" shows as
+// "Fincept Notebook — Time Value of Money" and "# Setup" shows as "Setup".
+QString clean_cell_name(const QString& source) {
+    QString s;
+    for (const QString& ln : source.split('\n')) {
+        const QString t = ln.trimmed();
+        if (!t.isEmpty()) {
+            s = t;
+            break;
+        }
+    }
+    if (s.isEmpty())
+        return {};
+    s.remove('`');
+    // Strip a leading run of markdown block markers + whitespace.
+    int i = 0;
+    while (i < s.size() && QStringLiteral("#>*-=+ \t").contains(s.at(i)))
+        ++i;
+    s = s.mid(i);
+    // Drop a leading emoji / symbol run so "📘 Title" becomes "Title".
+    while (!s.isEmpty() && !s.at(0).isLetterOrNumber() && s.at(0) != '(' && s.at(0) != '"' && s.at(0) != '\'')
+        s.remove(0, 1);
+    return s.simplified();
+}
+} // namespace
+
 CellNavigator::CellNavigator(QWidget* parent) : QWidget(parent) {
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -64,8 +94,8 @@ CellNavigator::CellNavigator(QWidget* parent) : QWidget(parent) {
     list_ = new QListWidget(this);
     list_->setStyleSheet(
         QString("QListWidget { background:%1; border:none; outline:none;"
-                " font-family:%2; font-size:%3px; }"
-                "QListWidget::item { color:%4; padding:6px 10px;"
+                " font-family:%2, 'Menlo', 'SF Mono', monospace; font-size:%3px; }"
+                "QListWidget::item { color:%4; padding:7px 10px;"
                 " border-bottom:1px solid %5; }"
                 "QListWidget::item:selected { background:%6; color:%7;"
                 " border-left:2px solid %7; }"
@@ -122,21 +152,24 @@ void CellNavigator::rebuild(const QVector<NotebookCell>& cells, const QString& s
     int selected_row = -1;
     for (int i = 0; i < cells.size(); ++i) {
         const auto& cell = cells[i];
-        QString type_tag = (cell.cell_type == "code") ? "PY" : "MD";
+        const QString type_tag = (cell.cell_type == "code") ? "PY" : "MD";
         QString exec_tag;
         if (cell.execution_count > 0)
-            exec_tag = QString(" [%1]").arg(cell.execution_count);
+            exec_tag = QString("  [%1]").arg(cell.execution_count);
 
-        QString preview = cell.title.trimmed();
-        if (preview.isEmpty())
-            preview = cell.source.split('\n').first().trimmed();
-        if (preview.isEmpty())
-            preview = tr("(empty)");
+        // Prefer a user/authored title; otherwise derive a clean name from the
+        // cell source (strips markdown markers + emoji).
+        QString name = cell.title.trimmed();
+        if (name.isEmpty())
+            name = clean_cell_name(cell.source);
+        if (name.isEmpty())
+            name = tr("(empty)");
 
-        const QString label = QString("%1  %2  %3%4").arg(i + 1, 2).arg(type_tag, -2).arg(preview, exec_tag);
+        // " 1  PY  Fincept Notebook — Time Value of Money   [3]"
+        const QString label = QString("%1  %2  %3%4").arg(i + 1, 2).arg(type_tag, -2).arg(name, exec_tag);
         auto* item = new QListWidgetItem(label, list_);
         item->setData(Qt::UserRole, cell.id);
-        item->setToolTip(label);
+        item->setToolTip(name);
 
         if (cell.id == selected_id)
             selected_row = i;

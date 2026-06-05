@@ -208,7 +208,7 @@ Result<void> SecureStorage::store(const QString& key, const QString& value) {
         return Result<void>::err("Encryption failed");
     }
 
-    QSqlQuery q(db.raw_db());
+    QSqlQuery q(db.connection()); // per-thread connection (see retrieve) — thread-safe
     q.prepare(R"sql(
         INSERT INTO secure_credentials (key, ciphertext, iv, tag, updated_at)
         VALUES (?, ?, ?, ?, datetime('now'))
@@ -235,7 +235,10 @@ Result<QString> SecureStorage::retrieve(const QString& key) {
     if (!db.is_open())
         return Result<QString>::err("Database not open");
 
-    QSqlQuery q(db.raw_db());
+    // Use the per-thread connection, NOT the shared raw_db(): credential reads run
+    // on worker threads (algo quote polling, candle warm-up, order placement), and
+    // sharing one SQLite handle across threads corrupts the parser → SIGSEGV.
+    QSqlQuery q(db.connection());
     q.prepare("SELECT ciphertext, iv, tag FROM secure_credentials WHERE key = ?");
     q.addBindValue(key);
     if (!q.exec()) {
@@ -269,7 +272,7 @@ Result<void> SecureStorage::remove(const QString& key) {
     if (!db.is_open())
         return Result<void>::err("Database not open");
 
-    QSqlQuery q(db.raw_db());
+    QSqlQuery q(db.connection()); // per-thread connection (see retrieve) — thread-safe
     q.prepare("DELETE FROM secure_credentials WHERE key = ?");
     q.addBindValue(key);
     if (!q.exec()) {

@@ -35,16 +35,25 @@ QJsonObject LlmService::build_openai_request(const QString& user_message,
     QJsonObject req;
     req["model"]    = model_;
     req["messages"] = messages;
-    // Temperature omitted — each provider's default. OpenAI/xAI use max_completion_tokens; others max_tokens.
+    // Temperature omitted — each provider's default.
+    // Token-limit field: OpenAI/xAI native endpoints take max_completion_tokens
+    // universally. AIHubMix is a pass-through aggregator (no param translation),
+    // so an OpenAI-family model routed through it ALSO needs max_completion_tokens —
+    // o-series and gpt-5 hard-reject max_tokens with a 400 ("Unsupported parameter:
+    // 'max_tokens' ... Use 'max_completion_tokens' instead"). Non-OpenAI models
+    // (claude/gemini/deepseek/qwen/…) keep the OpenAI-compat max_tokens.
     const int mx = resolved_max_tokens();
-    if (provider_ == "openai" || provider_ == "xai")
+    const bool wants_completion_tokens = provider_ == "openai" || provider_ == "xai" ||
+                                         (provider_ == "aihubmix" && detail::is_openai_family_model(model_lower));
+    if (wants_completion_tokens)
         req["max_completion_tokens"] = mx;
     else
         req["max_tokens"] = mx;
     if (stream) {
         req["stream"] = true;
-        // OpenAI/xAI omit usage on streamed responses unless we opt in.
-        if (provider_ == "openai" || provider_ == "xai")
+        // OpenAI/xAI (and OpenAI-family models via AIHubMix) omit usage on streamed
+        // responses unless we opt in. Don't send stream_options to non-OpenAI routes.
+        if (wants_completion_tokens)
             req["stream_options"] = QJsonObject{{"include_usage", true}};
     }
 
@@ -90,23 +99,28 @@ QJsonObject LlmService::build_anthropic_request(const QString& user_message,
         req["stream"] = true;
 
     // Anthropic tools: bare {name, description, input_schema} — no OpenAI-style "type":"function" wrapper.
-    if (detail::effective_tools_enabled(tools_enabled_)) {
-        QJsonArray ant_tools;
-        auto all_tools = mcp::McpService::instance().get_all_tools(detail::apply_request_policy(tool_filter_));
-        for (const auto& tool : all_tools) {
-            QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
-            QJsonObject schema = tool.input_schema;
-            if (schema.isEmpty()) {
-                schema["type"]       = "object";
-                schema["properties"] = QJsonObject();
-            }
-            ant_tools.append(
-                QJsonObject{{"name", fn_name}, {"description", tool.description}, {"input_schema", schema}});
-        }
-        if (!ant_tools.isEmpty())
-            req["tools"] = ant_tools;
-    }
+    QJsonArray ant_tools = build_anthropic_tools();
+    if (!ant_tools.isEmpty())
+        req["tools"] = ant_tools;
     return req;
+}
+
+QJsonArray LlmService::build_anthropic_tools() {
+    QJsonArray ant_tools;
+    if (!detail::effective_tools_enabled(tools_enabled_))
+        return ant_tools;
+    auto all_tools = mcp::McpService::instance().get_all_tools(detail::apply_request_policy(tool_filter_));
+    for (const auto& tool : all_tools) {
+        QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
+        QJsonObject schema = tool.input_schema;
+        if (schema.isEmpty()) {
+            schema["type"]       = "object";
+            schema["properties"] = QJsonObject();
+        }
+        ant_tools.append(
+            QJsonObject{{"name", fn_name}, {"description", tool.description}, {"input_schema", schema}});
+    }
+    return ant_tools;
 }
 
 QJsonObject LlmService::build_gemini_request(const QString& user_message,
@@ -131,25 +145,30 @@ QJsonObject LlmService::build_gemini_request(const QString& user_message,
     }
 
     // Gemini tools: tools[{functionDeclarations:[{name, description, parameters}]}].
-    auto all_tools = detail::effective_tools_enabled(tools_enabled_)
-                         ? mcp::McpService::instance().get_all_tools(detail::apply_request_policy(tool_filter_))
-                         : std::vector<mcp::UnifiedTool>{};
-    if (!all_tools.empty()) {
-        QJsonArray fn_decls;
-        for (const auto& tool : all_tools) {
-            QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
-            QJsonObject schema = tool.input_schema;
-            if (schema.isEmpty()) {
-                schema["type"]       = "object";
-                schema["properties"] = QJsonObject();
-            }
-            fn_decls.append(QJsonObject{{"name", fn_name}, {"description", tool.description}, {"parameters", schema}});
-        }
-        if (!fn_decls.isEmpty())
-            req["tools"] = QJsonArray{QJsonObject{{"functionDeclarations", fn_decls}}};
-    }
+    QJsonArray gem_tools = build_gemini_tools();
+    if (!gem_tools.isEmpty())
+        req["tools"] = gem_tools;
 
     return req;
+}
+
+QJsonArray LlmService::build_gemini_tools() {
+    if (!detail::effective_tools_enabled(tools_enabled_))
+        return {};
+    auto all_tools = mcp::McpService::instance().get_all_tools(detail::apply_request_policy(tool_filter_));
+    QJsonArray fn_decls;
+    for (const auto& tool : all_tools) {
+        QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
+        QJsonObject schema = tool.input_schema;
+        if (schema.isEmpty()) {
+            schema["type"]       = "object";
+            schema["properties"] = QJsonObject();
+        }
+        fn_decls.append(QJsonObject{{"name", fn_name}, {"description", tool.description}, {"parameters", schema}});
+    }
+    if (fn_decls.isEmpty())
+        return {};
+    return QJsonArray{QJsonObject{{"functionDeclarations", fn_decls}}};
 }
 
 QJsonObject LlmService::build_fincept_request(const QString& user_message,

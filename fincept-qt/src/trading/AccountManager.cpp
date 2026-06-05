@@ -82,6 +82,14 @@ void AccountManager::load_from_db() {
     }
 }
 
+void AccountManager::reload_from_db() {
+    {
+        QMutexLocker lock(&mutex_);
+        accounts_.clear();
+    }
+    load_from_db(); // re-acquires the lock internally
+}
+
 // ── Legacy credential migration ─────────────────────────────────────────────
 
 void AccountManager::migrate_legacy_credentials() {
@@ -367,6 +375,14 @@ void AccountManager::save_credentials(const QString& account_id, const BrokerCre
     secure.store(acct_key(account_id, "refresh_token"), creds.refresh_token);
     secure.store(acct_key(account_id, "user_id"), creds.user_id);
     secure.store(acct_key(account_id, "additional_data"), creds.additional_data);
+
+    // The live token just changed. Notify listeners (DataStreamManager) so any
+    // running stream is rebuilt with the new credentials: WebSocket adapters
+    // capture the access token at construction and have no setter, so without a
+    // rebuild they keep resolving/subscribing with the stale token (HTTP 401)
+    // and never stream ticks — the cause of price data stalling after a daily
+    // re-auth until the next slow REST poll happened to reload the new token.
+    emit credentials_changed(account_id);
 }
 
 BrokerCredentials AccountManager::load_credentials(const QString& account_id) const {

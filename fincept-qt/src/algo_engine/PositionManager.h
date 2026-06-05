@@ -20,6 +20,11 @@ public:
     void record_entry(PositionSide side, double qty, double price, int64_t time_ms);
     double record_exit(double qty, double price, int64_t time_ms);
 
+    // Re-seed position + cumulative metrics after an app restart so a resumed
+    // deployment continues its open position instead of starting flat.
+    void restore_state(PositionSide side, double qty, double entry_price,
+                       double total_pnl, int total_trades, double win_rate, double max_drawdown);
+
     bool has_position() const;
     bool is_paused() const;
     bool validate_order_value(double qty, double price) const;

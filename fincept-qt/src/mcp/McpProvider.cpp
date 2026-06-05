@@ -118,6 +118,29 @@ std::optional<UnifiedTool> McpProvider::find_tool(const QString& name) const {
     return it.value();
 }
 
+std::vector<McpProvider::ToolAuditInfo> McpProvider::audit_all_tools() const {
+    QMutexLocker lock(&mutex_);
+    std::vector<ToolAuditInfo> result;
+    result.reserve(static_cast<std::size_t>(tools_.size()));
+    for (auto it = tools_.cbegin(); it != tools_.cend(); ++it) {
+        const ToolDef& def = it.value();
+        ToolAuditInfo info;
+        info.name = def.name;
+        info.category = def.category;
+        info.description = def.description;
+        // A std::function is truthy when a target is bound. async wins if both.
+        info.has_handler = static_cast<bool>(def.handler) || static_cast<bool>(def.async_handler);
+        info.is_async = static_cast<bool>(def.async_handler);
+        info.enabled = !disabled_tools_.contains(it.key());
+        info.is_destructive = def.is_destructive;
+        info.auth_required = def.auth_required;
+        info.input_schema = def.input_schema.to_json();
+        info.legacy_aliases = def.legacy_aliases;
+        result.push_back(std::move(info));
+    }
+    return result;
+}
+
 std::size_t McpProvider::tool_count() const {
     QMutexLocker lock(&mutex_);
     std::size_t count = 0;

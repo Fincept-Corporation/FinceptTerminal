@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
+#include "trading/HistoricalDataService.h"
 #include "trading/instruments/InstrumentService.h"
 
 #include <QDateTime>
@@ -137,73 +138,7 @@ QVector<OhlcvCandle> parse_yahoo_chart(const QJsonObject& root, int64_t tf_ms, Q
 }
 
 // ── Broker symbol resolution ─────────────────────────────────────────────────
-// Most broker get_history() implementations need more than a bare symbol:
-//   - token brokers want EXCHANGE:SYMBOL:TOKEN (numeric instrument_token);
-//   - tradejini wants the scrip id at parts[1];
-//   - the rest resolve EXCHANGE:SYMBOL internally.
-// We resolve via InstrumentService (warming its cache on a worker thread if
-// needed). Unresolvable token brokers return "" so the caller skips to Yahoo.
-
-const QSet<QString>& brokers_needing_token() {
-    static const QSet<QString> s = {
-        QStringLiteral("motilal"),   QStringLiteral("aliceblue"), QStringLiteral("fivepaisa"),
-        QStringLiteral("iifl"),      QStringLiteral("ibkr"),      QStringLiteral("saxobank"),
-    };
-    return s;
-}
-
-// Worker-thread-safe synchronous instrument load. Uses the worker-safe loader
-// (private named connection); never the main-thread load_from_db().
-bool ensure_instruments_loaded_blocking(const QString& broker_id) {
-    auto& svc = fincept::trading::InstrumentService::instance();
-    if (svc.is_loaded(broker_id))
-        return true;
-    svc.load_from_db_worker(broker_id);
-    return svc.is_loaded(broker_id);
-}
-
-// Build the symbol string <broker_id>::get_history expects. Empty result means a
-// token was required but could not be resolved (caller should fall back to Yahoo).
-QString resolve_broker_symbol(const QString& broker_id, const QString& bare_symbol,
-                              const QString& exchange) {
-    using fincept::trading::InstrumentService;
-    if (bare_symbol.contains(':')) // already fully qualified by caller
-        return bare_symbol;
-    const QString sym = bare_symbol.trimmed().toUpper();
-    const QString exch = exchange.isEmpty() ? QStringLiteral("NSE") : exchange.toUpper();
-
-    if (broker_id == QStringLiteral("tradejini")) { // get_history reads parts[1]
-        if (ensure_instruments_loaded_blocking(broker_id)) {
-            auto inst = InstrumentService::instance().find(sym, exch, broker_id);
-            if (inst) {
-                const QString symid =
-                    inst->brsymbol.isEmpty() ? QString::number(inst->instrument_token) : inst->brsymbol;
-                return exch + ":" + symid;
-            }
-        }
-        return exch + ":" + sym; // best-effort
-    }
-    if (brokers_needing_token().contains(broker_id)) { // EXCHANGE:SYMBOL:TOKEN
-        if (!ensure_instruments_loaded_blocking(broker_id))
-            return {};
-        auto tok = InstrumentService::instance().instrument_token(sym, exch, broker_id);
-        if (!tok.has_value() || tok.value() <= 0)
-            return {};
-        return exch + ":" + sym + ":" + QString::number(tok.value());
-    }
-    // Brokers whose get_history resolves the symbol internally via InstrumentService
-    // (numeric token lookup) — warm the cache so that lookup succeeds, but pass the
-    // BARE symbol: they default the exchange to NSE and a colon-form is unnecessary.
-    static const QSet<QString> kInternalResolvers = {
-        QStringLiteral("zerodha"), QStringLiteral("angelone"),
-        QStringLiteral("dhan"),    QStringLiteral("upstox"),
-    };
-    if (kInternalResolvers.contains(broker_id))
-        ensure_instruments_loaded_blocking(broker_id);
-    // Everyone else accepts the bare symbol as-is (Fyers/Groww format it themselves;
-    // Alpaca/Tradier/MetaApi want a plain ticker). Preserve the original string.
-    return bare_symbol;
-}
+// Broker symbol resolution + token handling moved to trading/HistoricalDataService.
 
 } // namespace
 
@@ -338,69 +273,18 @@ void CandleDataFetcher::fetch_multi(const QStringList& symbols, const QString& t
 void CandleDataFetcher::fetch_from_broker(const QString& symbol, const QString& timeframe,
                                            int lookback_days, const QString& broker_id,
                                            const QString& account_id, CandleCallback callback) {
-    QPointer<CandleDataFetcher> self = this;
-    QtConcurrent::run([self, symbol, timeframe, lookback_days, broker_id, account_id, callback]() {
-        auto* broker = trading::BrokerRegistry::instance().get(broker_id);
-        if (!broker) {
-            QMetaObject::invokeMethod(self, [callback]() {
-                callback(false, {}, QStringLiteral("Broker not found"));
-            }, Qt::QueuedConnection);
-            return;
-        }
-
-        auto creds = trading::AccountManager::instance().load_credentials(account_id);
-        if (creds.api_key.isEmpty()) {
-            QMetaObject::invokeMethod(self, [callback]() {
-                callback(false, {}, QStringLiteral("No credentials"));
-            }, Qt::QueuedConnection);
-            return;
-        }
-
-        const QDateTime to = QDateTime::currentDateTime();
-        const QDateTime from = to.addDays(-lookback_days);
-        const QString resolution = timeframe_to_broker_resolution(timeframe);
-        const QString from_s = from.toString("yyyy-MM-dd");
-        const QString to_s = to.toString("yyyy-MM-dd");
-
-        // Build the broker-specific symbol string (EXCHANGE:SYMBOL[:TOKEN]); empty
-        // means a token broker we couldn't resolve — fall straight through to Yahoo.
-        const QString resolved = resolve_broker_symbol(broker_id, symbol, QStringLiteral("NSE"));
-
-        auto has_data = [](const trading::ApiResponse<QVector<trading::BrokerCandle>>& r) {
-            return r.success && r.data.value_or(QVector<trading::BrokerCandle>{}).size() > 0;
-        };
-
-        trading::ApiResponse<QVector<trading::BrokerCandle>> result;
-        QString last_err;
-        if (!resolved.isEmpty()) {
-            result = broker->get_history(creds, resolved, resolution, from_s, to_s);
-            if (!result.success)
-                last_err = result.error;
-        } else {
-            last_err = QStringLiteral("symbol resolution failed (no instrument token)");
-        }
-        // Fallback: retry with the bare symbol if the resolved form yielded nothing.
-        if (!has_data(result) && resolved != symbol) {
-            auto r2 = broker->get_history(creds, symbol, resolution, from_s, to_s);
-            if (has_data(r2))
-                result = r2;
-            else if (last_err.isEmpty())
-                last_err = r2.error;
-        }
-
-        if (!self) return;
-        if (has_data(result)) {
-            auto candles = broker_candles_to_ohlcv(result.data.value_or(QVector<trading::BrokerCandle>{}), timeframe);
-            QMetaObject::invokeMethod(self, [callback, candles]() {
-                callback(true, candles, {});
-            }, Qt::QueuedConnection);
-        } else {
-            const QString err = last_err.isEmpty() ? QStringLiteral("No data") : last_err;
-            QMetaObject::invokeMethod(self, [callback, err]() {
+    // Broker history (symbol resolution + bare-symbol fallback + cache) now lives
+    // in the shared trading::HistoricalDataService; convert its BrokerCandle
+    // result to the algo OhlcvCandle here. (Yahoo fallback is layered in fetch().)
+    const QString tf = timeframe;
+    trading::HistoricalDataService::instance().fetch(
+        symbol, timeframe, lookback_days, broker_id, account_id,
+        [callback, tf](bool ok, const QVector<trading::BrokerCandle>& candles, const QString& err) {
+            if (ok && !candles.isEmpty())
+                callback(true, CandleDataFetcher::broker_candles_to_ohlcv(candles, tf), {});
+            else
                 callback(false, {}, err);
-            }, Qt::QueuedConnection);
-        }
-    });
+        });
 }
 
 void CandleDataFetcher::fetch_from_yahoo(const QStringList& symbols, const QString& timeframe,

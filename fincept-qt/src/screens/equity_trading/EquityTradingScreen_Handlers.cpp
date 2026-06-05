@@ -29,6 +29,7 @@
 #include "trading/DataStreamManager.h"
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
+#include "trading/instruments/InstrumentNormalize.h"
 #include "trading/instruments/InstrumentService.h"
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
@@ -41,6 +42,7 @@
 #include <QDateTime>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QHash>
@@ -48,11 +50,13 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPointer>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QRadioButton>
 #include <QScrollBar>
 #include <QSplitter>
@@ -97,6 +101,11 @@ void EquityTradingScreen::on_account_changed(const QString& account_id) {
         order_entry_->configure_for_broker(prof);
         order_entry_->set_broker_id(account.broker_id);
         watchlist_->set_broker_id(account.broker_id);
+
+        // Time & Sales / Auctions / Calendar are US-broker-only market data —
+        // show those tabs and run their fetches only for US brokers (Alpaca etc.).
+        focused_is_us_market_ = (prof.region == QLatin1String("US"));
+        bottom_panel_->set_us_market_tabs_visible(focused_is_us_market_);
     }
 
     // Update mode button to reflect this account's trading mode
@@ -141,14 +150,20 @@ void EquityTradingScreen::on_account_changed(const QString& account_id) {
         auto* stream = dsm.stream_for(account_id);
         if (stream) {
             stream->set_selected_symbol(selected_symbol_, selected_exchange_);
-            stream->subscribe_symbols(watchlist_symbols_);
+            stream->subscribe_symbols(QStringLiteral("equity:watchlist"), watchlist_symbols_);
             stream->fetch_candles(selected_symbol_, chart_->current_timeframe());
             stream->fetch_orderbook(selected_symbol_);
-            stream->fetch_time_sales(selected_symbol_);
-            stream->fetch_calendar();
-            stream->fetch_clock();
+            // US-only market data — skip for Indian/other brokers (no tape/calendar).
+            if (focused_is_us_market_) {
+                stream->fetch_time_sales(selected_symbol_);
+                stream->fetch_calendar();
+                stream->fetch_clock();
+            }
         }
     }
+
+    // Each account's order book opens on today's session.
+    orders_view_day_ = QDate::currentDate();
 
     // Load paper portfolio orders into matcher
     if (!account.paper_portfolio_id.isEmpty() && account.trading_mode == "paper") {
@@ -157,7 +172,7 @@ void EquityTradingScreen::on_account_changed(const QString& account_id) {
             if (o.order_type != "market")
                 OrderMatcher::instance().add_order(o);
         }
-        // Refresh paper data immediately (positions/orders/trades/stats/funds).
+        // Refresh paper data immediately (positions/holdings/orders/funds/stats).
         refresh_paper_panels();
     }
 
@@ -200,7 +215,7 @@ void EquityTradingScreen::switch_symbol(const QString& symbol) {
         stream->fetch_orderbook(symbol);
 
         auto account = AccountManager::instance().get_account(focused_account_id_);
-        if (account.trading_mode == "live") {
+        if (account.trading_mode == "live" && focused_is_us_market_) {
             stream->fetch_time_sales(symbol);
         }
     }
@@ -236,10 +251,17 @@ void EquityTradingScreen::on_symbol_search_changed(const QString& text) {
     const auto results = InstrumentService::instance().search_all(query, "", ids, 24);
     QStringList suggestions;
     suggestions.reserve(results.size());
+    symbol_suggestion_map_.clear();
     for (const auto& inst : results) {
-        auto* b = BrokerRegistry::instance().get(inst.broker_id);
-        const QString broker_name = b ? b->profile().display_name : inst.broker_id;
-        suggestions.append(QString("%1  ·  %2  ·  %3").arg(inst.symbol, inst.exchange, broker_name));
+        // Show a clean human label (e.g. "NIFTY 7 Jul 26 18250 CE  ·  NFO") instead
+        // of the raw canonical symbol, and remember the real symbol for selection.
+        const QString friendly =
+            norm::display_name(inst.name, inst.instrument_type, inst.expiry, inst.strike, inst.symbol);
+        const QString label = QStringLiteral("%1  ·  %2").arg(friendly, inst.exchange);
+        if (symbol_suggestion_map_.contains(label))
+            continue; // collapse identical labels surfaced by multiple brokers
+        symbol_suggestion_map_.insert(label, inst.symbol);
+        suggestions.append(label);
     }
     symbol_completer_model_->setStringList(suggestions);
     // Re-evaluate the popup against the just-updated model; otherwise the
@@ -250,11 +272,15 @@ void EquityTradingScreen::on_symbol_search_changed(const QString& text) {
 }
 
 void EquityTradingScreen::apply_symbol_input(const QString& raw) {
-    // A chosen suggestion is "SYMBOL  ·  EXCH  ·  Broker" — keep only the leading
-    // symbol token. Also tolerate the legacy "EXCHANGE:SYMBOL" form and bare input.
-    QString sym = raw.trimmed().section(QStringLiteral("  ·  "), 0, 0).trimmed().toUpper();
-    if (sym.contains(':'))
-        sym = sym.section(':', 1);
+    const QString trimmed = raw.trimmed();
+    // A picked suggestion maps its friendly label back to the real symbol.
+    QString sym = symbol_suggestion_map_.value(trimmed);
+    if (sym.isEmpty()) {
+        // Typed text or legacy "SYMBOL  ·  EXCH" / "EXCHANGE:SYMBOL" forms.
+        sym = trimmed.section(QStringLiteral("  ·  "), 0, 0).trimmed().toUpper();
+        if (sym.contains(':'))
+            sym = sym.section(':', 1);
+    }
     if (sym.isEmpty())
         return;
     on_symbol_selected(sym);
@@ -313,13 +339,10 @@ void EquityTradingScreen::on_accounts_clicked() {
     connect(dlg, &AccountManagementDialog::account_removed, this, [this](const QString& account_id) {
         DataStreamManager::instance().stop_stream(account_id);
         update_account_menu();
-        // If removed the focused account, switch to next available
+        // If removed the focused account, switch to the next configured broker.
         if (account_id == focused_account_id_) {
-            auto accounts = AccountManager::instance().active_accounts();
-            if (!accounts.isEmpty())
-                on_account_changed(accounts.first().account_id);
-            else
-                focused_account_id_.clear();
+            focused_account_id_.clear();
+            ensure_account_loaded(); // credential-aware next pick
         }
         update_connection_status();
     });
@@ -344,7 +367,7 @@ void EquityTradingScreen::on_accounts_clicked() {
         auto* stream = DataStreamManager::instance().stream_for(account_id);
         if (stream && account_id == focused_account_id_) {
             stream->set_selected_symbol(selected_symbol_, selected_exchange_);
-            stream->subscribe_symbols(watchlist_symbols_);
+            stream->subscribe_symbols(QStringLiteral("equity:watchlist"), watchlist_symbols_);
         }
         AccountManager::instance().set_connection_state(account_id, ConnectionState::Connected);
         update_connection_status();
@@ -398,8 +421,14 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
             return;
         }
 
+        // Forward the exchange + broker product (MIS/CNC/NRML) so the engine
+        // applies per-product leverage, tags the position, and routes CNC to the
+        // Holdings tab. Without this the product was silently dropped (everything
+        // looked like blank-product CNC) and MIS could never be told apart.
+        const QString product = product_to_broker_str(order.product_type);
         try {
-            auto pt_order = pt_place_order(portfolio_id, order.symbol, side, type, order.quantity, price_opt, stop_opt);
+            auto pt_order = pt_place_order(portfolio_id, order.symbol, side, type, order.quantity, price_opt,
+                                           stop_opt, /*reduce_only=*/false, order.exchange, product);
 
             if (order.order_type == OrderType::Market) {
                 double fill_price = current_price_ > 0 ? current_price_ : (order.price > 0 ? order.price : 0.0);
@@ -419,19 +448,8 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
             return;
         }
 
-        // Refresh paper portfolio
-        try {
-            auto portfolio = pt_get_portfolio(portfolio_id);
-            auto positions = pt_get_positions(portfolio_id);
-            auto orders_list = pt_get_orders(portfolio_id);
-            auto trades = pt_get_trades(portfolio_id, 50);
-            auto stats = pt_get_stats(portfolio_id);
-            order_entry_->set_balance(portfolio.balance);
-            bottom_panel_->set_paper_positions(positions);
-            bottom_panel_->set_paper_orders(orders_list);
-            bottom_panel_->set_paper_trades(trades);
-            bottom_panel_->set_paper_stats(stats);
-        } catch (...) {}
+        // Refresh paper portfolio (positions/holdings/orders/funds/stats).
+        refresh_paper_panels();
     } else {
         // Route to live broker via account-aware UnifiedTrading
         // Safety: capture account_id by value at click time (immutable per order lifecycle)
@@ -476,6 +494,87 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
     }
 }
 
+void EquityTradingScreen::on_chart_buy_requested(double price) {
+    open_chart_order_ticket(true, price);
+}
+
+void EquityTradingScreen::on_chart_sell_requested(double price) {
+    open_chart_order_ticket(false, price);
+}
+
+void EquityTradingScreen::on_chart_add_to_watchlist() {
+    if (!selected_symbol_.isEmpty())
+        on_watchlist_symbol_added(selected_symbol_);
+}
+
+// Kite-style chart trading: a compact confirm ticket (qty + limit price,
+// prefilled at the clicked level), then route through the normal placement path
+// so paper/live handling, balances and status all behave exactly like the order
+// panel. For live accounts on_order_submitted() still applies its own pre-send
+// gate; for paper this ticket is the single confirmation.
+void EquityTradingScreen::open_chart_order_ticket(bool is_buy, double price) {
+    if (focused_account_id_.isEmpty()) {
+        order_entry_->show_order_status(tr("No account selected — add one via ACCOUNTS"), false);
+        return;
+    }
+    if (price <= 0)
+        price = current_price_; // cursor price unavailable — fall back to last traded
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(is_buy ? tr("Buy %1").arg(selected_symbol_) : tr("Sell %1").arg(selected_symbol_));
+    auto* form = new QFormLayout(&dlg);
+
+    auto* hdr = new QLabel(
+        QStringLiteral("%1  %2 · %3").arg(is_buy ? tr("BUY") : tr("SELL"), selected_symbol_, selected_exchange_), &dlg);
+    hdr->setStyleSheet(QString("font-weight:700;font-size:13px;color:%1;")
+                           .arg(is_buy ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
+    form->addRow(hdr);
+
+    auto* type_combo = new QComboBox(&dlg);
+    type_combo->addItems({tr("Market"), tr("Limit")});
+    type_combo->setCurrentIndex(0); // default to Market
+    form->addRow(tr("Type"), type_combo);
+
+    auto* qty_spin = new QSpinBox(&dlg);
+    qty_spin->setRange(1, 10000000);
+    qty_spin->setValue(1);
+    form->addRow(tr("Qty"), qty_spin);
+
+    auto* px_spin = new QDoubleSpinBox(&dlg);
+    px_spin->setRange(0.01, 1.0e9);
+    px_spin->setDecimals(2);
+    px_spin->setValue(price > 0 ? price : 0.01);
+    form->addRow(tr("Limit price"), px_spin);
+
+    // A Market order needs no price (it fills at the LTP), so the limit-price
+    // row (label + field) is hidden entirely unless Limit is selected.
+    auto sync_type = [form, px_spin](int idx) { form->setRowVisible(px_spin, idx == 1); }; // 1 = Limit
+    connect(type_combo, qOverload<int>(&QComboBox::currentIndexChanged), &dlg, sync_type);
+    sync_type(type_combo->currentIndex());
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, &dlg);
+    QPushButton* ok = buttons->addButton(is_buy ? tr("Buy") : tr("Sell"), QDialogButtonBox::AcceptRole);
+    ok->setDefault(true);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    form->addRow(buttons);
+
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    UnifiedOrder order;
+    order.symbol = selected_symbol_;
+    order.exchange = selected_exchange_;
+    order.side = is_buy ? OrderSide::Buy : OrderSide::Sell;
+    const bool is_market = (type_combo->currentIndex() == 0);
+    order.order_type = is_market ? OrderType::Market : OrderType::Limit;
+    order.quantity = qty_spin->value();
+    order.price = is_market ? 0.0 : px_spin->value();
+    order.product_type = ProductType::Intraday;
+    order.validity = QStringLiteral("DAY");
+    on_order_submitted(order);
+}
+
 void EquityTradingScreen::on_cancel_order(const QString& order_id) {
     auto account = AccountManager::instance().get_account(focused_account_id_);
 
@@ -487,20 +586,7 @@ void EquityTradingScreen::on_cancel_order(const QString& order_id) {
             LOG_ERROR(TAG, QString("Paper cancel failed: %1 order_id=%2").arg(e.what(), order_id));
         }
         // Refresh paper data
-        if (!account.paper_portfolio_id.isEmpty()) {
-            try {
-                auto portfolio = pt_get_portfolio(account.paper_portfolio_id);
-                auto positions = pt_get_positions(account.paper_portfolio_id);
-                auto orders = pt_get_orders(account.paper_portfolio_id);
-                auto trades = pt_get_trades(account.paper_portfolio_id, 50);
-                auto stats = pt_get_stats(account.paper_portfolio_id);
-                order_entry_->set_balance(portfolio.balance);
-                bottom_panel_->set_paper_positions(positions);
-                bottom_panel_->set_paper_orders(orders);
-                bottom_panel_->set_paper_trades(trades);
-                bottom_panel_->set_paper_stats(stats);
-            } catch (...) {}
-        }
+        refresh_paper_panels();
     } else {
         const QString acct_id = focused_account_id_;
         QPointer<EquityTradingScreen> self = this;
@@ -549,44 +635,267 @@ void EquityTradingScreen::async_modify_order(const QString& order_id, double qty
     });
 }
 
+void EquityTradingScreen::flush_paper_prices() {
+    paper_flush_armed_ = false;
+    if (pending_paper_prices_.isEmpty() || focused_paper_portfolio_id_.isEmpty()) {
+        pending_paper_prices_.clear();
+        return;
+    }
+    // Persist each symbol's latest buffered LTP. Coalesced off the per-tick hot
+    // path; recomputes the position's unrealized P&L in the same SQLite UPDATE.
+    for (auto it = pending_paper_prices_.cbegin(); it != pending_paper_prices_.cend(); ++it)
+        pt_update_position_price(focused_paper_portfolio_id_, it.key(), it.value());
+    pending_paper_prices_.clear();
+}
+
 void EquityTradingScreen::refresh_paper_panels() {
     auto account = AccountManager::instance().get_account(focused_account_id_);
+    // Keep the per-tick quote handler's cached context fresh — this also fires on
+    // paper order events, where the portfolio id may have just been assigned.
+    focused_is_paper_ = account.trading_mode == "paper";
+    focused_paper_portfolio_id_ = focused_is_paper_ ? account.paper_portfolio_id : QString();
     if (account.trading_mode != "paper" || account.paper_portfolio_id.isEmpty())
         return; // live data flows from AccountDataStream via the hub
+    // Persist any buffered tick prices first so the positions/funds snapshot below
+    // reflects the latest LTP at this refresh/order moment, not a coalesce window ago.
+    flush_paper_prices();
     try {
-        auto portfolio = pt_get_portfolio(account.paper_portfolio_id);
-        auto positions = pt_get_positions(account.paper_portfolio_id);
-        auto orders = pt_get_orders(account.paper_portfolio_id);
-        auto trades = pt_get_trades(account.paper_portfolio_id, 50);
-        auto stats = pt_get_stats(account.paper_portfolio_id);
-        order_entry_->set_balance(portfolio.balance);
-        bottom_panel_->set_paper_positions(positions);
-        bottom_panel_->set_paper_orders(orders);
-        bottom_panel_->set_paper_trades(trades);
-        bottom_panel_->set_paper_stats(stats);
-        // Paper Funds tab: live set_funds is gated off in paper, so surface a
-        // broker-equivalent funds view computed from the paper portfolio.
-        // equity = free cash + open P&L; used margin = notional / leverage.
-        double unrealized = 0.0, used_margin = 0.0;
-        for (const auto& p : positions) {
-            unrealized += p.unrealized_pnl;
-            const double lev = p.leverage > 0.0 ? p.leverage : 1.0;
-            used_margin += (qAbs(p.quantity) * p.current_price) / lev;
-        }
-        trading::BrokerFunds funds;
-        funds.available_balance = portfolio.balance;          // free cash
-        funds.used_margin = used_margin;                      // locked in open positions
-        funds.total_balance = portfolio.balance + unrealized; // equity
-        bottom_panel_->set_funds(funds);
-        // Held symbols get live WebSocket prices even if not in the active list.
+        const auto portfolio = pt_get_portfolio(account.paper_portfolio_id);
+        const auto positions = pt_get_positions(account.paper_portfolio_id);
+        const auto stats = pt_get_stats(account.paper_portfolio_id);
+        const QString sym = currency_symbol(portfolio.currency.isEmpty() ? QStringLiteral("INR") : portfolio.currency);
+
+        // Split exposure: CNC/delivery -> Holdings tab, MIS/NRML -> Positions tab.
+        QVector<trading::PtPosition> intraday;
+        QVector<trading::BrokerHolding> holdings;
+        double used_margin = 0.0, mis_unrealized = 0.0;
+        double holdings_value = 0.0, holdings_unreal = 0.0;
         QStringList pos_syms;
-        for (const auto& p : positions)
+        for (const auto& p : positions) {
             pos_syms << p.symbol;
+            if (product_is_delivery(p.product)) {
+                trading::BrokerHolding h;
+                h.symbol = p.symbol;
+                h.quantity = p.quantity;
+                h.avg_price = p.entry_price;
+                h.ltp = p.current_price > 0.0 ? p.current_price : p.entry_price;
+                h.invested_value = p.entry_price * p.quantity;
+                h.current_value = h.ltp * p.quantity;
+                h.pnl = h.current_value - h.invested_value;
+                h.pnl_pct = h.invested_value > 0.0 ? (h.pnl / h.invested_value) * 100.0 : 0.0;
+                holdings.push_back(h);
+                holdings_value += h.current_value;
+                holdings_unreal += h.pnl;
+            } else {
+                intraday.push_back(p);
+                used_margin += p.held_margin;
+                mis_unrealized += p.unrealized_pnl;
+            }
+        }
+        const double unrealized = mis_unrealized + holdings_unreal;
+
+        order_entry_->set_balance(portfolio.balance);
+        bottom_panel_->set_currency(sym); // before positions so the P&L summary formats in ₹
+        bottom_panel_->set_paper_positions(intraday);
+        bottom_panel_->set_holdings(holdings);
+
+        // Order book: the day shown by the date selector (default today, so each
+        // session starts empty). Keep the picker in sync with the viewed day.
+        bottom_panel_->set_orders_date(orders_view_day_);
+        bottom_panel_->set_paper_orders(pt_get_orders_for_day(account.paper_portfolio_id, orders_view_day_));
+
+        // ── Funds card view ──
+        EquityFundsView fv;
+        fv.is_paper = true;
+        fv.currency = sym;
+        fv.available = portfolio.balance;
+        fv.used_margin = used_margin;
+        fv.holdings_value = holdings_value;
+        fv.unrealized_pnl = unrealized;
+        fv.total_equity = portfolio.balance + used_margin + holdings_value + mis_unrealized;
+        fv.opening_balance = portfolio.initial_balance;
+        fv.realized_pnl = stats.today_pnl; // booked today
+        fv.collateral = 0.0;
+        const double margin_denom = used_margin + portfolio.balance;
+        fv.margin_util_pct = margin_denom > 0.0 ? (used_margin / margin_denom) * 100.0 : 0.0;
+        bottom_panel_->set_funds_view(fv);
+
+        // ── Stats card view ──
+        EquityStatsView sv;
+        sv.currency = sym;
+        sv.realized_pnl = stats.total_pnl; // all-time realized
+        sv.unrealized_pnl = unrealized;
+        sv.net_pnl = stats.total_pnl + unrealized;
+        sv.today_pnl = stats.today_pnl;
+        sv.return_pct = portfolio.initial_balance > 0.0 ? (sv.net_pnl / portfolio.initial_balance) * 100.0 : 0.0;
+        sv.win_rate = stats.win_rate;
+        sv.total_trades = stats.total_trades;
+        sv.winning_trades = stats.winning_trades;
+        sv.losing_trades = stats.losing_trades;
+        sv.profit_factor = stats.profit_factor;
+        sv.avg_win = stats.avg_win;
+        sv.avg_loss = stats.avg_loss;
+        sv.largest_win = stats.largest_win;
+        sv.largest_loss = stats.largest_loss;
+        sv.total_fees = stats.total_fees;
+        sv.turnover = stats.turnover;
+        bottom_panel_->set_stats_view(sv);
+
+        // Held symbols get live WebSocket prices even if not in the active list.
         update_position_symbols(pos_syms);
         update_chart_position(); // refresh the on-chart position card
     } catch (...) {
         LOG_WARN(TAG, "Exception refreshing paper panels");
     }
+}
+
+void EquityTradingScreen::on_convert_position(const QString& position_id, const QString& symbol,
+                                              const QString& new_product) {
+    if (focused_account_id_.isEmpty() || position_id.isEmpty())
+        return;
+    auto account = AccountManager::instance().get_account(focused_account_id_);
+    if (account.trading_mode != "paper" || account.paper_portfolio_id.isEmpty()) {
+        order_entry_->show_order_status(tr("Product conversion is available for paper accounts"), false);
+        return;
+    }
+    const auto reply = QMessageBox::question(
+        this, tr("Convert to %1").arg(new_product),
+        tr("Convert %1 to %2 (delivery)?\n\nThis locks the full position value as cash and carries it overnight "
+           "instead of auto-squaring at 15:30.")
+            .arg(symbol, new_product),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (reply != QMessageBox::Yes)
+        return;
+    try {
+        pt_convert_position_product(position_id, new_product);
+        order_entry_->show_order_status(tr("%1 converted to %2").arg(symbol, new_product), true);
+    } catch (const std::exception& e) {
+        order_entry_->show_order_status(tr("Convert failed: %1").arg(e.what()), false);
+    }
+    refresh_paper_panels();
+}
+
+void EquityTradingScreen::on_orders_day_changed(const QDate& day) {
+    orders_view_day_ = day;
+    auto account = AccountManager::instance().get_account(focused_account_id_);
+    if (account.trading_mode == "paper" && !account.paper_portfolio_id.isEmpty())
+        bottom_panel_->set_paper_orders(pt_get_orders_for_day(account.paper_portfolio_id, day));
+}
+
+void EquityTradingScreen::on_square_off_group(const QString& account_id, int sign) {
+    if (account_id.isEmpty() || sign == 0)
+        return;
+    auto account = AccountManager::instance().get_account(account_id);
+
+    // Collect the matching positions (the panel already confirmed via dialog).
+    struct Target {
+        QString symbol;
+        QString exchange;
+        QString product;
+    };
+    QVector<Target> targets;
+    if (account.trading_mode == "paper" && !account.paper_portfolio_id.isEmpty()) {
+        for (const auto& p : pt_get_positions(account.paper_portfolio_id)) {
+            if (product_is_delivery(p.product))
+                continue; // CNC lives in Holdings — not squared by the positions buttons
+            if ((sign > 0 && p.unrealized_pnl > 0.0) || (sign < 0 && p.unrealized_pnl < 0.0))
+                targets.push_back({p.symbol, QString(), p.product});
+        }
+    } else {
+        for (const auto& p : live_positions_) {
+            if ((sign > 0 && p.pnl > 0.0) || (sign < 0 && p.pnl < 0.0))
+                targets.push_back({p.symbol, p.exchange, p.product_type});
+        }
+    }
+    if (targets.isEmpty()) {
+        order_entry_->show_order_status(
+            tr("No %1 positions to square off").arg(sign > 0 ? tr("winning") : tr("losing")), false);
+        return;
+    }
+
+    // Close each in a single background worker (sequential) to avoid a thread storm.
+    const QString acct_id = account_id;
+    QPointer<EquityTradingScreen> self = this;
+    (void)QtConcurrent::run([self, acct_id, targets]() {
+        if (!self)
+            return;
+        for (const auto& t : targets)
+            UnifiedTrading::instance().close_position(acct_id, t.symbol, t.exchange, t.product);
+        QMetaObject::invokeMethod(
+            self,
+            [self]() {
+                if (self)
+                    self->refresh_paper_panels();
+            },
+            Qt::QueuedConnection);
+    });
+}
+
+void EquityTradingScreen::on_trade_symbol_requested(const QString& symbol, const QString& product, bool is_buy) {
+    // Exchange isn't carried on the row; default to the screen's current exchange.
+    open_order_ticket_for(symbol, QString(), product, is_buy);
+}
+
+void EquityTradingScreen::open_order_ticket_for(const QString& symbol, const QString& exchange,
+                                                const QString& product, bool is_buy) {
+    if (focused_account_id_.isEmpty()) {
+        order_entry_->show_order_status(tr("No account selected — add one via ACCOUNTS"), false);
+        return;
+    }
+    const QString exch = exchange.isEmpty() ? selected_exchange_ : exchange;
+    const double ref_price = (symbol == selected_symbol_ && current_price_ > 0.0) ? current_price_ : 0.0;
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(is_buy ? tr("Buy %1").arg(symbol) : tr("Sell %1").arg(symbol));
+    auto* form = new QFormLayout(&dlg);
+
+    auto* hdr = new QLabel(
+        QStringLiteral("%1  %2 · %3 · %4").arg(is_buy ? tr("BUY") : tr("SELL"), symbol, exch, product.toUpper()), &dlg);
+    hdr->setStyleSheet(QString("font-weight:700;font-size:13px;color:%1;")
+                           .arg(is_buy ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
+    form->addRow(hdr);
+
+    auto* type_combo = new QComboBox(&dlg);
+    type_combo->addItems({tr("Market"), tr("Limit")});
+    type_combo->setCurrentIndex(0);
+    form->addRow(tr("Type"), type_combo);
+
+    auto* qty_spin = new QSpinBox(&dlg);
+    qty_spin->setRange(1, 10000000);
+    qty_spin->setValue(1);
+    form->addRow(tr("Qty"), qty_spin);
+
+    auto* px_spin = new QDoubleSpinBox(&dlg);
+    px_spin->setRange(0.01, 1.0e9);
+    px_spin->setDecimals(2);
+    px_spin->setValue(ref_price > 0.0 ? ref_price : 0.01);
+    form->addRow(tr("Limit price"), px_spin);
+
+    auto sync_type = [form, px_spin](int idx) { form->setRowVisible(px_spin, idx == 1); }; // 1 = Limit
+    connect(type_combo, qOverload<int>(&QComboBox::currentIndexChanged), &dlg, sync_type);
+    sync_type(type_combo->currentIndex());
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, &dlg);
+    QPushButton* ok = buttons->addButton(is_buy ? tr("Buy") : tr("Sell"), QDialogButtonBox::AcceptRole);
+    ok->setDefault(true);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    form->addRow(buttons);
+
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    UnifiedOrder order;
+    order.symbol = symbol;
+    order.exchange = exch;
+    order.side = is_buy ? OrderSide::Buy : OrderSide::Sell;
+    const bool is_market = (type_combo->currentIndex() == 0);
+    order.order_type = is_market ? OrderType::Market : OrderType::Limit;
+    order.quantity = qty_spin->value();
+    order.price = is_market ? 0.0 : px_spin->value();
+    order.product_type = product_from_broker_str(product);
+    order.validity = QStringLiteral("DAY");
+    on_order_submitted(order);
 }
 
 void EquityTradingScreen::on_chart_exit_position(const QString& symbol, const QString& exchange,

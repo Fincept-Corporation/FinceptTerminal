@@ -82,6 +82,7 @@ private:
                                        const QVector<double>& low,
                                        const QVector<double>& close,
                                        const QVector<double>& volume, int period);
+    static IndicatorResult compute_vol_win_chg(const QVector<double>& volume, int window);
 
     // Stock attribute pseudo-indicators
     static IndicatorResult compute_stock_attr(const QVector<OhlcvCandle>& candles,

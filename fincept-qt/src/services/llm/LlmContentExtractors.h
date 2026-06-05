@@ -3,11 +3,22 @@
 // the response shapes of the OpenAI / Anthropic / Gemini APIs. No state, no
 // I/O — just JSON walkers used by LlmService and its tool-loop follow-ups.
 
+#include <QByteArray>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QString>
 
 namespace fincept::ai_chat {
+
+/// Pull a human-readable error message out of an LLM provider's non-2xx HTTP
+/// body so callers can surface the *real* reason (bad model id, unsupported
+/// parameter, quota, …) instead of Qt's generic "server replied: Bad Request".
+/// Handles the shapes seen across OpenAI / AIHubMix / OpenRouter / DeepSeek /
+/// Groq / Anthropic: top-level {"message":...}, nested {"error":{"message":...,
+/// "metadata":{"raw":...}}}, and {"error":"<string>"}. Returns empty when the
+/// body is not a recognised error object (caller then falls back to the Qt
+/// transport error string).
+QString parse_server_error_message(const QByteArray& body);
 
 /// Extract user-visible text from an OpenAI-compatible `message` object.
 ///

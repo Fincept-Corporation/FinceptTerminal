@@ -7,16 +7,46 @@
 #include <QWebEnginePage>
 #endif
 
+#include <QContextMenuEvent>
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
+#include <QMenu>
+#include <QMouseEvent>
+#include <QPointer>
 #include <QShowEvent>
+#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 
 namespace fincept::ui {
+
+#ifdef HAS_QT_WEBENGINE
+namespace {
+// QWebEngineView delivers context-menu events to the view subclass in Qt 6, so
+// we override contextMenuEvent to replace the default web menu with our native
+// trading menu. The price under the cursor is resolved asynchronously via JS.
+class ChartWebView : public QWebEngineView {
+  public:
+    explicit ChartWebView(KLineChartWidget* host) : QWebEngineView(host), host_(host) {}
+
+  protected:
+    void contextMenuEvent(QContextMenuEvent* e) override {
+        if (host_ && host_->trading_menu_enabled()) {
+            host_->show_chart_context_menu(e->pos().y(), e->globalPos());
+            e->accept();
+            return; // suppress the default WebEngine context menu
+        }
+        QWebEngineView::contextMenuEvent(e);
+    }
+
+  private:
+    KLineChartWidget* host_;
+};
+} // namespace
+#endif
 
 KLineChartWidget::KLineChartWidget(QWidget* parent) : QWidget(parent) {
     setObjectName("klineChartWidget");
@@ -45,6 +75,7 @@ bool KLineChartWidget::is_available() const {
 void KLineChartWidget::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
     ensure_web_view();
+    install_chart_event_filter();
 }
 
 void KLineChartWidget::ensure_web_view() {
@@ -53,7 +84,7 @@ void KLineChartWidget::ensure_web_view() {
         return;
     initialized_ = true;
 
-    web_view_ = new QWebEngineView(this);
+    web_view_ = new ChartWebView(this);
     web_view_->setObjectName("klineWebView");
 
     // The bundled chart html/js is local and changes across releases — never
@@ -82,6 +113,7 @@ void KLineChartWidget::on_load_finished(bool ok) {
     if (!ok) return;
     page_ready_ = true;
     flush_pending();
+    install_chart_event_filter(); // render widget exists by now
     emit chart_ready();
 }
 
@@ -167,6 +199,104 @@ void KLineChartWidget::clear_position_line() {
 
 void KLineChartWidget::clear() {
     run_js(QStringLiteral("window.clearChart()"));
+}
+
+void KLineChartWidget::show_chart_context_menu(int local_y, const QPoint& global_pos) {
+    if (menu_open_)
+        return; // a paired event for the same right-click — ignore
+    menu_open_ = true;
+
+    // The menu MUST be shown synchronously, in direct response to the right-click
+    // event. On macOS a QMenu popped later (e.g. from an async runJavaScript
+    // callback) silently fails to display. So exec() here, then resolve the
+    // cursor price asynchronously only once the user has actually chosen Buy/Sell.
+    QMenu menu;
+    QAction* buy_act = menu.addAction(tr("Buy"));
+    menu.addAction(tr("Sell")); // non-buy, non-watchlist choice ⇒ Sell (see below)
+    menu.addSeparator();
+    QAction* wl_act = menu.addAction(tr("Add to watchlist"));
+
+    QAction* chosen = menu.exec(global_pos);
+    // Clear the guard after this event burst so the right-click's paired event
+    // (some platforms deliver both a mouse-press and a ContextMenu) can't pop a
+    // second menu, but the next genuine right-click can.
+    QPointer<KLineChartWidget> self = this;
+    QTimer::singleShot(0, this, [self] { if (self) self->menu_open_ = false; });
+
+    if (!chosen)
+        return;
+    if (chosen == wl_act) {
+        emit add_to_watchlist_requested();
+        return;
+    }
+    const bool is_buy = (chosen == buy_act);
+
+#ifdef HAS_QT_WEBENGINE
+    if (web_view_ && page_ready_) {
+        QPointer<KLineChartWidget> self = this;
+        web_view_->page()->runJavaScript(
+            QStringLiteral("window.priceAtY(%1)").arg(local_y),
+            [self, is_buy](const QVariant& v) {
+                if (!self)
+                    return;
+                bool ok = false;
+                const double price = v.toDouble(&ok);
+                self->emit_trade(is_buy, (ok && price > 0) ? price : -1.0);
+            });
+        return;
+    }
+#endif
+    Q_UNUSED(local_y);
+    emit_trade(is_buy, -1.0); // no chart price — the ticket falls back to the LTP
+}
+
+void KLineChartWidget::emit_trade(bool is_buy, double price) {
+    if (is_buy)
+        emit buy_requested(price);
+    else
+        emit sell_requested(price);
+}
+
+void KLineChartWidget::install_chart_event_filter() {
+#ifdef HAS_QT_WEBENGINE
+    if (!web_view_ || !trading_menu_)
+        return;
+    // The render widget (focusProxy) is created lazily — after the page's render
+    // process is up. Retry until it exists, then filter it for right-clicks.
+    QWidget* proxy = web_view_->focusProxy();
+    if (!proxy) {
+        QPointer<KLineChartWidget> self = this;
+        QTimer::singleShot(50, this, [self] { if (self) self->install_chart_event_filter(); });
+        return;
+    }
+    if (proxy == filtered_proxy_)
+        return; // already filtering this one
+    if (filtered_proxy_)
+        filtered_proxy_->removeEventFilter(this);
+    proxy->installEventFilter(this);
+    filtered_proxy_ = proxy;
+#endif
+}
+
+bool KLineChartWidget::eventFilter(QObject* obj, QEvent* ev) {
+#ifdef HAS_QT_WEBENGINE
+    if (trading_menu_ && obj == filtered_proxy_) {
+        if (ev->type() == QEvent::ContextMenu) {
+            auto* cme = static_cast<QContextMenuEvent*>(ev);
+            show_chart_context_menu(cme->pos().y(), cme->globalPos());
+            return true; // consume — no default Chromium menu
+        }
+        if (ev->type() == QEvent::MouseButtonPress) {
+            auto* me = static_cast<QMouseEvent*>(ev);
+            if (me->button() == Qt::RightButton) {
+                show_chart_context_menu(static_cast<int>(me->position().y()),
+                                        me->globalPosition().toPoint());
+                return true;
+            }
+        }
+    }
+#endif
+    return QWidget::eventFilter(obj, ev);
 }
 
 } // namespace fincept::ui

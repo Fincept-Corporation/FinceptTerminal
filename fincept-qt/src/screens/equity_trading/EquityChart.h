@@ -7,6 +7,7 @@
 
 #include <QColor>
 #include <QEvent>
+#include <QPoint>
 #include <QPushButton>
 #include <QVector>
 #include <QWidget>
@@ -46,12 +47,18 @@ public:
 
 signals:
     void timeframe_changed(const QString& tf);
+    void buy_requested(double price);
+    void sell_requested(double price);
+    void add_to_watchlist_requested();
 
 protected:
     void changeEvent(QEvent* event) override;
 
 private:
     void retranslateUi();
+    // Pop the right-click trading menu (Buy/Sell @ price + watchlist) at the
+    // given screen position; `price` is the y-axis value under the cursor.
+    void show_trade_menu(double price, const QPoint& global_pos);
     void rebuild_chart();
     void update_axes(double min_price, double max_price, qint64 min_time, qint64 max_time);
     void set_active_tf(int idx);

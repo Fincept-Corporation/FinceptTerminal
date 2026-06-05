@@ -38,6 +38,8 @@ signals:
     void status_changed(const QString& deployment_id, const QString& status);
     void order_requested(const fincept::algo::AlgoOrderSignal& signal);
     void error_occurred(const QString& deployment_id, const QString& error);
+    // Real-time snapshot for the Dashboard (LTP, P&L, position, per-condition status).
+    void live_update(const QString& deployment_id, const fincept::algo::AlgoLiveSnapshot& snap);
 
 public slots:
     void on_order_filled(const QString& broker_order_id, double fill_price, double fill_qty);
@@ -49,13 +51,29 @@ private slots:
     void on_heartbeat();
 
 private:
-    void subscribe_tick_topic();
-    void unsubscribe_tick_topic();
+    // Live market data: subscribe to the shared per-account quote feed via
+    // DataStreamManager (the same feed the Equity watchlist uses). Quotes arrive
+    // on the engine thread via on_tick_data(). No private broker polling — one
+    // connection per (account, symbol) is shared across all consumers.
+    void start_market_data();
+    void stop_market_data();
+    // Builds the candle window used for live (per-tick) evaluation: the closed
+    // history plus the previous and current tick as the last two bars, so a
+    // crossover is detected tick-to-tick against the live price.
+    QVector<OhlcvCandle> live_eval_window(double price) const;
+    // Evaluates entry/exit each tick (live timeframe only) and emits a snapshot.
+    void evaluate_live(double price);
+    // Pushes the real-time snapshot (LTP, P&L, position, per-condition status) to
+    // the Dashboard, throttled. `note` is a short activity line.
+    void emit_live_snapshot(double price, const QString& note);
     void evaluate_entry(const QVector<OhlcvCandle>& candles);
     void evaluate_exit(const QVector<OhlcvCandle>& candles);
     void emit_order_signal(const AlgoOrderSignal& signal);
     void persist_trade(const AlgoTradeRecord& trade);
     void persist_metrics();
+    // Re-seed position + metrics from algo_metrics so a resumed deployment continues
+    // its open position across restarts (no-op for a fresh deploy — no row yet).
+    void restore_state_from_db();
     void update_deployment_status(const QString& status);
 
     fincept::services::algo::AlgoDeployment deployment_;
@@ -67,9 +85,12 @@ private:
 
     std::atomic<bool> running_{false};
     std::atomic<bool> paused_{false};
-    QMetaObject::Connection tick_connection_;
     QTimer* heartbeat_timer_ = nullptr;
     int64_t last_heartbeat_ms_ = 0;
+    bool first_tick_logged_ = false;    // log the first live quote once, for trackability
+    bool live_mode_ = false;            // timeframe == "live" → evaluate per tick
+    int64_t last_emit_ms_ = 0;          // throttle for live_update emission
+    double last_tick_price_ = 0;        // previous tick price → tick-to-tick crossovers
 
     struct PendingOrder {
         QString broker_order_id;

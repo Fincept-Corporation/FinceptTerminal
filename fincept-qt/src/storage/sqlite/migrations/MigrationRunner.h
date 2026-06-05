@@ -85,5 +85,11 @@ void register_migration_v035();
 void register_migration_v036();
 void register_migration_v037();
 void register_migration_v038();
+void register_migration_v039();
+void register_migration_v040();
+void register_migration_v041();
+void register_migration_v042();
+void register_migration_v043();
+void register_migration_v044();
 
 } // namespace fincept

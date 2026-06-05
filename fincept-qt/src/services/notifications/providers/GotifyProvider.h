@@ -7,7 +7,7 @@ class GotifyProvider final : public BaseProvider {
   public:
     QString provider_id() const override { return "gotify"; }
     QString display_name() const override { return "Gotify"; }
-    QString icon() const override { return "🔊"; }
+    QString icon() const override { return ""; }
     bool is_configured() const override { return !server_url_.isEmpty() && !app_token_.isEmpty(); }
 
     void send(const NotificationRequest& req, std::function<void(bool, QString)> cb) override;

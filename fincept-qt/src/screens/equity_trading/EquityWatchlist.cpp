@@ -4,9 +4,11 @@
 #include "screens/equity_trading/EquityTypes.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
+#include "trading/instruments/InstrumentNormalize.h"
 #include "trading/instruments/InstrumentService.h"
 #include "ui/theme/Theme.h"
 
+#include <QAbstractItemView>
 #include <QAction>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -34,12 +36,6 @@ QStringList connected_broker_ids(const QString& active) {
             ids << a.broker_id;
     }
     return ids;
-}
-
-// Human-readable broker name for the suggestion tag.
-QString broker_display(const QString& broker_id) {
-    auto* b = trading::BrokerRegistry::instance().get(broker_id);
-    return b ? b->profile().display_name : broker_id;
 }
 
 // True if at least one of the connected brokers has its instrument catalog loaded.
@@ -77,7 +73,7 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
 
     wl_menu_btn_ = new QToolButton;
     wl_menu_btn_->setObjectName("eqWatchlistMenuBtn");
-    wl_menu_btn_->setText(QStringLiteral("⋯"));
+    wl_menu_btn_->setText(QStringLiteral("+"));
     wl_menu_btn_->setCursor(Qt::PointingHandCursor);
     wl_menu_btn_->setAutoRaise(true);
     wl_menu_btn_->setToolTip(tr("New / Rename / Delete watchlist"));
@@ -128,6 +124,61 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     completer_->setMaxVisibleItems(8);
     add_edit_->setCompleter(completer_);
 
+    // Style the completer's popup explicitly. It is a separate top-level QListView
+    // that no global stylesheet rule covers, so without this it renders with a
+    // transparent background and the watchlist behind it shows through. (The combo
+    // popups, e.g. #eqOeCombo QAbstractItemView, are styled the same way.)
+    if (auto* popup = completer_->popup()) {
+        popup->setObjectName("eqWatchlistCompleterPopup");
+        popup->setStyleSheet(
+            QString("QListView { background:%1; color:%2; border:1px solid %3; outline:none;"
+                    " font-family:%4; font-size:%5px; }"
+                    "QListView::item { padding:4px 8px; border:none; }"
+                    "QListView::item:selected { background:%6; color:%2; }")
+                .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(),
+                     fincept::ui::colors::BORDER_MED(), fincept::ui::fonts::DATA_FAMILY())
+                .arg(fincept::ui::fonts::SMALL)
+                .arg(fincept::ui::colors::BG_HOVER()));
+    }
+
+    // Picking a suggestion (mouse click, Enter, or Arrow+Enter) must add the
+    // symbol — not merely paste "SYMBOL  ·  EXCH  ·  Broker" into the edit, which
+    // is all QCompleter does by default. Wire activated() to add + clear. This
+    // slot is connected after setCompleter(), so it runs after QCompleter's own
+    // text insertion; clearing here leaves the edit empty, so a trailing
+    // returnPressed becomes a harmless no-op (no double add).
+    // Resolve a picked label back to the real symbol: friendly-name map first
+    // (clean F&O label), else the legacy "SYMBOL  ·  EXCH" / "EXCH:SYMBOL" parse.
+    auto resolve = [this](const QString& choice) -> QString {
+        QString sym = add_suggestion_map_.value(choice);
+        if (sym.isEmpty()) {
+            sym = choice.section(QStringLiteral("  ·  "), 0, 0).trimmed().toUpper();
+            if (sym.contains(':'))
+                sym = sym.section(':', 1);
+        }
+        return sym;
+    };
+    connect(completer_, QOverload<const QString&>::of(&QCompleter::activated), this,
+            [this, resolve](const QString& choice) {
+                const QString sym = resolve(choice);
+                if (sym.isEmpty())
+                    return;
+                add_symbol(sym);
+                add_edit_->clear();
+            });
+    // A single mouse-click on a suggestion must add it — QCompleter::activated is
+    // unreliable on click for a per-keystroke model, so wire the popup's clicked()
+    // directly. add_symbol() dedups, so the two paths can never double-add.
+    if (auto* popup = completer_->popup()) {
+        connect(popup, &QAbstractItemView::clicked, this, [this, resolve](const QModelIndex& idx) {
+            const QString sym = resolve(idx.data(Qt::DisplayRole).toString());
+            if (sym.isEmpty())
+                return;
+            add_symbol(sym);
+            add_edit_->clear();
+        });
+    }
+
     add_btn_ = new QPushButton("+");
     add_btn_->setObjectName("eqWatchlistAddBtn");
     add_btn_->setFixedSize(22, 22);
@@ -171,11 +222,13 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     // room from SYMBOL, which is what truncated the names.
     table_->horizontalHeader()->setStretchLastSection(false);
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
-    table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
-    table_->horizontalHeader()->setMinimumSectionSize(48);
-    table_->setColumnWidth(1, 84); // LTP — fits up to "24500.50" without eliding
-    table_->setColumnWidth(2, 64); // CHG% — fits "+12.34%"
+    // LTP/CHG auto-size to their widest value (+ header) so neither ever elides —
+    // a fixed 64px proved too tight once the data font resolved to Menlo, cutting
+    // "+12.34%" down to "+1.1…". ResizeToContents recomputes on each data change;
+    // SYMBOL (the Stretch column) still absorbs all leftover width.
+    table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    table_->horizontalHeader()->setMinimumSectionSize(40);
     table_->verticalHeader()->setDefaultSectionSize(24);
 
     connect(table_, &QTableWidget::cellClicked, this, &EquityWatchlist::on_cell_clicked);
@@ -290,39 +343,40 @@ void EquityWatchlist::set_symbols(const QStringList& symbols) {
     rebuild_table();
 }
 
-void EquityWatchlist::update_quotes(const QVector<trading::BrokerQuote>& quotes) {
+void EquityWatchlist::update_quote(const trading::BrokerQuote& quote) {
     QMutexLocker lock(&mutex_);
-    for (const auto& q : quotes) {
-        for (auto& e : entries_) {
-            if (e.symbol == q.symbol) {
-                e.ltp = q.ltp;
-                e.change_pct = q.change_pct;
-                e.volume = q.volume;
-                e.has_data = true;
-                break;
-            }
+
+    // Update the cached entry for this symbol. Bail early if we don't track it —
+    // position symbols stream quotes too but may not be in the active watchlist.
+    WatchlistEntry* entry = nullptr;
+    for (auto& e : entries_) {
+        if (e.symbol == quote.symbol) {
+            entry = &e;
+            break;
         }
     }
-    // Update visible rows without full rebuild
+    if (!entry)
+        return;
+    entry->ltp = quote.ltp;
+    entry->change_pct = quote.change_pct;
+    entry->volume = quote.volume;
+    entry->has_data = true;
+
+    // Repaint only this symbol's row. setText / setForeground are no-ops when the
+    // value is unchanged (Qt early-returns), so identical ticks cost nothing.
     for (int row = 0; row < table_->rowCount(); ++row) {
         auto* sym_item = table_->item(row, 0);
-        if (!sym_item)
+        if (!sym_item || sym_item->data(Qt::UserRole).toString() != quote.symbol)
             continue;
-        const QString sym = sym_item->data(Qt::UserRole).toString();
-        for (const auto& e : entries_) {
-            if (e.symbol == sym && e.has_data) {
-                auto* ltp_item = table_->item(row, 1);
-                auto* chg_item = table_->item(row, 2);
-                if (ltp_item)
-                    ltp_item->setText(QString::number(e.ltp, 'f', 2));
-                if (chg_item) {
-                    chg_item->setText(QString("%1%2%").arg(e.change_pct >= 0 ? "+" : "").arg(e.change_pct, 0, 'f', 2));
-                    chg_item->setForeground(e.change_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE())
-                                                              : QColor(fincept::ui::colors::NEGATIVE()));
-                }
-                break;
-            }
+        if (auto* ltp_item = table_->item(row, 1))
+            ltp_item->setText(QString::number(entry->ltp, 'f', 2));
+        if (auto* chg_item = table_->item(row, 2)) {
+            chg_item->setText(
+                QString("%1%2%").arg(entry->change_pct >= 0 ? "+" : "").arg(entry->change_pct, 0, 'f', 2));
+            chg_item->setForeground(entry->change_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE())
+                                                           : QColor(fincept::ui::colors::NEGATIVE()));
         }
+        break;
     }
 }
 
@@ -412,15 +466,18 @@ void EquityWatchlist::add_symbol(const QString& symbol) {
 }
 
 void EquityWatchlist::on_add_symbol_entered() {
-    const QString raw = add_edit_->text().trimmed().toUpper();
+    const QString raw = add_edit_->text().trimmed();
     if (raw.isEmpty())
         return;
 
-    // The completer suggestion is "SYMBOL  ·  EXCH  ·  Broker" — keep only the
-    // leading symbol token. Also tolerate the legacy "EXCHANGE:SYMBOL" form.
-    QString sym = raw.section(QStringLiteral("  ·  "), 0, 0).trimmed();
-    if (sym.contains(':'))
-        sym = sym.section(':', 1);
+    // A picked friendly label resolves to the real symbol via the map; otherwise
+    // treat the text as typed input (legacy "SYMBOL  ·  EXCH" / "EXCH:SYMBOL").
+    QString sym = add_suggestion_map_.value(raw);
+    if (sym.isEmpty()) {
+        sym = raw.toUpper().section(QStringLiteral("  ·  "), 0, 0).trimmed();
+        if (sym.contains(':'))
+            sym = sym.section(':', 1);
+    }
 
     // Validate against every connected broker (not just the focused one) so a
     // symbol that only one connected broker carries is still accepted.
@@ -457,9 +514,16 @@ void EquityWatchlist::on_add_text_changed(const QString& text) {
     auto results = trading::InstrumentService::instance().search_all(query, "", ids, 24);
     QStringList suggestions;
     suggestions.reserve(results.size());
+    add_suggestion_map_.clear();
     for (const auto& inst : results) {
-        suggestions.append(
-            QString("%1  ·  %2  ·  %3").arg(inst.symbol, inst.exchange, broker_display(inst.broker_id)));
+        // Clean F&O label instead of the raw symbol; remember the real symbol.
+        const QString friendly =
+            trading::norm::display_name(inst.name, inst.instrument_type, inst.expiry, inst.strike, inst.symbol);
+        const QString label = QStringLiteral("%1  ·  %2").arg(friendly, inst.exchange);
+        if (add_suggestion_map_.contains(label))
+            continue; // collapse identical labels across brokers
+        add_suggestion_map_.insert(label, inst.symbol);
+        suggestions.append(label);
     }
     completer_model_->setStringList(suggestions);
     // Force the popup to refresh against the just-updated model (otherwise the

@@ -4,6 +4,8 @@
 
 #include "trading/TradingTypes.h"
 
+#include <QDate>
+
 #include <optional>
 #include <vector>
 
@@ -70,8 +72,37 @@ PtOrder pt_place_order(const QString& portfolio_id, const QString& symbol, const
 void pt_cancel_order(const QString& order_id);
 QVector<PtOrder> pt_get_orders(const QString& portfolio_id, const QString& status = "");
 
+// --- Day-scoped order/trade queries (v040) ---
+// Orders / executions whose timestamp falls on the given IST calendar day. Backs
+// the order book's per-day view (default today, date-selector for history), so the
+// book starts empty each session instead of accumulating every past order.
+QVector<PtOrder> pt_get_orders_for_day(const QString& portfolio_id, const QDate& ist_day);
+QVector<PtTrade> pt_get_trades_for_day(const QString& portfolio_id, const QDate& ist_day);
+
+// --- Product conversion (v040) ---
+// Convert an open position's broker product in place (e.g. MIS -> CNC). Re-prices
+// the locked margin to the new product (CNC/delivery needs full notional vs MIS
+// notional/leverage) and locks the extra from available balance; throws
+// std::runtime_error if the balance is insufficient. After an MIS->CNC convert the
+// position carries overnight (skipped by the 15:30 auto-square) and the Equity
+// screen renders it in the Holdings tab.
+void pt_convert_position_product(const QString& position_id, const QString& new_product);
+
+// --- Intraday settlement / auto square-off (v040) ---
+// Square off every open MIS (intraday) position at its last known price when the
+// IST clock is at/after 15:30, OR when the position was opened on an earlier IST
+// day (catch-up for when the app was closed at the cutoff). Also cancels stale
+// pending DAY orders left from prior sessions. CNC/NRML carry-forward positions are
+// untouched. Returns the number of positions squared off.
+int pt_settle_intraday(const QString& portfolio_id);
+int pt_settle_intraday_all();
+
 // --- Fill (core engine logic) ---
-PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<double> fill_qty = std::nullopt);
+// `fill_time` (ISO UTC) overrides the trade/fill timestamp; empty = now. Used by
+// intraday settlement to stamp an auto-square at the session close it belongs to
+// (so a catch-up square-off lands in that day's book, not today's).
+PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<double> fill_qty = std::nullopt,
+                      const QString& fill_time = {});
 
 // --- Positions ---
 QVector<PtPosition> pt_get_positions(const QString& portfolio_id);

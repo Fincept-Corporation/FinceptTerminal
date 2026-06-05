@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <numeric>
 
 namespace fincept::algo {
@@ -159,6 +160,10 @@ IndicatorResult IndicatorEngine::compute(const QString& name,
     // Volume
     if (name == "OBV") return compute_obv(close, vol);
     if (name == "CMF") return compute_cmf(high, low, close, vol, period);
+    if (name == "VOL_WIN_CHG") {
+        int window = params.value("window").toInt(10);
+        return compute_vol_win_chg(vol, window);
+    }
 
     return make_error(QStringLiteral("Unknown indicator: ") + name);
 }
@@ -783,6 +788,31 @@ IndicatorResult IndicatorEngine::compute_obv(const QVector<double>& close,
         else if (close[i] < close[i - 1]) obv -= volume[i];
     }
     return make_result(obv, prev_obv);
+}
+
+IndicatorResult IndicatorEngine::compute_vol_win_chg(const QVector<double>& volume, int window) {
+    if (window < 1)
+        return make_error(QStringLiteral("VOL_WIN_CHG: window must be >= 1"));
+    const int n = volume.size();
+    if (n < 2 * window)
+        return make_error(QStringLiteral("Insufficient data for VOL_WIN_CHG (need %1 bars)")
+                              .arg(2 * window));
+    // Compute the windowed %-change at the current bar and at the previous bar so
+    // crossing/rising operators (which re-read the prior sample) stay consistent.
+    auto win_pct = [&](int last_index) -> double {
+        double sum_last = 0, sum_prev = 0;
+        for (int i = last_index - window + 1; i <= last_index; ++i)
+            sum_last += volume[i];
+        for (int i = last_index - 2 * window + 1; i <= last_index - window; ++i)
+            sum_prev += volume[i];
+        if (sum_prev <= 0.0)
+            return std::numeric_limits<double>::quiet_NaN();
+        return (sum_last / sum_prev - 1.0) * 100.0;
+    };
+    double curr = win_pct(n - 1);
+    double prev = (n >= 2 * window + 1) ? win_pct(n - 2)
+                                        : std::numeric_limits<double>::quiet_NaN();
+    return make_result(curr, prev);
 }
 
 IndicatorResult IndicatorEngine::compute_cmf(const QVector<double>& high,

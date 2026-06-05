@@ -992,16 +992,23 @@ void AccountManagementDialog::on_connect_zerodha_browser() {
     // BUG 1 FIX: persist key+secret now.
     persist_zerodha_creds_before_auth();
 
-    // Tear down any prior server
+    // Tear down any prior server. stop() closes the listening socket
+    // synchronously so the fixed redirect port is freed *now*; deleteLater()
+    // alone defers the close to the next event-loop pass, so the start() below
+    // would still see the old socket bound, fall back to an ephemeral port, and
+    // the broker's redirect to the registered :5010 would hit nothing.
     if (z_redirect_server_) {
+        z_redirect_server_->stop();
         z_redirect_server_->deleteLater();
         z_redirect_server_ = nullptr;
     }
     z_redirect_server_ = new trading::auth::RedirectServer(this);
 
     // Must match the redirect URL shown in the setup steps above (127.0.0.1:5010).
+    // Reject the ephemeral fallback: Kite redirects to the fixed registered URL,
+    // so a random port can never receive the callback — route to manual instead.
     constexpr quint16 kZerodhaPort = 5010;
-    if (!z_redirect_server_->start(kZerodhaPort, 120)) {
+    if (!z_redirect_server_->start(kZerodhaPort, 120) || z_redirect_server_->port() != kZerodhaPort) {
         z_status_->setText(tr("Port 5010 busy - use manual paste fallback"));
         z_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
         z_redirect_server_->deleteLater();
@@ -1258,8 +1265,14 @@ void AccountManagementDialog::on_connect_fyers_browser() {
     creds.api_secret = api_secret;
     AccountManager::instance().save_credentials(selected_account_id_, creds);
 
-    // Tear down any prior server
+    // Tear down any prior server. stop() closes the listening socket
+    // synchronously so port 5011 is freed *now*; deleteLater() alone defers the
+    // close to the next event-loop pass, so the start() below would still see
+    // the old socket bound, fall back to an ephemeral port, and Fyers' redirect
+    // to the registered http://127.0.0.1:5011/ would hit nothing (the browser
+    // then shows "could not connect", which looks like a network error).
     if (f_redirect_server_) {
+        f_redirect_server_->stop();
         f_redirect_server_->deleteLater();
         f_redirect_server_ = nullptr;
     }

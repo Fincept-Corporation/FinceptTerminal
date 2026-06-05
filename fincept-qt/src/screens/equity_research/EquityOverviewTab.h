@@ -52,6 +52,9 @@ class EquityOverviewTab : public QWidget {
     void set_symbol(const QString& symbol);
 
     static QString currency_symbol(const QString& currency_code);
+    // Compact magnitude formatter (1.90T / 890.00B / …). Public so the parent
+    // research screen's title bar formats market cap identically to this tab.
+    static QString fmt_large(double v);
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -99,7 +102,6 @@ class EquityOverviewTab : public QWidget {
     void rebuild_chart(const QVector<services::equity::Candle>& candles);
     void switch_period(QPushButton* btn, const QString& period);
 
-    static QString fmt_large(double v);
     static QString fmt_pct(double v);
     QString fmt_price(double v) const;
 

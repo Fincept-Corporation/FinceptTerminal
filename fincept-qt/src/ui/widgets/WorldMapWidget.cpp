@@ -7,7 +7,7 @@
 #include <QGeoView/QGVDrawItem.h>
 #include <QGeoView/QGVGlobal.h>
 #include <QGeoView/QGVLayer.h>
-#include <QGeoView/QGVLayerOSM.h>
+#include <QGeoView/QGVLayerTilesOnline.h>
 #include <QGeoView/QGVMap.h>
 #include <QGeoView/QGVProjection.h>
 #include <QGeoView/QGVWidgetScale.h>
@@ -33,6 +33,77 @@ namespace fincept::ui {
 // callback. Pins that don't carry an id (the default -1) skip the wiring
 // entirely so non-interactive maps stay free of click overhead.
 namespace {
+
+// ── Basemap catalog ─────────────────────────────────────────────────────────
+//
+// One entry per selectable basemap. `url` is an OSM-style ${z}/${x}/${y}
+// template; some providers (Esri) order the path as ${z}/${y}/${x}. zoom
+// bounds cap tile requests so the map upscales the deepest available tile
+// instead of asking the server for a level it doesn't serve (which Esri
+// answers with a "Map data not available" placeholder image).
+struct BasemapDef {
+    QString label;
+    QString url;
+    int min_zoom;
+    int max_zoom;
+};
+
+const QVector<BasemapDef>& basemap_catalog() {
+    static const QVector<BasemapDef> kCatalog = {
+        {QStringLiteral("SATELLITE"),
+         QStringLiteral("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/"
+                        "MapServer/tile/${z}/${y}/${x}"),
+         0, 19},
+        {QStringLiteral("DARK"),
+         QStringLiteral("https://basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png"),
+         0, 20},
+        {QStringLiteral("OCEAN"),
+         QStringLiteral("https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/"
+                        "World_Ocean_Base/MapServer/tile/${z}/${y}/${x}"),
+         0, 13},
+        {QStringLiteral("STREETS"),
+         QStringLiteral("https://tile.openstreetmap.org/${z}/${x}/${y}.png"),
+         0, 19},
+        {QStringLiteral("LIGHT"),
+         QStringLiteral("https://basemaps.cartocdn.com/light_all/${z}/${x}/${y}.png"),
+         0, 20},
+        {QStringLiteral("TERRAIN"),
+         QStringLiteral("https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/"
+                        "MapServer/tile/${z}/${y}/${x}"),
+         0, 19},
+    };
+    return kCatalog;
+}
+
+// ── Tile layer ──────────────────────────────────────────────────────────────
+//
+// Drop-in for QGVLayerOSM. Two reasons not to use QGVLayerOSM directly:
+//   1. Its tilePosToUrl() lowercases the WHOLE url — fatal for case-sensitive
+//      provider paths like Esri's `.../World_Imagery/MapServer/...` (the
+//      lowercased path 404s and the server returns an error tile).
+//   2. Its zoom range is hardcoded 0–20; per-provider caps let us stop at the
+//      deepest level a service actually publishes.
+class FinceptTileLayer : public QGVLayerTilesOnline {
+  public:
+    FinceptTileLayer(QString url, int min_zoom, int max_zoom)
+        : url_(std::move(url)), min_zoom_(min_zoom), max_zoom_(max_zoom) {}
+
+  private:
+    int minZoomlevel() const override { return min_zoom_; }
+    int maxZoomlevel() const override { return max_zoom_; }
+    QString tilePosToUrl(const QGV::GeoTilePos& tilePos) const override {
+        QString url = url_;  // case-preserving (unlike QGVLayerOSM)
+        url.replace(QStringLiteral("${z}"), QString::number(tilePos.zoom()));
+        url.replace(QStringLiteral("${x}"), QString::number(tilePos.pos().x()));
+        url.replace(QStringLiteral("${y}"), QString::number(tilePos.pos().y()));
+        return url;
+    }
+
+    QString url_;
+    int min_zoom_;
+    int max_zoom_;
+};
+
 class ClickableIcon : public QGVIcon {
   public:
     explicit ClickableIcon(int id, QString tooltip, std::function<void(int)> on_click)
@@ -111,6 +182,51 @@ class ShapeDrawItem : public QGVDrawItem {
     QGVMap* map_ = nullptr;
 };
 
+// ── Track polyline item ──────────────────────────────────────────────────────
+//
+// Draws an ordered list of geo points as a connected amber polyline (a voyage
+// track). Geometry is rebuilt in projection space each paint so it follows
+// pan/zoom. Points are (lat, lng).
+class PathDrawItem : public QGVDrawItem {
+  public:
+    PathDrawItem(QVector<QPointF> pts, QGVMap* map) : pts_(std::move(pts)), map_(map) {}
+
+    QPainterPath projShape() const override {
+        QPainterPath path;
+        auto* proj = map_ ? map_->getProjection() : nullptr;
+        if (!proj || pts_.size() < 2)
+            return path;
+        bool first = true;
+        for (const QPointF& p : pts_) {
+            const QPointF pr = proj->geoToProj(QGV::GeoPos(p.x(), p.y()));  // x=lat, y=lng
+            if (first) {
+                path.moveTo(pr);
+                first = false;
+            } else {
+                path.lineTo(pr);
+            }
+        }
+        return path;
+    }
+
+    void projPaint(QPainter* painter) override {
+        const QPainterPath path = projShape();
+        if (path.isEmpty())
+            return;
+        QPen pen(QColor(0xF5, 0x9E, 0x0B, 205));  // amber, matches the trail dots
+        pen.setCosmetic(true);                     // constant width regardless of zoom
+        pen.setWidthF(2.0);
+        pen.setJoinStyle(Qt::RoundJoin);
+        painter->setPen(pen);
+        painter->setBrush(Qt::NoBrush);
+        painter->drawPath(path);
+    }
+
+  private:
+    QVector<QPointF> pts_;
+    QGVMap* map_ = nullptr;
+};
+
 }  // namespace
 
 // ── MapShape ─────────────────────────────────────────────────────────────────
@@ -151,9 +267,8 @@ WorldMapWidget::WorldMapWidget(QWidget* parent) : QWidget(parent) {
         view->setBackgroundBrush(QColor(0x08, 0x08, 0x08));
     }
 
-    // Use CartoDB Dark Matter tiles
-    auto* tiles = new QGVLayerOSM(QStringLiteral("https://basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png"));
-    map_->addItem(tiles);
+    // Install the default basemap (SATELLITE). set_basemap() can swap it later.
+    apply_basemap(basemap_index_);
 
     // Zoom controls
     map_->addWidget(new QGVWidgetZoom());
@@ -161,6 +276,10 @@ WorldMapWidget::WorldMapWidget(QWidget* parent) : QWidget(parent) {
 
     // Enable mouse interactions
     map_->setMouseActions(QGV::MouseAction::All);
+
+    // Track-polyline layer (added before markers so the line draws under pins).
+    path_layer_ = new QGVLayer();
+    map_->addItem(path_layer_);
 
     // Marker layer
     marker_layer_ = new QGVLayer();
@@ -178,6 +297,46 @@ WorldMapWidget::WorldMapWidget(QWidget* parent) : QWidget(parent) {
 
     layout->addWidget(map_);
     map_ready_ = true;
+}
+
+// ── Basemap selection ───────────────────────────────────────────────────────
+
+QStringList WorldMapWidget::basemap_labels() {
+    QStringList out;
+    out.reserve(basemap_catalog().size());
+    for (const auto& b : basemap_catalog())
+        out << b.label;
+    return out;
+}
+
+void WorldMapWidget::set_basemap(int index) {
+    if (index == basemap_index_ && !tile_layers_.isEmpty())
+        return;
+    apply_basemap(index);
+}
+
+void WorldMapWidget::apply_basemap(int index) {
+    if (!map_)
+        return;
+    const auto& cat = basemap_catalog();
+    if (index < 0 || index >= cat.size())
+        return;
+
+    // Drop the previous tile layer(s).
+    for (auto* layer : tile_layers_) {
+        map_->removeItem(layer);
+        delete layer;
+    }
+    tile_layers_.clear();
+
+    const BasemapDef& def = cat[index];
+    auto* layer = new FinceptTileLayer(def.url, def.min_zoom, def.max_zoom);
+    map_->addItem(layer);
+    // Tiles must sit beneath the marker and shape layers regardless of when
+    // the basemap is swapped, so push them to the back of the z-order.
+    layer->sendToBack();
+    tile_layers_.append(layer);
+    basemap_index_ = index;
 }
 
 // ── Marker image generation ─────────────────────────────────────────────────
@@ -255,6 +414,35 @@ void WorldMapWidget::rebuild_markers() {
 void WorldMapWidget::set_pins(const QVector<MapPin>& pins) {
     pins_ = pins;
     rebuild_markers();
+    // A fresh pin set implies a new context — drop any stale track polyline.
+    // Callers that want a path (e.g. voyage history) call set_track_path after.
+    clear_track_path();
+}
+
+// ── Track polyline ──────────────────────────────────────────────────────────
+
+void WorldMapWidget::set_track_path(const QVector<QPointF>& latlng_points) {
+    track_points_ = latlng_points;
+    rebuild_path_overlay();
+}
+
+void WorldMapWidget::clear_track_path() {
+    if (track_points_.isEmpty())
+        return;
+    track_points_.clear();
+    rebuild_path_overlay();
+}
+
+void WorldMapWidget::rebuild_path_overlay() {
+    if (!map_ready_ || !path_layer_)
+        return;
+    while (path_layer_->countItems() > 0) {
+        auto* item = path_layer_->getItem(0);
+        path_layer_->removeItem(item);
+        delete item;
+    }
+    if (track_points_.size() >= 2)
+        path_layer_->addItem(new PathDrawItem(track_points_, map_));
 }
 
 void WorldMapWidget::add_pin(const MapPin& pin) {
@@ -284,7 +472,9 @@ void WorldMapWidget::fly_to(double lat, double lng, int zoom) {
     Q_UNUSED(zoom);
     if (!map_ready_)
         return;
-    double d = 5.0;
+    // ~2.5° half-extent → a close regional zoom centred on the point, tight
+    // enough to clearly show a single tracked vessel / port with context.
+    double d = 2.5;
     auto target = QGV::GeoRect(QGV::GeoPos(lat + d, lng - d * 1.5), QGV::GeoPos(lat - d, lng + d * 1.5));
     map_->flyTo(QGVCameraActions(map_).scaleTo(target));
 }
@@ -319,11 +509,11 @@ void WorldMapWidget::fit_to_pins() {
         return;
     }
 
-    // Pad proportionally to the span — 10% per side. Floor of 4° / 6° keeps a
-    // single pin or tightly-clustered pins from zooming in absurdly far while
-    // staying visually tight enough to avoid empty black space.
-    double lat_pad = std::max(lat_span * 0.1, 4.0);
-    double lng_pad = std::max(lng_span * 0.1, 6.0);
+    // Pad proportionally to the span — 10% per side. Small floors keep a single
+    // pin / tight cluster from zooming in absurdly far, but stay tight enough to
+    // actually frame the vessels instead of opening on a near-global view.
+    double lat_pad = std::max(lat_span * 0.1, 1.5);
+    double lng_pad = std::max(lng_span * 0.1, 2.0);
 
     double box_min_lat = min_lat - lat_pad;
     double box_max_lat = max_lat + lat_pad;

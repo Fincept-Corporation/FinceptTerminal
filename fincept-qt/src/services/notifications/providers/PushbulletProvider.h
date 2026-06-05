@@ -7,7 +7,7 @@ class PushbulletProvider final : public BaseProvider {
   public:
     QString provider_id() const override { return "pushbullet"; }
     QString display_name() const override { return "Pushbullet"; }
-    QString icon() const override { return "🔵"; }
+    QString icon() const override { return ""; }
     bool is_configured() const override { return !api_key_.isEmpty(); }
 
     void send(const NotificationRequest& req, std::function<void(bool, QString)> cb) override;

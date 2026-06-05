@@ -63,6 +63,9 @@ void GroupBlock::build_ui() {
     remove_btn_->setObjectName(QStringLiteral("condBlockRemove"));
     remove_btn_->setFixedSize(24, 22);
     remove_btn_->setToolTip(tr("Remove group"));
+    // See ConditionBlock: keep focus off the close button so deleting the group
+    // doesn't transfer the caret into an adjacent editable combo.
+    remove_btn_->setFocusPolicy(Qt::NoFocus);
     header->addWidget(add_cond_btn_);
     header->addWidget(add_group_btn_);
     header->addWidget(remove_btn_);

@@ -451,7 +451,7 @@ void ForumSidebarPanel::rebuild_contributors() {
     }
 
     // Medal icons for top 3
-    static const char* medals[] = {"🥇", "🥈", "🥉", " 4", " 5"};
+    static const char* medals[] = {" 1", " 2", " 3", " 4", " 5"};
     const QString rank_colors[] = {ui::colors::AMBER(), ui::colors::TEXT_SECONDARY(), ui::colors::WARNING(),
                                    ui::colors::TEXT_TERTIARY(), ui::colors::TEXT_TERTIARY()};
 

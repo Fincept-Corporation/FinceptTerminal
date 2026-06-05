@@ -7,18 +7,31 @@
 #include "core/logging/Logger.h"
 #include "screens/algo_trading/AlgoDeployDialog.h"
 #include "services/algo_trading/AlgoTradingService.h"
+#include "trading/AccountManager.h"
+#include "trading/BrokerInterface.h"
+#include "trading/BrokerRegistry.h"
 #include "ui/theme/Theme.h"
 
 #include <QDate>
 #include <QDateEdit>
+#include <QEventLoop>
 #include <QFrame>
+#include <QFutureWatcher>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
+#include <QMessageBox>
 #include <QScrollArea>
+#include <QSet>
 #include <QSplitter>
+#include <QTimer>
 #include <QUuid>
 #include <QVBoxLayout>
+#include <QtConcurrent>
+
+#include <cmath>
 
 namespace fincept::screens {
 namespace algo_ns = fincept::algo;
@@ -124,6 +137,64 @@ QString status_style() {
         .arg(ui::colors::TEXT_TERTIARY())
         .arg(ui::fonts::TINY)
         .arg(ui::fonts::DATA_FAMILY());
+}
+
+// Bounded fetch of the current LTP from the connected broker for deploy-time sanity
+// checks. Runs off-thread with a short timeout so the deploy click never hangs.
+double fetch_quote_ltp(const QString& broker_id, const QString& account_id, const QString& symbol,
+                       int timeout_ms) {
+    if (broker_id.isEmpty() || account_id.isEmpty() || symbol.isEmpty())
+        return 0.0;
+    auto fut = QtConcurrent::run([broker_id, account_id, symbol]() -> double {
+        auto* broker = trading::BrokerRegistry::instance().get(broker_id);
+        if (!broker)
+            return 0.0;
+        auto creds = trading::AccountManager::instance().load_credentials(account_id);
+        auto resp = broker->get_quotes(creds, {symbol});
+        if (resp.success && resp.data.has_value() && !resp.data->isEmpty())
+            return resp.data->first().ltp;
+        return 0.0;
+    });
+    QFutureWatcher<double> watcher;
+    QEventLoop loop;
+    QObject::connect(&watcher, &QFutureWatcher<double>::finished, &loop, &QEventLoop::quit);
+    watcher.setFuture(fut);
+    QTimer::singleShot(timeout_ms, &loop, &QEventLoop::quit);
+    loop.exec();
+    return watcher.isFinished() ? watcher.result() : 0.0;
+}
+
+// Collects human-readable warnings for price-based leaves that can't fire at `price`
+// (crossover already on the wrong side, or threshold wildly far from price). Only
+// price-scale indicators are checked — RSI<30 etc. are left alone.
+void scan_unreachable(const QJsonArray& conds, const QString& section, double price, QStringList& out) {
+    static const QSet<QString> price_inds = {"CLOSE", "OPEN", "HIGH", "LOW", "VWAP"};
+    for (const auto& v : conds) {
+        const QJsonObject o = v.toObject();
+        if (o.contains("children")) {
+            scan_unreachable(o.value("children").toArray(), section, price, out);
+            continue;
+        }
+        if (o.value("compare_mode").toString("value") != "value")
+            continue;
+        const QString ind = o.value("indicator").toString();
+        if (!price_inds.contains(ind))
+            continue;
+        const QString op = o.value("operator").toString();
+        const double val = o.value("value").toDouble();
+        if (val <= 0)
+            continue;
+        if (op == "crosses_above" && price > val)
+            out << QString("• %1 '%2 crosses above %3' — price %4 is already above; it can never cross up.")
+                       .arg(section, ind).arg(val, 0, 'f', 2).arg(price, 0, 'f', 2);
+        else if (op == "crosses_below" && price < val)
+            out << QString("• %1 '%2 crosses below %3' — price %4 is already below; it can never cross down.")
+                       .arg(section, ind).arg(val, 0, 'f', 2).arg(price, 0, 'f', 2);
+        else if (std::abs(price - val) / price > 0.25)
+            out << QString("• %1 '%2 %3 %4' — threshold is %5% away from price %6.")
+                       .arg(section, ind, op).arg(val, 0, 'f', 2)
+                       .arg(std::abs(price - val) / price * 100.0, 0, 'f', 0).arg(price, 0, 'f', 2);
+    }
 }
 
 } // namespace
@@ -467,8 +538,13 @@ void StrategyBuilderPanel::on_backtest() {
 }
 
 void StrategyBuilderPanel::on_deploy() {
+    // Guards use a visible dialog/banner: the status label lives in the right-hand
+    // backtest card, far from the Deploy button, so a silent setText() there reads
+    // as "Deploy did nothing".
     if (name_edit_->text().trimmed().isEmpty()) {
-        status_label_->setText(tr("Save strategy first."));
+        QMessageBox::warning(this, tr("Deploy"),
+                             tr("Enter a strategy name before deploying."));
+        name_edit_->setFocus();
         return;
     }
     if (const QString err = validate(); !err.isEmpty()) {
@@ -482,19 +558,66 @@ void StrategyBuilderPanel::on_deploy() {
     auto strat = build_strategy();
 
     auto* dialog = new AlgoDeployDialog(strat, this);
+    dialog->set_symbol(symbol_combo_->currentText()); // carry the builder's symbol in
     if (dialog->exec() == QDialog::Accepted) {
         auto deployment = dialog->deployment();
         deployment.quantity = risk_panel_->quantity();
         deployment.max_order_value = risk_panel_->max_order_value();
 
+        // Sanity check (non-blocking, bounded): warn if a rule can't fire at the
+        // current price — e.g. 'crosses_above 280.45' on a stock trading at 1204.
+        const double cur_price = fetch_quote_ltp(deployment.broker_id, deployment.broker_account_id,
+                                                 deployment.symbol, 2500);
+        if (cur_price > 0) {
+            QStringList warns;
+            scan_unreachable(strat.entry_conditions, tr("Entry"), cur_price, warns);
+            scan_unreachable(strat.exit_conditions, tr("Exit"), cur_price, warns);
+            if (!warns.isEmpty()) {
+                const auto btn = QMessageBox::warning(
+                    this, tr("Deploy — check conditions"),
+                    tr("%1 is at %2, but some rules may never trigger:\n\n%3\n\nDeploy anyway?")
+                        .arg(deployment.symbol).arg(cur_price, 0, 'f', 2).arg(warns.join("\n\n")),
+                    QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+                if (btn != QMessageBox::Yes) {
+                    dialog->deleteLater();
+                    return;
+                }
+            }
+        }
+
+        // Confirm before deploying an exact duplicate of an already-running setup.
+        if (algo_ns::AlgoEngine::instance().has_active_duplicate(
+                deployment.strategy_id, deployment.symbol, deployment.mode, deployment.entry_side)) {
+            const auto btn = QMessageBox::question(
+                this, tr("Already deployed"),
+                tr("An identical deployment is already running:\n\n%1 · %2 · %3 · %4\n\n"
+                   "Deploy another copy anyway?")
+                    .arg(deployment.strategy_name, deployment.symbol, deployment.mode.toUpper(),
+                         deployment.entry_side),
+                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+            if (btn != QMessageBox::Yes) {
+                dialog->deleteLater();
+                return;
+            }
+        }
+
         // Save strategy first
         services::algo::AlgoTradingService::instance().save_strategy(strat);
 
-        // Deploy via C++ engine
-        algo_ns::AlgoEngine::instance().start_deployment(deployment, strat);
-        status_label_->setText(tr("Deploying strategy..."));
+        LOG_INFO("AlgoTrading",
+                 QString("Deploy requested: id=%1 strategy='%2' symbol=%3 mode=%4 backend=%5 "
+                         "broker=%6 acct=%7 qty=%8")
+                     .arg(deployment.id, strat.name, deployment.symbol, deployment.mode,
+                          deployment.backend, deployment.broker_id, deployment.broker_account_id)
+                     .arg(deployment.quantity));
 
-        // Switch to deployments tab handled by AlgoTradingScreen
+        // Deploy via C++ engine (persists the row, then starts the runner). Feedback
+        // is the jump to the Dashboard below — NOT a label on the backtest card, which
+        // is unrelated to deployment and read as "stuck on Deploying…".
+        algo_ns::AlgoEngine::instance().start_deployment(deployment, strat);
+
+        // Tell the parent screen to switch to the Dashboard and refresh.
+        emit deployed();
     }
     dialog->deleteLater();
 }

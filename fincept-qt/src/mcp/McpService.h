@@ -8,6 +8,7 @@
 #include <QDateTime>
 #include <QFuture>
 #include <QMutex>
+#include <QSet>
 
 #include <vector>
 
@@ -34,6 +35,14 @@ class McpService {
     /// catalogue per-LLM-request to reduce prompt size and tool-pick noise.
     /// Equivalent to format_tools_for_openai() when filter is default-constructed.
     QJsonArray format_tools_for_openai(const ToolFilter& filter);
+
+    /// Tool RAG activation variant. In Tier-0 (Tool RAG) mode the model only
+    /// sees the always-on Tier-0 tools; `extra_tool_names` force-includes tools
+    /// (by exact bare name) the model has discovered this turn via tool_list /
+    /// tool_describe, so a structured function-calling model can actually call
+    /// them. Has no effect outside Tier-0 mode (the filtered catalogue already
+    /// contains them). See the tool loop / note_tool_activations.
+    QJsonArray format_tools_for_openai(const ToolFilter& filter, const QSet<QString>& extra_tool_names);
 
     std::size_t tool_count();
 

@@ -38,6 +38,14 @@ EquityChartPanel::EquityChartPanel(QWidget* parent) : QWidget(parent) {
     kline_ = new fincept::ui::KLineChartWidget(this);
     if (kline_->is_available()) {
         build_kline_ui();
+        // Right-click chart trading — enable the menu and forward its actions up.
+        kline_->set_trading_menu_enabled(true);
+        connect(kline_, &fincept::ui::KLineChartWidget::buy_requested, this,
+                &EquityChartPanel::buy_requested);
+        connect(kline_, &fincept::ui::KLineChartWidget::sell_requested, this,
+                &EquityChartPanel::sell_requested);
+        connect(kline_, &fincept::ui::KLineChartWidget::add_to_watchlist_requested, this,
+                &EquityChartPanel::add_to_watchlist_requested);
     } else {
         // No WebEngine — drop KLineChart, use the Qt-Charts chart (which carries
         // its own timeframe buttons + overlays). Forward its timeframe signal.
@@ -46,6 +54,10 @@ EquityChartPanel::EquityChartPanel(QWidget* parent) : QWidget(parent) {
         fallback_ = new EquityChart(this);
         connect(fallback_, &EquityChart::timeframe_changed, this,
                 &EquityChartPanel::timeframe_changed);
+        connect(fallback_, &EquityChart::buy_requested, this, &EquityChartPanel::buy_requested);
+        connect(fallback_, &EquityChart::sell_requested, this, &EquityChartPanel::sell_requested);
+        connect(fallback_, &EquityChart::add_to_watchlist_requested, this,
+                &EquityChartPanel::add_to_watchlist_requested);
         root->addWidget(fallback_);
     }
 
@@ -308,6 +320,26 @@ void EquityChartPanel::set_position(const QString& symbol, const QString& side, 
         clear_position();
         return;
     }
+
+    // Title (LONG/SHORT qty @ entry) changes only when the position changes, so
+    // render it here — NOT on every per-tick P&L refresh, where setStyleSheet()
+    // would force a needless style re-parse + re-polish each tick.
+    {
+        namespace c = fincept::ui::colors;
+        const bool is_long = (pos_side_ != QLatin1String("short"));
+        const QString qty_str = QString::number(pos_qty_, 'f', pos_qty_ == qRound64(pos_qty_) ? 0 : 2);
+        pos_title_lbl_->setText(QStringLiteral("%1 %2 @ %3")
+                                    .arg(is_long ? tr("LONG") : tr("SHORT"))
+                                    .arg(qty_str)
+                                    .arg(QString::number(pos_entry_, 'f', 2)));
+        pos_title_lbl_->setStyleSheet(QString("background:transparent;border:none;font-weight:700;"
+                                              "font-size:%1px;font-family:%2;color:%3;")
+                                          .arg(fincept::ui::fonts::TINY)
+                                          .arg(fincept::ui::fonts::DATA_FAMILY())
+                                          .arg(is_long ? c::POSITIVE() : c::NEGATIVE()));
+    }
+    pos_pnl_sign_ = 0; // force the P&L color to be re-applied for the new position
+
     refresh_position_card();
     draw_position_line();
     if (pos_card_) {
@@ -332,8 +364,9 @@ void EquityChartPanel::update_pnl(double ltp) {
         pos_ltp_ = ltp;
     if (!has_position_)
         return;
+    // P&L text only. refresh_position_card() already adjustSize()s the card; the
+    // full layout (reposition + raise) runs on set_position()/resize, not per tick.
     refresh_position_card();
-    layout_position_card();
 }
 
 void EquityChartPanel::refresh_position_card() {
@@ -341,18 +374,9 @@ void EquityChartPanel::refresh_position_card() {
         return;
     namespace c = fincept::ui::colors;
 
+    // Per-tick path: only the live P&L changes here. The title (LONG/SHORT qty @
+    // entry) is rendered once in set_position(), not on every tick.
     const bool is_long = (pos_side_ != QLatin1String("short"));
-    const QString qty_str = QString::number(pos_qty_, 'f', pos_qty_ == qRound64(pos_qty_) ? 0 : 2);
-    pos_title_lbl_->setText(QStringLiteral("%1 %2 @ %3")
-                                .arg(is_long ? tr("LONG") : tr("SHORT"))
-                                .arg(qty_str)
-                                .arg(QString::number(pos_entry_, 'f', 2)));
-    pos_title_lbl_->setStyleSheet(QString("background:transparent;border:none;font-weight:700;"
-                                          "font-size:%1px;font-family:%2;color:%3;")
-                                      .arg(fincept::ui::fonts::TINY)
-                                      .arg(fincept::ui::fonts::DATA_FAMILY())
-                                      .arg(is_long ? c::POSITIVE() : c::NEGATIVE()));
-
     const double ltp = pos_ltp_ > 0.0 ? pos_ltp_ : pos_entry_;
     const double pnl = is_long ? (ltp - pos_entry_) * pos_qty_ : (pos_entry_ - ltp) * pos_qty_;
     const double basis = pos_entry_ * pos_qty_;
@@ -362,11 +386,18 @@ void EquityChartPanel::refresh_position_card() {
         (pnl >= 0 ? QStringLiteral("+") : QString()) + cur::money(pnl, false, pos_currency_);
     const QString pct_txt = QStringLiteral("%1%2%").arg(pct >= 0 ? "+" : "").arg(pct, 0, 'f', 2);
     pos_pnl_lbl_->setText(pnl_txt + QStringLiteral("   ") + pct_txt);
-    pos_pnl_lbl_->setStyleSheet(QString("background:transparent;border:none;font-weight:700;"
-                                        "font-size:%1px;font-family:%2;color:%3;")
-                                    .arg(fincept::ui::fonts::DATA)
-                                    .arg(fincept::ui::fonts::DATA_FAMILY())
-                                    .arg(pnl >= 0 ? c::POSITIVE() : c::NEGATIVE()));
+
+    // setStyleSheet() forces a full style re-parse + re-polish; only do it when
+    // the P&L sign — and therefore the color — actually flips.
+    const int sign = pnl >= 0 ? 1 : -1;
+    if (sign != pos_pnl_sign_) {
+        pos_pnl_sign_ = sign;
+        pos_pnl_lbl_->setStyleSheet(QString("background:transparent;border:none;font-weight:700;"
+                                            "font-size:%1px;font-family:%2;color:%3;")
+                                        .arg(fincept::ui::fonts::DATA)
+                                        .arg(fincept::ui::fonts::DATA_FAMILY())
+                                        .arg(pnl >= 0 ? c::POSITIVE() : c::NEGATIVE()));
+    }
     pos_card_->adjustSize();
 }
 

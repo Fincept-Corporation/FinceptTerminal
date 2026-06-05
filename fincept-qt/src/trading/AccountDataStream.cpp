@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
+#include "trading/HistoricalDataService.h"
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
 #include "trading/instruments/InstrumentService.h"
@@ -36,6 +37,7 @@ constexpr const char* ADS_TAG = "AccountDataStream";
 constexpr int ADS_QUOTE_POLL_MS = 300000;
 constexpr int ADS_PORTFOLIO_POLL_MS = 300000;
 constexpr int ADS_WATCHLIST_POLL_MS = 300000;
+constexpr int ADS_ACTIVE_FEED_POLL_MS = 3000; // fast poll for algo/active-feed symbols (non-WS brokers)
 } // namespace
 
 // ── Construction / Destruction ──────────────────────────────────────────────
@@ -57,6 +59,10 @@ AccountDataStream::AccountDataStream(const QString& account_id, QObject* parent)
     watchlist_timer_ = new QTimer(this);
     watchlist_timer_->setInterval(ADS_WATCHLIST_POLL_MS);
     connect(watchlist_timer_, &QTimer::timeout, this, &AccountDataStream::on_watchlist_timer);
+
+    active_feed_timer_ = new QTimer(this);
+    active_feed_timer_->setInterval(ADS_ACTIVE_FEED_POLL_MS);
+    connect(active_feed_timer_, &QTimer::timeout, this, &AccountDataStream::on_active_feed_timer);
 }
 
 AccountDataStream::~AccountDataStream() {
@@ -79,6 +85,8 @@ void AccountDataStream::start() {
         watchlist_timer_->start();
     }
     portfolio_timer_->start();
+    if (!active_feed_symbol_union().isEmpty())
+        active_feed_timer_->start();
 
     // Initial data fetch
     async_fetch_quote();
@@ -99,6 +107,7 @@ void AccountDataStream::stop() {
     quote_timer_->stop();
     portfolio_timer_->stop();
     watchlist_timer_->stop();
+    active_feed_timer_->stop();
     ws_teardown();
 
     LOG_INFO(ADS_TAG, QString("Stopped stream for account %1").arg(account_id_));
@@ -108,6 +117,7 @@ void AccountDataStream::pause() {
     quote_timer_->stop();
     portfolio_timer_->stop();
     watchlist_timer_->stop();
+    active_feed_timer_->stop();
     // Keep WS alive in background
 }
 
@@ -119,18 +129,68 @@ void AccountDataStream::resume() {
         watchlist_timer_->start();
     }
     portfolio_timer_->start();
+    if (!active_feed_symbol_union().isEmpty())
+        active_feed_timer_->start();
 }
 
 // ── Symbol management ───────────────────────────────────────────────────────
 
-void AccountDataStream::subscribe_symbols(const QStringList& symbols) {
-    watchlist_symbols_ = symbols;
+void AccountDataStream::subscribe_symbols(const QString& consumer_id, const QStringList& symbols) {
+    if (symbols.isEmpty())
+        consumer_symbols_.remove(consumer_id);
+    else
+        consumer_symbols_[consumer_id] = symbols;
     // Resubscribe whenever the socket is connected — NOT gated on ws_active(),
     // which also requires ticks. On an account switch-back the socket is
     // connected but may have 0 ticks (it was subscribed to 0 symbols while
     // unfocused), so an ws_active() gate would never re-push the watchlist.
     if (ws_connected())
         ws_resubscribe();
+}
+
+void AccountDataStream::unsubscribe_consumer(const QString& consumer_id) {
+    const bool had = consumer_symbols_.remove(consumer_id) > 0;
+    active_feed_symbols_.remove(consumer_id);
+    if (active_feed_timer_ && active_feed_symbol_union().isEmpty())
+        active_feed_timer_->stop();
+    if (had && ws_connected())
+        ws_resubscribe();
+}
+
+void AccountDataStream::set_active_feed(const QString& consumer_id, const QStringList& symbols) {
+    if (symbols.isEmpty())
+        active_feed_symbols_.remove(consumer_id);
+    else
+        active_feed_symbols_[consumer_id] = symbols;
+    if (!active_feed_timer_)
+        return;
+    const bool any = !active_feed_symbol_union().isEmpty();
+    if (any && running_) {
+        if (!active_feed_timer_->isActive())
+            active_feed_timer_->start();
+        if (!ws_connected())
+            async_fetch_active_feed_quotes(); // non-WS only; WS brokers wait for the pushed tick
+    } else if (!any && active_feed_timer_->isActive()) {
+        active_feed_timer_->stop();
+    }
+}
+
+QStringList AccountDataStream::subscribed_symbols() const {
+    QStringList out;
+    for (auto it = consumer_symbols_.constBegin(); it != consumer_symbols_.constEnd(); ++it)
+        for (const QString& s : it.value())
+            if (!out.contains(s))
+                out.append(s);
+    return out;
+}
+
+QStringList AccountDataStream::active_feed_symbol_union() const {
+    QStringList out;
+    for (auto it = active_feed_symbols_.constBegin(); it != active_feed_symbols_.constEnd(); ++it)
+        for (const QString& s : it.value())
+            if (!out.contains(s))
+                out.append(s);
+    return out;
 }
 
 void AccountDataStream::set_selected_symbol(const QString& symbol, const QString& exchange) {
@@ -375,11 +435,11 @@ void AccountDataStream::async_fetch_funds() {
 }
 
 void AccountDataStream::async_fetch_watchlist_quotes() {
-    if (watchlist_symbols_.isEmpty())
+    const QStringList symbols = subscribed_symbols();
+    if (symbols.isEmpty())
         return;
     const QString acct_id = account_id_;
     const QString bid = broker_id_;
-    const QStringList symbols = watchlist_symbols_;
     QPointer<AccountDataStream> self = this;
 
     auto creds = AccountManager::instance().load_credentials(acct_id);
@@ -407,56 +467,82 @@ void AccountDataStream::async_fetch_watchlist_quotes() {
 
 // ── On-demand fetches ───────────────────────────────────────────────────────
 
-void AccountDataStream::fetch_candles(const QString& symbol, const QString& timeframe) {
-    if (candles_fetching_.exchange(true))
+void AccountDataStream::on_active_feed_timer() {
+    if (!running_ || ws_connected())
+        return; // WS is connected and pushes ticks — poll ONLY for non-WS brokers / WS outage
+    if (is_token_expired()) {
+        emit token_expired(account_id_);
+        return;
+    }
+    async_fetch_active_feed_quotes();
+}
+
+void AccountDataStream::async_fetch_active_feed_quotes() {
+    const QStringList symbols = active_feed_symbol_union();
+    if (symbols.isEmpty())
         return;
     const QString acct_id = account_id_;
     const QString bid = broker_id_;
     QPointer<AccountDataStream> self = this;
 
     auto creds = AccountManager::instance().load_credentials(acct_id);
-    if (creds.api_key.isEmpty()) {
-        candles_fetching_ = false;
+    if (creds.api_key.isEmpty())
         return;
-    }
 
-    (void)QtConcurrent::run([self, acct_id, bid, symbol, timeframe, creds]() {
+    (void)QtConcurrent::run([self, acct_id, bid, symbols, creds]() {
         auto* broker = BrokerRegistry::instance().get(bid);
-        if (!broker) {
-            if (self) self->candles_fetching_ = false;
+        if (!broker)
             return;
-        }
-        // Build date range
-        const QString to_dt = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm");
-        QString from_dt;
-        // Look-back windows kept within both Kite (1m=60d, intraday=100d,
-        // day=2000d) and Fyers (intraday ~100d/req, chunked) single-request
-        // limits, while loading enough bars to scroll back meaningfully.
-        if (timeframe == "1d" || timeframe == "D" || timeframe == "1w" || timeframe == "W")
-            from_dt = QDate::currentDate().addYears(-3).toString("yyyy-MM-dd") + " 00:00";
-        else if (timeframe == "1h" || timeframe == "60")
-            from_dt = QDate::currentDate().addDays(-60).toString("yyyy-MM-dd") + " 00:00";
-        else if (timeframe == "30m")
-            from_dt = QDate::currentDate().addDays(-45).toString("yyyy-MM-dd") + " 00:00";
-        else if (timeframe == "15m")
-            from_dt = QDate::currentDate().addDays(-30).toString("yyyy-MM-dd") + " 00:00";
-        else if (timeframe == "5m")
-            from_dt = QDate::currentDate().addDays(-15).toString("yyyy-MM-dd") + " 00:00";
-        else
-            from_dt = QDate::currentDate().addDays(-7).toString("yyyy-MM-dd") + " 00:00";
-
-        auto result = broker->get_history(creds, symbol, timeframe, from_dt, to_dt);
-        if (self) self->candles_fetching_ = false;
+        auto result = broker->get_quotes(creds, symbols.toVector());
         if (!result.success || !result.data) {
             if (self)
                 self->check_token_expiry(result.error);
             return;
         }
+        // Emit PER-SYMBOL quote_updated (not watchlist_updated) so DataStreamManager
+        // publishes each to broker:<id>:<acct>:quote:<symbol> (the topic algo feeds read).
         QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
             if (!self) return;
-            emit self->candles_fetched(acct_id, data);
+            for (const auto& q : data) {
+                self->quote_cache_[q.symbol] = q;
+                emit self->quote_updated(acct_id, q.symbol, q);
+            }
         }, Qt::QueuedConnection);
     });
+}
+
+void AccountDataStream::fetch_candles(const QString& symbol, const QString& timeframe) {
+    if (candles_fetching_.exchange(true))
+        return;
+    const QString acct_id = account_id_;
+    QPointer<AccountDataStream> self = this;
+
+    // Map the chart timeframe to a look-back window (preserves the prior per-tf
+    // windows), then delegate to the shared HistoricalDataService (broker fetch +
+    // symbol resolution + 60s cache). Yahoo fallback is algo-only, not used here.
+    auto lookback_for = [](const QString& tf) -> int {
+        if (tf == "1d" || tf == "D" || tf == "1w" || tf == "W") return 3 * 365;
+        if (tf == "1h" || tf == "60") return 60;
+        if (tf == "30m") return 45;
+        if (tf == "15m") return 30;
+        if (tf == "5m") return 15;
+        return 7;
+    };
+
+    HistoricalDataService::instance().fetch(
+        symbol, timeframe, lookback_for(timeframe), broker_id_, acct_id,
+        [self, acct_id](bool ok, const QVector<BrokerCandle>& candles, const QString& err) {
+            if (!self)
+                return;
+            self->candles_fetching_ = false;
+            if (ok) {
+                emit self->candles_fetched(acct_id, candles);
+            } else {
+                self->check_token_expiry(err);
+                LOG_WARN(ADS_TAG, QString("fetch_candles failed for %1/%2: %3")
+                                      .arg(self->broker_id_, acct_id, err));
+            }
+        });
 }
 
 void AccountDataStream::fetch_orderbook(const QString& symbol) {
@@ -722,7 +808,7 @@ void AccountDataStream::ws_init() {
             QStringList fyers_symbols;
             if (!selected_symbol_.isEmpty())
                 fyers_symbols.append(to_fyers(selected_symbol_));
-            for (const auto& s : watchlist_symbols_)
+            for (const QString& s : subscribed_symbols())
                 fyers_symbols.append(to_fyers(s));
             fyers_symbols.removeDuplicates();
             if (auto* fws = qobject_cast<FyersWebSocket*>(ws_))
@@ -788,7 +874,7 @@ void AccountDataStream::ws_init() {
             QStringList symbols;
             if (!selected_symbol_.isEmpty())
                 symbols.append(selected_symbol_);
-            for (const auto& s : watchlist_symbols_) {
+            for (const QString& s : subscribed_symbols()) {
                 if (!symbols.contains(s))
                     symbols.append(s);
             }
@@ -820,7 +906,7 @@ void AccountDataStream::ws_init() {
         QStringList syms;
         if (!selected_symbol_.isEmpty())
             syms.append(selected_symbol_);
-        for (const auto& s : watchlist_symbols_) {
+        for (const QString& s : subscribed_symbols()) {
             if (!syms.contains(s))
                 syms.append(s);
         }
@@ -1102,7 +1188,7 @@ void AccountDataStream::ws_resubscribe() {
         QStringList fyers_symbols;
         if (!selected_symbol_.isEmpty())
             fyers_symbols.append(to_fyers(selected_symbol_));
-        for (const auto& s : watchlist_symbols_)
+        for (const QString& s : subscribed_symbols())
             fyers_symbols.append(to_fyers(s));
         fyers_symbols.removeDuplicates();
         fws->set_subscriptions(fyers_symbols);
@@ -1112,7 +1198,7 @@ void AccountDataStream::ws_resubscribe() {
         QStringList symbols;
         if (!selected_symbol_.isEmpty())
             symbols.append(selected_symbol_);
-        for (const auto& s : watchlist_symbols_) {
+        for (const QString& s : subscribed_symbols()) {
             if (!symbols.contains(s))
                 symbols.append(s);
         }
@@ -1125,7 +1211,7 @@ void AccountDataStream::ws_resubscribe() {
         QStringList symbols;
         if (!selected_symbol_.isEmpty())
             symbols.append(selected_symbol_);
-        for (const auto& s : watchlist_symbols_) {
+        for (const QString& s : subscribed_symbols()) {
             if (!symbols.contains(s))
                 symbols.append(s);
         }

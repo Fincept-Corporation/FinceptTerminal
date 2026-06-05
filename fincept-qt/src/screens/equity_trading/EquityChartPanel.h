@@ -56,6 +56,11 @@ class EquityChartPanel : public QWidget {
 
   signals:
     void timeframe_changed(const QString& tf);
+    // Right-click chart trading: forwarded from the active backend (KLineChart or
+    // the Qt-Charts fallback). `price` is the y-axis value under the cursor.
+    void buy_requested(double price);
+    void sell_requested(double price);
+    void add_to_watchlist_requested();
     // Emitted when the user clicks EXIT on the position card. The screen confirms
     // and routes the square-off (it owns the active account).
     void exit_position_requested(const QString& symbol, const QString& exchange,
@@ -107,6 +112,10 @@ class EquityChartPanel : public QWidget {
     double pos_qty_ = 0.0;
     double pos_entry_ = 0.0;
     double pos_ltp_ = 0.0;
+    // Last applied P&L sign (+1 / -1 / 0=unset). setStyleSheet() forces a full
+    // style re-parse + re-polish, so on the per-tick refresh we only touch the
+    // P&L label's stylesheet when the sign (hence color) actually flips.
+    int pos_pnl_sign_ = 0;
     // Drag state — once the user moves the card it stays where they put it.
     QPoint pos_drag_offset_;
     bool pos_dragging_ = false;

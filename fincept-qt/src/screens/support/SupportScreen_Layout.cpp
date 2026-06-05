@@ -135,10 +135,6 @@ QWidget* SupportScreen::build_empty_state() {
     vl->setAlignment(Qt::AlignCenter);
     vl->setSpacing(12);
 
-    auto* icon = lbl("🎟", ui::colors::TEXT_TERTIARY(), 40);
-    icon->setAlignment(Qt::AlignCenter);
-    vl->addWidget(icon);
-
     auto* t = lbl(tr("Select a ticket to view details"), ui::colors::TEXT_SECONDARY(), 13, true);
     t->setAlignment(Qt::AlignCenter);
     vl->addWidget(t);

@@ -5,6 +5,7 @@
 #include "ui/theme/Theme.h"
 #include "ui/widgets/WorldMapWidget.h"
 
+#include <QComboBox>
 #include <QDesktopServices>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -34,9 +35,77 @@ void ConflictMonitorPanel::build_ui() {
     left_splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM()));
 
     // ── World Map ───────────────────────────────────────────────────────────
-    map_widget_ = new fincept::ui::WorldMapWidget(left_splitter);
+    // Wrap the map in a container with a slim toolbar carrying the BASEMAP
+    // selector, then add the container (not the bare map) to the splitter.
+    auto* map_container = new QWidget(left_splitter);
+    auto* mc_vl = new QVBoxLayout(map_container);
+    mc_vl->setContentsMargins(0, 0, 0, 0);
+    mc_vl->setSpacing(0);
+
+    auto* map_toolbar = new QWidget(map_container);
+    map_toolbar->setObjectName("gpMapToolbar");
+    map_toolbar->setFixedHeight(32);
+    map_toolbar->setStyleSheet(QString("#gpMapToolbar { background:%1; border-bottom:1px solid %2; }")
+                                   .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED()));
+    auto* mt_hl = new QHBoxLayout(map_toolbar);
+    mt_hl->setContentsMargins(10, 0, 10, 0);
+    mt_hl->setSpacing(8);
+
+    auto* map_accent = new QLabel(map_toolbar);
+    map_accent->setFixedSize(3, 12);
+    map_accent->setStyleSheet(QString("background:%1; border-radius:1px;").arg(ui::colors::AMBER()));
+    mt_hl->addWidget(map_accent);
+
+    auto* map_title = new QLabel(tr("CONFLICT MAP"), map_toolbar);
+    map_title->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; font-family:%2; letter-spacing:1px;")
+                                 .arg(ui::colors::AMBER())
+                                 .arg(ui::fonts::DATA_FAMILY));
+    mt_hl->addWidget(map_title);
+    mt_hl->addStretch();
+
+    auto* basemap_cap = new QLabel(tr("BASEMAP"), map_toolbar);
+    basemap_cap->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; font-family:%2; letter-spacing:1px;")
+                                   .arg(ui::colors::TEXT_TERTIARY())
+                                   .arg(ui::fonts::DATA_FAMILY));
+    mt_hl->addWidget(basemap_cap);
+
+    map_type_combo_ = new QComboBox(map_toolbar);
+    map_type_combo_->setCursor(Qt::PointingHandCursor);
+    map_type_combo_->setFixedWidth(132);
+    map_type_combo_->setStyleSheet(
+        QString("QComboBox { background:%1; color:%2; border:1px solid %3; border-radius:2px;"
+                "font-family:%6; font-size:%7px; font-weight:700; padding:3px 8px; }"
+                "QComboBox:hover, QComboBox:focus { border-color:%4; }"
+                "QComboBox::drop-down { border:none; width:16px; }"
+                "QComboBox::down-arrow { image:none; width:0; height:0;"
+                "border-left:3px solid transparent; border-right:3px solid transparent;"
+                "border-top:4px solid %4; margin-right:6px; }"
+                "QComboBox QAbstractItemView { background:%1; color:%2; border:1px solid %3;"
+                "selection-background-color:%5; selection-color:%4; outline:0;"
+                "font-family:%6; font-size:%7px; }")
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(),
+                 ui::colors::AMBER(), ui::colors::BG_HOVER())
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::fonts::SMALL));
+    mt_hl->addWidget(map_type_combo_);
+
+    mc_vl->addWidget(map_toolbar);
+
+    map_widget_ = new fincept::ui::WorldMapWidget(map_container);
     map_widget_->setMinimumHeight(280);
-    left_splitter->addWidget(map_widget_);
+    mc_vl->addWidget(map_widget_, 1);
+
+    left_splitter->addWidget(map_container);
+
+    // Default geopolitics to the DARK political basemap (index 1) — preserves
+    // the screen's prior look; the selector lets the user pick satellite, etc.
+    map_type_combo_->addItems(fincept::ui::WorldMapWidget::basemap_labels());
+    map_type_combo_->setCurrentIndex(1);  // 1 = DARK in basemap_labels()
+    map_widget_->set_basemap(1);
+    connect(map_type_combo_, &QComboBox::currentIndexChanged, this, [this](int idx) {
+        if (map_widget_)
+            map_widget_->set_basemap(idx);
+    });
 
     // Map pin click → select the matching row in the events table. The row's
     // currentCellChanged handler (wired below) then fills the detail panel,

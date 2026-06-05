@@ -1,5 +1,7 @@
 ﻿#include "algo_engine/AlgoEngineProducer.h"
+#include "algo_engine/ScanMonitor.h"
 #include "services/llm/LlmService.h"
+#include "ui/notifications/DesktopNotifier.h"
 #include "app/MonitorPickerDialog.h"
 #include "app/WindowFrame.h"
 #include "app/TerminalShell.h"
@@ -23,6 +25,8 @@
 #include "core/symbol/SymbolRef.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "mcp/McpInit.h"
+#include "mcp/ToolSelfTest.h"
+#include "services/feeds/FeedSelfTest.h"
 #include "network/http/HttpClient.h"
 #include "python/PythonSetupManager.h"
 #include "screens/launchpad/LaunchpadScreen.h"
@@ -45,6 +49,7 @@
 #include "services/options/OptionChainService.h"
 #include "services/alpha_arena/AlphaArenaEngine.h"
 #include "services/news/NewsService.h"
+#include "services/notebooks/NotebookLibraryService.h"
 #include "services/polymarket/PolymarketWebSocket.h"
 #include "services/prediction/PredictionCredentialStore.h"
 #include "services/prediction/PredictionExchangeRegistry.h"
@@ -606,6 +611,11 @@ int main(int argc, char* argv[]) {
 
     fincept::Logger::instance().set_file(fincept::AppPaths::logs() + "/fincept.log");
 
+    // Seed the prebuilt Fincept Notebook library into the File Manager on first
+    // run (idempotent — guarded by a marker file). Makes the curated notebooks
+    // appear in both the Notebook Library and the File Manager out of the box.
+    fincept::services::NotebookLibraryService::instance().seed_into_files();
+
     // P3.18 — route Qt's own qDebug/qWarning/qCritical messages into our log
     // file so framework/3rd-party warnings are visible in Release builds.
     qInstallMessageHandler([](QtMsgType type, const QMessageLogContext& ctx, const QString& msg) {
@@ -699,6 +709,12 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v036();
     fincept::register_migration_v037();
     fincept::register_migration_v038();
+    fincept::register_migration_v039();
+    fincept::register_migration_v040();
+    fincept::register_migration_v041();
+    fincept::register_migration_v042();
+    fincept::register_migration_v043();
+    fincept::register_migration_v044();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
@@ -708,6 +724,14 @@ int main(int argc, char* argv[]) {
         // DB unavailable — apply theme with built-in defaults so the UI is at least styled
         fincept::ui::apply_global_stylesheet();
     } else {
+        // Load broker accounts now that the DB is open. The AccountManager
+        // singleton loads eagerly in its constructor on first access; if anything
+        // touched it before this point (before open()), it found an unusable DB
+        // and loaded nothing. This explicit main-thread reload guarantees the
+        // account map is populated from the now-open DB, so configured brokers
+        // survive restarts instead of vanishing.
+        fincept::trading::AccountManager::instance().reload_from_db();
+
         // Prune news articles older than 30 days — deferred to run after the event loop
         // starts so the startup critical path is not blocked.
         // NewsArticleRepository uses the main-thread DB connection (not thread-safe),
@@ -833,6 +857,33 @@ int main(int argc, char* argv[]) {
     // Initialize MCP tool system — registers all internal tools and starts
     // external MCP servers in the background (non-blocking).
     fincept::mcp::initialize_all_tools();
+
+    // ── Headless tool-system self-test / catalog dump ────────────────────────
+    // Runs after the real tool registration above but before any window or
+    // network init, so it exercises exactly what ships. Exits without starting
+    // the GUI — used by the dev loop and CI to measure tool retrieval recall
+    // and registry integrity (no LLM / API key required).
+    for (int i = 1; i < argc; ++i) {
+        if (qstrcmp(argv[i], "--selftest-tools") == 0)
+            return fincept::mcp::run_tool_selftest();
+        if (qstrcmp(argv[i], "--dump-tools") == 0)
+            return fincept::mcp::dump_tools_json();
+        if (qstrcmp(argv[i], "--selftest-feeds") == 0)
+            return fincept::feeds::run_feed_selftest();
+    }
+
+    // Start the scan-watch background service. Runs after Database::open() (which
+    // applies the scan_watches migration) and after bootstrap_auth() (broker
+    // creds, needed by the first candle poll), and after the headless self-test
+    // early-returns above so it is skipped on --selftest-tools / --dump-tools.
+    // Placed before the Python-setup branch so both GUI paths (setup screen and
+    // normal startup) start it exactly once. Candle fetching is native C++ (broker
+    // REST / native Yahoo), so it does not require the Python env to be ready.
+    fincept::algo::ScanMonitor::instance().start();
+
+    // Native desktop notifications (Win toast / macOS Notification Center / Linux
+    // libnotify) via a tray icon — also surfaces every in-app ToastService toast.
+    fincept::ui::DesktopNotifier::instance().init();
 
     // ── Python environment check ─────────────────────────────────────────────
     // check_status() fast path (sentinel + markers present) is synchronous and

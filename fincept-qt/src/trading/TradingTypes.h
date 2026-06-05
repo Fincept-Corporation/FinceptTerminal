@@ -93,6 +93,17 @@ struct PtPosition {
     double leverage = 1.0;
     std::optional<double> liquidation_price;
     QString opened_at;
+
+    // NEW (v040): broker product type ("MIS"/"CNC"/"NRML") so the engine can tell
+    // intraday from delivery (15:30 MIS auto-square, MIS->CNC convert), and the
+    // margin locked from available balance while this position is open (released on
+    // close). Persisted in pt_positions. Defaults preserve pre-v040 behavior.
+    //
+    // Storage model: ALL open exposure lives in pt_positions tagged by product.
+    // The Equity screen renders CNC/delivery positions in the Holdings tab and
+    // MIS/NRML in the Positions tab (single source of truth, one fill path).
+    QString product = "MIS";
+    double held_margin = 0.0;
 };
 
 struct PtTrade {
@@ -109,13 +120,23 @@ struct PtTrade {
 };
 
 struct PtStats {
-    double total_pnl = 0.0;
-    double win_rate = 0.0;
+    double total_pnl = 0.0; // realized P&L from closed trades
+    double win_rate = 0.0;  // winning_trades / total_trades (0..1)
     int64_t total_trades = 0;
     int64_t winning_trades = 0;
     int64_t losing_trades = 0;
     double largest_win = 0.0;
     double largest_loss = 0.0;
+
+    // NEW: richer trade-derived aggregates (all from pt_trades).
+    double gross_profit = 0.0;  // sum of positive trade P&L
+    double gross_loss = 0.0;    // sum of negative trade P&L (<= 0)
+    double avg_win = 0.0;       // gross_profit / winning_trades
+    double avg_loss = 0.0;      // gross_loss / losing_trades (<= 0)
+    double profit_factor = 0.0; // gross_profit / |gross_loss|
+    double total_fees = 0.0;    // sum of trade fees / charges
+    double turnover = 0.0;      // sum of price * quantity across trades
+    double today_pnl = 0.0;     // realized P&L from trades dated today (local)
 };
 
 struct PriceData {
@@ -205,6 +226,53 @@ inline const char* product_type_str(ProductType p) {
             return "mtf";
     }
     return "intraday";
+}
+
+/// Indian-broker product mnemonic (MIS/CNC/NRML/...) for a ProductType. Used by
+/// the paper engine to tag positions/orders so intraday (MIS) can be told apart
+/// from delivery (CNC) for auto-square-off, product conversion and leverage.
+inline const char* product_to_broker_str(ProductType p) {
+    switch (p) {
+        case ProductType::Intraday:
+            return "MIS";
+        case ProductType::Delivery:
+            return "CNC";
+        case ProductType::Margin:
+            return "NRML";
+        case ProductType::CoverOrder:
+            return "CO";
+        case ProductType::BracketOrder:
+            return "BO";
+        case ProductType::MTF:
+            return "MTF";
+    }
+    return "MIS";
+}
+
+/// True when a broker product string denotes an intraday position that must be
+/// auto-squared at session close. Treats MIS / INTRADAY as intraday; everything
+/// else (CNC / NRML / delivery / margin / blank) is carry-forward.
+inline bool product_is_intraday(const QString& product) {
+    return product.compare("MIS", Qt::CaseInsensitive) == 0 ||
+           product.compare("intraday", Qt::CaseInsensitive) == 0;
+}
+
+/// True when a broker product string denotes a delivery holding (CNC / delivery).
+inline bool product_is_delivery(const QString& product) {
+    return product.compare("CNC", Qt::CaseInsensitive) == 0 ||
+           product.compare("delivery", Qt::CaseInsensitive) == 0;
+}
+
+/// Parse a broker product mnemonic (MIS/CNC/NRML/MTF) back to a ProductType.
+/// Inverse of product_to_broker_str; unknown/blank defaults to Intraday (MIS).
+inline ProductType product_from_broker_str(const QString& s) {
+    if (s.compare("CNC", Qt::CaseInsensitive) == 0 || s.compare("delivery", Qt::CaseInsensitive) == 0)
+        return ProductType::Delivery;
+    if (s.compare("NRML", Qt::CaseInsensitive) == 0 || s.compare("margin", Qt::CaseInsensitive) == 0)
+        return ProductType::Margin;
+    if (s.compare("MTF", Qt::CaseInsensitive) == 0)
+        return ProductType::MTF;
+    return ProductType::Intraday;
 }
 
 struct UnifiedOrder {

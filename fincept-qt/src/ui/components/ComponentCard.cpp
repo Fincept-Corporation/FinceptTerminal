@@ -1,5 +1,7 @@
 #include "ui/components/ComponentCard.h"
 
+#include "ui/theme/Theme.h"
+
 #include <QApplication>
 #include <QDrag>
 #include <QFontMetrics>
@@ -78,18 +80,19 @@ void ComponentCard::build_ui() {
     cat_row->addWidget(cat);
     cat_row->addStretch(1);
     auto* stars = new QLabel(popularity_stars(meta_.popularity), body);
-    stars->setStyleSheet("color:#d97706;font-size:12px;");
+    stars->setStyleSheet(QString("color:%1;font-size:12px;").arg(colors::AMBER()));
     stars->setToolTip(QString("Use count: %1").arg(meta_.popularity));
     cat_row->addWidget(stars);
     bl->addLayout(cat_row);
 
     auto* title = new QLabel(meta_.title, body);
-    title->setStyleSheet("color:#f3f4f6;font-size:14px;font-weight:700;");
+    title->setStyleSheet(
+        QString("color:%1;font-size:14px;font-weight:700;").arg(colors::TEXT_PRIMARY()));
     bl->addWidget(title);
 
     auto* desc = new QLabel(body);
     desc->setWordWrap(true);
-    desc->setStyleSheet("color:#9ca3af;font-size:11px;");
+    desc->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::TEXT_SECONDARY()));
     const QString text = meta_.description.isEmpty() ? QStringLiteral(" ") : meta_.description;
     desc->setText(text);
     desc->setMaximumHeight(36);
@@ -100,16 +103,16 @@ void ComponentCard::build_ui() {
 }
 
 void ComponentCard::restyle() {
-    QString border = "#374151";
-    QString bg = "#111827";
+    QString border = colors::BORDER_MED();
+    QString bg = colors::BG_SURFACE();
     if (selected_) {
-        border = "#d97706";
-        bg = "#1f2937";
+        border = colors::AMBER();
+        bg = colors::BG_HOVER();
     } else if (hovered_) {
-        border = "#6b7280";
-        bg = "#1a2332";
+        border = colors::BORDER_BRIGHT();
+        bg = colors::BG_RAISED();
     }
-    setStyleSheet(QString("#componentCard{background:%1;border:1px solid %2;border-radius:4px;}")
+    setStyleSheet(QString("#componentCard{background:%1;border:1px solid %2;border-radius:2px;}")
                       .arg(bg, border));
 }
 
