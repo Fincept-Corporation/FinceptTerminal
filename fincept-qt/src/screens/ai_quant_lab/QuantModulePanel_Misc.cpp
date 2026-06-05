@@ -816,15 +816,24 @@ QWidget* QuantModulePanel::build_factor_discovery_panel() {
     fd_fields->setStyleSheet(input_ss());
     text_inputs_["fd_fields"] = fd_fields;
     datavl->addWidget(build_input_row(tr("Fields"), fd_fields, data_tab));
-    auto* fd_start = new QLineEdit(data_tab);
-    fd_start->setPlaceholderText(tr("Start date (YYYY-MM-DD, e.g. 2019-01-01)"));
-    fd_start->setStyleSheet(input_ss());
-    text_inputs_["fd_start"] = fd_start;
+    const QDate fd_today = QDate::currentDate();
+    auto* fd_start = new QDateEdit(data_tab);
+    fd_start->setCalendarPopup(true);
+    fd_start->setDisplayFormat("yyyy-MM-dd");
+    fd_start->setMinimumDate(QDate(2000, 1, 1));
+    fd_start->setMaximumDate(fd_today);
+    fd_start->setDate(fd_today.addYears(-1));
+    fd_start->setStyleSheet(dateedit_ss());
+    date_inputs_["fd_start"] = fd_start;
     datavl->addWidget(build_input_row(tr("Start Date"), fd_start, data_tab));
-    auto* fd_end = new QLineEdit(data_tab);
-    fd_end->setPlaceholderText(tr("End date (YYYY-MM-DD, e.g. 2020-11-10)"));
-    fd_end->setStyleSheet(input_ss());
-    text_inputs_["fd_end"] = fd_end;
+    auto* fd_end = new QDateEdit(data_tab);
+    fd_end->setCalendarPopup(true);
+    fd_end->setDisplayFormat("yyyy-MM-dd");
+    fd_end->setMinimumDate(QDate(2000, 1, 1));
+    fd_end->setMaximumDate(fd_today);
+    fd_end->setDate(fd_today);
+    fd_end->setStyleSheet(dateedit_ss());
+    date_inputs_["fd_end"] = fd_end;
     datavl->addWidget(build_input_row(tr("End Date"), fd_end, data_tab));
     auto* fd_run = make_run_button(tr("FETCH DATA"), data_tab);
     connect(fd_run, &QPushButton::clicked, this, [this]() {
@@ -840,10 +849,8 @@ QWidget* QuantModulePanel::build_factor_discovery_panel() {
             if (!s.trimmed().isEmpty())
                 fields.append(s.trimmed());
         params["fields"] = fields;
-        if (!text_inputs_["fd_start"]->text().isEmpty())
-            params["start_date"] = text_inputs_["fd_start"]->text().trimmed();
-        if (!text_inputs_["fd_end"]->text().isEmpty())
-            params["end_date"] = text_inputs_["fd_end"]->text().trimmed();
+        params["start_date"] = date_inputs_["fd_start"]->date().toString("yyyy-MM-dd");
+        params["end_date"] = date_inputs_["fd_end"]->date().toString("yyyy-MM-dd");
         AIQuantLabService::instance().factor_get_data(params);
     });
     datavl->addWidget(fd_run);
@@ -855,24 +862,31 @@ QWidget* QuantModulePanel::build_factor_discovery_panel() {
     auto* calvl = new QVBoxLayout(cal_tab);
     calvl->setContentsMargins(12, 12, 12, 12);
     calvl->setSpacing(8);
-    auto* cal_start = new QLineEdit(cal_tab);
-    cal_start->setPlaceholderText(tr("Start date (YYYY-MM-DD)"));
-    cal_start->setStyleSheet(input_ss());
-    text_inputs_["fd_cal_start"] = cal_start;
+    const QDate cal_today = QDate::currentDate();
+    auto* cal_start = new QDateEdit(cal_tab);
+    cal_start->setCalendarPopup(true);
+    cal_start->setDisplayFormat("yyyy-MM-dd");
+    cal_start->setMinimumDate(QDate(2000, 1, 1));
+    cal_start->setMaximumDate(cal_today);
+    cal_start->setDate(cal_today.addYears(-1));
+    cal_start->setStyleSheet(dateedit_ss());
+    date_inputs_["fd_cal_start"] = cal_start;
     calvl->addWidget(build_input_row(tr("Start Date"), cal_start, cal_tab));
-    auto* cal_end = new QLineEdit(cal_tab);
-    cal_end->setPlaceholderText(tr("End date (YYYY-MM-DD)"));
-    cal_end->setStyleSheet(input_ss());
-    text_inputs_["fd_cal_end"] = cal_end;
+    auto* cal_end = new QDateEdit(cal_tab);
+    cal_end->setCalendarPopup(true);
+    cal_end->setDisplayFormat("yyyy-MM-dd");
+    cal_end->setMinimumDate(QDate(2000, 1, 1));
+    cal_end->setMaximumDate(cal_today);
+    cal_end->setDate(cal_today);
+    cal_end->setStyleSheet(dateedit_ss());
+    date_inputs_["fd_cal_end"] = cal_end;
     calvl->addWidget(build_input_row(tr("End Date"), cal_end, cal_tab));
     auto* cal_run = make_run_button(tr("GET TRADING CALENDAR"), cal_tab);
     connect(cal_run, &QPushButton::clicked, this, [this]() {
         status_label_->setText(tr("Loading..."));
         QJsonObject params;
-        if (!text_inputs_["fd_cal_start"]->text().isEmpty())
-            params["start_date"] = text_inputs_["fd_cal_start"]->text().trimmed();
-        if (!text_inputs_["fd_cal_end"]->text().isEmpty())
-            params["end_date"] = text_inputs_["fd_cal_end"]->text().trimmed();
+        params["start_date"] = date_inputs_["fd_cal_start"]->date().toString("yyyy-MM-dd");
+        params["end_date"] = date_inputs_["fd_cal_end"]->date().toString("yyyy-MM-dd");
         AIQuantLabService::instance().factor_get_calendar(params);
     });
     calvl->addWidget(cal_run);

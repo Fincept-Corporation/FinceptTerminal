@@ -128,6 +128,37 @@ QString format_strike(double strike) {
     return s;
 }
 
+QString expiry_friendly(const QString& display_expiry) {
+    // Stored form is "DD-MMM-YY" (e.g. "07-JUL-26"). Make it "7 Jul 26": drop the
+    // day's leading zero and title-case the month.
+    const QStringList parts = display_expiry.split('-', Qt::SkipEmptyParts);
+    if (parts.size() != 3)
+        return display_expiry;
+    const int day = parts[0].toInt();
+    if (day <= 0)
+        return display_expiry;
+    const QString mon = parts[1].left(1).toUpper() + parts[1].mid(1).toLower();
+    return QStringLiteral("%1 %2 %3").arg(QString::number(day), mon, parts[2]);
+}
+
+QString display_name(const QString& name, InstrumentType itype, const QString& expiry, double strike,
+                     const QString& fallback_symbol) {
+    switch (itype) {
+        case InstrumentType::FUT:
+            return QStringLiteral("%1 %2 FUT").arg(name, expiry_friendly(expiry));
+        case InstrumentType::CE:
+            return QStringLiteral("%1 %2 %3 CE").arg(name, expiry_friendly(expiry), format_strike(strike));
+        case InstrumentType::PE:
+            return QStringLiteral("%1 %2 %3 PE").arg(name, expiry_friendly(expiry), format_strike(strike));
+        case InstrumentType::INDEX:
+            return name.isEmpty() ? fallback_symbol : name;
+        case InstrumentType::EQ:
+        case InstrumentType::UNKNOWN:
+        default:
+            return fallback_symbol.isEmpty() ? name : fallback_symbol;
+    }
+}
+
 QString strip_eq_suffix(const QString& trading_symbol) {
     QString s = trading_symbol.trimmed().toUpper();
     static const QRegularExpression re("(-EQ|-BE|-MF|-SG|-SM)$");

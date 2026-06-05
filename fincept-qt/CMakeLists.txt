@@ -781,6 +781,8 @@ set(STORAGE_SOURCES
     src/storage/repositories/FiiDiiRepository.cpp
     src/storage/repositories/IvHistoryRepository.cpp
     src/storage/repositories/WatchlistRepository.cpp
+    src/storage/repositories/ScanWatchRepository.cpp
+    src/storage/repositories/ScanEventRepository.cpp
     src/storage/repositories/NotesRepository.cpp
     src/storage/repositories/NotebookRepository.cpp
     src/storage/repositories/ReportRepository.cpp
@@ -788,6 +790,8 @@ set(STORAGE_SOURCES
     src/storage/repositories/NewsMonitorRepository.cpp
     src/storage/repositories/NewsArticleRepository.cpp
     src/storage/repositories/RssFeedRepository.cpp
+    src/storage/repositories/FeedSubscriptionRepository.cpp
+    src/storage/repositories/FeedItemRepository.cpp
     src/storage/repositories/PortfolioHoldingsRepository.cpp
     src/storage/repositories/ChatRepository.cpp
     src/storage/repositories/DashboardLayoutRepository.cpp
@@ -852,6 +856,11 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v037_cloud_sync.cpp
     src/storage/sqlite/migrations/v038_notebooks.cpp
     src/storage/sqlite/migrations/v039_algo_schema_fix.cpp
+    src/storage/sqlite/migrations/v040_paper_trading_realism.cpp
+    src/storage/sqlite/migrations/v041_scan_watches.cpp
+    src/storage/sqlite/migrations/v042_scan_watch_events.cpp
+    src/storage/sqlite/migrations/v043_feed_subscriptions.cpp
+    src/storage/sqlite/migrations/v044_feed_items.cpp
 
     # Historical OHLCV data store (Historify, Phase 3 §13)
     src/storage/HistoricalDataStore.cpp
@@ -1068,6 +1077,7 @@ set(ALGO_ENGINE_SOURCES
     src/algo_engine/AlgoEngineProducer.cpp
     src/algo_engine/AlgoScanner.cpp
     src/algo_engine/CandleDataFetcher.cpp
+    src/algo_engine/ScanMonitor.cpp
     src/algo_engine/BacktestEngine.cpp
 )
 
@@ -1124,6 +1134,11 @@ set(SERVICE_SOURCES
     src/services/news/NewsMonitorService.cpp
     src/services/news/NewsNlpService.cpp
     src/services/news/NewsCorrelationService.cpp
+    # Generalized feed monitor (reusable RSS/XML/JSON/CSV scraper engine)
+    src/services/feeds/FeedParseUtil.cpp
+    src/services/feeds/FeedScraper.cpp
+    src/services/feeds/FeedMonitor.cpp
+    src/services/feeds/FeedSelfTest.cpp
     src/services/databento/DatabentoService.cpp
     src/services/dbnomics/DBnomicsService.cpp
     src/services/gov_data/GovDataService.cpp
@@ -1317,6 +1332,7 @@ set(UI_SOURCES
     src/ui/command/QuickCommandBar.cpp
     src/ui/command/CommandPalette.cpp
     src/ui/notifications/NotificationService.cpp
+    src/ui/notifications/DesktopNotifier.cpp
     src/ui/error/ErrorPipeline.cpp
 
     src/ui/workspace/LayoutOpenDialog.cpp
@@ -1335,6 +1351,7 @@ set(UI_SOURCES
     src/ui/widgets/algo/ConditionSection.cpp
     src/ui/widgets/algo/RiskManagementPanel.cpp
     src/ui/widgets/algo/SymbolSearchCombo.cpp
+    src/ui/widgets/algo/SymbolChipInput.cpp
 )
 
 # Screens
@@ -1501,6 +1518,13 @@ set(SCREEN_SOURCES
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
     src/screens/equity_trading/OrderConfirmDialog.cpp
+    # Feed monitor (reusable across screens)
+    src/screens/common/feeds/FeedCardView.cpp
+    src/screens/common/feeds/FeedTableView.cpp
+    src/screens/common/feeds/FeedView.cpp
+    src/screens/common/feeds/FloatingFeedWindow.cpp
+    src/screens/common/feeds/FeedConfigDialog.cpp
+    src/screens/common/feeds/FeedPanel.cpp
     # Action Center — pending-orders popover + status-bar badge (queued approvals).
     src/screens/action_center/PendingOrdersPanel.cpp
     src/screens/action_center/PendingOrdersBadge.cpp
@@ -1647,6 +1671,7 @@ set(SCREEN_SOURCES
     src/screens/algo_trading/StrategyBuilderPanel.cpp
     src/screens/algo_trading/StrategyListPanel.cpp
     src/screens/algo_trading/ScannerPanel.cpp
+    src/screens/algo_trading/AlertsPanel.cpp
     src/screens/algo_trading/DeploymentDashboard.cpp
     src/screens/algo_trading/AlgoDeployDialog.cpp
 
@@ -1906,6 +1931,7 @@ set_source_files_properties(
     src/screens/algo_trading/AlgoTradingScreen.cpp
     src/screens/algo_trading/DeploymentDashboard.cpp
     src/screens/algo_trading/ScannerPanel.cpp
+    src/screens/algo_trading/AlertsPanel.cpp
     src/screens/algo_trading/StrategyBuilderPanel.cpp
     src/screens/algo_trading/StrategyListPanel.cpp
     src/screens/algo_trading/AlgoDeployDialog.cpp
@@ -1962,6 +1988,13 @@ set_source_files_properties(
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
     src/screens/equity_trading/OrderConfirmDialog.cpp
+    # Feed monitor (reusable across screens)
+    src/screens/common/feeds/FeedCardView.cpp
+    src/screens/common/feeds/FeedTableView.cpp
+    src/screens/common/feeds/FeedView.cpp
+    src/screens/common/feeds/FloatingFeedWindow.cpp
+    src/screens/common/feeds/FeedConfigDialog.cpp
+    src/screens/common/feeds/FeedPanel.cpp
     # Action Center — pending-orders popover + status-bar badge (queued approvals).
     src/screens/action_center/PendingOrdersPanel.cpp
     src/screens/action_center/PendingOrdersBadge.cpp
@@ -2258,6 +2291,8 @@ set_source_files_properties(
     src/storage/repositories/ReportRepository.cpp
     src/storage/repositories/SettingsRepository.cpp
     src/storage/repositories/WatchlistRepository.cpp
+    src/storage/repositories/ScanWatchRepository.cpp
+    src/storage/repositories/ScanEventRepository.cpp
     src/storage/repositories/WorkflowRepository.cpp
     src/storage/repositories/CustomIndexRepository.cpp
     src/storage/repositories/DataMappingRepository.cpp
@@ -2302,6 +2337,11 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v037_cloud_sync.cpp
     src/storage/sqlite/migrations/v038_notebooks.cpp
     src/storage/sqlite/migrations/v039_algo_schema_fix.cpp
+    src/storage/sqlite/migrations/v040_paper_trading_realism.cpp
+    src/storage/sqlite/migrations/v041_scan_watches.cpp
+    src/storage/sqlite/migrations/v042_scan_watch_events.cpp
+    src/storage/sqlite/migrations/v043_feed_subscriptions.cpp
+    src/storage/sqlite/migrations/v044_feed_items.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
@@ -2560,6 +2600,8 @@ set_source_files_properties(
     src/storage/repositories/ReportRepository.cpp
     src/storage/repositories/SettingsRepository.cpp
     src/storage/repositories/WatchlistRepository.cpp
+    src/storage/repositories/ScanWatchRepository.cpp
+    src/storage/repositories/ScanEventRepository.cpp
     src/storage/repositories/WorkflowRepository.cpp
     src/storage/repositories/CustomIndexRepository.cpp
     src/storage/repositories/DataMappingRepository.cpp

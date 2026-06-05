@@ -1,5 +1,7 @@
 ﻿#include "algo_engine/AlgoEngineProducer.h"
+#include "algo_engine/ScanMonitor.h"
 #include "services/llm/LlmService.h"
+#include "ui/notifications/DesktopNotifier.h"
 #include "app/MonitorPickerDialog.h"
 #include "app/WindowFrame.h"
 #include "app/TerminalShell.h"
@@ -24,6 +26,7 @@
 #include "datahub/DataHubMetaTypes.h"
 #include "mcp/McpInit.h"
 #include "mcp/ToolSelfTest.h"
+#include "services/feeds/FeedSelfTest.h"
 #include "network/http/HttpClient.h"
 #include "python/PythonSetupManager.h"
 #include "screens/launchpad/LaunchpadScreen.h"
@@ -707,6 +710,11 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v037();
     fincept::register_migration_v038();
     fincept::register_migration_v039();
+    fincept::register_migration_v040();
+    fincept::register_migration_v041();
+    fincept::register_migration_v042();
+    fincept::register_migration_v043();
+    fincept::register_migration_v044();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
@@ -860,7 +868,22 @@ int main(int argc, char* argv[]) {
             return fincept::mcp::run_tool_selftest();
         if (qstrcmp(argv[i], "--dump-tools") == 0)
             return fincept::mcp::dump_tools_json();
+        if (qstrcmp(argv[i], "--selftest-feeds") == 0)
+            return fincept::feeds::run_feed_selftest();
     }
+
+    // Start the scan-watch background service. Runs after Database::open() (which
+    // applies the scan_watches migration) and after bootstrap_auth() (broker
+    // creds, needed by the first candle poll), and after the headless self-test
+    // early-returns above so it is skipped on --selftest-tools / --dump-tools.
+    // Placed before the Python-setup branch so both GUI paths (setup screen and
+    // normal startup) start it exactly once. Candle fetching is native C++ (broker
+    // REST / native Yahoo), so it does not require the Python env to be ready.
+    fincept::algo::ScanMonitor::instance().start();
+
+    // Native desktop notifications (Win toast / macOS Notification Center / Linux
+    // libnotify) via a tray icon — also surfaces every in-app ToastService toast.
+    fincept::ui::DesktopNotifier::instance().init();
 
     // ── Python environment check ─────────────────────────────────────────────
     // check_status() fast path (sentinel + markers present) is synchronous and

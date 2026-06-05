@@ -4,6 +4,7 @@
 #include "screens/equity_trading/EquityTypes.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
+#include "trading/instruments/InstrumentNormalize.h"
 #include "trading/instruments/InstrumentService.h"
 #include "ui/theme/Theme.h"
 
@@ -35,12 +36,6 @@ QStringList connected_broker_ids(const QString& active) {
             ids << a.broker_id;
     }
     return ids;
-}
-
-// Human-readable broker name for the suggestion tag.
-QString broker_display(const QString& broker_id) {
-    auto* b = trading::BrokerRegistry::instance().get(broker_id);
-    return b ? b->profile().display_name : broker_id;
 }
 
 // True if at least one of the connected brokers has its instrument catalog loaded.
@@ -78,7 +73,7 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
 
     wl_menu_btn_ = new QToolButton;
     wl_menu_btn_->setObjectName("eqWatchlistMenuBtn");
-    wl_menu_btn_->setText(QStringLiteral("⋯"));
+    wl_menu_btn_->setText(QStringLiteral("+"));
     wl_menu_btn_->setCursor(Qt::PointingHandCursor);
     wl_menu_btn_->setAutoRaise(true);
     wl_menu_btn_->setToolTip(tr("New / Rename / Delete watchlist"));
@@ -152,16 +147,37 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     // slot is connected after setCompleter(), so it runs after QCompleter's own
     // text insertion; clearing here leaves the edit empty, so a trailing
     // returnPressed becomes a harmless no-op (no double add).
+    // Resolve a picked label back to the real symbol: friendly-name map first
+    // (clean F&O label), else the legacy "SYMBOL  ·  EXCH" / "EXCH:SYMBOL" parse.
+    auto resolve = [this](const QString& choice) -> QString {
+        QString sym = add_suggestion_map_.value(choice);
+        if (sym.isEmpty()) {
+            sym = choice.section(QStringLiteral("  ·  "), 0, 0).trimmed().toUpper();
+            if (sym.contains(':'))
+                sym = sym.section(':', 1);
+        }
+        return sym;
+    };
     connect(completer_, QOverload<const QString&>::of(&QCompleter::activated), this,
-            [this](const QString& choice) {
-        QString sym = choice.section(QStringLiteral("  ·  "), 0, 0).trimmed().toUpper();
-        if (sym.contains(':'))
-            sym = sym.section(':', 1);
-        if (sym.isEmpty())
-            return;
-        add_symbol(sym);
-        add_edit_->clear();
-    });
+            [this, resolve](const QString& choice) {
+                const QString sym = resolve(choice);
+                if (sym.isEmpty())
+                    return;
+                add_symbol(sym);
+                add_edit_->clear();
+            });
+    // A single mouse-click on a suggestion must add it — QCompleter::activated is
+    // unreliable on click for a per-keystroke model, so wire the popup's clicked()
+    // directly. add_symbol() dedups, so the two paths can never double-add.
+    if (auto* popup = completer_->popup()) {
+        connect(popup, &QAbstractItemView::clicked, this, [this, resolve](const QModelIndex& idx) {
+            const QString sym = resolve(idx.data(Qt::DisplayRole).toString());
+            if (sym.isEmpty())
+                return;
+            add_symbol(sym);
+            add_edit_->clear();
+        });
+    }
 
     add_btn_ = new QPushButton("+");
     add_btn_->setObjectName("eqWatchlistAddBtn");
@@ -450,15 +466,18 @@ void EquityWatchlist::add_symbol(const QString& symbol) {
 }
 
 void EquityWatchlist::on_add_symbol_entered() {
-    const QString raw = add_edit_->text().trimmed().toUpper();
+    const QString raw = add_edit_->text().trimmed();
     if (raw.isEmpty())
         return;
 
-    // The completer suggestion is "SYMBOL  ·  EXCH  ·  Broker" — keep only the
-    // leading symbol token. Also tolerate the legacy "EXCHANGE:SYMBOL" form.
-    QString sym = raw.section(QStringLiteral("  ·  "), 0, 0).trimmed();
-    if (sym.contains(':'))
-        sym = sym.section(':', 1);
+    // A picked friendly label resolves to the real symbol via the map; otherwise
+    // treat the text as typed input (legacy "SYMBOL  ·  EXCH" / "EXCH:SYMBOL").
+    QString sym = add_suggestion_map_.value(raw);
+    if (sym.isEmpty()) {
+        sym = raw.toUpper().section(QStringLiteral("  ·  "), 0, 0).trimmed();
+        if (sym.contains(':'))
+            sym = sym.section(':', 1);
+    }
 
     // Validate against every connected broker (not just the focused one) so a
     // symbol that only one connected broker carries is still accepted.
@@ -495,9 +514,16 @@ void EquityWatchlist::on_add_text_changed(const QString& text) {
     auto results = trading::InstrumentService::instance().search_all(query, "", ids, 24);
     QStringList suggestions;
     suggestions.reserve(results.size());
+    add_suggestion_map_.clear();
     for (const auto& inst : results) {
-        suggestions.append(
-            QString("%1  ·  %2  ·  %3").arg(inst.symbol, inst.exchange, broker_display(inst.broker_id)));
+        // Clean F&O label instead of the raw symbol; remember the real symbol.
+        const QString friendly =
+            trading::norm::display_name(inst.name, inst.instrument_type, inst.expiry, inst.strike, inst.symbol);
+        const QString label = QStringLiteral("%1  ·  %2").arg(friendly, inst.exchange);
+        if (add_suggestion_map_.contains(label))
+            continue; // collapse identical labels across brokers
+        add_suggestion_map_.insert(label, inst.symbol);
+        suggestions.append(label);
     }
     completer_model_->setStringList(suggestions);
     // Force the popup to refresh against the just-updated model (otherwise the

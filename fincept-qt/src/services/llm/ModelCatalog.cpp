@@ -153,6 +153,12 @@ const CatalogEntry kCatalog[] = {
     {"astraflow",    "*", kNoPublishedCap},
     {"astraflow_cn", "*", kNoPublishedCap},
 
+    // ── AIHubMix (OpenAI-compatible aggregator) ─────────────────────────────
+    // https://aihubmix.com/models — routes 500+ upstream models; per-model cap
+    // varies and we can't know the route from the id, so use a generous default
+    // (user max_tokens still applies).
+    {"aihubmix", "*", kNoPublishedCap},
+
     // ── Fincept (proxies upstream) ──────────────────────────────────────
     // Fincept's /research/llm/async wraps various upstream models. We
     // don't know which one is selected server-side, so go with a generous

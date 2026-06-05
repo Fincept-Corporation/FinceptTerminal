@@ -382,6 +382,10 @@ QString LlmService::get_endpoint_url() const {
         return "http://localhost:11434/v1/chat/completions";
     if (p == "xai")
         return "https://api.x.ai/v1/chat/completions";
+    if (p == "aihubmix")
+        // Fallback for when the prefilled base_url was cleared; the custom-base_url
+        // branch above wins whenever it's set (incl. regional/proxy overrides).
+        return "https://aihubmix.com/v1/chat/completions";
     return {};
 }
 
@@ -1039,7 +1043,17 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
 
     int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     if (reply->error() != QNetworkReply::NoError) {
-        resp.error = reply->errorString();
+        // A non-2xx (e.g. 400 from AIHubMix routing to a model that rejects a
+        // param) carries a JSON error body that explains why. The SSE reader
+        // never parses it because it isn't a "data:" line, so pull it from the
+        // unconsumed buffer + any remainder and surface the real reason instead
+        // of Qt's opaque "server replied: Bad Request".
+        const QByteArray err_body = partial_line + reply->readAll();
+        const QString server_msg = parse_server_error_message(err_body);
+        if (!server_msg.isEmpty())
+            resp.error = status > 0 ? QString("HTTP %1: %2").arg(status).arg(server_msg) : server_msg;
+        else
+            resp.error = reply->errorString();
         LOG_ERROR(kLlmSvcTag, "Stream request failed: " + resp.error);
     } else if (status >= 200 && status < 300) {
         resp.content = accumulated;

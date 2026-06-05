@@ -3,6 +3,7 @@
 #include "core/components/ComponentCatalog.h"
 #include "core/components/PopularityTracker.h"
 #include "ui/components/ComponentCard.h"
+#include "ui/theme/Theme.h"
 
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -39,7 +40,10 @@ ComponentBrowserDialog::ComponentBrowserDialog(QWidget* parent) : QDialog(parent
     setWindowTitle(tr("Component Browser"));
     setModal(true);
     resize(960, 640);
-    setStyleSheet("QDialog{background:#0f172a;} QLabel{color:#e5e7eb;}");
+    setStyleSheet(QString("QDialog{background:%1;font-family:%2;} QLabel{color:%3;}")
+                      .arg(colors::BG_BASE())
+                      .arg(fonts::DATA_FAMILY())
+                      .arg(colors::TEXT_PRIMARY()));
     build_ui();
     rebuild_cards();
 }
@@ -52,13 +56,16 @@ void ComponentBrowserDialog::build_ui() {
     // Header bar — title + search.
     auto* header = new QWidget(this);
     header->setFixedHeight(56);
-    header->setStyleSheet("background:#111827;border-bottom:1px solid #374151;");
+    header->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+                              .arg(colors::BG_RAISED())
+                              .arg(colors::BORDER_MED()));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(16, 8, 16, 8);
     hl->setSpacing(12);
 
     title_label_ = new QLabel(tr("COMPONENT BROWSER"), header);
-    title_label_->setStyleSheet("color:#d97706;font-size:13px;font-weight:700;letter-spacing:2px;");
+    title_label_->setStyleSheet(
+        QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;").arg(colors::AMBER()));
     hl->addWidget(title_label_);
 
     hl->addSpacing(24);
@@ -67,16 +74,20 @@ void ComponentBrowserDialog::build_ui() {
     search_->setPlaceholderText(tr("Search components…"));
     search_->setClearButtonEnabled(true);
     search_->setStyleSheet(
-        "QLineEdit{background:#0b1220;border:1px solid #374151;border-radius:3px;"
-        "color:#f3f4f6;padding:6px 10px;min-width:280px;}"
-        "QLineEdit:focus{border-color:#d97706;}");
+        QString("QLineEdit{background:%1;border:1px solid %2;border-radius:2px;"
+                "color:%3;padding:6px 10px;min-width:280px;}"
+                "QLineEdit:focus{border-color:%4;}")
+            .arg(colors::BG_SURFACE())
+            .arg(colors::BORDER_MED())
+            .arg(colors::TEXT_PRIMARY())
+            .arg(colors::AMBER()));
     connect(search_, &QLineEdit::textChanged, this, &ComponentBrowserDialog::on_search_changed);
     hl->addWidget(search_);
 
     hl->addStretch(1);
 
     count_label_ = new QLabel(header);
-    count_label_->setStyleSheet("color:#9ca3af;font-size:11px;");
+    count_label_->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::TEXT_SECONDARY()));
     hl->addWidget(count_label_);
 
     root->addWidget(header);
@@ -90,10 +101,16 @@ void ComponentBrowserDialog::build_ui() {
     category_list_ = new QListWidget(split);
     category_list_->setFixedWidth(180);
     category_list_->setStyleSheet(
-        "QListWidget{background:#0b1220;border:none;border-right:1px solid #374151;color:#e5e7eb;}"
-        "QListWidget::item{padding:8px 14px;border:none;}"
-        "QListWidget::item:selected{background:#1f2937;color:#d97706;border-left:3px solid #d97706;}"
-        "QListWidget::item:hover{background:#111827;}");
+        QString("QListWidget{background:%1;border:none;border-right:1px solid %2;color:%3;}"
+                "QListWidget::item{padding:8px 14px;border:none;}"
+                "QListWidget::item:selected{background:%4;color:%5;border-left:3px solid %5;}"
+                "QListWidget::item:hover{background:%6;}")
+            .arg(colors::BG_SURFACE())
+            .arg(colors::BORDER_MED())
+            .arg(colors::TEXT_SECONDARY())
+            .arg(colors::BG_HOVER())
+            .arg(colors::AMBER())
+            .arg(colors::BG_RAISED()));
     // Row 0 is the "All" sentinel: translated display text, empty UserRole.
     // Other rows store the real (non-translated) category id in UserRole so
     // filtering stays stable regardless of the active locale.
@@ -111,7 +128,7 @@ void ComponentBrowserDialog::build_ui() {
     scroll_ = new QScrollArea(split);
     scroll_->setWidgetResizable(true);
     scroll_->setFrameShape(QFrame::NoFrame);
-    scroll_->setStyleSheet("background:#0f172a;");
+    scroll_->setStyleSheet(QString("background:%1;").arg(colors::BG_BASE()));
     grid_host_ = new QWidget;
     grid_host_->setStyleSheet("background:transparent;");
     grid_layout_ = new QGridLayout(grid_host_);

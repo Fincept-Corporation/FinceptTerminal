@@ -603,6 +603,62 @@ class QlibService:
             "available_count": len(HANDLERS_AVAILABLE)
         }
 
+    def get_factor_library(self) -> Dict[str, Any]:
+        """List built-in Qlib alpha factors with their expressions.
+
+        Pulls the real (name, expression) pairs from the Alpha158/Alpha360
+        feature loaders when qlib is installed; falls back to a curated set
+        of canonical alpha expressions otherwise so the UI is never empty.
+        Returns {"success", "factors":[{name, category, expression}, ...]}.
+        """
+        factors: List[Dict[str, Any]] = []
+        if QLIB_AVAILABLE:
+            try:
+                from qlib.contrib.data.loader import Alpha158DL, Alpha360DL
+                for category, loader in (("Alpha158", Alpha158DL), ("Alpha360", Alpha360DL)):
+                    fields, names = loader.get_feature_config()
+                    for name, expr in zip(names, fields):
+                        factors.append({
+                            "name": name,
+                            "category": category,
+                            "expression": expr,
+                        })
+            except Exception as e:
+                print(f"Falling back to curated factor library: {e}", file=sys.stderr)
+                factors = []
+
+        if not factors:
+            # Curated fallback — canonical Qlib alpha expressions (Alpha158 style).
+            curated = [
+                ("KMID",  "($close-$open)/$open"),
+                ("KLEN",  "($high-$low)/$open"),
+                ("KUP",   "($high-Greater($open,$close))/$open"),
+                ("KLOW",  "(Less($open,$close)-$low)/$open"),
+                ("OPEN0", "$open/$close"),
+                ("HIGH0", "$high/$close"),
+                ("LOW0",  "$low/$close"),
+                ("ROC5",  "Ref($close,5)/$close"),
+                ("MA5",   "Mean($close,5)/$close"),
+                ("MA20",  "Mean($close,20)/$close"),
+                ("STD5",  "Std($close,5)/$close"),
+                ("STD20", "Std($close,20)/$close"),
+                ("BETA5", "Slope($close,5)/$close"),
+                ("MAX5",  "Max($high,5)/$close"),
+                ("MIN5",  "Min($low,5)/$close"),
+                ("QTLU5", "Quantile($close,5,0.8)/$close"),
+                ("QTLD5", "Quantile($close,5,0.2)/$close"),
+                ("RSV5",  "($close-Min($low,5))/(Max($high,5)-Min($low,5)+1e-12)"),
+                ("CORR5", "Corr($close,Log($volume+1),5)"),
+                ("CORD5", "Corr($close/Ref($close,1),Log($volume/Ref($volume,1)+1),5)"),
+                ("CNTP5", "Mean($close>Ref($close,1),5)"),
+                ("SUMP5", "Sum(Greater($close-Ref($close,1),0),5)/(Sum(Abs($close-Ref($close,1)),5)+1e-12)"),
+                ("VMA5",  "Mean($volume,5)/($volume+1e-12)"),
+                ("VSTD5", "Std($volume,5)/($volume+1e-12)"),
+            ]
+            factors = [{"name": n, "category": "Alpha158", "expression": e} for n, e in curated]
+
+        return {"success": True, "factors": factors, "count": len(factors)}
+
     def get_strategies(self) -> Dict[str, Any]:
         """Get available trading strategies"""
         strategies = {
@@ -1237,7 +1293,7 @@ class QlibService:
             }
 
     def get_instruments(self,
-                        market: str = "csi300",
+                        market: str = "all",
                         start_date: Optional[str] = None,
                         end_date: Optional[str] = None) -> Dict[str, Any]:
         """Get instruments list for a market index"""
@@ -1254,6 +1310,15 @@ class QlibService:
                 instrument_list = list(instruments)
             else:
                 instrument_list = []
+
+            if not instrument_list:
+                return {
+                    "success": False,
+                    "error": (f"No instruments found for market '{market}'. "
+                              "The qlib market dataset is not downloaded. Run: "
+                              "python -m qlib.run.get_data qlib_data "
+                              "--target_dir ~/.qlib/qlib_data/us_data --region us"),
+                }
 
             return {
                 "success": True,
@@ -1328,6 +1393,9 @@ def main():
 
         elif command == "get_data_handlers":
             result = service.get_data_handlers()
+
+        elif command == "get_factor_library":
+            result = service.get_factor_library()
 
         elif command == "get_strategies":
             result = service.get_strategies()
@@ -1454,7 +1522,7 @@ def main():
         elif command == "get_instruments":
             params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
             result = service.get_instruments(
-                params.get("market", "csi300"),
+                params.get("market", "all"),
                 params.get("start_date"),
                 params.get("end_date")
             )

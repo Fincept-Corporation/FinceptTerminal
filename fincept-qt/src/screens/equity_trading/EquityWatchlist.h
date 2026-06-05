@@ -6,6 +6,7 @@
 #include <QComboBox>
 #include <QCompleter>
 #include <QEvent>
+#include <QHash>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMutex>
@@ -76,6 +77,8 @@ class EquityWatchlist : public QWidget {
     QPushButton* add_btn_ = nullptr;
     QStringListModel* completer_model_ = nullptr;
     QCompleter* completer_ = nullptr;
+    // Friendly picker label → canonical symbol (F&O clean names in the add box).
+    QHash<QString, QString> add_suggestion_map_;
     QLabel* title_label_ = nullptr;
     QLabel* count_label_ = nullptr;
     QTableWidget* table_ = nullptr;

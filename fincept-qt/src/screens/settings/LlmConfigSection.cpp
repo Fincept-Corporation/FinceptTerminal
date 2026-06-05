@@ -35,7 +35,7 @@ static constexpr const char* TAG = "LlmConfigSection";
 
 const QStringList LlmConfigSection::KNOWN_PROVIDERS = {"openai",  "anthropic", "gemini",   "groq",  "deepseek",
                                                        "openrouter", "minimax", "kimi", "ollama", "xai",   "fincept",
-                                                       "astraflow", "astraflow_cn"};
+                                                       "astraflow", "astraflow_cn", "aihubmix"};
 
 QString LlmConfigSection::default_base_url(const QString& provider) {
     const QString p = provider.toLower();
@@ -65,6 +65,8 @@ QString LlmConfigSection::default_base_url(const QString& provider) {
         return "https://api-us-ca.umodelverse.ai/v1"; // Astraflow global endpoint (UCloud)
     if (p == "astraflow_cn")
         return "https://api.modelverse.cn/v1"; // Astraflow China endpoint (UCloud)
+    if (p == "aihubmix")
+        return "https://aihubmix.com/v1"; // AIHubMix — OpenAI-compatible aggregator (500+ models)
     return {};
 }
 
@@ -115,6 +117,15 @@ QStringList LlmConfigSection::fallback_models(const QString& provider) {
                 "gemini-2.5-flash", "gemini-2.5-pro",
                 "deepseek-chat", "deepseek-reasoner",
                 "llama-3.3-70b-versatile", "qwen-turbo", "qwen-plus"};
+    if (p == "aihubmix")
+        // AIHubMix — OpenAI-compatible aggregator routing 500+ models (OpenAI, Claude,
+        // Gemini, DeepSeek, Qwen, ...) through one /v1/chat/completions endpoint. Models
+        // keep their upstream ids. Starter list only; full list via the Fetch button.
+        return {"gpt-4o", "gpt-4o-mini", "gpt-4.1", "o3-mini",
+                "claude-sonnet-4-5-20250514", "claude-3-5-sonnet-20241022",
+                "gemini-2.5-flash", "gemini-2.5-pro",
+                "deepseek-chat", "deepseek-reasoner",
+                "qwen-max", "qwen-plus", "grok-4"};
     return {};
 }
 

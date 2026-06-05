@@ -138,4 +138,45 @@ inline QString currency_symbol(const QString& currency) {
     return "$";
 }
 
+// \u2500\u2500 Funds / Stats view-models \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// The bottom-panel Funds and Stats tabs render from these view-models, so the
+// panel is decoupled from the data source: live mode fills them from BrokerFunds
+// (the subset it knows), paper mode fills the full set from the paper engine.
+
+struct EquityFundsView {
+    QString currency = QStringLiteral("\u20B9"); // symbol, e.g. \u20B9 / $
+    bool is_paper = false;
+
+    double available = 0.0;       // free cash / available margin
+    double used_margin = 0.0;     // locked by open intraday positions + pending orders
+    double total_equity = 0.0;    // net worth = available + used + holdings + open P&L
+    double opening_balance = 0.0; // initial / start-of-day balance
+    double holdings_value = 0.0;  // current value of CNC delivery holdings
+    double realized_pnl = 0.0;    // realized P&L (today)
+    double unrealized_pnl = 0.0;  // open positions + holdings mark-to-market
+    double collateral = 0.0;      // pledged collateral (live brokers)
+    double margin_util_pct = 0.0; // used / (used + available) * 100
+};
+
+struct EquityStatsView {
+    QString currency = QStringLiteral("\u20B9");
+
+    double net_pnl = 0.0;        // realized + unrealized
+    double today_pnl = 0.0;      // realized today
+    double realized_pnl = 0.0;
+    double unrealized_pnl = 0.0;
+    double return_pct = 0.0;     // net_pnl / opening_balance * 100
+    double win_rate = 0.0;       // 0..1
+    long long total_trades = 0;
+    long long winning_trades = 0;
+    long long losing_trades = 0;
+    double profit_factor = 0.0;
+    double avg_win = 0.0;
+    double avg_loss = 0.0;
+    double largest_win = 0.0;
+    double largest_loss = 0.0;
+    double total_fees = 0.0;
+    double turnover = 0.0;
+};
+
 } // namespace fincept::screens::equity

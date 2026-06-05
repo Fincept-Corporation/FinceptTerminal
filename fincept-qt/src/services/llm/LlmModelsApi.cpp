@@ -68,6 +68,7 @@ QString LlmService::get_models_url(const QString& provider, const QString& api_k
     if (p == "openrouter") return "https://openrouter.ai/api/v1/models";
     if (p == "xai")     return "https://api.x.ai/v1/models";
     if (p == "kimi")    return "https://api.moonshot.ai/v1/models";
+    if (p == "aihubmix") return "https://aihubmix.com/v1/models"; // fallback if prefilled base_url was cleared
     if (p == "fincept") return fincept::AppConfig::instance().api_base_url() + "/research/llm/models";
     // minimax has no public /v1/models — caller falls back to known models.
     return {};

@@ -9,6 +9,7 @@
 #include "storage/repositories/PaperTradingRepository.h"
 #include "storage/sqlite/Database.h"
 
+#include <QDate>
 #include <QDateTime>
 #include <QHash>
 #include <QMutex>
@@ -394,7 +395,8 @@ QVector<PtOrder> pt_get_orders(const QString& portfolio_id, const QString& statu
 // Fill Order — The Core Engine
 // ============================================================================
 
-PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<double> fill_qty) {
+PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<double> fill_qty,
+                      const QString& fill_time) {
     if (!std::isfinite(fill_price) || fill_price <= 0.0)
         throw std::runtime_error("Invalid fill price");
     if (fill_qty && (!std::isfinite(*fill_qty) || *fill_qty <= 0.0))
@@ -420,107 +422,100 @@ PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<
     if (qty <= 0.0)
         throw std::runtime_error("Nothing left to fill");
     double fee = qty * fill_price * portfolio.fee_rate;
-    QString now = now_rfc3339();
+    QString now = fill_time.isEmpty() ? now_rfc3339() : fill_time;
 
     QString position_side = (order.side == "buy") ? "long" : "short";
     QString opposite_side = (order.side == "buy") ? "short" : "long";
     double pnl = 0.0;
+    double new_filled = order.filled_qty + qty;
+    bool fully_filled = (new_filled >= order.quantity);
 
     // ── Begin DB transaction for atomicity ──────────────────────────────
     auto& db = Database::instance();
     db.begin_transaction();
 
     try {
-        // 4. Check opposite-side position (closing)
-        auto opp = repo().find_position(order.portfolio_id, order.symbol, opposite_side);
-        bool had_opposite = false;
+        // Net change to available cash from this fill. Margin model (v040):
+        //   • Opening exposure KEEPS its margin locked on the position (held_margin)
+        //     — it is NOT released to cash on fill. This is what finally makes
+        //     available balance drop when a position is opened (the old code released
+        //     the block on fill, so an open position locked no cash — "stuck at 10L").
+        //   • Closing/reducing a position RELEASES that position's held margin back
+        //     to cash, proportionally, plus realized P&L.
+        //   • Brokerage (fee) is charged on every fill.
+        double balance_delta = -fee;
+        const double order_blocked = repo().get_margin_block(order_id);
+        double block_consumed = 0.0; // portion of the order's block turned into position margin
 
+        // ── Closing leg: net against an opposite-side position ──
+        double close_qty = 0.0;
+        auto opp = repo().find_position(order.portfolio_id, order.symbol, opposite_side);
         if (opp) {
-            had_opposite = true;
             PtPosition pos = *opp;
-            double close_qty = std::min(qty, pos.quantity);
+            close_qty = std::min(qty, pos.quantity);
             pnl = (pos.side == "long") ? (fill_price - pos.entry_price) * close_qty
                                        : (pos.entry_price - fill_price) * close_qty;
-
+            const double frac_close = pos.quantity > 0.0 ? (close_qty / pos.quantity) : 1.0;
+            const double margin_released = pos.held_margin * frac_close;
             if (close_qty >= pos.quantity) {
                 repo().delete_position(pos.id);
             } else {
                 repo().update_position(pos.id, pos.quantity - close_qty, pos.entry_price);
+                repo().set_position_margin(pos.id, pos.held_margin - margin_released);
                 repo().add_realized_pnl(pos.id, pnl);
             }
-
-            // Position flip: remaining qty becomes new opposite position
-            if (qty > close_qty) {
-                double new_qty = qty - close_qty;
-                PtPosition np;
-                np.id = generate_uuid();
-                np.portfolio_id = order.portfolio_id;
-                np.symbol = order.symbol;
-                np.side = position_side;
-                np.quantity = new_qty;
-                np.entry_price = fill_price;
-                np.current_price = fill_price;
-                np.leverage = portfolio.leverage;
-                np.opened_at = now;
-                repo().insert_position(np);
-            }
+            balance_delta += margin_released + pnl;
         }
 
-        if (!had_opposite) {
-            // 5. Same-side position (averaging)
+        // ── Opening leg: net-new exposure on the order's own side ──
+        const double open_qty = qty - close_qty;
+        if (open_qty > 0.0) {
+            // Margin the new exposure must lock, per product / leverage at fill price.
+            double open_margin = pt_calculate_required_margin(order.portfolio_id, order.symbol, order.exchange,
+                                                              order.product, open_qty, fill_price, order.side);
+            // That margin was pre-blocked on the order at placement: convert the
+            // block into position margin (release the block, re-lock the actual).
+            block_consumed = fully_filled ? order_blocked : std::min(order_blocked, open_margin);
+            balance_delta += block_consumed - open_margin;
+
+            const QString product = order.product.isEmpty() ? QStringLiteral("MIS") : order.product;
             auto same = repo().find_position(order.portfolio_id, order.symbol, position_side);
             if (same) {
                 PtPosition pos = *same;
-                double new_qty = pos.quantity + qty;
+                double new_qty = pos.quantity + open_qty;
                 if (new_qty <= 0.0)
                     throw std::runtime_error("Invalid position quantity after averaging");
-                double new_entry = (pos.entry_price * pos.quantity + fill_price * qty) / new_qty;
+                double new_entry = (pos.entry_price * pos.quantity + fill_price * open_qty) / new_qty;
                 repo().update_position(pos.id, new_qty, new_entry);
+                repo().set_position_margin(pos.id, pos.held_margin + open_margin);
             } else {
-                // 6. Brand new position
                 PtPosition np;
                 np.id = generate_uuid();
                 np.portfolio_id = order.portfolio_id;
                 np.symbol = order.symbol;
                 np.side = position_side;
-                np.quantity = qty;
+                np.quantity = open_qty;
                 np.entry_price = fill_price;
                 np.current_price = fill_price;
-                np.leverage = portfolio.leverage;
+                np.leverage = open_margin > 0.0 ? (open_qty * fill_price) / open_margin : portfolio.leverage;
                 np.opened_at = now;
+                np.product = product;
+                np.held_margin = open_margin;
                 repo().insert_position(np);
             }
         }
 
-        // 7a. Release blocked margin (Phase 3 §4).
-        // Margin was blocked from balance at placement for the net-new exposure.
-        // Release it proportionally to the filled quantity on each (possibly
-        // partial) fill. On the final fill, release whatever remains so rounding
-        // never leaves margin stuck.
-        double new_filled = order.filled_qty + qty;
-        bool fully_filled = (new_filled >= order.quantity);
-        double order_blocked = repo().get_margin_block(order_id);
-        double margin_release = 0.0;
+        // ── Settle the order's margin block ──
         if (order_blocked > 0.0) {
             if (fully_filled) {
-                margin_release = order_blocked; // release all remaining
                 repo().delete_margin_block(order_id);
             } else {
-                double frac = (order.quantity > 0.0) ? (qty / order.quantity) : 1.0;
-                margin_release = order_blocked * frac;
-                double remaining = std::max(0.0, order_blocked - margin_release);
+                double remaining = std::max(0.0, order_blocked - block_consumed);
                 repo().insert_margin_block(generate_uuid(), order.portfolio_id, order_id, order.symbol, remaining);
             }
         }
 
-        // 7b. Update balance
-        // Fee model: deduct fee only on closing fills (when realized PnL is produced).
-        // Entry fees are NOT deducted from balance at open — they are included in the
-        // exit fee when the position is closed. This matches how most exchanges present
-        // unrealized P&L (gross of entry fee) and only settle fees on close.
-        // Released margin is credited back to available balance alongside realized P&L.
-        double balance_change = (had_opposite ? (pnl - fee) : pnl) + margin_release;
-        repo().update_balance(order.portfolio_id, portfolio.balance + balance_change);
+        repo().update_balance(order.portfolio_id, portfolio.balance + balance_delta);
 
         // 8. Update order
         QString new_status = fully_filled ? "filled" : "partial";
@@ -589,6 +584,167 @@ PtStats pt_get_stats(const QString& portfolio_id) {
     if (r.is_err())
         return {};
     return r.value();
+}
+
+// ============================================================================
+// Day-scoped queries / Settlement / Product conversion (v040)
+// ============================================================================
+
+namespace {
+
+// IST = UTC + 5:30. The UTC instant at which the given IST calendar day begins.
+QDateTime ist_day_start_utc(const QDate& ist_day) {
+    QDateTime utc_midnight(ist_day, QTime(0, 0, 0), Qt::UTC);
+    return utc_midnight.addSecs(-330 * 60); // shift IST-midnight back to its UTC instant
+}
+
+// The IST calendar date of a stored (naive/Z UTC) ISO timestamp.
+QDate ist_date_of(const QString& iso_utc, const QDate& fallback) {
+    QDateTime dt = QDateTime::fromString(iso_utc, Qt::ISODate);
+    if (!dt.isValid())
+        return fallback;
+    dt.setTimeSpec(Qt::UTC); // timestamps are UTC; reinterpret if no zone was parsed
+    return dt.addSecs(330 * 60).date();
+}
+
+} // namespace
+
+QVector<PtOrder> pt_get_orders_for_day(const QString& portfolio_id, const QDate& ist_day) {
+    const QDateTime start = ist_day_start_utc(ist_day);
+    auto r = repo().get_orders_between(portfolio_id, start.toString(Qt::ISODate),
+                                       start.addDays(1).toString(Qt::ISODate));
+    return r.is_ok() ? r.value() : QVector<PtOrder>{};
+}
+
+QVector<PtTrade> pt_get_trades_for_day(const QString& portfolio_id, const QDate& ist_day) {
+    const QDateTime start = ist_day_start_utc(ist_day);
+    auto r = repo().get_trades_between(portfolio_id, start.toString(Qt::ISODate),
+                                       start.addDays(1).toString(Qt::ISODate));
+    return r.is_ok() ? r.value() : QVector<PtTrade>{};
+}
+
+void pt_convert_position_product(const QString& position_id, const QString& new_product) {
+    QMutexLocker lock(&s_fill_mutex);
+
+    auto pr = repo().get_position(position_id);
+    if (pr.is_err())
+        throw std::runtime_error(pr.error());
+    PtPosition pos = pr.value();
+    if (pos.product.compare(new_product, Qt::CaseInsensitive) == 0)
+        return; // already that product — no-op
+
+    auto portfolio = pt_get_portfolio(pos.portfolio_id);
+
+    // Margin the position would lock under the NEW product, at its entry basis.
+    // (CNC/delivery = full notional at 1x; MIS = notional/leverage.)
+    const QString side = (pos.side == "long") ? "buy" : "sell";
+    const double new_margin = pt_calculate_required_margin(pos.portfolio_id, pos.symbol, QString(), new_product,
+                                                           pos.quantity, pos.entry_price, side);
+    const double extra = new_margin - pos.held_margin; // additional cash to lock (CNC needs more than MIS)
+    if (extra > portfolio.balance + 1e-6)
+        throw std::runtime_error(("Insufficient balance to convert to " + new_product).toStdString());
+
+    auto& db = Database::instance();
+    db.begin_transaction();
+    try {
+        repo().update_balance(pos.portfolio_id, portfolio.balance - extra);
+        repo().set_position_margin(position_id, new_margin);
+        repo().set_position_product(position_id, new_product);
+        db.commit();
+    } catch (...) {
+        db.rollback();
+        throw;
+    }
+}
+
+int pt_settle_intraday(const QString& portfolio_id) {
+    // Intraday auto-square applies ONLY to Indian (INR) equity portfolios. Crypto
+    // and US (USD) paper portfolios trade on other schedules and must never be
+    // squared at the IST 15:30 cutoff (this previously closed month-old crypto
+    // positions because their product had defaulted to MIS).
+    PtPortfolio portfolio;
+    try {
+        portfolio = pt_get_portfolio(portfolio_id);
+    } catch (...) {
+        return 0;
+    }
+    if (portfolio.currency.compare("INR", Qt::CaseInsensitive) != 0)
+        return 0;
+
+    const QDateTime ist_now = QDateTime::currentDateTimeUtc().addSecs(330 * 60);
+    const QDate ist_today = ist_now.date();
+    const bool past_close = ist_now.time() >= QTime(15, 30);
+
+    int squared = 0;
+    const auto positions = pt_get_positions(portfolio_id);
+    for (const auto& pos : positions) {
+        if (!product_is_intraday(pos.product))
+            continue; // CNC / NRML carry forward
+        const QDate opened_ist = ist_date_of(pos.opened_at, ist_today);
+        const bool from_prior_day = opened_ist < ist_today;
+        if (!past_close && !from_prior_day)
+            continue; // still within today's session and not yet 15:30
+
+        const double price = pos.current_price > 0.0 ? pos.current_price : pos.entry_price;
+        if (price <= 0.0)
+            continue; // can't price the square-off
+
+        // Stamp the square-off at the session close it actually belongs to: 15:30
+        // IST on the day the position was opened. For a same-day position past the
+        // cutoff that's today's 15:30; for a carried-over position it's that prior
+        // day's close — so a catch-up auto-square lands in THAT day's book, never
+        // polluting today's order list with trades the user didn't place.
+        const QDateTime close_utc = QDateTime(opened_ist, QTime(15, 30, 0), Qt::UTC).addSecs(-330 * 60);
+        const QString close_iso = close_utc.toString(Qt::ISODate);
+
+        // Square off = insert a reduce-only market order on the opposite side and
+        // fill it at the last price. Reuses the fill engine's closing leg (margin
+        // release + realized P&L + trade record), and leaves an auto-square order
+        // in the book just like a real broker's 3:30 cutoff.
+        try {
+            PtOrder o;
+            o.id = generate_uuid();
+            o.portfolio_id = portfolio_id;
+            o.symbol = pos.symbol;
+            o.side = (pos.side == "long") ? QStringLiteral("sell") : QStringLiteral("buy");
+            o.order_type = "market";
+            o.quantity = pos.quantity;
+            o.price = price;
+            o.filled_qty = 0.0;
+            o.status = "pending";
+            o.reduce_only = true;
+            o.margin_blocked = 0.0;
+            o.product = pos.product;
+            o.created_at = close_iso;
+            auto ir = repo().insert_order(o);
+            if (ir.is_err())
+                continue;
+            pt_fill_order(o.id, price, std::nullopt, close_iso);
+            ++squared;
+        } catch (const std::exception& e) {
+            LOG_WARN("PaperTrading", QString("Auto-square failed for %1: %2").arg(pos.symbol, e.what()));
+        }
+    }
+
+    // Stale DAY orders from earlier IST sessions expire at the close — cancel them
+    // so they don't linger as pending or fire on a later day.
+    const auto pending = pt_get_orders(portfolio_id, "pending");
+    for (const auto& o : pending) {
+        if (ist_date_of(o.created_at, ist_today) < ist_today) {
+            try {
+                pt_cancel_order(o.id);
+            } catch (...) {
+            }
+        }
+    }
+    return squared;
+}
+
+int pt_settle_intraday_all() {
+    int total = 0;
+    for (const auto& p : pt_list_portfolios())
+        total += pt_settle_intraday(p.id);
+    return total;
 }
 
 } // namespace fincept::trading

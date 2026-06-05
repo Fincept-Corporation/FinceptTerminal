@@ -35,16 +35,25 @@ QJsonObject LlmService::build_openai_request(const QString& user_message,
     QJsonObject req;
     req["model"]    = model_;
     req["messages"] = messages;
-    // Temperature omitted — each provider's default. OpenAI/xAI use max_completion_tokens; others max_tokens.
+    // Temperature omitted — each provider's default.
+    // Token-limit field: OpenAI/xAI native endpoints take max_completion_tokens
+    // universally. AIHubMix is a pass-through aggregator (no param translation),
+    // so an OpenAI-family model routed through it ALSO needs max_completion_tokens —
+    // o-series and gpt-5 hard-reject max_tokens with a 400 ("Unsupported parameter:
+    // 'max_tokens' ... Use 'max_completion_tokens' instead"). Non-OpenAI models
+    // (claude/gemini/deepseek/qwen/…) keep the OpenAI-compat max_tokens.
     const int mx = resolved_max_tokens();
-    if (provider_ == "openai" || provider_ == "xai")
+    const bool wants_completion_tokens = provider_ == "openai" || provider_ == "xai" ||
+                                         (provider_ == "aihubmix" && detail::is_openai_family_model(model_lower));
+    if (wants_completion_tokens)
         req["max_completion_tokens"] = mx;
     else
         req["max_tokens"] = mx;
     if (stream) {
         req["stream"] = true;
-        // OpenAI/xAI omit usage on streamed responses unless we opt in.
-        if (provider_ == "openai" || provider_ == "xai")
+        // OpenAI/xAI (and OpenAI-family models via AIHubMix) omit usage on streamed
+        // responses unless we opt in. Don't send stream_options to non-OpenAI routes.
+        if (wants_completion_tokens)
             req["stream_options"] = QJsonObject{{"include_usage", true}};
     }
 

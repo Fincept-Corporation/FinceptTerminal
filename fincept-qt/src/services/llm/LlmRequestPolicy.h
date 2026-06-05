@@ -90,6 +90,20 @@ inline mcp::ToolFilter apply_request_policy(const mcp::ToolFilter& base) {
     return out;
 }
 
+// True for OpenAI-family chat model ids (gpt-*, chatgpt-*, o1/o3/o4 reasoning
+// series). Used by pass-through aggregators (AIHubMix) that forward parameters
+// unchanged: these models reject the legacy `max_tokens` field and require
+// `max_completion_tokens` (o-series / gpt-5 return a 400 otherwise), whereas
+// non-OpenAI models (claude-*, gemini-*, deepseek-*, qwen-*, …) keep max_tokens.
+// `model_lower` must already be lower-cased by the caller.
+inline bool is_openai_family_model(const QString& model_lower) {
+    return model_lower.startsWith(QLatin1String("gpt-")) ||
+           model_lower.startsWith(QLatin1String("chatgpt")) ||
+           model_lower.startsWith(QLatin1String("o1")) ||
+           model_lower.startsWith(QLatin1String("o3")) ||
+           model_lower.startsWith(QLatin1String("o4"));
+}
+
 // ── Tool RAG activation ──────────────────────────────────────────────────
 //
 // When Tool RAG is on, the model is only sent the ~7 Tier-0 tools each turn and

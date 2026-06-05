@@ -14,6 +14,7 @@
 #include "core/symbol/SymbolContext.h"
 #include "core/symbol/SymbolDragSource.h"
 
+#include <QAbstractItemView>
 #include <QApplication>
 #include <QMouseEvent>
 #include "screens/equity_trading/AccountManagementDialog.h"
@@ -24,6 +25,8 @@
 #include "screens/equity_trading/EquityOrderEntry.h"
 #include "screens/equity_trading/EquityTickerBar.h"
 #include "screens/equity_trading/EquityWatchlist.h"
+#include "screens/common/feeds/FeedPanel.h"
+#include "services/feeds/FeedMonitor.h"
 #include "services/portfolio/PortfolioService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "trading/AccountManager.h"
@@ -117,25 +120,30 @@ EquityTradingScreen::~EquityTradingScreen() {
 void EquityTradingScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
 
-    // Restore persisted session state on first show
+    // Always make sure a configured broker is loaded. Re-checked on every show so a
+    // broker configured after the tab first opened is picked up automatically,
+    // instead of stranding the user on "NO ACCOUNT" while a broker exists in the DB.
+    ensure_account_loaded();
+
+    // Restore the rest of the persisted session state on first show.
     if (!initialized_) {
         const auto s = ScreenStateManager::instance().load_direct("equity_trading");
         if (!s.isEmpty()) {
-            const QString acct = s.value("focused_account_id").toString();
             const QString sym = s.value("selected_symbol", selected_symbol_).toString();
-            if (!acct.isEmpty() && acct != focused_account_id_ && AccountManager::instance().has_account(acct))
-                on_account_changed(acct);
-            if (sym != selected_symbol_)
+            if (!sym.isEmpty() && sym != selected_symbol_)
                 on_symbol_selected(sym);
-        }
-        // Fallback: if no valid account was restored (empty/stale persisted state,
-        // a deleted account, or first run), default to the first active broker so
-        // the screen loads ready-to-trade instead of stranding the user on
-        // "NO ACCOUNT" while configured brokers exist in the DB.
-        if (focused_account_id_.isEmpty()) {
-            const auto accts = AccountManager::instance().active_accounts();
-            if (!accts.isEmpty())
-                on_account_changed(accts.first().account_id);
+            // Restore the feed column (visibility + width).
+            if (s.value("feeds_visible").toBool()) {
+                feeds_btn_->setChecked(true); // toggled() shows the panel
+                const int w = s.value("feeds_width").toInt();
+                if (w > 50 && main_splitter_) {
+                    auto sizes = main_splitter_->sizes();
+                    if (sizes.size() == 4) {
+                        sizes[3] = w;
+                        main_splitter_->setSizes(sizes);
+                    }
+                }
+            }
         }
     }
 
@@ -145,6 +153,12 @@ void EquityTradingScreen::showEvent(QShowEvent* event) {
 
     // Hub subscriptions for streaming data (D4)
     hub_subscribe_streaming();
+
+    // Catch up intraday auto-square for paper portfolios (e.g. the app was closed
+    // at 15:30, so yesterday's MIS positions never squared). Refresh picks up the
+    // resulting state; it no-ops for live accounts.
+    trading::pt_settle_intraday_all();
+    refresh_paper_panels();
 
     // UI-local timers
     if (clock_timer_)
@@ -156,6 +170,8 @@ void EquityTradingScreen::showEvent(QShowEvent* event) {
         init_focused_account();
         initialized_ = true;
     }
+
+    fincept::feeds::FeedMonitor::instance().resume_all();
 
     LOG_INFO(TAG, "Screen visible — data streams resumed");
 }
@@ -169,10 +185,14 @@ void EquityTradingScreen::hideEvent(QHideEvent* event) {
     if (market_clock_timer_)
         market_clock_timer_->stop();
 
+    fincept::feeds::FeedMonitor::instance().pause_all();
+
     ScreenStateManager::instance().save_direct("equity_trading", {
         {"focused_account_id", focused_account_id_},
         {"selected_symbol", selected_symbol_},
         {"selected_exchange", selected_exchange_},
+        {"feeds_visible", feed_panel_ != nullptr && feed_panel_->isVisible()},
+        {"feeds_width", main_splitter_ != nullptr ? main_splitter_->sizes().value(3) : 0},
     });
     LOG_INFO(TAG, "Screen hidden — data streams paused, hub unsubscribed");
 }
@@ -245,6 +265,21 @@ void EquityTradingScreen::setup_ui() {
     // Choosing a suggestion (click / Enter in the popup) activates that symbol.
     connect(symbol_completer_, qOverload<const QString&>(&QCompleter::activated), this,
             [this](const QString& choice) { apply_symbol_input(choice); });
+    // A single mouse-click on a suggestion must select it. QCompleter::activated is
+    // unreliable on click for a model rebuilt every keystroke, so wire the popup's
+    // clicked() directly (and give the dropdown a clean dark style).
+    if (auto* popup = symbol_completer_->popup()) {
+        popup->setObjectName("eqSymbolPopup");
+        popup->setStyleSheet(
+            QString("QAbstractItemView{background:%1;color:%2;border:1px solid %3;outline:0;padding:2px;"
+                    "font-size:11px;}"
+                    "QAbstractItemView::item{padding:4px 8px;border-radius:2px;}"
+                    "QAbstractItemView::item:selected,QAbstractItemView::item:hover{background:%4;color:%2;}")
+                .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(),
+                     fincept::ui::colors::BORDER_MED(), fincept::ui::colors::BG_HOVER()));
+        connect(popup, &QAbstractItemView::clicked, this,
+                [this](const QModelIndex& idx) { apply_symbol_input(idx.data(Qt::DisplayRole).toString()); });
+    }
     connect(symbol_input_, &QLineEdit::returnPressed, this,
             [this]() { apply_symbol_input(symbol_input_->text()); });
     cmd_layout->addWidget(symbol_input_);
@@ -285,10 +320,19 @@ void EquityTradingScreen::setup_ui() {
     mode_btn_->setCursor(Qt::PointingHandCursor);
     cmd_layout->addWidget(mode_btn_);
 
+    // FEEDS — toggles the far-right feed monitor column.
+    feeds_btn_ = new QPushButton(tr("FEEDS"));
+    feeds_btn_->setObjectName("eqApiBtn");
+    feeds_btn_->setFixedHeight(22);
+    feeds_btn_->setCheckable(true);
+    feeds_btn_->setCursor(Qt::PointingHandCursor);
+    cmd_layout->addWidget(feeds_btn_);
+
     main_layout->addWidget(cmd_bar);
 
     // ── MAIN 3-PANEL SPLITTER ─────────────────────────────────────────────────
-    auto* main_splitter = new QSplitter(Qt::Horizontal);
+    main_splitter_ = new QSplitter(Qt::Horizontal);
+    auto* main_splitter = main_splitter_;
     main_splitter->setObjectName("eqMainSplitter");
     main_splitter->setHandleWidth(1);
 
@@ -338,15 +382,32 @@ void EquityTradingScreen::setup_ui() {
 
     main_splitter->addWidget(right_splitter);
 
-    main_splitter->setSizes({265, 555, 290});
+    // FAR RIGHT: collapsible feed monitor column (hidden by default; toggled via the
+    // FEEDS command-bar button). Reusable FeedPanel — see screens/common/feeds.
+    feed_panel_ = new fincept::feeds::FeedPanel;
+    feed_panel_->setVisible(false);
+    main_splitter->addWidget(feed_panel_);
+
+    main_splitter->setSizes({265, 555, 290, 0});
     main_splitter->setStretchFactor(0, 0);
     main_splitter->setStretchFactor(1, 1);
     main_splitter->setStretchFactor(2, 0);
+    main_splitter->setStretchFactor(3, 0);
 
     main_layout->addWidget(main_splitter, 1);
 
     // ── Signal Connections ────────────────────────────────────────────────────
     connect(mode_btn_, &QPushButton::clicked, this, &EquityTradingScreen::on_mode_toggled);
+    connect(feeds_btn_, &QPushButton::toggled, this, [this](bool on) {
+        feed_panel_->setVisible(on);
+        if (on) {
+            auto sizes = main_splitter_->sizes();
+            if (sizes.size() == 4 && sizes[3] < 50) {
+                sizes[3] = 300;
+                main_splitter_->setSizes(sizes);
+            }
+        }
+    });
     connect(accounts_btn_, &QPushButton::clicked, this, &EquityTradingScreen::on_accounts_clicked);
     connect(watchlist_, &EquityWatchlist::symbol_selected, this, &EquityTradingScreen::on_symbol_selected);
     connect(watchlist_, &EquityWatchlist::symbol_added, this, &EquityTradingScreen::on_watchlist_symbol_added);
@@ -370,6 +431,13 @@ void EquityTradingScreen::setup_ui() {
     connect(bottom_panel_, &EquityBottomPanel::close_all_positions_requested, this,
             [this](const QString&) { on_close_all_positions(); });
     connect(bottom_panel_, &EquityBottomPanel::import_holdings_requested, this, &EquityTradingScreen::on_import_holdings_requested);
+    connect(bottom_panel_, &EquityBottomPanel::convert_position_requested, this,
+            &EquityTradingScreen::on_convert_position);
+    connect(bottom_panel_, &EquityBottomPanel::orders_day_changed, this, &EquityTradingScreen::on_orders_day_changed);
+    connect(bottom_panel_, &EquityBottomPanel::square_off_group_requested, this,
+            &EquityTradingScreen::on_square_off_group);
+    connect(bottom_panel_, &EquityBottomPanel::trade_symbol_requested, this,
+            &EquityTradingScreen::on_trade_symbol_requested);
     connect(chart_, &EquityChartPanel::timeframe_changed, this, [this](const QString& tf) {
         auto* stream = DataStreamManager::instance().stream_for(focused_account_id_);
         if (stream)
@@ -396,18 +464,20 @@ void EquityTradingScreen::setup_timers() {
     market_clock_timer_ = new QTimer(this);
     connect(market_clock_timer_, &QTimer::timeout, this, [this]() {
         auto* stream = DataStreamManager::instance().stream_for(focused_account_id_);
-        if (stream)
-            stream->fetch_clock();
+        if (stream && focused_is_us_market_)
+            stream->fetch_clock(); // US-only market clock (Alpaca calendar tab)
+        // Paper intraday auto-square at 15:30 IST. Cheap no-op until the cutoff;
+        // refreshes the panels only when something was actually squared off.
+        if (trading::pt_settle_intraday_all() > 0)
+            refresh_paper_panels();
     });
     market_clock_timer_->setInterval(60000);
 
-    // Deferred init — auto-select first account if none focused
+    // Deferred init — auto-select the configured broker if none is focused yet.
+    // Routes through the single credential-aware resolver so it can't pick an
+    // unconfigured (no-credentials) broker that merely sorts first in the map.
     QTimer::singleShot(100, this, [this]() {
-        if (focused_account_id_.isEmpty()) {
-            auto accounts = AccountManager::instance().active_accounts();
-            if (!accounts.isEmpty())
-                on_account_changed(accounts.first().account_id);
-        }
+        ensure_account_loaded();
         update_account_menu();
         update_connection_status();
     });
@@ -532,6 +602,54 @@ void EquityTradingScreen::connect_data_stream_signals() {
 // ============================================================================
 // Init
 // ============================================================================
+
+void EquityTradingScreen::ensure_account_loaded() {
+    auto& am = AccountManager::instance();
+
+    // Respect the current focus when it's a live session, or — once the user has
+    // started interacting (post-init) — any valid account, so manual broker switches
+    // are never undone. The smart auto-pick only happens at startup / when stranded.
+    const bool focus_valid = !focused_account_id_.isEmpty() && am.has_account(focused_account_id_);
+    if (focus_valid) {
+        const bool live = am.get_account(focused_account_id_).state == ConnectionState::Connected;
+        if (live || initialized_)
+            return;
+    }
+
+    const QString saved =
+        ScreenStateManager::instance().load_direct("equity_trading").value("focused_account_id").toString();
+
+    // Rank every account so the *connected* broker wins over one whose token is
+    // expired or that was merely added. Tiers (×2 so the saved tie-breaker can only
+    // reorder within a tier, never across):
+    //   Connected (live session)            → 4   ← what the user means by "configured"
+    //   Connecting (token, unknown expiry)  → 3
+    //   has credentials (api_key) but dead  → 1
+    //   added, no credentials               → 0
+    auto score = [&am](const BrokerAccount& a) -> int {
+        switch (a.state) {
+            case ConnectionState::Connected: return 4;
+            case ConnectionState::Connecting: return 3;
+            default: break; // TokenExpired / Error / Disconnected
+        }
+        return am.load_credentials(a.account_id).api_key.isEmpty() ? 0 : 1;
+    };
+
+    QString best;
+    int best_rank = -1;
+    for (const auto& a : am.list_accounts()) {
+        const int rank = score(a) * 2 + (a.account_id == saved ? 1 : 0);
+        if (rank > best_rank) {
+            best_rank = rank;
+            best = a.account_id;
+        }
+    }
+
+    // on_account_changed() configures the UI and (when credentials exist) loads the
+    // instrument master + starts the data stream; it is a no-op for a focused match.
+    if (!best.isEmpty() && best != focused_account_id_)
+        on_account_changed(best);
+}
 
 void EquityTradingScreen::init_focused_account() {
     if (focused_account_id_.isEmpty())
@@ -702,9 +820,10 @@ void EquityTradingScreen::restore_state(const QVariantMap& state) {
     const QString sym = state.value("symbol", "RELIANCE").toString();
     if (!sym.isEmpty() && sym != selected_symbol_)
         on_symbol_selected(sym);
-    const QString acct = state.value("account_id").toString();
-    if (!acct.isEmpty() && acct != focused_account_id_)
-        on_account_changed(acct);
+    // Account selection goes through the single connection-aware resolver (which
+    // reads the saved account itself) rather than forcing state["account_id"] — that
+    // direct path used to override the resolver and load an expired/unconfigured broker.
+    ensure_account_loaded();
     // Honour the restored list even when the account didn't change (idempotent).
     if (!wl.isEmpty() && !focused_account_id_.isEmpty())
         load_watchlists();

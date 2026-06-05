@@ -211,6 +211,7 @@ inline QVector<IndicatorDef> algo_indicators() {
         // Volume
         {"OBV", "On Balance Volume", "volume", {}, {"value"}},
         {"CMF", "Chaikin Money Flow", "volume", {{"period", 1, 100, 20, 1, 0}}, {"value"}},
+        {"VOL_WIN_CHG", "Volume Window Δ%", "volume", {{"window", 2, 200, 10, 1, 0}}, {"value"}},
     };
 }
 

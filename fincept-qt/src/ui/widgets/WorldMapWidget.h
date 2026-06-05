@@ -3,12 +3,15 @@
 #include <QColor>
 #include <QHash>
 #include <QImage>
+#include <QPoint>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 #include <QWidget>
 
 class QGVMap;
 class QGVLayer;
+class QGVItem;
 
 namespace fincept::ui {
 
@@ -60,6 +63,22 @@ class WorldMapWidget : public QWidget {
     void clear_pins();
     int pin_count() const { return pins_.size(); }
 
+    /// Draw a connecting polyline through the ordered lat/lng points (a voyage
+    /// track), rendered beneath the marker pins. Each QPointF is (lat, lng).
+    /// Fewer than 2 points clears it. set_pins() also clears any existing path.
+    void set_track_path(const QVector<QPointF>& latlng_points);
+    void clear_track_path();
+
+    // ── Basemap selection ───────────────────────────────────────────────────
+    /// Display labels for the available basemaps, in selector order
+    /// (SATELLITE, DARK, OCEAN, STREETS, LIGHT, TERRAIN). Use to populate a
+    /// QComboBox; the index maps 1:1 to set_basemap().
+    static QStringList basemap_labels();
+    /// Switch the active basemap by index into basemap_labels(). Preserves the
+    /// current camera, pins, and drawn shapes. Out-of-range indices are ignored.
+    void set_basemap(int index);
+    int current_basemap_index() const { return basemap_index_; }
+
     /// Fly the camera to show a specific region
     void fly_to(double lat, double lng, int zoom = 5);
 
@@ -88,7 +107,12 @@ class WorldMapWidget : public QWidget {
     bool eventFilter(QObject* watched, QEvent* event) override;
 
   private:
+    /// Tear down the current tile layer(s) and install the basemap at `index`
+    /// from the internal catalog. Sends the new tiles to the back so the
+    /// marker and shape layers keep drawing on top.
+    void apply_basemap(int index);
     void rebuild_markers();
+    void rebuild_path_overlay();
     void rebuild_shape_overlays();
     QImage make_marker_image(const QColor& color, double radius) const;
     /// Convert a viewport pixel (in the QGraphicsView) to geographic lat/lng.
@@ -101,7 +125,14 @@ class WorldMapWidget : public QWidget {
 
     QGVMap* map_ = nullptr;
     QGVLayer* marker_layer_ = nullptr;
+    QGVLayer* path_layer_ = nullptr;
     QGVLayer* shape_layer_ = nullptr;
+    /// Ordered (lat, lng) points of the current track polyline, if any.
+    QVector<QPointF> track_points_;
+    /// Active basemap tile layer(s). Owned by the map once added; replaced
+    /// wholesale on set_basemap(). Usually one layer.
+    QVector<QGVItem*> tile_layers_;
+    int basemap_index_ = 0;  // index into the basemap catalog; 0 = SATELLITE
     QVector<MapPin> pins_;
     mutable QHash<QString, QImage> marker_cache_;
     bool map_ready_ = false;

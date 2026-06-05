@@ -111,12 +111,28 @@ void EquityTradingScreen::hub_subscribe_streaming() {
                       });
 
         // ── Balance / Funds ──
+        // Resolve the broker's currency symbol once (₹/$/…) for the funds cards.
+        const QString ccy_sym = [&]() {
+            if (auto* b = BrokerRegistry::instance().get(bid))
+                return currency_symbol(b->profile().currency);
+            return QStringLiteral("$");
+        }();
+        bottom_panel_->set_currency(ccy_sym); // so the positions P&L summary formats correctly
         hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("balance")),
-                      [this](const QVariant& v) {
+                      [this, ccy_sym](const QVariant& v) {
                           if (!v.canConvert<BrokerFunds>())
                               return;
                           const auto funds = v.value<BrokerFunds>();
-                          bottom_panel_->set_funds(funds);
+                          EquityFundsView fv;
+                          fv.is_paper = false;
+                          fv.currency = ccy_sym;
+                          fv.available = funds.available_balance;
+                          fv.used_margin = funds.used_margin;
+                          fv.total_equity = funds.total_balance;
+                          fv.collateral = funds.collateral;
+                          const double denom = funds.used_margin + funds.available_balance;
+                          fv.margin_util_pct = denom > 0.0 ? (funds.used_margin / denom) * 100.0 : 0.0;
+                          bottom_panel_->set_funds_view(fv);
                           order_entry_->set_balance(funds.available_balance);
                       });
     }

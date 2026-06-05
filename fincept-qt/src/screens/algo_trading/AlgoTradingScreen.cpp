@@ -4,6 +4,7 @@
 #include "algo_engine/AlgoEngine.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "screens/algo_trading/AlertsPanel.h"
 #include "screens/algo_trading/DeploymentDashboard.h"
 #include "screens/algo_trading/ScannerPanel.h"
 #include "screens/algo_trading/StrategyBuilderPanel.h"
@@ -12,6 +13,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
+#include <QJsonArray>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -24,7 +26,7 @@ AlgoTradingScreen::AlgoTradingScreen(QWidget* parent) : QWidget(parent) {
     poll_timer_ = new QTimer(this);
     poll_timer_->setInterval(5000);
     connect(poll_timer_, &QTimer::timeout, this, [this]() {
-        if (active_tab_ == 3)
+        if (active_tab_ == 4)
             fincept::algo::AlgoEngine::instance().list_deployments();
     });
 
@@ -67,12 +69,14 @@ void AlgoTradingScreen::build_ui() {
     builder_ = new StrategyBuilderPanel(this);
     strategies_ = new StrategyListPanel(this);
     scanner_ = new ScannerPanel(this);
+    alerts_ = new AlertsPanel(this);
     dashboard_ = new DeploymentDashboard(this);
 
-    content_stack_->addWidget(builder_);
-    content_stack_->addWidget(strategies_);
-    content_stack_->addWidget(scanner_);
-    content_stack_->addWidget(dashboard_);
+    content_stack_->addWidget(builder_);     // 0
+    content_stack_->addWidget(strategies_);  // 1
+    content_stack_->addWidget(scanner_);     // 2
+    content_stack_->addWidget(alerts_);      // 3
+    content_stack_->addWidget(dashboard_);   // 4
     root->addWidget(content_stack_, 1);
 
     // "Edit" in My Strategies opens the Builder (tab 0) pre-filled with that strategy.
@@ -89,9 +93,18 @@ void AlgoTradingScreen::build_ui() {
                 builder_->load_and_backtest(s, symbol, start, end);
             });
 
-    // Deploying from the Builder jumps to the Dashboard (tab 3); on_tab_changed(3)
+    // Scanner → Alerts hand-off: pre-fills the AlertsPanel with the scan's conditions
+    // and switches to the ALERTS tab. ScannerPanel::create_alert_requested is added in R3.
+    connect(scanner_, &ScannerPanel::create_alert_requested, this,
+            [this](const QJsonArray& conds, const QString& logic, const QStringList& syms,
+                   const QString& tf, const QString& ds, const QString& acct) {
+                on_tab_changed(3); // ALERTS
+                alerts_->prefill(conds, logic, syms, tf, ds, acct);
+            });
+
+    // Deploying from the Builder jumps to the Dashboard (tab 4); on_tab_changed(4)
     // refreshes list_deployments() so the just-persisted row shows immediately.
-    connect(builder_, &StrategyBuilderPanel::deployed, this, [this]() { on_tab_changed(3); });
+    connect(builder_, &StrategyBuilderPanel::deployed, this, [this]() { on_tab_changed(4); });
 
     root->addWidget(build_status_bar());
     setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
@@ -120,8 +133,8 @@ QWidget* AlgoTradingScreen::build_top_bar() {
     hl->addWidget(div);
 
     // Tab buttons
-    QStringList tabs   = {tr("BUILDER"), tr("MY STRATEGIES"), tr("SCANNER"), tr("DASHBOARD")};
-    QStringList colors = {"#FF6B35", "#00E5FF", "#FFC400", "#00D66F"};
+    QStringList tabs   = {tr("BUILDER"), tr("MY STRATEGIES"), tr("SCANNER"), tr("ALERTS"), tr("DASHBOARD")};
+    QStringList colors = {"#FF6B35", "#00E5FF", "#FFC400", "#FF4081", "#00D66F"};
 
     for (int i = 0; i < tabs.size(); ++i) {
         auto* btn = new QPushButton(tabs[i], bar);
@@ -190,12 +203,12 @@ void AlgoTradingScreen::on_tab_changed(int index) {
     // Refresh data when switching tabs
     if (index == 1)
         AlgoTradingService::instance().list_strategies();
-    if (index == 3)
+    if (index == 4)
         fincept::algo::AlgoEngine::instance().list_deployments();
 }
 
 void AlgoTradingScreen::update_tab_buttons() {
-    QStringList colors = {"#FF6B35", "#00E5FF", "#FFC400", "#00D66F"};
+    QStringList colors = {"#FF6B35", "#00E5FF", "#FFC400", "#FF4081", "#00D66F"};
     for (int i = 0; i < tab_buttons_.size(); ++i) {
         bool active = (i == active_tab_);
         tab_buttons_[i]->setStyleSheet(
@@ -228,11 +241,12 @@ void AlgoTradingScreen::retranslateUi() {
     if (deploy_count_label_) deploy_count_label_->setText(tr("%1 LIVE").arg(active_deployments_));
 
     // Tab button labels — fixed order matches build_top_bar().
-    if (tab_buttons_.size() == 4) {
+    if (tab_buttons_.size() == 5) {
         tab_buttons_[0]->setText(tr("BUILDER"));
         tab_buttons_[1]->setText(tr("MY STRATEGIES"));
         tab_buttons_[2]->setText(tr("SCANNER"));
-        tab_buttons_[3]->setText(tr("DASHBOARD"));
+        tab_buttons_[3]->setText(tr("ALERTS"));
+        tab_buttons_[4]->setText(tr("DASHBOARD"));
     }
 }
 

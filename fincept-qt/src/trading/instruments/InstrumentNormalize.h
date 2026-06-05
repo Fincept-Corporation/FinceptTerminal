@@ -32,6 +32,20 @@ QString expiry_display(const QString& raw);
 /// decimal; fractional values are trimmed of trailing zeros.
 QString format_strike(double strike);
 
+/// Human-friendly expiry for symbol pickers: "07-JUL-26" → "7 Jul 26".
+/// Returns the input unchanged if it isn't the stored DD-MMM-YY form.
+QString expiry_friendly(const QString& display_expiry);
+
+/// Human-readable picker label so users aren't shown the raw canonical symbol
+/// (e.g. NIFTY07JUL2618250CE). Built from the catalog fields:
+///   FUT   → "NIFTY 30 Jun 26 FUT"
+///   CE/PE → "NIFTY 7 Jul 26 18250 CE"
+///   EQ    → the trading symbol (already clean, e.g. RELIANCE)
+///   INDEX → the underlying name (e.g. NIFTY)
+/// `fallback_symbol` is used for EQ / when fields are missing.
+QString display_name(const QString& name, InstrumentType itype, const QString& expiry, double strike,
+                     const QString& fallback_symbol);
+
 /// RELIANCE-EQ / -BE / -MF / -SG / -SM → RELIANCE (case-insensitive suffix).
 QString strip_eq_suffix(const QString& trading_symbol);
 
