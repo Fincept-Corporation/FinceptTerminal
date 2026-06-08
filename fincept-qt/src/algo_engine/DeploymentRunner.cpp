@@ -508,7 +508,7 @@ void DeploymentRunner::persist_trade(const AlgoTradeRecord& trade) {
     q.addBindValue(trade.pnl);
     q.addBindValue(trade.reason);
     q.addBindValue(trade.broker_order_id);
-    q.addBindValue(trade.latency_ms);
+    q.addBindValue(QVariant::fromValue(trade.latency_ms));
     if (!q.exec())
         LOG_ERROR("AlgoEngine", QString("Failed to persist trade: %1").arg(q.lastError().text()));
 }
