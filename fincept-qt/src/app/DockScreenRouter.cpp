@@ -379,6 +379,27 @@ void DockScreenRouter::restore_screen_state(const QString& id) {
     }
 }
 
+int DockScreenRouter::flush_all_screen_states() {
+    int flushed = 0;
+    // screens_ holds every MATERIALIZED screen widget (closed-but-not-yet-
+    // dematerialised included). Synchronously persist each stateful one so a
+    // tab that's still on screen at quit doesn't lose its config. Closed tabs
+    // were already saved through the visibilityChanged(false) hide path.
+    for (auto it = screens_.cbegin(); it != screens_.cend(); ++it) {
+        auto* stateful = dynamic_cast<screens::IStatefulScreen*>(it.value());
+        if (!stateful)
+            continue;
+        const PanelInstanceId uuid = panel_uuid_for(it.key());
+        if (!uuid.is_null())
+            ScreenStateManager::instance().save_now_by_uuid_sync(stateful, uuid.to_string());
+        else
+            ScreenStateManager::instance().save_now_sync(stateful);
+        ++flushed;
+    }
+    LOG_INFO("DockRouter", QString("flush_all_screen_states: persisted %1 screen(s)").arg(flushed));
+    return flushed;
+}
+
 void DockScreenRouter::apply_ads_theme() {
     // ADS's CSS (build_ads_qss on CDockManager) handles all ADS widget styling.
     // This function ensures tab widgets and labels don't have stale widget-level

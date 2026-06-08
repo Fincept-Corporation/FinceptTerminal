@@ -157,6 +157,10 @@ void AiChatScreen::on_send() {
     show_typing(true);
     scroll_to_bottom();
 
+    // Fresh Thinking section for this message (reasoning chunks land in a
+    // collapsible card created lazily by on_stream_chunk).
+    reset_thinking_state();
+
     std::vector<ai_chat::ConversationMessage> hist_copy = history_;
     const QString provider = ai_chat::LlmService::instance().active_provider();
     if (ai_chat::provider_supports_streaming(provider)) {
@@ -169,12 +173,13 @@ void AiChatScreen::on_send() {
                     [self, chunk, done, first_chunk]() {
                         if (!self)
                             return;
-                        // On first chunk: hide typing indicator, show streaming bubble
+                        // On first chunk: hide the typing indicator. The answer
+                        // bubble and Thinking card are created lazily inside
+                        // on_stream_chunk so a leading reasoning chunk doesn't
+                        // spawn an empty answer bubble above the card.
                         if (*first_chunk && !chunk.isEmpty()) {
                             *first_chunk = false;
                             self->show_typing(false);
-                            self->streaming_bubble_ = self->add_streaming_bubble();
-                            self->scroll_to_bottom();
                         }
                         self->on_stream_chunk(chunk, done);
                     },
@@ -198,28 +203,44 @@ void AiChatScreen::on_send() {
 }
 
 void AiChatScreen::on_stream_chunk(const QString& chunk, bool done) {
-    // Snapshot QPointer to local — prevents TOCTOU between null-check and use.
-    QLabel* bubble = streaming_bubble_;
-    if (!bubble)
-        return;
-
-    // Tool-call clear sentinel: reset bubble content (removes partial XML)
-    if (chunk.startsWith("\x01__TOOL_CALL_CLEAR__")) {
-        fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(bubble, tr("Calling tool..."));
-        scroll_to_bottom();
-        return;
-    }
-
-    if (!chunk.isEmpty()) {
-        fincept::ai_chat::ChatBubbleFactory::append_streaming_chunk(bubble, chunk);
-        scroll_to_bottom();
-    }
     Q_UNUSED(done)
+
+    // Chain-of-thought chunk → separate, collapsible Thinking section (kept out
+    // of the answer bubble). Routed in-band via the think_stream_prefix sentinel.
+    const QString think_prefix = ai_chat::think_stream_prefix();
+    if (chunk.startsWith(think_prefix)) {
+        append_thinking_chunk(chunk.mid(think_prefix.size()));
+        scroll_to_bottom();
+        return;
+    }
+
+    // Tool-call clear sentinel: reset bubble content (removes partial XML).
+    if (chunk.startsWith("\x01__TOOL_CALL_CLEAR__")) {
+        if (!streaming_bubble_)
+            streaming_bubble_ = add_streaming_bubble();
+        fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(streaming_bubble_, tr("Calling tool..."));
+        scroll_to_bottom();
+        return;
+    }
+
+    if (chunk.isEmpty())
+        return;
+
+    // Lazily create the answer bubble on the first real answer chunk so it lands
+    // below any Thinking card that arrived first.
+    if (!streaming_bubble_)
+        streaming_bubble_ = add_streaming_bubble();
+    fincept::ai_chat::ChatBubbleFactory::append_streaming_chunk(streaming_bubble_, chunk);
+    scroll_to_bottom();
 }
 
 void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
     streaming_ = false;
     show_typing(false);
+
+    // Lock in the Thinking card (swap the live "Thinking…" header for its final
+    // label) and stop tracking it so the next message starts a fresh one.
+    finalize_thinking_card();
 
     // Ensure a bubble exists for any terminal state (success + content,
     // failure with an error message, or success-but-empty). Without this,
@@ -314,10 +335,96 @@ QLabel* AiChatScreen::add_streaming_bubble() {
     return b.body;
 }
 
+// ── Thinking (chain-of-thought) card ────────────────────────────────────────────
+// Reasoning models stream their thoughts on a separate channel (see
+// think_stream_prefix()). We collect them into a collapsed dropdown shown ABOVE
+// the answer bubble so the answer itself stays clean and unmixed.
+
+void AiChatScreen::create_thinking_card() {
+    if (thinking_card_)
+        return;
+
+    auto* card = new QWidget;
+    card->setMaximumWidth(kAiColMaxWidth);
+    card->setStyleSheet(QString("background:%1;border:1px solid %2;").arg(col::BG_SURFACE(), col::BORDER_DIM()));
+    auto* vl = new QVBoxLayout(card);
+    vl->setContentsMargins(10, 6, 10, 6);
+    vl->setSpacing(4);
+
+    // Collapsed by default — header toggles the body. The leading chevron (▸/▾)
+    // reflects expanded state; the body holds the dimmed, selectable reasoning.
+    auto* header = new QPushButton(QChar(0x25B8) + (QStringLiteral("  ") + QString::fromUtf8("\xF0\x9F\x92\xAD") + QStringLiteral(" ")) + tr("Thinking…"));
+    header->setCursor(Qt::PointingHandCursor);
+    header->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:none;"
+                                  "font-size:%2px;font-weight:600;text-align:left;padding:0;}"
+                                  "QPushButton:hover{color:%3;}")
+                              .arg(col::TEXT_TERTIARY())
+                              .arg(fnt::SMALL)
+                              .arg(col::TEXT_SECONDARY()));
+    vl->addWidget(header);
+
+    auto* body = new QLabel;
+    body->setWordWrap(true);
+    body->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    body->setVisible(false);
+    body->setStyleSheet(QString("QLabel{color:%1;font-size:%2px;font-style:italic;background:transparent;}")
+                            .arg(col::TEXT_DIM())
+                            .arg(fnt::SMALL));
+    vl->addWidget(body);
+
+    // Capture raw pointers (not the QPointer members, which get nulled when the
+    // stream finishes) so the finished card stays toggleable.
+    QObject::connect(header, &QPushButton::clicked, card, [header, body]() {
+        const bool show = !body->isVisible();
+        body->setVisible(show);
+        QString t = header->text();
+        if (!t.isEmpty())
+            t.replace(0, 1, show ? QChar(0x25BE) : QChar(0x25B8));
+        header->setText(t);
+    });
+
+    // Insert just before the trailing stretch so it sits above the answer bubble
+    // (which is created lazily on the first answer chunk and lands below it).
+    messages_layout_->insertWidget(messages_layout_->count() - 1, card, 0, Qt::AlignLeft);
+    thinking_card_ = card;
+    thinking_header_ = header;
+    thinking_body_ = body;
+}
+
+void AiChatScreen::append_thinking_chunk(const QString& text) {
+    if (text.isEmpty())
+        return;
+    show_typing(false); // the card now signals activity
+    if (!thinking_card_)
+        create_thinking_card();
+    thinking_text_ += text;
+    if (thinking_body_)
+        thinking_body_->setText(thinking_text_);
+}
+
+void AiChatScreen::finalize_thinking_card() {
+    if (thinking_header_) {
+        const bool expanded = thinking_body_ && thinking_body_->isVisible();
+        const QChar chev = expanded ? QChar(0x25BE) : QChar(0x25B8);
+        thinking_header_->setText(chev + (QStringLiteral("  ") + QString::fromUtf8("\xF0\x9F\x92\xAD") + QStringLiteral(" ")) + tr("Thoughts"));
+    }
+    reset_thinking_state();
+}
+
+void AiChatScreen::reset_thinking_state() {
+    // Stops tracking the current card (the widget itself remains in the
+    // transcript); the next message creates a fresh one.
+    thinking_card_ = nullptr;
+    thinking_header_ = nullptr;
+    thinking_body_ = nullptr;
+    thinking_text_.clear();
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 void AiChatScreen::clear_messages() {
     streaming_bubble_.clear();
+    reset_thinking_state(); // card widgets are deleted by the loop below
     while (messages_layout_->count() > 1) {
         QLayoutItem* item = messages_layout_->takeAt(0);
         if (item->widget())

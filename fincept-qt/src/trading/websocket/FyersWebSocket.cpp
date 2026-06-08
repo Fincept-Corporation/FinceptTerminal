@@ -536,6 +536,10 @@ void FyersWebSocket::emit_tick(quint16 topic_id) {
     tick.tot_buy_qty = val(9) != kSentinel ? static_cast<double>(val(9)) : 0;
     tick.tot_sell_qty = val(10) != kSentinel ? static_cast<double>(val(10)) : 0;
     tick.atp = price(11);
+    // Field 12 is open interest (contracts) for F&O sf topics — a raw count,
+    // not price-scaled. Lite updates only refresh ltp[0] so the last full
+    // snapshot's OI persists in f[12]; sentinel/short arrays leave oi at 0.
+    tick.oi = val(12) != kSentinel ? static_cast<double>(val(12)) : 0;
     tick.low = price(13);
     tick.high = price(14);
     tick.open = price(19);
@@ -602,6 +606,18 @@ void FyersWebSocket::resolve_and_subscribe(const QStringList& symbols) {
         for (const auto& s : fyers_syms) arr.append(s);
         QJsonObject body;
         body["symbols"] = arr;
+        {
+            // [subdbg] F&O symbols being sent for token resolution (equities omitted
+            // to keep the line readable). Lets us confirm a held option is actually
+            // requested — and below, whether Fyers resolved or rejected it.
+            QStringList fno;
+            for (const auto& s : fyers_syms)
+                if (!s.endsWith(QLatin1String("-EQ")) && (s.contains(QLatin1String("CE")) ||
+                    s.contains(QLatin1String("PE")) || s.contains(QLatin1String("FUT"))))
+                    fno << s;
+            LOG_INFO("subdbg", QString("resolve_and_subscribe: sending %1 syms, F&O=[%2]")
+                                   .arg(fyers_syms.size()).arg(fno.join(',')));
+        }
 
         auto resp = BrokerHttp::instance().post_json(
             QStringLiteral("https://api-t1.fyers.in/data/symbol-token"), body,
@@ -620,6 +636,15 @@ void FyersWebSocket::resolve_and_subscribe(const QStringList& symbols) {
                 topics.append(QStringLiteral("dp|%1|%2").arg(seg, exch_token));
             }
             LOG_INFO("FyersWS", QString("Resolved %1 symbols → %2 topics").arg(fyers_syms.size()).arg(topics.size()));
+            // [subdbg] any symbols we SENT that Fyers did NOT return as valid —
+            // these silently get no live feed (the suspected option failure mode).
+            QStringList unresolved;
+            for (const auto& s : fyers_syms)
+                if (!valid.contains(s))
+                    unresolved << s;
+            if (!unresolved.isEmpty())
+                LOG_WARN("subdbg", QString("resolve_and_subscribe: %1 UNRESOLVED (no feed): [%2]")
+                                       .arg(unresolved.size()).arg(unresolved.join(',')));
             for (const auto& t : topics)
                 LOG_DEBUG("FyersWS", QString("  topic: %1").arg(t));
         } else {

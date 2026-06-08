@@ -157,7 +157,7 @@ QString strip_think_blocks(QString content) {
 }
 
 // ── SSE chunk → text ───────────────────────────────────────────────────────
-QString LlmService::parse_sse_chunk(const QString& data, const QString& provider) {
+LlmService::SseDelta LlmService::parse_sse_chunk(const QString& data, const QString& provider) {
     auto doc = QJsonDocument::fromJson(data.toUtf8());
     if (doc.isNull() || !doc.isObject())
         return {};
@@ -167,15 +167,16 @@ QString LlmService::parse_sse_chunk(const QString& data, const QString& provider
         // delta is a tagged union. text_delta carries the final answer;
         // thinking_delta carries the chain-of-thought for extended-thinking
         // models (claude-3-7 / claude-opus-4+ with `thinking` param). Surfacing
-        // both keeps the UI responsive during long reasoning phases. Other
-        // delta types (input_json_delta, signature_delta) must not be rendered.
+        // both keeps the UI responsive during long reasoning phases, but they
+        // must stay on SEPARATE channels so the UI doesn't mix reasoning into the
+        // answer. Other delta types (input_json_delta, signature_delta) aren't rendered.
         if (j["type"].toString() == "content_block_delta") {
             QJsonObject delta = j["delta"].toObject();
             const QString dtype = delta["type"].toString();
             if (dtype == "text_delta")
-                return delta["text"].toString();
+                return {delta["text"].toString(), false};
             if (dtype == "thinking_delta")
-                return delta["thinking"].toString();
+                return {delta["thinking"].toString(), true};
         }
         return {};
     }
@@ -187,22 +188,22 @@ QString LlmService::parse_sse_chunk(const QString& data, const QString& provider
         if (!delta["content"].isNull() && !delta["content"].isUndefined()) {
             QString s = delta["content"].toString();
             if (!s.isEmpty())
-                return s;
+                return {s, false};
         }
         // Reasoning models (kimi-k2.5 / kimi-k2.6 / kimi-k2-thinking*, deepseek-reasoner,
-        // grok-4 reasoning variants) stream their chain-of-thought as
+        // GLM / MiniMax / grok-4 reasoning variants) stream their chain-of-thought as
         // `delta.reasoning_content` and only emit `delta.content` after reasoning
-        // completes. Surface reasoning deltas so the user sees progress instead
-        // of a blank bubble for 10+ seconds.
+        // completes. Tag it as reasoning so the caller routes it to the separate,
+        // collapsible Thinking section instead of concatenating it into the answer.
         if (!delta["reasoning_content"].isNull() && !delta["reasoning_content"].isUndefined()) {
             QString s = delta["reasoning_content"].toString();
             if (!s.isEmpty())
-                return s;
+                return {s, true};
         }
         // Refusal deltas — newer OpenAI and some Groq safety paths stream a
         // `refusal` field in place of `content` when the model declines.
         if (!delta["refusal"].isNull() && !delta["refusal"].isUndefined())
-            return delta["refusal"].toString();
+            return {delta["refusal"].toString(), false};
     }
     return {};
 }

@@ -538,7 +538,11 @@ void AiChatBubble::on_send() {
                 [self, chunk, done, first_chunk]() {
                     if (!self)
                         return;
-                    if (*first_chunk && !chunk.isEmpty()) {
+                    // A leading reasoning chunk (think_stream_prefix) shouldn't
+                    // spawn the answer bubble — the floating bubble omits
+                    // chain-of-thought entirely.
+                    if (*first_chunk && !chunk.isEmpty() &&
+                        !chunk.startsWith(ai_chat::think_stream_prefix())) {
                         *first_chunk = false;
                         self->streaming_bubble_ = self->add_streaming_bubble();
                     }
@@ -550,6 +554,11 @@ void AiChatBubble::on_send() {
 }
 
 void AiChatBubble::on_stream_chunk(const QString& chunk, bool done) {
+    Q_UNUSED(done)
+    // The compact floating bubble doesn't surface chain-of-thought — drop
+    // reasoning chunks so the sentinel never leaks into the visible text.
+    if (chunk.startsWith(ai_chat::think_stream_prefix()))
+        return;
     QLabel* bubble = streaming_bubble_;
     if (!bubble)
         return;
@@ -557,7 +566,6 @@ void AiChatBubble::on_stream_chunk(const QString& chunk, bool done) {
         fincept::ai_chat::ChatBubbleFactory::append_streaming_chunk(bubble, chunk);
         scroll_to_bottom();
     }
-    Q_UNUSED(done)
 }
 
 void AiChatBubble::on_streaming_done(ai_chat::LlmResponse response) {

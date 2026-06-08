@@ -20,8 +20,9 @@ TabBar::TabBar(QWidget* parent) : QWidget(parent) {
     tab_layout_->setSpacing(2);
 
     tab_defs_ = {
-        {"dashboard", "DASHBOARD"}, {"markets", "MARKETS"},   {"crypto_trading", "CRYPTO"},  {"portfolio", "PORTFOLIO"},
-        {"news", "NEWS"},           {"ai_chat", "AI CHAT"},   {"backtesting", "BACKTEST"},   {"algo_trading", "ALGO"},
+        {"dashboard", "DASHBOARD"}, {"markets", "MARKETS"},   {"crypto_trading", "CRYPTO"},  {"equity_trading", "EQUITY"},
+        {"portfolio", "PORTFOLIO"}, {"news", "NEWS"},         {"ai_chat", "AI CHAT"},        {"backtesting", "BACKTEST"},
+        {"algo_trading", "ALGO"},
         {"node_editor", "NODES"},   {"code_editor", "CODE"},  {"ai_quant_lab", "QUANT LAB"}, {"quantlib", "QUANTLIB"},
         {"settings", "SETTINGS"},   {"profile", "PROFILE"},
     };

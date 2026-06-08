@@ -1,5 +1,7 @@
 #include "storage/repositories/PaperTradingRepository.h"
 
+#include <cmath>
+
 namespace fincept {
 
 using namespace trading;
@@ -272,6 +274,15 @@ Result<void> PaperTradingRepository::update_position(const QString& id, double q
 
 Result<void> PaperTradingRepository::update_position_price(const QString& portfolio_id, const QString& symbol,
                                                            double price) {
+    // Guard against garbage/zero ticks. A non-finite or non-positive mark price
+    // is never a real trade — feeds occasionally emit 0.0 for an illiquid leg or
+    // a malformed packet. Writing it through recomputes unrealized_pnl as
+    // (entry - 0) * qty, which on a SHORT option surfaces the FULL premium as a
+    // phantom profit (the "square-off shows total trade value in profit" bug).
+    // Ignore it so the position keeps its last good price + P&L.
+    if (!std::isfinite(price) || price <= 0.0)
+        return Result<void>::ok();
+
     // Update current_price AND recompute unrealized_pnl atomically
     // long: (price - entry) * qty,  short: (entry - price) * qty
     return exec_write("UPDATE pt_positions SET current_price = ?, "

@@ -684,6 +684,7 @@ set(CORE_SOURCES
     src/core/events/EventBus.cpp
     src/core/HealthMonitor.cpp
     src/core/layout/LayoutTypes.cpp
+    src/core/layout/DockLayoutSelftest.cpp
     src/core/layout/LayoutCatalog.cpp
     src/core/layout/LayoutTemplates.cpp
     src/core/layout/WorkspaceMatcher.cpp
@@ -861,6 +862,8 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v042_scan_watch_events.cpp
     src/storage/sqlite/migrations/v043_feed_subscriptions.cpp
     src/storage/sqlite/migrations/v044_feed_items.cpp
+    src/storage/sqlite/migrations/v045_scan_watch_universe.cpp
+    src/storage/sqlite/migrations/v046_fno_algo.cpp
 
     # Historical OHLCV data store (Historify, Phase 3 §13)
     src/storage/HistoricalDataStore.cpp
@@ -966,6 +969,8 @@ set(MCP_SOURCES
 # Trading
 set(TRADING_SOURCES
     src/trading/PaperTrading.cpp
+    src/trading/PaperTradingSelftest.cpp
+    src/trading/PaperMarkService.cpp
     src/trading/OrderMatcher.cpp
     src/trading/BrokerRegistry.cpp
     src/trading/UnifiedTrading.cpp
@@ -1078,7 +1083,12 @@ set(ALGO_ENGINE_SOURCES
     src/algo_engine/AlgoScanner.cpp
     src/algo_engine/CandleDataFetcher.cpp
     src/algo_engine/ScanMonitor.cpp
+    src/algo_engine/RealtimeScanRunner.cpp
+    src/algo_engine/UniverseScanSelftest.cpp
     src/algo_engine/BacktestEngine.cpp
+    src/algo_engine/fno/FnoAlgoTypes.cpp
+    src/algo_engine/fno/FnoAlgoSelftest.cpp
+    src/algo_engine/fno/FnoLegResolver.cpp
 )
 
 # Services
@@ -1515,6 +1525,7 @@ set(SCREEN_SOURCES
     src/screens/equity_trading/EquityOrderEntry.cpp
     src/screens/equity_trading/EquityOrderBook.cpp
     src/screens/equity_trading/EquityBottomPanel.cpp
+    src/screens/common/PaperBlotterPanel.cpp
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
     src/screens/equity_trading/OrderConfirmDialog.cpp
@@ -1671,6 +1682,7 @@ set(SCREEN_SOURCES
     src/screens/algo_trading/StrategyBuilderPanel.cpp
     src/screens/algo_trading/StrategyListPanel.cpp
     src/screens/algo_trading/ScannerPanel.cpp
+    src/screens/algo_trading/UniverseScannerPanel.cpp
     src/screens/algo_trading/AlertsPanel.cpp
     src/screens/algo_trading/DeploymentDashboard.cpp
     src/screens/algo_trading/AlgoDeployDialog.cpp
@@ -1931,6 +1943,7 @@ set_source_files_properties(
     src/screens/algo_trading/AlgoTradingScreen.cpp
     src/screens/algo_trading/DeploymentDashboard.cpp
     src/screens/algo_trading/ScannerPanel.cpp
+    src/screens/algo_trading/UniverseScannerPanel.cpp
     src/screens/algo_trading/AlertsPanel.cpp
     src/screens/algo_trading/StrategyBuilderPanel.cpp
     src/screens/algo_trading/StrategyListPanel.cpp
@@ -1985,6 +1998,7 @@ set_source_files_properties(
     src/screens/equity_trading/EquityOrderEntry.cpp
     src/screens/equity_trading/EquityOrderBook.cpp
     src/screens/equity_trading/EquityBottomPanel.cpp
+    src/screens/common/PaperBlotterPanel.cpp
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
     src/screens/equity_trading/OrderConfirmDialog.cpp
@@ -2342,6 +2356,8 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v042_scan_watch_events.cpp
     src/storage/sqlite/migrations/v043_feed_subscriptions.cpp
     src/storage/sqlite/migrations/v044_feed_items.cpp
+    src/storage/sqlite/migrations/v045_scan_watch_universe.cpp
+    src/storage/sqlite/migrations/v046_fno_algo.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
@@ -2487,6 +2503,10 @@ set_source_files_properties(
     src/mcp/tools/GeopoliticsTools.cpp
     src/mcp/tools/ExcelTools.cpp
     src/mcp/tools/SurfaceAnalyticsTools.cpp
+    src/algo_engine/fno/FnoAlgoSelftest.cpp
+    src/algo_engine/fno/FnoLegResolver.cpp
+    src/trading/PaperTradingSelftest.cpp
+    src/trading/PaperMarkService.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 

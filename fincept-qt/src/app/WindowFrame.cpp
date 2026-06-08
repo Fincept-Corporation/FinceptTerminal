@@ -405,6 +405,15 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
     connect(dock_layout_save_timer_, &QTimer::timeout, this, [this]() {
         if (!dock_manager_)
             return;
+        // Drop hidden/closed panels before serialising so the saved layout is
+        // exactly the visible grid — otherwise closed areas accumulate into
+        // dozens of phantom splits that corrupt the restored arrangement.
+        // prune emits dockWidgetRemoved/viewToggled (→ schedule_dock_layout_save);
+        // suppress that re-entrant restart while we save the freshly-pruned tree.
+        suppress_layout_save_ = true;
+        if (dock_router_)
+            dock_router_->prune_hidden_panels();
+        suppress_layout_save_ = false;
         // SessionManager.save_dock_layout fans out to WorkspaceSnapshotRing
         // (60s rate-limited auto snapshot). That covers what the legacy
         // 5-min WorkspaceManager autosave used to do, with better cadence.
@@ -749,7 +758,10 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
     // conflicts with restoreState's layout.
     // Layout version: bump this whenever the dock layout format changes to
     // automatically discard stale/corrupt saved state from previous versions.
-    static constexpr int kDockLayoutVersion = 4;
+    // v5: closed panels are now pruned before save (prune_hidden_panels), so
+    // pre-v5 blobs — bloated with dozens of phantom closed single-widget areas
+    // that reshuffle the restored grid — are discarded rather than restored.
+    static constexpr int kDockLayoutVersion = 5;
     bool dock_restored = false;
 
     if (dock_manager_) {
@@ -777,9 +789,13 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
                 dock_restored = dock_manager_->restoreState(saved_dock);
                 dock_router_->set_suppress_materialize(false);
 
-                // Sanity check: if restoreState produced an unreasonable number
-                // of visible dock areas (>6), the layout is likely corrupt.
-                if (dock_restored && dock_manager_->openedDockAreas().size() > 6) {
+                // Sanity check: a genuinely corrupt blob restores into dozens of
+                // areas (the pre-prune bug produced 28-33). A legit layout now
+                // tops out around the 4-panel auto-grid plus a few floating /
+                // torn-off panels, so 6 was too tight — it would nuke a valid
+                // grid+float layout. prune_hidden_panels() keeps saved blobs at
+                // visible-panel count, so this is only a backstop for true bloat.
+                if (dock_restored && dock_manager_->openedDockAreas().size() > 16) {
                     LOG_WARN("WindowFrame", QString("Dock layout corrupt: %1 open areas — resetting")
                                                .arg(dock_manager_->openedDockAreas().size()));
                     dock_restored = false;
@@ -1071,6 +1087,14 @@ constexpr const char* kActiveForWorkProp = "fincept.active_for_work";
 } // namespace
 
 void WindowFrame::closeEvent(QCloseEvent* event) {
+    // Synchronously persist every open tab's UI state BEFORE anything else.
+    // Panels visible at quit never get visibilityChanged(false), so their
+    // per-screen save would otherwise never fire — and an async save here
+    // would race process exit. This guarantees each tab reopens with the
+    // exact config it had (FNO underlying/expiry/broker, equity symbol/
+    // watchlist, active sub-tab, …).
+    if (dock_router_)
+        dock_router_->flush_all_screen_states();
     // Force an immediate snapshot bypassing the 60s rate limit so a real
     // shutdown always has fresh state to restore from. Per Phase 6 the
     // legacy WorkspaceManager autosave is gone — the snapshot ring is the
@@ -1083,6 +1107,13 @@ void WindowFrame::closeEvent(QCloseEvent* event) {
     if (QScreen* scr = screen())
         SessionManager::instance().save_screen_name(window_id_, scr->name());
     if (dock_manager_) {
+        // Persist only the visible grid — drop closed panels so the saved
+        // layout doesn't carry phantom areas that corrupt the restored
+        // arrangement (see DockScreenRouter::prune_hidden_panels).
+        suppress_layout_save_ = true;
+        if (dock_router_)
+            dock_router_->prune_hidden_panels();
+        suppress_layout_save_ = false;
         SessionManager::instance().save_dock_layout(window_id_, dock_manager_->saveState());
         QSettings tmp;
         dock_manager_->savePerspectives(tmp);

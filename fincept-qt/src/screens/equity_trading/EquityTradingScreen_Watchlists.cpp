@@ -15,6 +15,7 @@
 #include "storage/repositories/WatchlistRepository.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/DataStreamManager.h"
+#include "trading/websocket/FyersTickTypes.h"
 
 #include <QPair>
 #include <QVector>
@@ -157,6 +158,34 @@ void EquityTradingScreen::apply_active_watchlist(bool resubscribe) {
         stream->subscribe_symbols(QStringLiteral("equity:watchlist"), eff);
         stream->fetch_orderbook(selected_symbol_);
     }
+
+    // (Re)bind the F&O option-position price router to the focused stream — but
+    // only while an option is actually held. Fyers' live HSM tick spells an
+    // option differently from its REST position symbol, so option ticks never
+    // arrive on the per-symbol quote topics; route_option_quote reconciles them
+    // by (underlying, strike, side). Keeping the binding off when no option is
+    // held avoids a per-tick parse on the equity hot path. See route_option_quote.
+    if (opt_quote_conn_) {
+        QObject::disconnect(opt_quote_conn_);
+        opt_quote_conn_ = {};
+    }
+    if (stream) {
+        bool has_option = false;
+        for (const auto& s : position_symbols_)
+            if (trading::fyers_parse_option(s).valid) {
+                has_option = true;
+                break;
+            }
+        if (has_option)
+            opt_quote_conn_ = connect(stream, &trading::AccountDataStream::quote_updated,
+                                      this, &EquityTradingScreen::route_option_quote);
+        LOG_INFO("posdbg", QString("opt route bind: has_option=%1 stream=%2 conn=%3 pos=[%4]")
+                               .arg(has_option ? "Y" : "N")
+                               .arg(stream ? "Y" : "N")
+                               .arg(opt_quote_conn_ ? "Y" : "N")
+                               .arg(position_symbols_.join(',')));
+    }
+
     if (isVisible() && hub_active_)
         hub_subscribe_streaming(); // re-point quote topics at the new symbol set
 }
@@ -233,6 +262,7 @@ void EquityTradingScreen::update_position_symbols(const QStringList& syms) {
     if (deduped == position_symbols_)
         return; // unchanged — avoid resubscribe churn
     position_symbols_ = deduped;
+    LOG_INFO("posdbg", QString("update_position_symbols: [%1]").arg(deduped.join(',')));
     // Re-display + re-subscribe to the new active∪positions union so held symbols
     // get live WebSocket prices. Deferred to the next tick because this can fire
     // from inside a hub callback, and apply_active_watchlist re-subscribes the hub.

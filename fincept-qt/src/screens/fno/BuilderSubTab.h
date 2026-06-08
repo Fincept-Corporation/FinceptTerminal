@@ -62,7 +62,6 @@ class BuilderSubTab : public QWidget {
     void on_chain_published(const QString& topic, const QVariant& v);
     void refresh_analytics();
     fincept::services::options::Strategy current_strategy() const;
-    static QString ensure_paper_portfolio();
     void update_trade_button_state();
 
     BuilderAnalyticsRibbon* ribbon_ = nullptr;

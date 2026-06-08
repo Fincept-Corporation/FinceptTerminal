@@ -5,6 +5,7 @@
 #include "core/logging/Logger.h"
 #include "trading/AccountManager.h"
 #include "trading/OrderValidator.h"
+#include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
 #include "trading/SmartOrderEngine.h"
 #include "trading/StrategyPortfolio.h"
@@ -268,26 +269,50 @@ UnifiedOrderResponse UnifiedTrading::place_paper_order_for_account(const QString
     if (account.paper_portfolio_id.isEmpty())
         return {false, "", "No paper portfolio for this account", "paper"};
 
-    QString symbol = order.exchange.isEmpty() ? order.symbol : order.exchange + ":" + order.symbol;
-    QString side_str = order_side_str(order.side);
-    QString type_str = order_type_str(order.order_type);
+    // Store the BARE symbol (no exchange prefix). Positions mark to market against
+    // the live quote feed published under the bare symbol (broker:<id>:<acct>:quote:
+    // <bare>), and this matches the Equity screen's convention. Re-prefixing here as
+    // "NFO:NIFTY…" was why F&O positions never marked (the prefix never matched a
+    // quote topic) and showed a frozen/garbage price.
+    const QString symbol = order.symbol;
+    const QString side_str = order_side_str(order.side);
+    const QString type_str = order_type_str(order.order_type);
 
+    // Forward the broker product (MIS/CNC/NRML) and exchange so the engine applies
+    // per-product leverage and TAGS the position with its real product. Without it
+    // the product defaulted to CNC (delivery), which made square-off-all skip the
+    // position entirely (it filters to intraday) — the "doesn't exit" bug.
+    const QString product = product_to_broker_str(order.product_type);
+
+    // Resolve the order's reference / fill price. Limit & stop-limit carry their own
+    // trigger; market and plain-stop fill at the caller-supplied live price
+    // (order.price = LTP at click time). A market order with no usable price is
+    // rejected with a clear message rather than the old hardcoded 1000.0 sentinel.
     std::optional<double> price_opt;
-    if (order.order_type == OrderType::Market)
-        price_opt = 1000.0;
-    else if (order.price > 0)
+    if (order.order_type == OrderType::Limit || order.order_type == OrderType::StopLossLimit) {
+        if (order.price > 0)
+            price_opt = order.price;
+    } else if (order.price > 0) {
         price_opt = order.price;
-
+    }
     std::optional<double> stop_opt;
     if (order.stop_price > 0)
         stop_opt = order.stop_price;
 
+    const bool is_market = (order.order_type == OrderType::Market);
+    if (is_market && !price_opt)
+        return {false, "", "No live price yet for a market fill — wait for quotes to load", "paper"};
+
     try {
         auto paper_order = pt_place_order(account.paper_portfolio_id, symbol, side_str, type_str, order.quantity,
-                                          price_opt, stop_opt, false);
-        if (order.order_type == OrderType::Market) {
-            double fill_price = order.price > 0 ? order.price : 1000.0;
-            pt_fill_order(paper_order.id, fill_price);
+                                          price_opt, stop_opt, /*reduce_only=*/false, order.exchange, product);
+        if (is_market) {
+            pt_fill_order(paper_order.id, *price_opt);
+        } else {
+            // Limit / stop / stop-limit: hand to the matcher so it fills on a real
+            // market touch (driven centrally off the quote feed). Previously these
+            // were placed and then left "pending" forever — never filled.
+            OrderMatcher::instance().add_order(paper_order);
         }
         return {true, paper_order.id, "Paper order placed", "paper"};
     } catch (const std::exception& e) {
@@ -382,14 +407,24 @@ ApiResponse<CloseAllResult> UnifiedTrading::close_all_positions(const QString& a
         for (const auto& pos : positions) {
             if (pos.quantity == 0) continue;
             result.total_positions++;
-            auto side_str = (pos.quantity > 0) ? QString("sell") : QString("buy");
+            // Close with the OPPOSITE side. Paper positions store quantity as a
+            // positive magnitude with side="long"/"short", so the quantity sign is
+            // unreliable (shorts are +) — derive the direction from `side`. Using
+            // the sign sold a short instead of buying it back, so it never closed.
+            const QString dir = pos.side.toLower();
+            const bool is_short = dir == QLatin1String("short") || dir == QLatin1String("sell") || pos.quantity < 0;
+            const QString side_str = is_short ? QStringLiteral("buy") : QStringLiteral("sell");
+            const double fill = pos.current_price > 0.0 ? pos.current_price : pos.entry_price;
             try {
                 auto paper_order = pt_place_order(account.paper_portfolio_id, pos.symbol,
-                    side_str, "market", std::abs(pos.quantity), pos.current_price, std::nullopt, false);
-                pt_fill_order(paper_order.id, pos.current_price);
+                    side_str, "market", std::abs(pos.quantity), fill, std::nullopt, false);
+                pt_fill_order(paper_order.id, fill);
                 result.closed_symbols.append(pos.symbol);
-            } catch (...) {
-                result.failed.append({pos.symbol, "Close failed"});
+                LOG_INFO("UnifiedTrading", QString("close_all paper: %1 %2 x%3 @ %4 (was %5)")
+                                               .arg(side_str, pos.symbol).arg(std::abs(pos.quantity)).arg(fill).arg(pos.side));
+            } catch (const std::exception& e) {
+                result.failed.append({pos.symbol, e.what()});
+                LOG_WARN("UnifiedTrading", QString("close_all paper failed for %1: %2").arg(pos.symbol, e.what()));
             }
         }
         publish(AllPositionsClosedEvent{account_id, (int)result.closed_symbols.size(),
@@ -424,11 +459,16 @@ ApiResponse<OrderPlaceResponse> UnifiedTrading::close_position(
             QString pos_sym = pos.symbol;
             if (pos_sym == symbol || pos_sym == exchange + ":" + symbol) {
                 if (pos.quantity == 0) continue;
-                auto side_str = (pos.quantity > 0) ? QString("sell") : QString("buy");
+                // Close by the OPPOSITE of the position's `side` (quantity is a
+                // positive magnitude; shorts are +, so the sign is unreliable).
+                const QString dir = pos.side.toLower();
+                const bool is_short = dir == QLatin1String("short") || dir == QLatin1String("sell") || pos.quantity < 0;
+                const QString side_str = is_short ? QStringLiteral("buy") : QStringLiteral("sell");
+                const double fill = pos.current_price > 0.0 ? pos.current_price : pos.entry_price;
                 try {
                     auto paper_order = pt_place_order(account.paper_portfolio_id, pos.symbol,
-                        side_str, "market", std::abs(pos.quantity), pos.current_price, std::nullopt, false);
-                    pt_fill_order(paper_order.id, pos.current_price);
+                        side_str, "market", std::abs(pos.quantity), fill, std::nullopt, false);
+                    pt_fill_order(paper_order.id, fill);
                     return {true, OrderPlaceResponse{true, paper_order.id, {}}, {}};
                 } catch (const std::exception& e) {
                     return {false, std::nullopt, QString("Close failed: %1").arg(e.what())};
@@ -623,30 +663,39 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
             r.exchange = order.exchange;
 
             if (is_paper) {
-                QString symbol = order.exchange.isEmpty() ? order.symbol
-                                                          : order.exchange + ":" + order.symbol;
-                QString side_str = order_side_str(order.side);
-                QString type_str = order_type_str(order.order_type);
+                // Store the BARE symbol + forward exchange/product (same contract as
+                // place_paper_order_for_account) so each leg marks to market and
+                // squares off correctly. Market legs fill at the supplied price (no
+                // 1000.0 sentinel — a market leg with no price fails cleanly); limit/
+                // stop legs go to the matcher to fill on a real touch.
+                const QString side_str = order_side_str(order.side);
+                const QString type_str = order_type_str(order.order_type);
+                const QString product = product_to_broker_str(order.product_type);
+                const bool is_market = (order.order_type == OrderType::Market);
                 std::optional<double> price_opt;
-                if (order.order_type == OrderType::Market)
-                    price_opt = 1000.0;
-                else if (order.price > 0)
+                if (order.price > 0)
                     price_opt = order.price;
                 std::optional<double> stop_opt;
                 if (order.stop_price > 0)
                     stop_opt = order.stop_price;
-                try {
-                    auto paper_order = pt_place_order(paper_portfolio_id, symbol, side_str, type_str,
-                                                      order.quantity, price_opt, stop_opt, false);
-                    if (order.order_type == OrderType::Market) {
-                        double fill_price = order.price > 0 ? order.price : 1000.0;
-                        pt_fill_order(paper_order.id, fill_price);
-                    }
-                    r.success = true;
-                    r.order_id = paper_order.id;
-                } catch (const std::exception& e) {
+                if (is_market && !price_opt) {
                     r.success = false;
-                    r.error = QString("Paper order failed: %1").arg(e.what());
+                    r.error = "No live price for market fill";
+                } else {
+                    try {
+                        auto paper_order = pt_place_order(paper_portfolio_id, order.symbol, side_str, type_str,
+                                                          order.quantity, price_opt, stop_opt, false,
+                                                          order.exchange, product);
+                        if (is_market)
+                            pt_fill_order(paper_order.id, *price_opt);
+                        else
+                            OrderMatcher::instance().add_order(paper_order);
+                        r.success = true;
+                        r.order_id = paper_order.id;
+                    } catch (const std::exception& e) {
+                        r.success = false;
+                        r.error = QString("Paper order failed: %1").arg(e.what());
+                    }
                 }
             } else {
                 OrderPlaceResponse resp = broker->place_order(creds, order);
@@ -770,30 +819,36 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
             r.exchange = chunk.exchange;
 
             if (is_paper) {
-                QString symbol = chunk.exchange.isEmpty() ? chunk.symbol
-                                                          : chunk.exchange + ":" + chunk.symbol;
-                QString side_str = order_side_str(chunk.side);
-                QString type_str = order_type_str(chunk.order_type);
+                // Bare symbol + forwarded exchange/product (same contract as the
+                // keystone) so split chunks mark + square off; no 1000.0 sentinel.
+                const QString side_str = order_side_str(chunk.side);
+                const QString type_str = order_type_str(chunk.order_type);
+                const QString product = product_to_broker_str(chunk.product_type);
+                const bool is_market = (chunk.order_type == OrderType::Market);
                 std::optional<double> price_opt;
-                if (chunk.order_type == OrderType::Market)
-                    price_opt = 1000.0;
-                else if (chunk.price > 0)
+                if (chunk.price > 0)
                     price_opt = chunk.price;
                 std::optional<double> stop_opt;
                 if (chunk.stop_price > 0)
                     stop_opt = chunk.stop_price;
-                try {
-                    auto paper_order = pt_place_order(paper_portfolio_id, symbol, side_str, type_str,
-                                                      chunk.quantity, price_opt, stop_opt, false);
-                    if (chunk.order_type == OrderType::Market) {
-                        double fill_price = chunk.price > 0 ? chunk.price : 1000.0;
-                        pt_fill_order(paper_order.id, fill_price);
-                    }
-                    r.success = true;
-                    r.order_id = paper_order.id;
-                } catch (const std::exception& e) {
+                if (is_market && !price_opt) {
                     r.success = false;
-                    r.error = QString("Paper order failed: %1").arg(e.what());
+                    r.error = "No live price for market fill";
+                } else {
+                    try {
+                        auto paper_order = pt_place_order(paper_portfolio_id, chunk.symbol, side_str, type_str,
+                                                          chunk.quantity, price_opt, stop_opt, false,
+                                                          chunk.exchange, product);
+                        if (is_market)
+                            pt_fill_order(paper_order.id, *price_opt);
+                        else
+                            OrderMatcher::instance().add_order(paper_order);
+                        r.success = true;
+                        r.order_id = paper_order.id;
+                    } catch (const std::exception& e) {
+                        r.success = false;
+                        r.error = QString("Paper order failed: %1").arg(e.what());
+                    }
                 }
             } else {
                 OrderPlaceResponse resp = broker->place_order(creds, chunk);

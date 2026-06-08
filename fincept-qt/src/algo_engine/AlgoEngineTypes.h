@@ -162,6 +162,16 @@ struct AlgoMetrics {
 
 // ── Order signal ────────────────────────────────────────────────────────────
 
+// One leg of a multi-leg F&O order. Empty AlgoOrderSignal.legs means the
+// single-symbol equity path (symbol/quantity/side fields) is used instead.
+struct AlgoOrderLeg {
+    QString symbol;             // broker-native option/future symbol
+    qint64  instrument_token = 0;
+    QString side;               // BUY | SELL
+    double  quantity = 0;
+    double  price = 0;          // limit price; 0 = market
+};
+
 struct AlgoOrderSignal {
     QString deployment_id;
     QString account_id;
@@ -175,6 +185,7 @@ struct AlgoOrderSignal {
     double trigger_price = 0;
     QString reason;
     QString mode = "paper"; // paper | live — paper simulates the fill, live routes to the broker
+    QVector<AlgoOrderLeg> legs; // multi-leg F&O orders; empty = single-symbol equity path
 };
 
 // ── Live dashboard snapshot ───────────────────────────────────────────────────

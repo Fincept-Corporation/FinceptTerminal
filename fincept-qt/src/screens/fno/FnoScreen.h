@@ -29,6 +29,10 @@
 
 #include <functional>
 
+namespace fincept::screens::common {
+class PaperBlotterPanel;
+}
+
 namespace fincept::screens::fno {
 
 class BuilderSubTab;
@@ -67,6 +71,7 @@ class FnoScreen : public QWidget,
         TabMultiStraddle = 3,
         TabFiiDii = 4,
         TabScreener = 5,
+        TabPositions = 6,
         TabCount
     };
 
@@ -105,6 +110,7 @@ class FnoScreen : public QWidget,
     QPointer<class FiiDiiSubTab> fii_dii_tab_;
     QPointer<class MultiStraddleSubTab> multi_straddle_tab_;
     QPointer<class ScreenerSubTab> screener_tab_;
+    QPointer<fincept::screens::common::PaperBlotterPanel> positions_tab_;
 
     // Group G is the "yellow" slot in the default palette (per SymbolGroup.h
     // line 16). Plan called for Yellow as the F&O default — that's slot G.

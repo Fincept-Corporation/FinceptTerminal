@@ -24,11 +24,24 @@ inline bool provider_supports_streaming(const QString& provider) {
     return provider == "openai" || provider == "anthropic" || provider == "gemini" || provider == "google" ||
            provider == "groq" || provider == "deepseek" || provider == "openrouter" || provider == "minimax" ||
            provider == "kimi" || provider == "ollama" || provider == "xai" || provider == "fincept" ||
-           provider == "astraflow" || provider == "astraflow_cn" || provider == "aihubmix";
+           provider == "astraflow" || provider == "astraflow_cn" || provider == "aihubmix" ||
+           provider == "atlascloud";
 }
 
 inline bool provider_requires_api_key(const QString& provider) {
     return provider != "ollama" && provider != "fincept";
+}
+
+/// In-band sentinel prefixed onto a streamed chunk to mark it as chain-of-thought
+/// ("thinking") rather than answer text. Reasoning models (DeepSeek-R1, GLM, Kimi,
+/// MiniMax, …) stream `reasoning_content` (and Anthropic streams `thinking_delta`)
+/// before the real answer. The AI Chat tab strips this prefix and routes the
+/// remainder into a separate, collapsible Thinking section so it never mixes into
+/// the answer bubble; the floating Quick-Chat bubble simply drops these chunks.
+/// Uses STX (\x02) so it can't collide with model text — mirrors the existing
+/// \x01 __TOOL_CALL_CLEAR__ sentinel style.
+inline QString think_stream_prefix() {
+    return QStringLiteral("\x02__THINK__");
 }
 
 struct ConversationMessage {
@@ -173,7 +186,14 @@ class LlmService : public QObject {
     static QMap<QString, QString> get_models_headers(const QString& provider, const QString& api_key);
     static QStringList parse_models_response(const QString& provider, const QByteArray& body);
 
-    static QString parse_sse_chunk(const QString& data, const QString& provider);
+    /// One parsed SSE delta. `is_reasoning` is true for chain-of-thought text
+    /// (OpenAI-compat `reasoning_content`, Anthropic `thinking_delta`) so the
+    /// streaming loop can route it to the Thinking channel instead of the answer.
+    struct SseDelta {
+        QString text;
+        bool is_reasoning = false;
+    };
+    static SseDelta parse_sse_chunk(const QString& data, const QString& provider);
 
     static void parse_usage(LlmResponse& resp, const QJsonObject& rj, const QString& provider);
 

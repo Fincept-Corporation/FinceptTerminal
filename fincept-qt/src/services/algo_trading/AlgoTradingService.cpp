@@ -40,22 +40,26 @@ void AlgoTradingService::save_strategy(const AlgoStrategy& strategy) {
         QString::fromUtf8(QJsonDocument(strategy.entry_conditions).toJson(QJsonDocument::Compact));
     const QString exit_json =
         QString::fromUtf8(QJsonDocument(strategy.exit_conditions).toJson(QJsonDocument::Compact));
+    const QString legs_json =
+        QString::fromUtf8(QJsonDocument(strategy.legs).toJson(QJsonDocument::Compact));
 
     // is_active=1 in the UPDATE branch so re-saving a soft-deleted strategy revives it.
     auto r = fincept::Database::instance().execute(
         "INSERT INTO algo_strategies "
         "(id, name, description, timeframe, entry_conditions, exit_conditions, "
-        " entry_logic, exit_logic, stop_loss, take_profit, trailing_stop, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) "
+        " entry_logic, exit_logic, stop_loss, take_profit, trailing_stop, "
+        " instrument_type, legs_json, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) "
         "ON CONFLICT(id) DO UPDATE SET "
         "  name=excluded.name, description=excluded.description, timeframe=excluded.timeframe, "
         "  entry_conditions=excluded.entry_conditions, exit_conditions=excluded.exit_conditions, "
         "  entry_logic=excluded.entry_logic, exit_logic=excluded.exit_logic, "
         "  stop_loss=excluded.stop_loss, take_profit=excluded.take_profit, "
-        "  trailing_stop=excluded.trailing_stop, is_active=1, updated_at=CURRENT_TIMESTAMP",
+        "  trailing_stop=excluded.trailing_stop, instrument_type=excluded.instrument_type, "
+        "  legs_json=excluded.legs_json, is_active=1, updated_at=CURRENT_TIMESTAMP",
         {resolved_id, strategy.name, strategy.description, strategy.timeframe, entry_json, exit_json,
          strategy.entry_logic, strategy.exit_logic, strategy.stop_loss, strategy.take_profit,
-         strategy.trailing_stop});
+         strategy.trailing_stop, strategy.instrument_type, legs_json});
 
     if (r.is_err()) {
         LOG_ERROR("AlgoTrading", QString("save_strategy failed: %1").arg(QString::fromStdString(r.error())));
@@ -71,7 +75,7 @@ static QVector<AlgoStrategy> load_dsl_strategies_from_db() {
     auto q = fincept::Database::instance().execute(
         "SELECT id, name, description, timeframe, entry_conditions, exit_conditions, "
         "entry_logic, exit_logic, stop_loss, take_profit, trailing_stop, "
-        "created_at, updated_at "
+        "created_at, updated_at, instrument_type, legs_json "
         "FROM algo_strategies WHERE is_active = 1 ORDER BY created_at DESC", {});
     if (q.is_err())
         return result;
@@ -91,6 +95,8 @@ static QVector<AlgoStrategy> load_dsl_strategies_from_db() {
         s.trailing_stop    = query.value(10).toDouble();
         s.created_at       = query.value(11).toString();
         s.updated_at       = query.value(12).toString();
+        s.instrument_type  = query.value(13).isNull() ? QStringLiteral("equity") : query.value(13).toString();
+        s.legs             = QJsonDocument::fromJson(query.value(14).toString().toUtf8()).array();
         result.append(s);
     }
     return result;

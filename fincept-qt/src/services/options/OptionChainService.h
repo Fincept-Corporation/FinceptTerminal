@@ -128,6 +128,28 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
     /// `option:atm_iv:<broker>:<underlying>` (decimal IV).
     void publish_atm_iv(const fincept::services::options::OptionChain& chain);
 
+    // ── WS-first live streaming (Phase 3 fan-out) ──────────────────────────
+    // When the broker has a native option WebSocket (Fyers today), the market
+    // is open, and the account is connected, the chain switches from REST
+    // polling to a live WS feed: the ATM±window option symbols are subscribed
+    // on the account's shared AccountDataStream, and incoming ticks patch
+    // last_chain_ in place + fan out on `option:tick:<broker>:<token>`. REST is
+    // suppressed (see refresh()) while the feed stays fresh, and resumes as the
+    // fallback when the feed goes stale / market closes / account disconnects.
+
+    /// Subscribe the ATM±window legs of `chain` to the live WS and route ticks.
+    /// No-op (and tears down any existing feed) when not WS-eligible.
+    void maybe_start_ws_stream(const fincept::services::options::OptionChain& chain, const QString& topic);
+    /// Drop the WS subscription + tick routing for the active streamed topic.
+    void stop_ws_stream();
+    /// Tick handler — merges a live broker quote into last_chain_ and republishes
+    /// the affected leg on `option:tick:*`. Filters by account + symbol map.
+    void on_ws_quote(const QString& account_id, const QString& symbol,
+                     const fincept::trading::BrokerQuote& quote);
+    /// True when `topic` is the streamed topic and a tick arrived within the
+    /// staleness window (so the REST poll should stand down).
+    bool ws_feed_fresh(const QString& topic) const;
+
     /// Risk-free rate from settings (`fno.risk_free_rate`), default 0.067
     /// (RBI 91-day T-bill ballpark). Cached after first read.
     double risk_free_rate();
@@ -155,6 +177,14 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
     bool risk_free_rate_loaded_ = false;
     /// Cached Databento expiries per underlying (session-scoped).
     QHash<QString, QStringList> databento_expiry_cache_;
+
+    // ── WS-first streaming state ───────────────────────────────────────────
+    QString ws_topic_;                      ///< chain topic currently WS-streamed ("" = none)
+    QString ws_account_id_;                 ///< account whose stream we subscribed
+    QHash<QString, qint64> ws_sym_token_;   ///< bare WS option symbol → leg token
+    qint64 ws_last_tick_ms_ = 0;            ///< last WS tick arrival (epoch ms)
+    QMetaObject::Connection ws_quote_conn_; ///< AccountDataStream::quote_updated binding
+    QMetaObject::Connection ws_idle_conn_;  ///< DataHub::topic_idle teardown binding
 };
 
 } // namespace fincept::services::options

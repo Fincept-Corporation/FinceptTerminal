@@ -35,7 +35,7 @@ static constexpr const char* TAG = "LlmConfigSection";
 
 const QStringList LlmConfigSection::KNOWN_PROVIDERS = {"openai",  "anthropic", "gemini",   "groq",  "deepseek",
                                                        "openrouter", "minimax", "kimi", "ollama", "xai",   "fincept",
-                                                       "astraflow", "astraflow_cn", "aihubmix"};
+                                                       "astraflow", "astraflow_cn", "aihubmix", "atlascloud"};
 
 QString LlmConfigSection::default_base_url(const QString& provider) {
     const QString p = provider.toLower();
@@ -67,6 +67,8 @@ QString LlmConfigSection::default_base_url(const QString& provider) {
         return "https://api.modelverse.cn/v1"; // Astraflow China endpoint (UCloud)
     if (p == "aihubmix")
         return "https://aihubmix.com/v1"; // AIHubMix — OpenAI-compatible aggregator (500+ models)
+    if (p == "atlascloud")
+        return "https://api.atlascloud.ai/v1"; // AtlasCloud — OpenAI-compatible aggregator (300+ open models)
     return {};
 }
 
@@ -126,6 +128,16 @@ QStringList LlmConfigSection::fallback_models(const QString& provider) {
                 "gemini-2.5-flash", "gemini-2.5-pro",
                 "deepseek-chat", "deepseek-reasoner",
                 "qwen-max", "qwen-plus", "grok-4"};
+    if (p == "atlascloud")
+        // AtlasCloud — OpenAI-compatible aggregator (300+ models). Model ids are
+        // HuggingFace-style "org/model" strings (NOT short aliases). Note: a few ids
+        // listed by /v1/models are unprovisioned and return 400 (e.g. google/gemini-2.0-flash,
+        // openai/gpt-4o*). The list below is a verified-working starter set; use the
+        // Fetch button for the full live catalog (/v1/models).
+        return {"deepseek-ai/DeepSeek-V3.1", "deepseek-ai/deepseek-r1-0528",
+                "qwen/qwen3-32b", "Qwen/Qwen3-235B-A22B-Instruct-2507",
+                "zai-org/GLM-4.6", "moonshotai/Kimi-K2-Instruct", "MiniMaxAI/MiniMax-M2",
+                "google/gemini-2.5-flash", "anthropic/claude-haiku-4.5-20251001"};
     return {};
 }
 

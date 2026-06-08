@@ -29,14 +29,25 @@ static QString to_fyers_sym(const QString& sym) {
     return QStringLiteral("NSE:") + sym + QStringLiteral("-EQ");
 }
 
-// Strip Fyers format back to plain symbol: NSE:RELIANCE-EQ → RELIANCE
+// Strip Fyers format back to plain symbol: NSE:RELIANCE-EQ → RELIANCE.
+// F&O contracts come back with "-CE"/"-PE"/"-FUT"; strip those too so a position
+// symbol matches the bare HSM symbol the WS feed publishes (e.g.
+// "NIFTY09JUN26C22650"), keeping option positions marked-to-market live. We strip
+// only known segment suffixes — NOT everything after the first '-', since names
+// like "BAJAJ-AUTO-EQ" legitimately contain hyphens.
 static QString from_fyers_sym(const QString& fyers_sym) {
     QString s = fyers_sym;
     const int colon = s.indexOf(':');
     if (colon >= 0)
         s = s.mid(colon + 1);
-    if (s.endsWith(QLatin1String("-EQ")))
-        s.chop(3);
+    static const QStringList kSuffixes = {QStringLiteral("-EQ"), QStringLiteral("-CE"),
+                                          QStringLiteral("-PE"), QStringLiteral("-FUT")};
+    for (const auto& suf : kSuffixes) {
+        if (s.endsWith(suf)) {
+            s.chop(int(suf.size()));
+            break;
+        }
+    }
     return s;
 }
 
@@ -320,6 +331,16 @@ ApiResponse<QVector<BrokerPosition>> FyersBroker::get_positions(const BrokerCred
         const QString raw_pos_sym = p.value("symbol").toString();
         pos.symbol = from_fyers_sym(raw_pos_sym);
         pos.exchange = exchange_of(raw_pos_sym, p.value("exchange").toInt(-1));
+        {
+            // [posdiag] one-shot per symbol — verify position symbol matches the
+            // WS quote symbol so option positions mark-to-market live.
+            static QSet<QString> s_seen_pos;
+            if (!s_seen_pos.contains(raw_pos_sym)) {
+                s_seen_pos.insert(raw_pos_sym);
+                LOG_INFO("FyersBroker", QString("[posdiag] raw='%1' → norm='%2' exch='%3'")
+                                            .arg(raw_pos_sym, pos.symbol, pos.exchange));
+            }
+        }
         pos.product_type = p.value("productType").toString();
         pos.quantity = p.value("netQty").toDouble();
         pos.avg_price = p.value("netAvg").toDouble();

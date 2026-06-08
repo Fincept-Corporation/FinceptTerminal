@@ -88,8 +88,9 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void on_orders_day_changed(const QDate& day);
     // Square off the subset of open positions by P&L sign (+1 winners, -1 losers).
     void on_square_off_group(const QString& account_id, int sign);
-    // Right-click Buy/Sell on a position or holding → open an order ticket.
-    void on_trade_symbol_requested(const QString& symbol, const QString& product, bool is_buy);
+    // Buy/Sell on a position or holding (right-click or per-row SELL button) →
+    // open an order ticket. `qty` pre-fills the ticket (held qty on a reduce/exit).
+    void on_trade_symbol_requested(const QString& symbol, const QString& product, bool is_buy, double qty);
     // EXIT clicked on the chart's position card → confirm + square off the symbol.
     void on_chart_exit_position(const QString& symbol, const QString& exchange,
                                 const QString& product_type, const QString& side, double qty);
@@ -149,7 +150,8 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void open_chart_order_ticket(bool is_buy, double price);
     // Generalized order ticket for an arbitrary symbol/product (right-click trade
     // from the positions/holdings tables). Routes through on_order_submitted().
-    void open_order_ticket_for(const QString& symbol, const QString& exchange, const QString& product, bool is_buy);
+    void open_order_ticket_for(const QString& symbol, const QString& exchange, const QString& product, bool is_buy,
+                               double qty = 0.0);
     // Re-reads the focused account's paper portfolio into the panels. No-op for
     // live accounts (their data flows from AccountDataStream via the hub).
     void refresh_paper_panels();
@@ -160,6 +162,15 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void hub_unsubscribe_all();
     void hub_subscribe_quotes();
     QString broker_id_for_focused() const;
+
+    // Mark held F&O option positions to market. Fyers' live HSM tick feed spells
+    // an option ("NIFTY09JUN26C23200") differently from its REST position symbol
+    // ("NIFTY2660923200CE"), so option ticks never match the per-symbol quote
+    // topics. This router reconciles the two by (underlying, strike, side) and
+    // patches the position/holding row + paper P&L. Bound to the focused stream
+    // (opt_quote_conn_) only while an option position is actually held.
+    void route_option_quote(const QString& account_id, const QString& symbol,
+                            const trading::BrokerQuote& quote);
 
     // Named-watchlist controller (WatchlistRepository). load_watchlists() refreshes
     // the combo + seeds a default from the broker's default_watchlist on first run;
@@ -234,6 +245,9 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     // UPDATE per tick. SL/TP + limit matching still run every tick (in-memory).
     QHash<QString, double> pending_paper_prices_;
     bool paper_flush_armed_ = false;
+    // Focused stream → route_option_quote, bound only while an F&O option position
+    // is held (Fyers' HSM tick symbol can't match the per-symbol quote topics).
+    QMetaObject::Connection opt_quote_conn_;
 
     // Async guards
     std::atomic<bool> token_expired_shown_{false};

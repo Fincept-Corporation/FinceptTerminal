@@ -169,7 +169,14 @@ void InstanceLock::on_new_connection() {
 
             const auto args = parse_args(payload);
             LOG_INFO(kTag, QString("Secondary connected: %1 args").arg(args.size()));
-            emit message_received(args);
+            // Defer the emit to the next event-loop turn. Consumers open a modal
+            // monitor picker (QDialog::exec spins a NESTED event loop); doing that
+            // synchronously inside this QLocalSocket::readyRead slot re-enters
+            // socket delivery, and the client's disconnected→deleteLater then frees
+            // the socket mid-emit → doActivate crashes (EXC_BAD_ACCESS). Posting the
+            // emit lets this slot fully unwind before any nested loop runs.
+            QMetaObject::invokeMethod(
+                this, [this, args]() { emit message_received(args); }, Qt::QueuedConnection);
         });
 
         connect(client, &QLocalSocket::disconnected, client, &QLocalSocket::deleteLater);

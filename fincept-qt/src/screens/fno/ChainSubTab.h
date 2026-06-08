@@ -65,6 +65,9 @@ class ChainSubTab : public QWidget {
     void on_underlying_changed(const QString& underlying);
     void on_expiry_changed(const QString& expiry);
     void on_refresh_clicked();
+    /// Right-click Buy/Sell on a chain leg → build a 1-lot market order, confirm,
+    /// and route to the connected broker (live or paper per its trading mode).
+    void on_order_requested(qint64 token, double strike, bool is_call, bool is_buy);
 
   private:
     void retranslateUi();
@@ -84,6 +87,10 @@ class ChainSubTab : public QWidget {
 
     /// Topic we're currently subscribed to. Empty when not subscribed.
     QString active_topic_;
+
+    /// Per-leg live-tick pattern we're subscribed to (`option:tick:<broker>:*`),
+    /// used to patch single cells from the WS feed. Empty when not subscribed.
+    QString tick_pattern_;
 
     /// Whether the widget is currently visible — gates re-subscribe paths
     /// triggered by combo changes from non-visible state.

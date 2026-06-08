@@ -128,6 +128,15 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     int total_tokens_ = 0;
     int total_messages_ = 0;
 
+    // ── Per-stream "Thinking" (chain-of-thought) section ─────────────────────
+    // Reasoning models stream their thoughts on a separate channel (see
+    // think_stream_prefix()). We collect them into a collapsible card inserted
+    // ABOVE the answer bubble so the answer stays clean. Reset between messages.
+    QPointer<QWidget> thinking_card_;
+    QPointer<QPushButton> thinking_header_;
+    QPointer<QLabel> thinking_body_;
+    QString thinking_text_;
+
     // ── Build ────────────────────────────────────────────────────────────
     void build_ui();
     void retranslateUi();
@@ -145,6 +154,11 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     void create_new_session();
     void add_message_bubble(const QString& role, const QString& content, const QString& timestamp = {});
     QLabel* add_streaming_bubble();
+    // Collapsible "Thinking" card for the in-flight assistant message.
+    void append_thinking_chunk(const QString& text);
+    void create_thinking_card();
+    void finalize_thinking_card();
+    void reset_thinking_state();
     void clear_messages();
     void scroll_to_bottom();
     void set_input_enabled(bool enabled);

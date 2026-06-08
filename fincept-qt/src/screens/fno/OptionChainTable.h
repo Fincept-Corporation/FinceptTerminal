@@ -20,14 +20,19 @@ class OptionChainTable : public QTableView {
     OptionChainModel* chain_model() const { return model_; }
 
   signals:
-    /// Emitted when the user clicks a CE or PE LTP cell — used by the
-    /// strategy builder (Phase 5) to add a leg.
-    /// `is_call=true` means CE side. `lots` is +1 (buy) for left-click,
-    /// -1 (sell) for right-click.
+    /// Emitted when the user left-clicks a CE or PE LTP cell (or picks
+    /// "Add to Builder") — used by the strategy builder (Phase 5) to add a
+    /// leg. `is_call=true` means CE side. `lots` is +1 (buy).
     void leg_clicked(qint64 token, double strike, bool is_call, int lots);
+
+    /// Emitted when the user picks Buy/Sell from a leg's right-click menu.
+    /// `is_buy=false` means Sell. ChainSubTab routes it to the broker (live
+    /// or paper, per the connected account's trading mode).
+    void order_requested(qint64 token, double strike, bool is_call, bool is_buy);
 
   protected:
     void mousePressEvent(QMouseEvent* e) override;
+    void contextMenuEvent(QContextMenuEvent* e) override;
 
   private:
     OptionChainModel* model_ = nullptr;

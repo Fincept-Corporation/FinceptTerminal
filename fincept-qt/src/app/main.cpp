@@ -1,5 +1,7 @@
 ﻿#include "algo_engine/AlgoEngineProducer.h"
 #include "algo_engine/ScanMonitor.h"
+#include "algo_engine/UniverseScanSelftest.h"
+#include "algo_engine/fno/FnoAlgoSelftest.h"
 #include "services/llm/LlmService.h"
 #include "ui/notifications/DesktopNotifier.h"
 #include "app/MonitorPickerDialog.h"
@@ -18,6 +20,7 @@
 #include "core/currency/CurrencyManager.h"
 #include "core/i18n/LanguageManager.h"
 #include "core/keys/KeyConfigManager.h"
+#include "core/layout/DockLayoutSelftest.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/session/SessionManager.h"
@@ -27,6 +30,7 @@
 #include "mcp/McpInit.h"
 #include "mcp/ToolSelfTest.h"
 #include "services/feeds/FeedSelfTest.h"
+#include "trading/PaperTradingSelftest.h"
 #include "network/http/HttpClient.h"
 #include "python/PythonSetupManager.h"
 #include "screens/launchpad/LaunchpadScreen.h"
@@ -72,6 +76,7 @@
 #include "trading/AccountManager.h"
 #include "trading/DataStreamManager.h"
 #include "trading/ExchangeService.h"
+#include "trading/PaperMarkService.h"
 #include "trading/ExchangeSessionManager.h"
 #include "storage/HistoricalDataStore.h"
 #include "storage/repositories/NewsArticleRepository.h"
@@ -715,6 +720,8 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v042();
     fincept::register_migration_v043();
     fincept::register_migration_v044();
+    fincept::register_migration_v045();
+    fincept::register_migration_v046();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
@@ -870,6 +877,14 @@ int main(int argc, char* argv[]) {
             return fincept::mcp::dump_tools_json();
         if (qstrcmp(argv[i], "--selftest-feeds") == 0)
             return fincept::feeds::run_feed_selftest();
+        if (qstrcmp(argv[i], "--selftest-dock-layout") == 0)
+            return fincept::layout::run_dock_layout_selftest();
+        if (qstrcmp(argv[i], "--selftest-fno-algo") == 0)
+            return fincept::algo::fno::run_fno_algo_selftest();
+        if (qstrcmp(argv[i], "--selftest-universe-scan") == 0)
+            return fincept::algo::run_universe_scan_selftest();
+        if (qstrcmp(argv[i], "--selftest-paper") == 0)
+            return fincept::trading::run_paper_trading_selftest();
     }
 
     // Start the scan-watch background service. Runs after Database::open() (which
@@ -880,6 +895,13 @@ int main(int argc, char* argv[]) {
     // normal startup) start it exactly once. Candle fetching is native C++ (broker
     // REST / native Yahoo), so it does not require the Python env to be ready.
     fincept::algo::ScanMonitor::instance().start();
+
+    // Centralized paper mark-to-market + order matching. Runs independent of which
+    // screen is open so paper positions (equity AND F&O) keep their P&L live and
+    // resting limit/stop/SL-TP orders fill continuously — not only while the
+    // Equity tab is focused. Placed alongside ScanMonitor (after the self-test
+    // early-returns, so it stays off in headless --selftest runs).
+    fincept::trading::PaperMarkService::instance().start();
 
     // Native desktop notifications (Win toast / macOS Notification Center / Linux
     // libnotify) via a tray icon — also surfaces every in-app ToastService toast.

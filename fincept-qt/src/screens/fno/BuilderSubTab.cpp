@@ -12,7 +12,8 @@
 #include "services/options/StrategyAnalytics.h"
 #include "services/options/StrategyTemplates.h"
 #include "storage/repositories/StrategiesRepository.h"
-#include "trading/PaperTrading.h"
+#include "trading/AccountManager.h"
+#include "trading/UnifiedTrading.h"
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
 
@@ -333,23 +334,23 @@ void BuilderSubTab::update_trade_button_state() {
                               : tr("Build a strategy first — Trade All needs at least one active leg."));
 }
 
-QString BuilderSubTab::ensure_paper_portfolio() {
-    const QString name = QStringLiteral("F&O Paper");
-    const QString exchange = QStringLiteral("NFO");
-    auto existing = fincept::trading::pt_find_portfolio(name, exchange);
-    if (existing.has_value())
-        return existing->id;
-    auto p = fincept::trading::pt_create_portfolio(name, /*balance*/ 1'000'000.0,
-                                                   /*currency*/ "INR",
-                                                   /*leverage*/ 1.0,
-                                                   /*margin_mode*/ "cross",
-                                                   /*fee_rate*/ 0.0005,
-                                                   /*exchange*/ exchange);
-    LOG_INFO("FnoBuilder", QString("Created paper portfolio '%1' (id=%2)").arg(name, p.id));
-    return p.id;
+namespace {
+// Resolve the trading account for the chain's broker so Builder strategy trades
+// land in the SAME paper portfolio as the chain's right-click Buy/Sell (one
+// unified F&O blotter), rather than a disconnected standalone "F&O Paper"
+// portfolio. Prefer an active account, else the first configured one. Mirrors
+// ChainSubTab::find_account_for_broker.
+QString find_account_for_broker(const QString& broker_id) {
+    auto accounts = fincept::trading::AccountManager::instance().list_accounts(broker_id);
+    for (const auto& acct : accounts)
+        if (acct.is_active)
+            return acct.account_id;
+    return accounts.isEmpty() ? QString{} : accounts[0].account_id;
 }
+} // namespace
 
 void BuilderSubTab::on_trade_clicked() {
+    using namespace fincept::trading;
     const auto& legs = legs_view_->leg_model()->legs();
     if (legs.isEmpty() || last_chain_.rows.isEmpty())
         return;
@@ -368,22 +369,44 @@ void BuilderSubTab::on_trade_clicked() {
         ribbon_->set_margin(val, /*estimated*/ false);
     }
 
-    const QString portfolio_id = ensure_paper_portfolio();
+    // Route every leg through the account-aware UnifiedTrading path (identical to
+    // the chain's right-click Buy/Sell). For paper this fills market orders
+    // immediately at the current premium, tags the position with its product
+    // (NRML), stores the bare symbol so it marks to market, and keeps every F&O
+    // paper position in ONE account portfolio so square-off and the shared
+    // blotter can see them. Previously each leg was a raw "limit" order that was
+    // never filled and lived in a separate portfolio nothing else could reach.
+    const QString broker = last_chain_.broker_id;
+    const QString account_id = find_account_for_broker(broker);
+    if (account_id.isEmpty()) {
+        QMessageBox::warning(
+            this, tr("Trade Strategy"),
+            tr("No connected %1 account. Connect one in Equity Trading to paper-trade this strategy.")
+                .arg(broker.isEmpty() ? tr("trading") : broker));
+        return;
+    }
+
     int placed = 0;
     int failed = 0;
     QStringList failures;
     for (const auto& leg : legs) {
         if (!leg.is_active || leg.lots == 0)
             continue;
-        const QString side = leg.lots > 0 ? "buy" : "sell";
-        const double qty = std::abs(double(leg.lots) * double(leg.lot_size));
-        try {
-            fincept::trading::pt_place_order(portfolio_id, leg.symbol, side, "limit", qty,
-                                             leg.entry_price);
+        UnifiedOrder order;
+        order.symbol = leg.symbol;
+        order.exchange = QStringLiteral("NFO");
+        order.side = leg.lots > 0 ? OrderSide::Buy : OrderSide::Sell;
+        order.order_type = OrderType::Market;       // paper: execute the strategy at current premiums
+        order.quantity = std::abs(double(leg.lots) * double(leg.lot_size));
+        order.price = leg.entry_price;              // current leg premium → paper fill price
+        order.product_type = ProductType::Margin;   // NRML (positional) for F&O
+        order.validity = QStringLiteral("DAY");
+        auto resp = UnifiedTrading::instance().place_order(account_id, order);
+        if (resp.success) {
             ++placed;
-        } catch (const std::exception& e) {
+        } else {
             ++failed;
-            failures.append(QString("%1: %2").arg(leg.symbol, e.what()));
+            failures.append(QString("%1: %2").arg(leg.symbol, resp.message));
         }
     }
 
