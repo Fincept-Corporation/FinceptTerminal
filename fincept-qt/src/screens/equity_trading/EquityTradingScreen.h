@@ -82,6 +82,8 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void on_strategy_submitted(const trading::BasketOrderRequest& basket); // options strategy → basket
     void on_ob_price_clicked(double price);
     void on_import_holdings_requested(const QVector<trading::BrokerHolding>& holdings);
+    // Replicate a source account's portfolio into a paper account (opens dialog).
+    void on_replicate_portfolio_requested();
     // Paper: convert a position's product in place (MIS -> CNC) then refresh.
     void on_convert_position(const QString& position_id, const QString& symbol, const QString& new_product);
     // Orders tab date-selector changed — show that IST day's paper order book.

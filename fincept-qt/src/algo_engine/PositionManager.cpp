@@ -25,6 +25,63 @@ PositionManager::PositionManager(const QString& deployment_id,
 std::optional<AlgoOrderSignal> PositionManager::check_risk(double current_price) {
     QMutexLocker lock(&mutex_);
 
+    // ── Multi-leg basket branch (P3) ────────────────────────────────────────
+    // Entered ONLY when legs are active. Single-position logic below is UNCHANGED.
+    if (multi_leg_) {
+        if (legs_.isEmpty())
+            return std::nullopt;
+
+        // Compute current basket P&L from cached unrealized_pnl on each leg.
+        double basket_pnl = 0;
+        for (const auto& leg : std::as_const(legs_))
+            basket_pnl += leg.unrealized_pnl;
+
+        double basket_pnl_pct = basket_entry_value_ > 1e-10
+            ? basket_pnl / basket_entry_value_ * 100.0 : 0;
+
+        // Daily loss limit
+        if (max_daily_loss_ > 0 && risk_.daily_pnl <= -std::abs(max_daily_loss_)) {
+            risk_.paused_by_loss_limit = true;
+            AlgoOrderSignal sig;
+            sig.deployment_id = deployment_id_;
+            sig.reason = "daily_loss_limit";
+            return sig;
+        }
+
+        // Stop loss
+        if (stop_loss_pct_ > 0 && basket_pnl_pct <= -std::abs(stop_loss_pct_)) {
+            AlgoOrderSignal sig;
+            sig.deployment_id = deployment_id_;
+            sig.reason = "stop_loss";
+            return sig;
+        }
+
+        // Take profit
+        if (take_profit_pct_ > 0 && basket_pnl_pct >= std::abs(take_profit_pct_)) {
+            AlgoOrderSignal sig;
+            sig.deployment_id = deployment_id_;
+            sig.reason = "take_profit";
+            return sig;
+        }
+
+        // Trailing stop — track peak basket P&L
+        if (trailing_stop_pct_ > 0) {
+            if (basket_pnl > basket_peak_pnl_)
+                basket_peak_pnl_ = basket_pnl;
+            double peak_pct = basket_entry_value_ > 1e-10
+                ? basket_peak_pnl_ / basket_entry_value_ * 100.0 : 0;
+            if (peak_pct - basket_pnl_pct >= trailing_stop_pct_) {
+                AlgoOrderSignal sig;
+                sig.deployment_id = deployment_id_;
+                sig.reason = "trailing_stop";
+                return sig;
+            }
+        }
+
+        return std::nullopt;
+    }
+    // ── End multi-leg branch ────────────────────────────────────────────────
+
     if (position_.side == PositionSide::None)
         return std::nullopt;
 
@@ -99,6 +156,7 @@ std::optional<AlgoOrderSignal> PositionManager::check_risk(double current_price)
 
 void PositionManager::record_entry(PositionSide side, double qty, double price, int64_t time_ms) {
     QMutexLocker lock(&mutex_);
+    Q_ASSERT(!multi_leg_); // invariant: single-leg path must not be called while a basket is active
     position_.side = side;
     position_.quantity = qty;
     position_.entry_price = price;
@@ -219,6 +277,88 @@ void PositionManager::reset_daily() {
     risk_.daily_pnl = 0;
     risk_.paused_by_loss_limit = false;
     risk_.day_start_epoch = QDateTime::currentMSecsSinceEpoch();
+}
+
+// ── Multi-leg basket methods (P3) ───────────────────────────────────────────
+
+void PositionManager::record_entry_legs(const QVector<fincept::algo::AlgoLegPosition>& legs,
+                                        int64_t time_ms) {
+    QMutexLocker lock(&mutex_);
+    Q_ASSERT(position_.side == PositionSide::None); // invariant: multi-leg path must not be called while a single-leg position is open
+    legs_        = legs;
+    multi_leg_   = true;
+    basket_peak_pnl_ = 0;
+
+    // Compute entry value: Σ |entry_price * quantity| (unsigned, used as denominator)
+    basket_entry_value_ = 0;
+    double total_qty = 0;
+    for (const auto& leg : std::as_const(legs_)) {
+        basket_entry_value_ += std::abs(leg.entry_price * leg.quantity);
+        total_qty           += leg.quantity;
+    }
+
+    metrics_.current_position_side = QStringLiteral("BASKET");
+    metrics_.current_position_qty  = total_qty;
+    metrics_.last_trade_time       = time_ms;
+}
+
+double PositionManager::record_exit_legs(int64_t time_ms) {
+    QMutexLocker lock(&mutex_);
+    double pnl = 0;
+    for (const auto& leg : std::as_const(legs_))
+        pnl += leg.unrealized_pnl;
+
+    metrics_.total_pnl  += pnl;
+    metrics_.total_trades++;
+    if (pnl > 0)      metrics_.winning_trades++;
+    else if (pnl < 0) metrics_.losing_trades++;
+    metrics_.win_rate = metrics_.total_trades > 0
+        ? static_cast<double>(metrics_.winning_trades) / metrics_.total_trades * 100.0 : 0;
+    metrics_.last_trade_time = time_ms;
+    metrics_.unrealized_pnl  = 0;
+
+    risk_.daily_pnl += pnl;
+    update_drawdown();
+
+    legs_.clear();
+    multi_leg_          = false;
+    basket_entry_value_ = 0;
+    basket_peak_pnl_    = 0;
+
+    metrics_.current_position_side = QString();
+    metrics_.current_position_qty  = 0;
+
+    return pnl;
+}
+
+void PositionManager::update_leg_price(const QString& symbol, double ltp) {
+    QMutexLocker lock(&mutex_);
+    bool found = false;
+    for (auto& leg : legs_) {
+        if (leg.symbol == symbol) {
+            leg.current_price   = ltp;
+            leg.unrealized_pnl  = (ltp - leg.entry_price) * leg.quantity * leg.side_sign;
+            found = true;
+            break;
+        }
+    }
+    if (!found)
+        qWarning() << "PositionManager::update_leg_price: symbol not in basket:" << symbol;
+    // Recompute basket unrealized P&L
+    double basket_pnl = 0;
+    for (const auto& leg : std::as_const(legs_))
+        basket_pnl += leg.unrealized_pnl;
+    metrics_.unrealized_pnl = basket_pnl;
+}
+
+bool PositionManager::has_legs() const {
+    QMutexLocker lock(&mutex_);
+    return multi_leg_ && !legs_.isEmpty();
+}
+
+QVector<fincept::algo::AlgoLegPosition> PositionManager::legs() const {
+    QMutexLocker lock(&mutex_);
+    return legs_;
 }
 
 } // namespace fincept::algo

@@ -116,6 +116,19 @@ struct AlgoPosition {
     double lowest_since_entry = 0;
 };
 
+// One leg of an open multi-leg F&O basket position (P3).
+struct AlgoLegPosition {
+    QString symbol;            // broker-native option symbol
+    qint64  instrument_token = 0;
+    bool    is_call = true;
+    double  strike = 0;
+    int     side_sign = 1;     // +1 long/BUY, -1 short/SELL
+    double  quantity = 0;      // contracts (lots × lot_size)
+    double  entry_price = 0;   // premium per contract at entry
+    double  current_price = 0; // live mark
+    double  unrealized_pnl = 0;
+};
+
 // ── Risk ────────────────────────────────────────────────────────────────────
 
 struct RiskState {
@@ -140,6 +153,11 @@ struct AlgoTradeRecord {
     int64_t timestamp = 0;
     QString broker_order_id;
     int64_t latency_ms = 0;
+    // Multi-leg F&O basket fills (P3.4): one trade row per leg. leg_symbol is the
+    // broker-native contract; leg_index is its position in the basket. Empty/-1 for
+    // the single-symbol equity path.
+    QString leg_symbol;
+    int     leg_index = -1;
 };
 
 // ── Metrics ─────────────────────────────────────────────────────────────────
@@ -185,6 +203,7 @@ struct AlgoOrderSignal {
     double trigger_price = 0;
     QString reason;
     QString mode = "paper"; // paper | live — paper simulates the fill, live routes to the broker
+    QString paper_portfolio_id; // PtPortfolio id for the paper basket path (stamped by the runner)
     QVector<AlgoOrderLeg> legs; // multi-leg F&O orders; empty = single-symbol equity path
 };
 

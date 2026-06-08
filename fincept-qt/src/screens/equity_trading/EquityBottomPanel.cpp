@@ -444,6 +444,13 @@ void EquityBottomPanel::setup_holdings_tab() {
     });
     strip_layout->addWidget(holdings_import_btn_);
 
+    holdings_replicate_btn_ = new QPushButton(tr("REPLICATE → PAPER"));
+    holdings_replicate_btn_->setCursor(Qt::PointingHandCursor);
+    holdings_replicate_btn_->setStyleSheet(holdings_import_btn_->styleSheet());
+    connect(holdings_replicate_btn_, &QPushButton::clicked, this,
+            [this]() { emit replicate_portfolio_requested(); });
+    strip_layout->addWidget(holdings_replicate_btn_);
+
     v->addWidget(strip);
 
     holdings_table_ = new QTableWidget;

@@ -2,8 +2,10 @@
 #include "algo_engine/DeploymentRunner.h"
 #include "algo_engine/CandleDataFetcher.h"
 #include "algo_engine/ConditionEvaluator.h"
+#include "algo_engine/fno/FnoExecution.h"
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
+#include "services/options/OptionChainService.h"
 #include "storage/sqlite/Database.h"
 
 using fincept::Database;
@@ -14,7 +16,10 @@ using fincept::Database;
 #include "trading/DataStreamManager.h"
 #include "trading/TradingTypes.h"
 
+#include <QDate>
 #include <QDateTime>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QPointer>
 #include <QSqlQuery>
 #include <QUuid>
@@ -148,6 +153,20 @@ void DeploymentRunner::start_market_data() {
             if (self && self->running_.load() && !self->paused_.load())
                 self->on_tick_data(QVariant::fromValue(q));
         });
+
+    // F&O basket reattached across a restart: re-establish the chain stream and
+    // re-pin the open legs so their LTPs flow for live marking. (On a fresh deploy
+    // legs aren't open yet — evaluate_entry does the ensure_chain + pin at entry.)
+    if (deployment_.instrument_type != QLatin1String("equity") && fno_bridge_
+        && position_mgr_->has_legs()) {
+        fno_bridge_->ensure_chain(deployment_.broker_id, deployment_.underlying, resolved_expiry_);
+        QStringList syms;
+        for (const auto& l : position_mgr_->legs())
+            syms << l.symbol;
+        fno_bridge_->pin_legs(deployment_.broker_id, deployment_.underlying, resolved_expiry_, syms);
+        LOG_INFO("AlgoEngine", QString("Deployment %1: re-pinned %2 reattached F&O legs")
+                                   .arg(deployment_.id).arg(syms.size()));
+    }
 }
 
 void DeploymentRunner::stop_market_data() {
@@ -187,16 +206,40 @@ void DeploymentRunner::on_tick_data(const QVariant& data) {
                                    .arg(deployment_.broker_id));
     }
 
-    position_mgr_->update_price(price);
+    // ── F&O multi-leg basket: mark each leg from the chain snapshot, then run
+    // basket risk (SL/TP/trailing). The single-symbol update_price() must be
+    // SKIPPED here — it writes the single-position unrealized P&L (0 for a
+    // basket) over the basket marks. ───────────────────────────────────────────
+    const bool fno_basket = deployment_.instrument_type != QLatin1String("equity")
+                            && fno_bridge_ && position_mgr_->has_legs();
+    if (fno_basket) {
+        const auto chain = fno_bridge_->snapshot(deployment_.broker_id,
+                                                 deployment_.underlying, resolved_expiry_);
+        const auto marks = fincept::algo::fno::leg_marks_from_chain(position_mgr_->legs(), chain);
+        for (auto it = marks.constBegin(); it != marks.constEnd(); ++it)
+            position_mgr_->update_leg_price(it.key(), it.value());
 
-    auto risk_signal = position_mgr_->check_risk(price);
-    if (risk_signal) {
-        risk_signal->account_id = deployment_.broker_account_id;
-        risk_signal->symbol = deployment_.symbol;
-        risk_signal->exchange = deployment_.exchange;
-        risk_signal->product_type = deployment_.product_type;
-        risk_signal->price = price; // current market price for the simulated/real exit
-        emit_order_signal(*risk_signal);
+        auto risk_signal = position_mgr_->check_risk(price); // basket branch ignores price
+        if (risk_signal) {
+            risk_signal->account_id = deployment_.broker_account_id;
+            risk_signal->symbol     = deployment_.underlying;
+            risk_signal->exchange   = deployment_.exchange;
+            risk_signal->product_type = deployment_.product_type;
+            risk_signal->legs       = fincept::algo::fno::build_exit_legs(position_mgr_->legs());
+            emit_order_signal(*risk_signal);
+        }
+    } else {
+        position_mgr_->update_price(price);
+
+        auto risk_signal = position_mgr_->check_risk(price);
+        if (risk_signal) {
+            risk_signal->account_id = deployment_.broker_account_id;
+            risk_signal->symbol = deployment_.symbol;
+            risk_signal->exchange = deployment_.exchange;
+            risk_signal->product_type = deployment_.product_type;
+            risk_signal->price = price; // current market price for the simulated/real exit
+            emit_order_signal(*risk_signal);
+        }
     }
 
     aggregator_->on_tick(price, volume, timestamp);
@@ -238,10 +281,14 @@ void DeploymentRunner::evaluate_live(double price) {
     auto candles = live_eval_window(price);
     if (candles.size() < 2)
         return;
-    if (position_mgr_->has_position())
+    if (in_position())
         evaluate_exit(candles);
     else
         evaluate_entry(candles);
+}
+
+bool DeploymentRunner::in_position() const {
+    return position_mgr_->has_position() || position_mgr_->has_legs();
 }
 
 namespace {
@@ -306,7 +353,7 @@ void DeploymentRunner::on_candle_closed(const OhlcvCandle& /*candle*/) {
     auto candles = aggregator_->closed_candles();
     if (candles.size() < 20) return;
 
-    if (position_mgr_->has_position()) {
+    if (in_position()) {
         evaluate_exit(candles);
     } else {
         evaluate_entry(candles);
@@ -326,14 +373,63 @@ void DeploymentRunner::evaluate_entry(const QVector<OhlcvCandle>& candles) {
     AlgoOrderSignal signal;
     signal.deployment_id = deployment_.id;
     signal.account_id = deployment_.broker_account_id;
-    signal.symbol = deployment_.symbol;
     signal.exchange = deployment_.exchange;
     signal.product_type = deployment_.product_type;
-    signal.side = deployment_.entry_side;
-    signal.quantity = deployment_.quantity;
     signal.order_type = "MARKET";
     signal.price = candles.last().close; // fill reference for paper sim / P&L
     signal.reason = "entry_signal";
+
+    // ── F&O multi-leg branch ────────────────────────────────────────────────
+    // Resolve expiry rule + chain snapshot + leg contracts, then emit a multi-
+    // leg order basket. The equity single-symbol path below is left untouched.
+    if (deployment_.instrument_type != QLatin1String("equity") && fno_bridge_) {
+        // Determine expiry rule from the first leg rule (single-expiry v1).
+        QString exp_mode = QStringLiteral("WEEKLY");
+        QString exp_val;
+        {
+            const auto rules = fincept::algo::fno::fno_legs_from_json(strategy_.legs);
+            if (!rules.isEmpty()) {
+                exp_mode = rules.first().expiry_mode;
+                exp_val  = rules.first().expiry_value;
+            }
+        }
+
+        const QString expiry = fincept::algo::fno::resolve_expiry(
+            exp_mode, exp_val,
+            fincept::services::options::OptionChainService::instance().list_expiries(
+                deployment_.broker_id, deployment_.underlying),
+            QDate::currentDate());
+        resolved_expiry_ = expiry; // keep for live leg marks + restart reattach
+
+        fno_bridge_->ensure_chain(deployment_.broker_id, deployment_.underlying, expiry);
+        const auto chain = fno_bridge_->snapshot(deployment_.broker_id,
+                                                  deployment_.underlying, expiry);
+        auto legs = fincept::algo::fno::resolve_entry_legs(chain, strategy_.legs);
+
+        if (legs.isEmpty()) {
+            LOG_WARN("AlgoEngine",
+                     QString("Deployment %1: F&O entry: no resolvable legs (chain not ready?)")
+                         .arg(deployment_.id));
+            return;
+        }
+
+        // Pin the resolved leg symbols into the live WS subscription window so
+        // they stay fresh for mark-to-market during the life of the position.
+        QStringList syms;
+        for (const auto& l : legs)
+            syms << l.symbol;
+        fno_bridge_->pin_legs(deployment_.broker_id, deployment_.underlying, expiry, syms);
+
+        signal.symbol   = deployment_.underlying; // underlying for bookkeeping
+        signal.legs     = legs;
+        emit_order_signal(signal);
+        return; // skip the equity single-symbol path below
+    }
+    // ── Equity single-symbol path (unchanged) ───────────────────────────────
+
+    signal.symbol = deployment_.symbol;
+    signal.side = deployment_.entry_side;
+    signal.quantity = deployment_.quantity;
 
     if (!position_mgr_->validate_order_value(signal.quantity, candles.last().close)) {
         LOG_WARN("AlgoEngine", QString("Deployment %1: order value exceeds limit, skipping entry")
@@ -350,18 +446,30 @@ void DeploymentRunner::evaluate_exit(const QVector<OhlcvCandle>& candles) {
 
     if (!result.triggered) return;
 
-    auto pos = position_mgr_->position();
     AlgoOrderSignal signal;
     signal.deployment_id = deployment_.id;
     signal.account_id = deployment_.broker_account_id;
-    signal.symbol = deployment_.symbol;
     signal.exchange = deployment_.exchange;
     signal.product_type = deployment_.product_type;
+    signal.order_type = "MARKET";
+    signal.price = candles.last().close;
+    signal.reason = "exit_signal";
+
+    // ── F&O multi-leg exit branch ───────────────────────────────────────────
+    if (deployment_.instrument_type != QLatin1String("equity")
+        && fno_bridge_
+        && position_mgr_->has_legs()) {
+        signal.symbol = deployment_.underlying;
+        signal.legs   = fincept::algo::fno::build_exit_legs(position_mgr_->legs());
+        emit_order_signal(signal);
+        return; // skip the equity single-symbol exit path below
+    }
+    // ── Equity single-symbol exit path (unchanged) ──────────────────────────
+
+    auto pos = position_mgr_->position();
+    signal.symbol = deployment_.symbol;
     signal.side = (pos.side == PositionSide::Long) ? "SELL" : "BUY";
     signal.quantity = pos.quantity;
-    signal.order_type = "MARKET";
-    signal.price = candles.last().close; // fill reference for paper sim / P&L
-    signal.reason = "exit_signal";
 
     emit_order_signal(signal);
 }
@@ -379,6 +487,7 @@ void DeploymentRunner::emit_order_signal(const AlgoOrderSignal& signal_in) {
     // (the account is its data source).
     AlgoOrderSignal signal = signal_in;
     signal.mode = deployment_.mode;
+    signal.paper_portfolio_id = deployment_.paper_portfolio_id; // paper basket target
     if (signal.price <= 0)
         signal.price = position_mgr_->metrics().current_price;
 
@@ -451,6 +560,114 @@ void DeploymentRunner::on_order_rejected(const QString& /*broker_order_id*/,
               .arg(deployment_.id, reason));
 }
 
+// ── Multi-leg F&O basket fills (P3.4) ───────────────────────────────────────
+// One call per leg from AlgoEngine::execute_basket. Fills accumulate in
+// basket_fills_ / basket_rejected_ until the whole in-flight basket is
+// accounted for, then finalize_basket_if_complete() records or abandons it.
+
+void DeploymentRunner::on_leg_filled(int leg_index, const AlgoOrderLeg& leg,
+                                     double fill_price, double fill_qty) {
+    if (pending_orders_.isEmpty())
+        return;
+    const PendingOrder& pending = pending_orders_.first();
+    const bool is_entry = (pending.signal.reason == "entry_signal");
+    const int64_t now = QDateTime::currentMSecsSinceEpoch();
+
+    if (is_entry) {
+        // Record the fill as an open leg position; P&L marks come from leg quotes.
+        AlgoLegPosition lp;
+        lp.symbol           = leg.symbol;
+        lp.instrument_token = leg.instrument_token;
+        lp.side_sign        = (leg.side == QLatin1String("BUY")) ? 1 : -1;
+        lp.quantity         = fill_qty;
+        lp.entry_price      = fill_price;
+        lp.current_price    = fill_price;
+        lp.unrealized_pnl   = 0;
+        basket_fills_.append(lp);
+    } else {
+        // Exit fill: mark the matching open leg at the exit price so the realized
+        // basket P&L (computed in record_exit_legs from the open legs' marks)
+        // reflects the exit fills. Count it for completion via basket_fills_.
+        position_mgr_->update_leg_price(leg.symbol, fill_price);
+        AlgoLegPosition lp;
+        lp.symbol   = leg.symbol;
+        lp.quantity = fill_qty;
+        basket_fills_.append(lp);
+    }
+
+    // Persist one trade row per leg (symbol = underlying for grouping; leg_symbol
+    // = the concrete contract; pnl is attached to the basket at finalize).
+    AlgoTradeRecord trade;
+    trade.id             = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    trade.deployment_id  = deployment_.id;
+    trade.symbol         = deployment_.underlying.isEmpty() ? deployment_.symbol
+                                                            : deployment_.underlying;
+    trade.side           = leg.side;
+    trade.quantity       = fill_qty;
+    trade.price          = fill_price;
+    trade.pnl            = 0;
+    trade.reason         = pending.signal.reason;
+    trade.timestamp      = now;
+    trade.broker_order_id = QString();
+    trade.latency_ms     = now - pending.submitted_ms;
+    trade.leg_symbol     = leg.symbol;
+    trade.leg_index      = leg_index;
+    persist_trade(trade);
+    emit trade_executed(trade);
+
+    finalize_basket_if_complete();
+}
+
+void DeploymentRunner::on_leg_rejected(int leg_index, const QString& reason) {
+    basket_rejected_++;
+    LOG_ERROR("AlgoEngine", QString("Deployment %1: basket leg %2 rejected: %3")
+              .arg(deployment_.id).arg(leg_index).arg(reason));
+    finalize_basket_if_complete();
+}
+
+void DeploymentRunner::finalize_basket_if_complete() {
+    if (pending_orders_.isEmpty())
+        return;
+    const PendingOrder& pending = pending_orders_.first();
+    const int expected = pending.signal.legs.size();
+    if (expected <= 0)
+        return;
+    if (basket_fills_.size() + basket_rejected_ < expected)
+        return; // still waiting on legs
+
+    const bool is_entry = (pending.signal.reason == "entry_signal");
+    const int64_t now = QDateTime::currentMSecsSinceEpoch();
+    pending_orders_.removeFirst(); // release the in-flight guard
+
+    double pnl = 0;
+    if (is_entry) {
+        if (basket_rejected_ == 0 && !basket_fills_.isEmpty()) {
+            position_mgr_->record_entry_legs(basket_fills_, now);
+            persist_resolved_legs(); // so a restart reattaches to the open basket
+            emit_live_snapshot(0, QStringLiteral("ENTRY basket filled (%1 legs)")
+                                      .arg(basket_fills_.size()));
+        } else {
+            // Partial entry: the engine has rolled back the filled legs at the
+            // broker; record no position so we stay flat.
+            LOG_WARN("AlgoEngine",
+                     QString("Deployment %1: entry basket aborted (%2 filled, %3 rejected) — no position recorded")
+                         .arg(deployment_.id).arg(basket_fills_.size()).arg(basket_rejected_));
+            emit_live_snapshot(0, QStringLiteral("ENTRY basket aborted — rolled back"));
+        }
+    } else {
+        // Exit: open legs were marked at their exit fills in on_leg_filled.
+        pnl = position_mgr_->record_exit_legs(now);
+        clear_resolved_legs(); // basket closed — nothing to reattach on restart
+        resolved_expiry_.clear();
+        emit_live_snapshot(0, QStringLiteral("EXIT basket closed, P&L %1")
+                                  .arg(pnl, 0, 'f', 2));
+    }
+
+    basket_fills_.clear();
+    basket_rejected_ = 0;
+    emit metrics_updated(deployment_.id, position_mgr_->metrics());
+}
+
 void DeploymentRunner::on_heartbeat() {
     if (!running_.load()) return;
     int64_t now = QDateTime::currentMSecsSinceEpoch();
@@ -497,8 +714,8 @@ void DeploymentRunner::persist_trade(const AlgoTradeRecord& trade) {
     QSqlQuery q(db);
     q.prepare(QStringLiteral(
         "INSERT INTO algo_trades (id, deployment_id, symbol, side, quantity, price, pnl, "
-        "reason, broker_order_id, latency_ms, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))"));
+        "reason, broker_order_id, latency_ms, leg_symbol, leg_index, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))"));
     q.addBindValue(trade.id);
     q.addBindValue(trade.deployment_id);
     q.addBindValue(trade.symbol);
@@ -509,6 +726,8 @@ void DeploymentRunner::persist_trade(const AlgoTradeRecord& trade) {
     q.addBindValue(trade.reason);
     q.addBindValue(trade.broker_order_id);
     q.addBindValue(QVariant::fromValue(trade.latency_ms));
+    q.addBindValue(trade.leg_symbol);
+    q.addBindValue(trade.leg_index);
     if (!q.exec())
         LOG_ERROR("AlgoEngine", QString("Failed to persist trade: %1").arg(q.lastError().text()));
 }
@@ -536,8 +755,61 @@ void DeploymentRunner::persist_metrics() {
         LOG_ERROR("AlgoEngine", QString("Failed to persist metrics: %1").arg(q.lastError().text()));
 }
 
+void DeploymentRunner::persist_resolved_legs() {
+    const QJsonArray arr = fincept::algo::fno::leg_positions_to_json(position_mgr_->legs());
+    const QString json = QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+    auto db = Database::instance().connection();
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral(
+        "UPDATE algo_deployments SET resolved_legs_json = ?, resolved_expiry = ?, "
+        "underlying = ?, instrument_type = ?, updated_at = datetime('now') WHERE id = ?"));
+    q.addBindValue(json);
+    q.addBindValue(resolved_expiry_);
+    q.addBindValue(deployment_.underlying);
+    q.addBindValue(deployment_.instrument_type);
+    q.addBindValue(deployment_.id);
+    if (!q.exec())
+        LOG_ERROR("AlgoEngine", QString("Failed to persist resolved legs: %1").arg(q.lastError().text()));
+}
+
+void DeploymentRunner::clear_resolved_legs() {
+    auto db = Database::instance().connection();
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral(
+        "UPDATE algo_deployments SET resolved_legs_json = '[]', resolved_expiry = '', "
+        "updated_at = datetime('now') WHERE id = ?"));
+    q.addBindValue(deployment_.id);
+    q.exec();
+}
+
 void DeploymentRunner::restore_state_from_db() {
     auto db = Database::instance().connection();
+
+    // ── F&O: reattach an open multi-leg basket persisted before the restart ──────
+    // Done first (and independently of algo_metrics) so a basket-open deployment
+    // resumes its legs even if the metrics row is missing. Marks refresh on the
+    // next tick; metrics (total_pnl etc.) are restored from algo_metrics below.
+    if (deployment_.instrument_type != QLatin1String("equity")) {
+        QSqlQuery lq(db);
+        lq.prepare(QStringLiteral(
+            "SELECT resolved_legs_json, resolved_expiry FROM algo_deployments WHERE id = ?"));
+        lq.addBindValue(deployment_.id);
+        if (lq.exec() && lq.next()) {
+            const QString legs_json = lq.value("resolved_legs_json").toString();
+            const auto doc = QJsonDocument::fromJson(legs_json.toUtf8());
+            if (doc.isArray()) {
+                const auto restored = fincept::algo::fno::leg_positions_from_json(doc.array());
+                if (!restored.isEmpty()) {
+                    resolved_expiry_ = lq.value("resolved_expiry").toString();
+                    position_mgr_->record_entry_legs(restored, QDateTime::currentMSecsSinceEpoch());
+                    LOG_INFO("AlgoEngine",
+                             QString("Deployment %1: reattached open F&O basket (%2 legs, expiry %3) across restart")
+                                 .arg(deployment_.id).arg(restored.size()).arg(resolved_expiry_));
+                }
+            }
+        }
+    }
+
     QSqlQuery q(db);
     q.prepare(QStringLiteral(
         "SELECT total_pnl, total_trades, win_rate, max_drawdown, current_position_qty, "

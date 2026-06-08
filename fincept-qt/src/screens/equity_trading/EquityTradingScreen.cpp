@@ -27,6 +27,7 @@
 #include "screens/equity_trading/EquityWatchlist.h"
 #include "screens/common/feeds/FeedPanel.h"
 #include "services/feeds/FeedMonitor.h"
+#include "screens/equity_trading/PortfolioReplicationDialog.h"
 #include "services/portfolio/PortfolioService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "trading/AccountManager.h"
@@ -431,6 +432,8 @@ void EquityTradingScreen::setup_ui() {
     connect(bottom_panel_, &EquityBottomPanel::close_all_positions_requested, this,
             [this](const QString&) { on_close_all_positions(); });
     connect(bottom_panel_, &EquityBottomPanel::import_holdings_requested, this, &EquityTradingScreen::on_import_holdings_requested);
+    connect(bottom_panel_, &EquityBottomPanel::replicate_portfolio_requested, this,
+            &EquityTradingScreen::on_replicate_portfolio_requested);
     connect(bottom_panel_, &EquityBottomPanel::convert_position_requested, this,
             &EquityTradingScreen::on_convert_position);
     connect(bottom_panel_, &EquityBottomPanel::orders_day_changed, this, &EquityTradingScreen::on_orders_day_changed);
@@ -831,6 +834,14 @@ void EquityTradingScreen::restore_state(const QVariantMap& state) {
     // Honour the restored list even when the account didn't change (idempotent).
     if (!wl.isEmpty() && !focused_account_id_.isEmpty())
         load_watchlists();
+}
+
+void EquityTradingScreen::on_replicate_portfolio_requested() {
+    fincept::screens::PortfolioReplicationDialog dlg(this);
+    dlg.exec();
+    // Reflect any new paper positions/holdings/funds in the panels. Safe to call
+    // unconditionally — it no-ops unless the focused account is paper.
+    refresh_paper_panels();
 }
 
 } // namespace fincept::screens

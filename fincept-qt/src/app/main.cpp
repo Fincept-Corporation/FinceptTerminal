@@ -7,7 +7,7 @@
 #include "app/MonitorPickerDialog.h"
 #include "app/WindowFrame.h"
 #include "app/TerminalShell.h"
-#include "core/keys/WindowCycler.h"
+#include "core/window/WindowRegistry.h"
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
 #include "auth/PinManager.h"
@@ -31,6 +31,7 @@
 #include "mcp/ToolSelfTest.h"
 #include "services/feeds/FeedSelfTest.h"
 #include "trading/PaperTradingSelftest.h"
+#include "trading/replication/PortfolioReplicationSelftest.h"
 #include "network/http/HttpClient.h"
 #include "python/PythonSetupManager.h"
 #include "screens/launchpad/LaunchpadScreen.h"
@@ -123,21 +124,40 @@
 
 // Wire the two app-level lifecycle handlers that fire after the primary
 // window exists: InstanceLock::message_received (a re-launch of the exe
-// asks us to open another WindowFrame — args ignored, the request itself is
-// the trigger) and QApplication::lastWindowClosed (surface the Launchpad
+// asks us to bring the running instance to the front — args ignored, the
+// request itself is the trigger) and QApplication::lastWindowClosed (surface the Launchpad
 // instead of quitting; the Launchpad's own close handler quits explicitly).
 // Called from both the post-setup-screen path and the no-setup path so the
 // two branches stay in sync.
 static void wire_app_lifecycle(QApplication& app, fincept::InstanceLock& lock) {
     QObject::connect(&lock, &fincept::InstanceLock::message_received,
                      [](const QStringList& /*args*/) {
-                         // Route through the same picker the toolbar uses so
-                         // secondary-instance launches respect the user's
-                         // monitor choice on multi-monitor setups. Picker
-                         // short-circuits on single-monitor systems, so this
-                         // is a no-op cost there.
-                         fincept::WindowCycler::instance().new_window_on_next_monitor();
-                         LOG_INFO("App", "New window opened via secondary instance request");
+                         // Re-launching the exe while an instance is already
+                         // running means "bring the running instance forward" —
+                         // the standard single-instance behaviour — NOT "open a
+                         // new window". Opening a new window (and the monitor
+                         // picker that goes with it) stays an EXPLICIT action:
+                         // the toolbar "New Window", Ctrl+Shift+N, the Launchpad
+                         // button, and tear-off. Routing relaunches through the
+                         // picker surprised users by prompting for a monitor on
+                         // every open even when they never asked for a new window.
+                         const auto frames = fincept::WindowRegistry::instance().frames();
+                         if (!frames.isEmpty()) {
+                             // Lowest window_id (the primary) is the predictable
+                             // target. Activating one window pulls the whole app
+                             // forward on every platform we support.
+                             fincept::WindowFrame* target = frames.first();
+                             if (target->isMinimized())
+                                 target->showNormal();
+                             target->raise();
+                             target->activateWindow();
+                             LOG_INFO("App", "Secondary instance request — raised existing window");
+                         } else {
+                             // No live frames (e.g. the user closed to the
+                             // Launchpad). Surface it instead of silently no-op'ing.
+                             fincept::screens::LaunchpadScreen::instance()->surface();
+                             LOG_INFO("App", "Secondary instance request — surfaced Launchpad");
+                         }
                      });
     QObject::connect(&app, &QApplication::lastWindowClosed, &app, []() {
         // Settings → General → "On last window close" controls behaviour.
@@ -722,6 +742,7 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v044();
     fincept::register_migration_v045();
     fincept::register_migration_v046();
+    fincept::register_migration_v047();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
@@ -885,6 +906,8 @@ int main(int argc, char* argv[]) {
             return fincept::algo::run_universe_scan_selftest();
         if (qstrcmp(argv[i], "--selftest-paper") == 0)
             return fincept::trading::run_paper_trading_selftest();
+        if (qstrcmp(argv[i], "--selftest-portfolio-replication") == 0)
+            return fincept::trading::replication::run_portfolio_replication_selftest();
     }
 
     // Start the scan-watch background service. Runs after Database::open() (which

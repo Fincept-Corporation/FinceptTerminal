@@ -227,8 +227,29 @@ QScreen* MonitorPickerDialog::pick(QWidget* parent, QScreen* current) {
     if (screens.size() <= 1)
         return screens.isEmpty() ? nullptr : screens.first();
 
+    // Re-entrancy guard. exec() below spins a NESTED event loop, and the
+    // secondary-instance relaunch path (InstanceLock::message_received →
+    // new_window_on_next_monitor → here) is a QUEUED signal, so it gets
+    // delivered *by that nested loop* while a picker is already open. Without
+    // this guard, every relaunch stacks another modal picker on top of the
+    // current one; the user then dismisses them one by one and each dismissal
+    // spawns a window — looking like "the dialog won't close and keeps opening
+    // windows". exec() is GUI-thread only, so a function-static pointer is the
+    // right scope: surface the existing picker and drop the duplicate request
+    // instead of stacking. (The InstanceLock deferred-emit only fixed the
+    // crash this same re-entrancy used to cause, not the stacking.)
+    static MonitorPickerDialog* s_active = nullptr;
+    if (s_active) {
+        s_active->raise();
+        s_active->activateWindow();
+        return nullptr;
+    }
+
     MonitorPickerDialog dlg(parent, current);
-    if (dlg.exec() == QDialog::Accepted)
+    s_active = &dlg;
+    const int rc = dlg.exec();
+    s_active = nullptr;
+    if (rc == QDialog::Accepted)
         return dlg.picked_screen();
     return nullptr;
 }

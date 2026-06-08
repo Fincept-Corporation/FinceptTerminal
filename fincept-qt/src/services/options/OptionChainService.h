@@ -69,6 +69,13 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
     /// Async expiry fetch for Databento — calls Python script, caches result.
     void list_databento_expiries(const QString& underlying, std::function<void(QStringList)> callback);
 
+    /// Pin extra contract symbols into the live WS subscription window for a chain
+    /// topic. Replaces any prior pin set for that topic; an empty list clears pins.
+    /// Call from the main thread only.
+    void pin_contracts(const QString& topic, const QStringList& symbols);
+    /// Returns the currently-pinned symbols for `topic` (empty when no pins set).
+    QStringList pinned_contracts_for(const QString& topic) const { return pinned_contracts_.value(topic); }
+
   signals:
     /// Emitted alongside the hub publish so callers can connect via Qt
     /// signals if they prefer that to subscribing on the hub.
@@ -160,6 +167,9 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
 
     fincept::services::options::OptionChain last_chain_;
     bool hub_registered_ = false;
+    /// Extra symbols pinned per topic (e.g. by FnoDataBridge for algo legs).
+    /// Unioned into the WS subscription set inside maybe_start_ws_stream.
+    QHash<QString, QStringList> pinned_contracts_;
     /// In-flight guard per topic to avoid duplicate refresh fan-out when the
     /// hub scheduler races with a manual request.
     QHash<QString, bool> in_flight_;

@@ -920,6 +920,24 @@ void OptionChainService::publish_per_leg_ticks(const OptionChain& chain) {
     LOG_DEBUG("OptionChain", QString("Per-leg tick fan-out: %1 publishes").arg(published));
 }
 
+// ── Pin contracts ──────────────────────────────────────────────────────────
+
+void OptionChainService::pin_contracts(const QString& topic, const QStringList& symbols) {
+    if (symbols.isEmpty())
+        pinned_contracts_.remove(topic);
+    else
+        pinned_contracts_[topic] = symbols;
+
+    // If this is the currently-streamed topic, re-arm the stream so the newly
+    // pinned symbols are subscribed immediately without waiting for next REST refresh.
+    if (!ws_topic_.isEmpty() && ws_topic_ == topic && !last_chain_.rows.isEmpty()) {
+        maybe_start_ws_stream(last_chain_, topic);
+    } else {
+        LOG_DEBUG("OptionChain", QString("pin_contracts: stored %1 pin(s) for %2 (applies at next WS refresh)")
+                                     .arg(symbols.size()).arg(topic));
+    }
+}
+
 // ── WS-first live streaming ────────────────────────────────────────────────
 
 bool OptionChainService::ws_feed_fresh(const QString& topic) const {
@@ -984,6 +1002,14 @@ void OptionChainService::maybe_start_ws_stream(const OptionChain& chain, const Q
     if (sub_syms.isEmpty()) {
         stop_ws_stream();
         return;
+    }
+
+    // Union in any extra symbols pinned by the algo engine (e.g. specific legs
+    // for an active deployment). When nothing is pinned, sub_syms is unchanged.
+    const QStringList& pins = pinned_contracts_.value(topic);
+    for (const QString& pin : pins) {
+        if (!pin.isEmpty() && !sub_syms.contains(pin))
+            sub_syms.append(pin);
     }
 
     ws_topic_ = topic;

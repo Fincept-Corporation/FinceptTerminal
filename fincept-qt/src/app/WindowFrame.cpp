@@ -521,6 +521,20 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
             w->show();
             w->raise();
             w->activateWindow();
+        } else if (action == "close_window") {
+            // Same as the titlebar close button — WA_DeleteOnClose handles
+            // teardown, closeEvent persists this window's layout. If this is
+            // the last window, the app honours general.on_last_window_close
+            // (quit or surface the Launchpad), exactly like a manual close.
+            close();
+        } else if (action == "close_all_windows") {
+            // Snapshot the registry first: each close() schedules the frame's
+            // destruction (WA_DeleteOnClose → deleteLater) which unregisters it,
+            // so iterating the live registry would be unsafe. The copy is stable.
+            const auto frames = WindowRegistry::instance().frames();
+            for (WindowFrame* w : frames)
+                if (w)
+                    w->close();
         } else if (action.startsWith("move_to_monitor:")) {
             // Move this window to the named monitor. We resolve by QScreen::name
             // (not index) because index ordering flips on plug/unplug events.

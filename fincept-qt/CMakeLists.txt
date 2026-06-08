@@ -870,6 +870,7 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v044_feed_items.cpp
     src/storage/sqlite/migrations/v045_scan_watch_universe.cpp
     src/storage/sqlite/migrations/v046_fno_algo.cpp
+    src/storage/sqlite/migrations/v047_algo_multileg_trades.cpp
 
     # Historical OHLCV data store (Historify, Phase 3 §13)
     src/storage/HistoricalDataStore.cpp
@@ -976,6 +977,8 @@ set(MCP_SOURCES
 set(TRADING_SOURCES
     src/trading/PaperTrading.cpp
     src/trading/PaperTradingSelftest.cpp
+    src/trading/replication/PortfolioReplicationService.cpp
+    src/trading/replication/PortfolioReplicationSelftest.cpp
     src/trading/PaperMarkService.cpp
     src/trading/OrderMatcher.cpp
     src/trading/BrokerRegistry.cpp
@@ -1095,6 +1098,9 @@ set(ALGO_ENGINE_SOURCES
     src/algo_engine/fno/FnoAlgoTypes.cpp
     src/algo_engine/fno/FnoAlgoSelftest.cpp
     src/algo_engine/fno/FnoLegResolver.cpp
+    src/algo_engine/fno/FnoStrategyPreview.cpp
+    src/algo_engine/fno/FnoDataBridge.cpp
+    src/algo_engine/fno/FnoExecution.cpp
 )
 
 # Services
@@ -1368,6 +1374,7 @@ set(UI_SOURCES
     src/ui/widgets/algo/RiskManagementPanel.cpp
     src/ui/widgets/algo/SymbolSearchCombo.cpp
     src/ui/widgets/algo/SymbolChipInput.cpp
+    src/ui/widgets/algo/FnoLegRuleEditor.cpp
 )
 
 # Screens
@@ -1535,6 +1542,7 @@ set(SCREEN_SOURCES
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
     src/screens/equity_trading/OrderConfirmDialog.cpp
+    src/screens/equity_trading/PortfolioReplicationDialog.cpp
     # Feed monitor (reusable across screens)
     src/screens/common/feeds/FeedCardView.cpp
     src/screens/common/feeds/FeedTableView.cpp
@@ -2008,6 +2016,7 @@ set_source_files_properties(
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
     src/screens/equity_trading/OrderConfirmDialog.cpp
+    src/screens/equity_trading/PortfolioReplicationDialog.cpp
     # Feed monitor (reusable across screens)
     src/screens/common/feeds/FeedCardView.cpp
     src/screens/common/feeds/FeedTableView.cpp
@@ -2364,6 +2373,7 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v044_feed_items.cpp
     src/storage/sqlite/migrations/v045_scan_watch_universe.cpp
     src/storage/sqlite/migrations/v046_fno_algo.cpp
+    src/storage/sqlite/migrations/v047_algo_multileg_trades.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp

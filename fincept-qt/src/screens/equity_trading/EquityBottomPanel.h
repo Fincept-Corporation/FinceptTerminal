@@ -72,6 +72,7 @@ class EquityBottomPanel : public QWidget {
     void cancel_order_requested(const QString& order_id);
     void modify_order_requested(const QString& order_id, double new_qty, double new_price);
     void import_holdings_requested(const QVector<trading::BrokerHolding>& holdings);
+    void replicate_portfolio_requested();
     void cancel_all_orders_requested(const QString& account_id);
     void close_all_positions_requested(const QString& account_id);
     // Paper: convert an open position's product in place (MIS -> CNC), identified
@@ -165,6 +166,7 @@ class EquityBottomPanel : public QWidget {
     QLabel* holdings_pnl_caption_ = nullptr;
     QLabel* holdings_pnl_pct_caption_ = nullptr;
     class QPushButton* holdings_import_btn_ = nullptr;
+    class QPushButton* holdings_replicate_btn_ = nullptr;
     QVector<trading::BrokerHolding> last_holdings_;
     QTableWidget* orders_table_ = nullptr;
     QDateEdit* orders_date_edit_ = nullptr;        // per-day order book selector
