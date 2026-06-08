@@ -100,6 +100,14 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
     auto feeds = list_effective_feeds();
     feed_count_ = feeds.size();
 
+    if (feeds.isEmpty()) {
+        LOG_WARN("NewsService", "No enabled feeds — returning empty result");
+        cb(true, {});
+        emit articles_updated({});
+        publish_articles_to_hub({});
+        return;
+    }
+
     // Shared state for collecting results from parallel requests
     struct FetchState {
         QMutex mutex;
@@ -251,6 +259,14 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
     auto feeds = list_effective_feeds();
     feed_count_ = feeds.size();
     const int total = feeds.size();
+
+    if (feeds.isEmpty()) {
+        LOG_WARN("NewsService", "No enabled feeds — returning empty result");
+        final_cb(true, {});
+        emit articles_partial({}, 0, 0);
+        publish_articles_to_hub({});
+        return;
+    }
 
     struct FetchState {
         QMutex mutex;
