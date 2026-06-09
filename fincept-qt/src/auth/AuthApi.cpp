@@ -201,6 +201,12 @@ void AuthApi::verify_mfa(const QString& email, const QString& otp, Callback cb) 
     request("POST", "/user/verify-mfa", body, cb);
 }
 
+void AuthApi::redeem_desktop_handoff(const QString& code, Callback cb) {
+    QJsonObject body;
+    body["token"] = code;
+    request("POST", "/user/auth/desktop-handoff/redeem", body, cb);
+}
+
 // ── Authenticated endpoints (HttpClient carries X-API-Key + X-Session-Token) ─
 
 void AuthApi::logout(Callback cb) {

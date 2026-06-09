@@ -751,6 +751,7 @@ set(DATAHUB_SOURCES
 set(AUTH_SOURCES
     src/auth/AuthManager.cpp
     src/auth/AuthApi.cpp
+    src/auth/GoogleDesktopLogin.cpp
     src/auth/UserApi.cpp
     src/auth/SessionGuard.cpp
     src/auth/PinManager.cpp

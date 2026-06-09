@@ -328,6 +328,40 @@ jobs:
       - name: Install yt-dlp
         run: pip install yt-dlp
 
+      # ── Generate Linux desktop icon (shared by AppImage/.deb/.rpm) ─────────
+      # CMake's install rule renames resources/fincept.png → fincept-terminal.png
+      # (the name the .desktop `Icon=` key and the .rpm %files manifest expect).
+      # The repo only ships resources/fincept.ico, so derive the PNG here.
+      #
+      # CRITICAL: this MUST run BEFORE `cmake -B build`. CMake evaluates the
+      # install rule's `if(EXISTS resources/fincept.png)` (CMakeLists.txt) at
+      # CONFIGURE time and bakes the decision into cmake_install.cmake. If the
+      # PNG appears only after configure, `cmake --install` never emits it and
+      # the .rpm build fails: File not found: .../fincept-terminal.png.
+      - name: Generate Linux icon PNG
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          if [ ! -f resources/fincept.png ]; then
+            if [ -f resources/icons/app_icon_256.png ]; then
+              cp resources/icons/app_icon_256.png resources/fincept.png
+            elif [ -f resources/fincept.ico ]; then
+              # ICO may hold multiple frames — [0] selects the primary/largest.
+              convert "ico:resources/fincept.ico[0]" -resize 256x256 -background none -flatten "png:resources/fincept.png"
+            else
+              # Solid-color last resort, written with a valid IDAT+CRC.
+              convert -size 256x256 xc:'#1a1a1a' "png:resources/fincept.png"
+            fi
+          fi
+          # Fail fast on a missing/empty/corrupt PNG — a bad icon here breaks both
+          # the AppImage (linuxdeploy's libpng pass) and the .rpm %files check.
+          if [ ! -s resources/fincept.png ] || ! file resources/fincept.png | grep -q 'PNG image data'; then
+            echo "::error::resources/fincept.png is missing or not a valid PNG"
+            file resources/fincept.png 2>&1 || true
+            exit 1
+          fi
+          echo "Icon ready: resources/fincept.png ($(du -h resources/fincept.png | cut -f1))"
+
       # ── Configure + Build ─────────────────────────────────────────────────
       # No FINCEPT_BUILD_INSTALLER / no QtIFW on Linux — we ship an AppImage
       # instead (see "Build AppImage" step below).
@@ -354,36 +388,6 @@ jobs:
           [ -f "$BINARY" ] || { echo "::error::Binary not found"; exit 1; }
           echo "Binary: $BINARY ($(du -sh "$BINARY" | cut -f1))"
           file "$BINARY"
-
-      # ── Generate Linux desktop icon (shared by AppImage/.deb/.rpm) ─────────
-      # CMake's install rule renames resources/fincept.png → fincept-terminal.png
-      # (the name the .desktop `Icon=` key and the .rpm %files manifest expect).
-      # The repo only ships resources/fincept.ico, so derive the PNG here once,
-      # before any packaging step runs `cmake --install`. Without this the .rpm
-      # build fails with: File not found: .../fincept-terminal.png.
-      - name: Generate Linux icon PNG
-        working-directory: fincept-qt
-        run: |
-          set -euo pipefail
-          if [ ! -f resources/fincept.png ]; then
-            if [ -f resources/icons/app_icon_256.png ]; then
-              cp resources/icons/app_icon_256.png resources/fincept.png
-            elif [ -f resources/fincept.ico ]; then
-              # ICO may hold multiple frames — [0] selects the primary/largest.
-              convert "ico:resources/fincept.ico[0]" -resize 256x256 -background none -flatten "png:resources/fincept.png"
-            else
-              # Solid-color last resort, written with a valid IDAT+CRC.
-              convert -size 256x256 xc:'#1a1a1a' "png:resources/fincept.png"
-            fi
-          fi
-          # Fail fast on a missing/empty/corrupt PNG — a bad icon here breaks both
-          # the AppImage (linuxdeploy's libpng pass) and the .rpm %files check.
-          if [ ! -s resources/fincept.png ] || ! file resources/fincept.png | grep -q 'PNG image data'; then
-            echo "::error::resources/fincept.png is missing or not a valid PNG"
-            file resources/fincept.png 2>&1 || true
-            exit 1
-          fi
-          echo "Icon ready: resources/fincept.png ($(du -h resources/fincept.png | cut -f1))"
 
       # ── Build self-contained AppImage ─────────────────────────────────────
       # The previous release workflow ran CPack IFW on Linux but didn't bundle
@@ -604,6 +608,20 @@ jobs:
 
           mkdir -p "${RPM_ROOT}/usr"
           cmake --install build --prefix "${RPM_ROOT}/usr"
+
+          # Belt-and-suspenders: the %files manifest hard-requires
+          # fincept-terminal.png. The "Generate Linux icon PNG" step should have
+          # made cmake install it, but if that ever regresses, fall back to the
+          # always-installed flatpak-named copy so rpmbuild never fails here.
+          ICON_DIR="${RPM_ROOT}/usr/share/icons/hicolor/256x256/apps"
+          if [ ! -f "${ICON_DIR}/fincept-terminal.png" ] && [ -f "${ICON_DIR}/in.fincept.FinceptTerminal.png" ]; then
+            cp "${ICON_DIR}/in.fincept.FinceptTerminal.png" "${ICON_DIR}/fincept-terminal.png"
+          fi
+          if [ ! -f "${ICON_DIR}/fincept-terminal.png" ]; then
+            echo "::error::fincept-terminal.png missing from staged RPM tree (${ICON_DIR})"
+            ls -la "${ICON_DIR}" 2>&1 || true
+            exit 1
+          fi
 
           mkdir -p ~/rpmbuild/{SPECS,BUILDROOT}
 

@@ -24,6 +24,10 @@ class AuthApi : public QObject {
     void reset_password(const ResetPasswordRequest& req, Callback cb);
     void verify_mfa(const QString& email, const QString& otp, Callback cb);
 
+    // Desktop Google login: exchange a one-time handoff code (from the browser
+    // loopback redirect) for a real session. Unauthenticated.
+    void redeem_desktop_handoff(const QString& code, Callback cb);
+
     // Authenticated (uses api_key stored on HttpClient)
     void logout(Callback cb);
     void session_pulse(Callback cb);

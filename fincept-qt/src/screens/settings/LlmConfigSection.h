@@ -148,6 +148,11 @@ class LlmConfigSection : public QWidget {
     static const QStringList KNOWN_PROVIDERS;
     static QString default_base_url(const QString& provider);
     static QStringList fallback_models(const QString& provider);
+
+    // Human-readable label for a provider id (e.g. "aihubmix" → "AIHubMix").
+    static QString provider_display_name(const QString& provider_id);
+    // KNOWN_PROVIDERS ids sorted alphabetically by their display name.
+    static QStringList providers_sorted();
 };
 
 } // namespace fincept::screens

@@ -16,6 +16,8 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QHash>
+
 // Unity-build hygiene: this split TU shares an unstable unity bucket with
 // LlmConfigSection.cpp (static TAG) and LlmConfigSection_Profiles.cpp
 // (another anonymous-namespace TAG). Unique identifier prevents ambiguous
@@ -96,12 +98,20 @@ QWidget* LlmConfigSection::build_provider_list_panel() {
                             "QPushButton:hover{background:" +
                             QString(ui::colors::BG_RAISED()) + ";}");
     connect(add_btn_, &QPushButton::clicked, this, [this]() {
-        // Show input dialog to pick provider
-        QStringList choices = KNOWN_PROVIDERS;
+        // Show input dialog to pick provider — display formatted names in
+        // alphabetical order, then map the choice back to its provider id.
+        QStringList choices;
+        QHash<QString, QString> display_to_id;
+        for (const auto& id : providers_sorted()) {
+            const QString disp = provider_display_name(id);
+            choices << disp;
+            display_to_id.insert(disp, id);
+        }
         bool ok;
-        QString provider = QInputDialog::getItem(this, tr("Add Provider"), tr("Select provider:"), choices, 0, false, &ok);
-        if (!ok || provider.isEmpty())
+        QString chosen = QInputDialog::getItem(this, tr("Add Provider"), tr("Select provider:"), choices, 0, false, &ok);
+        if (!ok || chosen.isEmpty())
             return;
+        QString provider = display_to_id.value(chosen, chosen);
 
         // Check if already exists
         auto existing = LlmConfigRepository::instance().list_providers();
@@ -459,7 +469,7 @@ void LlmConfigSection::load_providers() {
     if (result.is_ok()) {
         for (const auto& p : result.value()) {
             bool is_fincept = (p.provider.toLower() == "fincept");
-            QString display = is_fincept ? tr("Fincept LLM") : p.provider;
+            QString display = provider_display_name(p.provider);
             if (p.is_active) {
                 display += "  ✓";
                 active_provider = p.provider;
