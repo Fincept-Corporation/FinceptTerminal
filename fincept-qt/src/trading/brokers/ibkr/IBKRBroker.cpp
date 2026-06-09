@@ -406,8 +406,13 @@ ApiResponse<QVector<BrokerPosition>> IBKRBroker::get_positions(const BrokerCrede
         pos.pnl = o.value("unrealizedPnl").toDouble();
         pos.day_pnl = o.value("realizedPnl").toDouble();
         pos.side = qty > 0 ? "LONG" : "SHORT";
-        if (pos.avg_price > 0)
-            pos.pnl_pct = (pos.ltp - pos.avg_price) / pos.avg_price * 100.0;
+        // avgCost is per-contract cost INCLUDING the contract multiplier (e.g. ×100
+        // for options) while mktPrice is the raw unit price — a price-based % mixes
+        // scales. Compute the % from values instead: invested = qty*avgCost (correctly
+        // scaled), current = API mktValue (already correctly scaled).
+        const double invested_value = qty * pos.avg_price;
+        const double current_value = o.value("mktValue").toDouble();
+        pos.pnl_pct = (invested_value > 0.0) ? ((current_value - invested_value) / invested_value) * 100.0 : 0.0;
         positions.append(pos);
     }
 
@@ -448,8 +453,10 @@ ApiResponse<QVector<BrokerHolding>> IBKRBroker::get_holdings(const BrokerCredent
         h.pnl = o.value("unrealizedPnl").toDouble();
         h.invested_value = qty * h.avg_price;
         h.current_value = o.value("mktValue").toDouble();
-        if (h.invested_value > 0)
-            h.pnl_pct = h.pnl / h.invested_value * 100.0;
+        // avgCost bakes in the contract multiplier while mktPrice is the raw unit
+        // price, so a price-based % mixes scales. Derive the % from the (correctly
+        // scaled) values: invested = qty*avgCost, current = API mktValue.
+        h.pnl_pct = (h.invested_value > 0.0) ? ((h.current_value - h.invested_value) / h.invested_value) * 100.0 : 0.0;
         holdings.append(h);
     }
 

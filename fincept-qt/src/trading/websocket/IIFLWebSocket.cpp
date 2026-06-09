@@ -151,7 +151,7 @@ void IIFLWebSocket::http_subscription(const QVector<qint64>& tokens, bool subscr
                                          : nam_->sendCustomRequest(req, "PUT", payload);
 
         // `this` as context: Qt auto-disconnects on destruction (safe — see P8).
-        connect(reply, &QNetworkReply::finished, this, [this, reply, subscribe, code]() {
+        connect(reply, &QNetworkReply::finished, this, [reply, subscribe, code]() {
             const int status =
                 reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             if (reply->error() != QNetworkReply::NoError || status != 200) {

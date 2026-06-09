@@ -93,6 +93,50 @@ void NewsNlpService::extract_entities(const QVector<NewsArticle>& articles, Enti
         });
 }
 
+void NewsNlpService::analyze_sentiment(const QVector<NewsArticle>& articles, SentimentCallback cb) {
+    auto json_str = QString::fromUtf8(QJsonDocument(articles_to_json(articles)).toJson(QJsonDocument::Compact));
+
+    QPointer<NewsNlpService> self = this;
+    python::PythonRunner::instance().run(
+        "news_nlp.py", {"analyze_sentiment_batch", json_str}, [self, cb](python::PythonResult result) {
+            if (!self)
+                return;
+            if (!result.success) {
+                LOG_WARN("NewsNlpService", "Sentiment analysis failed: " + result.error);
+                cb(false, {});
+                return;
+            }
+
+            auto doc = QJsonDocument::fromJson(result.output.toUtf8());
+            auto obj = doc.object();
+            if (!obj["success"].toBool()) {
+                cb(false, {});
+                return;
+            }
+
+            NewsSentimentResult res;
+            res.engine = obj["engine"].toString();
+            res.overall_score = obj["overall_score"].toDouble();
+
+            const auto agg = obj["aggregate"].toObject();
+            res.bullish = agg["bullish"].toInt();
+            res.bearish = agg["bearish"].toInt();
+            res.neutral = agg["neutral"].toInt();
+
+            for (const auto& v : obj["results"].toArray()) {
+                auto r = v.toObject();
+                ArticleSentimentResult ar;
+                ar.id = r["id"].toString();
+                ar.label = r["sentiment"].toString();
+                ar.score = r["score"].toDouble();
+                ar.confidence = r["confidence"].toDouble();
+                res.per_article.append(ar);
+            }
+
+            cb(true, res);
+        });
+}
+
 void NewsNlpService::cluster_semantic(const QVector<NewsArticle>& articles, SemanticClustersCallback cb) {
     auto json_str = QString::fromUtf8(QJsonDocument(articles_to_json(articles)).toJson(QJsonDocument::Compact));
 

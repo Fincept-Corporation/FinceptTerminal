@@ -323,13 +323,21 @@ ApiResponse<QVector<BrokerHolding>> ZerodhaBroker::get_holdings(const BrokerCred
         BrokerHolding hold;
         hold.symbol = h.value("tradingsymbol").toString();
         hold.exchange = h.value("exchange").toString();
-        hold.quantity = h.value("quantity").toDouble();
+        // Total holding = settled (T+2) demat `quantity` + `t1_quantity` (bought,
+        // not yet settled). Using only `quantity` under-counts a stock bought in the
+        // last 1–2 sessions and makes qty/invested/value disagree with the Kite app.
+        hold.quantity = h.value("quantity").toDouble() + h.value("t1_quantity").toDouble();
         hold.avg_price = h.value("average_price").toDouble();
         hold.ltp = h.value("last_price").toDouble();
         hold.invested_value = hold.quantity * hold.avg_price;
         hold.current_value = hold.quantity * hold.ltp;
         hold.pnl = h.value("pnl").toDouble();
         hold.pnl_pct = hold.avg_price > 0 ? ((hold.ltp - hold.avg_price) / hold.avg_price) * 100.0 : 0.0;
+        // [TEMP DEBUG] Dump the full raw Zerodha holding object so we can diagnose the
+        // average_price mismatch between the Kite app and the terminal. Remove after diagnosis.
+        LOG_INFO("Zerodha", QString("HOLDINGS_RAW %1: %2")
+                                .arg(hold.symbol,
+                                     QString::fromUtf8(QJsonDocument(h).toJson(QJsonDocument::Compact))));
         holdings.append(hold);
     }
     return {true, holdings, "", ts};

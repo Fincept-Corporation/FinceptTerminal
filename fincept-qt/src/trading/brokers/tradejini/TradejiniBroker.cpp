@@ -359,6 +359,7 @@ ApiResponse<QVector<BrokerPosition>> TradejiniBroker::get_positions(const Broker
         pos.avg_price = o.value("netAvgPrice").toVariant().toDouble();
         pos.ltp = o.value("ltp").toVariant().toDouble();
         pos.pnl = o.value("realizedPnl").toVariant().toDouble() + o.value("unrealizedPnl").toVariant().toDouble();
+        pos.pnl_pct = (pos.avg_price > 0.0) ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 : 0.0;
         pos.side = net_qty > 0 ? "LONG" : "SHORT";
         positions.append(pos);
     }
@@ -411,6 +412,8 @@ ApiResponse<QVector<BrokerHolding>> TradejiniBroker::get_holdings(const BrokerCr
         h.pnl_pct = tj_first(o, "pnlPercent", "pnlpercent").toVariant().toDouble();
         h.invested_value = h.quantity * h.avg_price;
         h.current_value = h.quantity * h.ltp;
+        if (h.pnl_pct == 0.0 && h.invested_value > 0.0)
+            h.pnl_pct = (h.pnl / h.invested_value) * 100.0;
         holdings.append(h);
     }
 

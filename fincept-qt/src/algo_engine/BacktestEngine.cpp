@@ -349,7 +349,7 @@ QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles,
         };
         for (int j = 0; j < equity_curve.size(); ++j) {
             const QString ym =
-                QDateTime::fromMSecsSinceEpoch(candles[kWarmupBars + j].open_time, Qt::UTC).toString("yyyy-MM");
+                QDateTime::fromMSecsSinceEpoch(candles[kWarmupBars + j].open_time, QTimeZone::UTC).toString("yyyy-MM");
             if (have_month && ym != cur_month)
                 flush(cur_month);
             cur_month = ym;

@@ -18,6 +18,7 @@
 
 #include <QFormLayout>
 #include <QFrame>
+#include <QHash>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QMessageBox>
@@ -26,16 +27,45 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <memory>
 
 namespace fincept::screens {
 
-static constexpr const char* TAG = "LlmConfigSection";
+[[maybe_unused]] static constexpr const char* TAG = "LlmConfigSection";
 
 
 const QStringList LlmConfigSection::KNOWN_PROVIDERS = {"openai",  "anthropic", "gemini",   "groq",  "deepseek",
                                                        "openrouter", "minimax", "kimi", "ollama", "xai",   "fincept",
                                                        "astraflow", "astraflow_cn", "aihubmix", "atlascloud"};
+
+QString LlmConfigSection::provider_display_name(const QString& provider_id) {
+    static const QHash<QString, QString> kNames = {
+        {"openai", "OpenAI"},        {"anthropic", "Anthropic"},      {"gemini", "Gemini"},
+        {"groq", "Groq"},            {"deepseek", "DeepSeek"},        {"openrouter", "OpenRouter"},
+        {"minimax", "MiniMax"},      {"kimi", "Kimi"},                {"ollama", "Ollama"},
+        {"xai", "xAI"},              {"fincept", "Fincept LLM (recommended)"}, {"astraflow", "AstraFlow"},
+        {"astraflow_cn", "AstraFlow CN"}, {"aihubmix", "AIHubMix"},   {"atlascloud", "AtlasCloud"},
+    };
+    const QString id = provider_id.toLower();
+    const auto it = kNames.find(id);
+    if (it != kNames.end())
+        return it.value();
+    // Unknown/custom provider: capitalize the first letter as a sensible default.
+    if (provider_id.isEmpty())
+        return provider_id;
+    QString s = provider_id;
+    s[0] = s[0].toUpper();
+    return s;
+}
+
+QStringList LlmConfigSection::providers_sorted() {
+    QStringList ids = KNOWN_PROVIDERS;
+    std::sort(ids.begin(), ids.end(), [](const QString& a, const QString& b) {
+        return provider_display_name(a).compare(provider_display_name(b), Qt::CaseInsensitive) < 0;
+    });
+    return ids;
+}
 
 QString LlmConfigSection::default_base_url(const QString& provider) {
     const QString p = provider.toLower();

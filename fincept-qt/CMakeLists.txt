@@ -33,7 +33,7 @@ if(WIN32 AND CMAKE_HOST_WIN32)
     unset(_fincept_sdk_dirs)
 endif()
 
-project(FinceptTerminal VERSION 4.0.3 LANGUAGES C CXX)
+project(FinceptTerminal VERSION 4.1.0 LANGUAGES C CXX)
 
 # Strip C/C++ flags out of RC invocations — rc.exe only understands /D, /I, /fo.
 if(WIN32)
@@ -217,6 +217,15 @@ if(MSVC)
     # /W4          : level-4 warnings (highest practical without /Wall noise)
     # /WX only in CI so local iteration isn't blocked by new warnings
     add_compile_options(/Z7 /Oi /bigobj /permissive- /W4)
+    # Suppress /W4 warnings that have NO -Wall/-Wextra equivalent on GCC/Clang, so
+    # all three compilers enforce a consistent policy under -Werror/-WX:
+    #   C4456-C4459 = variable shadowing (GCC/Clang's -Wshadow, deliberately NOT in
+    #                 -Wall -Wextra — pervasive/benign in Qt code, e.g. a local
+    #                 'data' hiding QWidget::data, or 'self'/'w' shadowing a local).
+    #   C4804       = bool used in a comparison (e.g. the Qt6 idiom
+    #                 `QHash::remove(k) > 0`, where remove() now returns bool).
+    # These are style, not bugs — the same code compiles clean under GCC/Clang.
+    add_compile_options(/wd4456 /wd4457 /wd4458 /wd4459 /wd4804)
     if(DEFINED ENV{CI})
         add_compile_options(/WX)
     endif()
@@ -762,6 +771,7 @@ set(DATAHUB_SOURCES
 set(AUTH_SOURCES
     src/auth/AuthManager.cpp
     src/auth/AuthApi.cpp
+    src/auth/GoogleDesktopLogin.cpp
     src/auth/UserApi.cpp
     src/auth/SessionGuard.cpp
     src/auth/PinManager.cpp
@@ -1185,6 +1195,7 @@ set(SERVICE_SOURCES
     src/services/dbnomics/DBnomicsService.cpp
     src/services/gov_data/GovDataService.cpp
     src/services/equity/EquityResearchService.cpp
+    src/services/equity/EquitySentimentService.cpp
     src/services/equity/MarketSentimentService.cpp
     src/services/equity/MarketSentimentSupport.cpp
     src/services/ma_analytics/MAAnalyticsService.cpp
@@ -1818,7 +1829,6 @@ set(SCREEN_SOURCES
     src/screens/equity_research/EquityFinancialsTab_Populate.cpp
     src/screens/equity_research/EquityAnalysisTab.cpp
     src/screens/equity_research/EquityTechnicalsTab.cpp
-    src/screens/equity_research/EquityTalippTab.cpp
     src/screens/equity_research/EquityPeersTab.cpp
     src/screens/equity_research/EquityNewsTab.cpp
     src/screens/equity_research/EquitySentimentTab.cpp
@@ -2177,7 +2187,6 @@ set_source_files_properties(
     src/screens/equity_research/EquityPeersTab.cpp
     src/screens/equity_research/EquityResearchScreen.cpp
     src/screens/equity_research/EquitySentimentTab.cpp
-    src/screens/equity_research/EquityTalippTab.cpp
     src/screens/equity_research/EquityTechnicalsTab.cpp
     src/screens/excel/ExcelScreen.cpp
     src/screens/excel/SpreadsheetWidget.cpp
@@ -3397,18 +3406,71 @@ if(WIN32)
             DESTINATION "resources/notebooks" COMPONENT core)
 
 elseif(APPLE)
-    # macOS: install the .app bundle
-    install(TARGETS FinceptTerminal BUNDLE DESTINATION "." COMPONENT core)
-    # Requirements files — deployed beside the .app so PythonSetupManager finds them
-    install(FILES
-            "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy1.txt"
-            "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy2.txt"
-            DESTINATION "FinceptTerminal.app/Contents/Resources/resources" COMPONENT core)
-    # Prebuilt Fincept Notebook library (bundled + seeded into the File Manager).
-    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resources/notebooks/"
-            DESTINATION "FinceptTerminal.app/Contents/Resources/resources/notebooks" COMPONENT core)
+    if(FINCEPT_BUILD_INSTALLER)
+        # ── macOS IFW installer path ─────────────────────────────────────────
+        # Package the bundle that CI has ALREADY run macdeployqt + deep codesign
+        # over (build/FinceptTerminal.app, signed in place). Copy it with
+        # `ditto`, which preserves framework symlinks AND code signatures —
+        # plain install(TARGETS)/file(INSTALL) rewrites them and triggers the
+        # dyld "Code Signature Invalid" SIGKILL from issue #139. The signed
+        # bundle already contains scripts/, resources/, requirements, and
+        # notebooks (staged before signing), so we copy it whole and inject
+        # NOTHING afterwards (any post-sign edit breaks the seal).
+        # CONTRACT: CI must macdeployqt + codesign the bundle BEFORE `cpack -G IFW`.
+        install(CODE "
+            message(STATUS \"[Fincept] Packaging signed .app via ditto for IFW installer\")
+            execute_process(
+                COMMAND /usr/bin/ditto
+                    \"$<TARGET_BUNDLE_DIR:FinceptTerminal>\"
+                    \"\${CMAKE_INSTALL_PREFIX}/FinceptTerminal.app\"
+                RESULT_VARIABLE _fincept_ditto_rc)
+            if(NOT _fincept_ditto_rc EQUAL 0)
+                message(FATAL_ERROR \"[Fincept] ditto of signed .app failed (rc=\${_fincept_ditto_rc})\")
+            endif()
+        " COMPONENT core)
+    else()
+        # ── Plain `cmake --install` (DMG path / dev) ─────────────────────────
+        # macOS: install the .app bundle
+        install(TARGETS FinceptTerminal BUNDLE DESTINATION "." COMPONENT core)
+        # Requirements files — deployed beside the .app so PythonSetupManager finds them
+        install(FILES
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy1.txt"
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources/requirements-numpy2.txt"
+                DESTINATION "FinceptTerminal.app/Contents/Resources/resources" COMPONENT core)
+        # Prebuilt Fincept Notebook library (bundled + seeded into the File Manager).
+        install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resources/notebooks/"
+                DESTINATION "FinceptTerminal.app/Contents/Resources/resources/notebooks" COMPONENT core)
+    endif()
+
+elseif(FINCEPT_BUILD_INSTALLER AND FINCEPT_IFW_PAYLOAD)
+    # ── Linux IFW installer path (relocatable, self-contained) ───────────────
+    # Ship the tree that linuxdeploy already produced (app binary + bundled Qt
+    # libs + plugins), so the installed app runs from ANY chosen TargetDir.
+    # The binary's rpath ($ORIGIN/../lib, set by linuxdeploy) plus the staged
+    # qt.conf resolve Qt's libraries and plugins relative to the install dir —
+    # no system Qt, no LD_LIBRARY_PATH, no fixed prefix. IFW does not bundle
+    # dependencies itself, so CI sets FINCEPT_IFW_PAYLOAD to the linuxdeploy
+    # AppDir's usr/ directory.
+    install(DIRECTORY "${FINCEPT_IFW_PAYLOAD}/"
+            DESTINATION "."
+            USE_SOURCE_PERMISSIONS
+            COMPONENT core)
+    # qt.conf next to the binary so Qt finds the bundled plugins/libs at any
+    # install location (an IFW install has no AppRun launcher to set env vars).
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/qt.conf"
+            DESTINATION "bin" COMPONENT core)
+    # NOTE: scripts/, resources/, and requirements live INSIDE the linuxdeploy
+    # AppDir payload already (staged into usr/bin/ by the CI AppImage step), so
+    # they are captured by the install(DIRECTORY) above — no separate scripts
+    # component here (it is Windows-only; see the IFW component config below).
 
 else()
+    if(FINCEPT_BUILD_INSTALLER AND NOT FINCEPT_IFW_PAYLOAD)
+        message(WARNING
+            "FINCEPT_BUILD_INSTALLER is ON for Linux but FINCEPT_IFW_PAYLOAD is unset — "
+            "the IFW .run would ship WITHOUT bundled Qt and fail to launch. "
+            "Set -DFINCEPT_IFW_PAYLOAD=<linuxdeploy-AppDir>/usr, or build the AppImage instead.")
+    endif()
     # Linux: FHS-compliant layout. Architecture-neutral — works for x86_64
     # and aarch64 (ARM64) without changes; CMake just installs the binary
     # produced for the target arch into share/fincept-terminal/. To build for
@@ -3486,6 +3548,16 @@ endif()
 # Output:   FinceptTerminal-<ver>-<platform>-setup.exe/.run/.app
 
 option(FINCEPT_BUILD_INSTALLER "Generate QtIFW installer via CPack" OFF)
+
+# Path to a pre-deployed, self-contained payload that the IFW installer should
+# package on macOS/Linux. QtIFW does NOT bundle dependencies itself — the OS
+# deploy tools must run first (windeployqt on Windows, macdeployqt on macOS,
+# linuxdeploy on Linux). On Linux, set this to the linuxdeploy AppDir's usr/
+# directory so the .run ships bundled Qt and is relocatable. Unused on Windows
+# (windeployqt output is captured directly below) and on macOS (the signed
+# .app is copied via ditto in the install rule above).
+set(FINCEPT_IFW_PAYLOAD "" CACHE PATH
+    "Pre-deployed payload dir for the IFW installer (Linux: linuxdeploy AppDir/usr)")
 
 if(FINCEPT_BUILD_INSTALLER)
 
@@ -3628,13 +3700,20 @@ if(FINCEPT_BUILD_INSTALLER)
     set(CPACK_IFW_PACKAGE_CONTROL_SCRIPT
         "${CMAKE_CURRENT_SOURCE_DIR}/packaging/installer/config/controlscript.qs")
 
-    # Target directory defaults per platform
+    # Target directory defaults per platform. These are only DEFAULTS — the
+    # wizard's Target Directory page lets the user pick any path (the page is
+    # shown interactively now that controlscript.qs guards its auto-advance
+    # with isCommandLineInstance()).
     if(WIN32)
         set(CPACK_IFW_TARGET_DIRECTORY "@ApplicationsDirX64@/FinceptTerminal")
     elseif(APPLE)
         set(CPACK_IFW_TARGET_DIRECTORY "/Applications/FinceptTerminal")
     else()
+        # Default to the user's home so no root is required; the installer only
+        # escalates (and uses AdminTargetDir) if the chosen path isn't writable.
+        # The app is relocatable, so any custom path works either way.
         set(CPACK_IFW_TARGET_DIRECTORY "@HomeDir@/FinceptTerminal")
+        set(CPACK_IFW_ADMIN_TARGET_DIRECTORY "/opt/FinceptTerminal")
     endif()
 
     # Output file naming — arch-aware so the auto-updater manifest can point
@@ -3692,10 +3771,15 @@ if(FINCEPT_BUILD_INSTALLER)
         DESCRIPTION  "Core application executable and Qt runtime libraries"
         REQUIRED)
 
-    cpack_add_component(scripts
-        DISPLAY_NAME "Python Analytics Scripts"
-        DESCRIPTION  "1300+ Python analytics scripts (equity, derivatives, portfolio, quant)"
-        DEPENDS core)
+    # Scripts are a separate, optional component on Windows only. On macOS they
+    # ship inside the signed .app bundle, and on Linux inside the linuxdeploy
+    # AppDir payload — both captured by the `core` component on those platforms.
+    if(WIN32)
+        cpack_add_component(scripts
+            DISPLAY_NAME "Python Analytics Scripts"
+            DESCRIPTION  "1300+ Python analytics scripts (equity, derivatives, portfolio, quant)"
+            DEPENDS core)
+    endif()
 
     # ── CPackIFW component configuration ─────────────────────────────────────
     cpack_ifw_configure_component(core
@@ -3707,12 +3791,14 @@ if(FINCEPT_BUILD_INSTALLER)
         DEFAULT TRUE
         FORCED_INSTALLATION)
 
-    cpack_ifw_configure_component(scripts
-        NAME "com.fincept.terminal.scripts"
-        VERSION "${CMAKE_PROJECT_VERSION}"
-        SORTING_PRIORITY 50
-        DEFAULT TRUE
-        DEPENDS "com.fincept.terminal.core")
+    if(WIN32)
+        cpack_ifw_configure_component(scripts
+            NAME "com.fincept.terminal.scripts"
+            VERSION "${CMAKE_PROJECT_VERSION}"
+            SORTING_PRIORITY 50
+            DEFAULT TRUE
+            DEPENDS "com.fincept.terminal.core")
+    endif()
 
     # ── Linux: AppImage helper target ────────────────────────────────────────
     # `linuxdeploy` + `linuxdeploy-plugin-qt` are external tools; we don't

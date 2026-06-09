@@ -153,11 +153,14 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
     profile_provider_field_lbl_ = lbl(tr("PROVIDER"));
     vl->addWidget(profile_provider_field_lbl_);
     profile_provider_combo_ = new QComboBox;
-    profile_provider_combo_->addItems(KNOWN_PROVIDERS);
+    // Formatted names, alphabetical; the provider id rides in itemData.
+    for (const auto& id : providers_sorted())
+        profile_provider_combo_->addItem(provider_display_name(id), id);
     profile_provider_combo_->setStyleSheet(
         QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(field_style()));
-    connect(profile_provider_combo_, &QComboBox::currentTextChanged, this,
-            &LlmConfigSection::on_profile_provider_changed);
+    connect(profile_provider_combo_, &QComboBox::currentIndexChanged, this, [this](int) {
+        on_profile_provider_changed(profile_provider_combo_->currentData().toString());
+    });
     vl->addWidget(profile_provider_combo_);
 
     profile_model_field_lbl_ = lbl(tr("MODEL"));
@@ -280,12 +283,13 @@ void LlmConfigSection::load_profiles() {
 void LlmConfigSection::populate_profile_form(const LlmProfile& p) {
     profile_name_edit_->setText(p.name);
 
-    int idx = profile_provider_combo_->findText(p.provider, Qt::MatchFixedString | Qt::MatchCaseSensitive);
+    int idx = profile_provider_combo_->findData(p.provider, Qt::UserRole, Qt::MatchFixedString);
     if (idx >= 0)
         profile_provider_combo_->setCurrentIndex(idx);
     else {
-        profile_provider_combo_->addItem(p.provider);
-        profile_provider_combo_->setCurrentText(p.provider);
+        // Custom/unknown provider: add it with the id in itemData.
+        profile_provider_combo_->addItem(provider_display_name(p.provider), p.provider);
+        profile_provider_combo_->setCurrentIndex(profile_provider_combo_->count() - 1);
     }
 
     // Populate model combo from fallback list, then select saved model
@@ -307,7 +311,7 @@ void LlmConfigSection::populate_profile_form(const LlmProfile& p) {
 void LlmConfigSection::clear_profile_form() {
     profile_name_edit_->clear();
     profile_provider_combo_->setCurrentIndex(0);
-    on_profile_provider_changed(profile_provider_combo_->currentText());
+    on_profile_provider_changed(profile_provider_combo_->currentData().toString());
     profile_api_key_edit_->clear();
     profile_base_url_edit_->clear();
     profile_temp_spin_->setValue(0.7);
@@ -402,7 +406,7 @@ void LlmConfigSection::on_save_profile() {
         show_profile_status(tr("Profile name is required"), true);
         return;
     }
-    QString provider = profile_provider_combo_->currentText().trimmed();
+    QString provider = profile_provider_combo_->currentData().toString().trimmed();
     QString model = profile_model_combo_->currentText().trimmed();
     if (model.isEmpty()) {
         show_profile_status(tr("Model is required"), true);

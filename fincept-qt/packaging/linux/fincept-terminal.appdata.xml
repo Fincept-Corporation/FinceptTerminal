@@ -28,6 +28,11 @@
     <binary>FinceptTerminal</binary>
   </provides>
   <releases>
+    <release version="4.1.0" date="2026-06-09">
+      <description>
+        <p>Version 4.1.0 — Optional NewsAPI.org news provider, broker-sourced technicals, and fixes.</p>
+      </description>
+    </release>
     <release version="4.0.2" date="2026-04-14">
       <description>
         <p>Version 4.0.2 — Patch release.</p>

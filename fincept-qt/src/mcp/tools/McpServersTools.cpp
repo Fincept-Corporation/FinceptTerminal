@@ -462,7 +462,7 @@ std::vector<ToolDef> get_mcp_servers_tools() {
             const QString server_id = args["server_id"].toString();
             const QString tool_name = args["tool_name"].toString();
             const QJsonObject inner_args = args["args"].toObject();
-            QtConcurrent::run([server_id, tool_name, inner_args, promise, ctx]() {
+            (void)QtConcurrent::run([server_id, tool_name, inner_args, promise, ctx]() {
                 if (ctx.cancelled())
                     return resolve_async(promise, ToolResult::fail("cancelled"));
                 resolve_async(promise,

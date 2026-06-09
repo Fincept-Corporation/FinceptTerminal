@@ -1,6 +1,8 @@
 // CryptoWatchlist.cpp — compact watchlist, 3-column, no horizontal scroll
 #include "screens/crypto_trading/CryptoWatchlist.h"
 
+#include "core/symbol/SymbolDragSource.h"
+#include "core/symbol/SymbolRef.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
@@ -98,6 +100,29 @@ CryptoWatchlist::CryptoWatchlist(QWidget* parent) : QWidget(parent) {
 
     connect(table_, &QTableWidget::cellClicked, this, &CryptoWatchlist::on_cell_clicked);
     layout->addWidget(table_, 1);
+
+    // Drag-out: hold-and-drag a pair row to ship it to any drop target — drop
+    // it on the pushpin bar at the top to pin + broadcast it, matching the
+    // standalone Watchlist tab and the equity watchlist. The ref MUST carry
+    // asset_class="crypto", or CryptoTradingScreen::on_group_symbol_changed
+    // drops it as a non-crypto symbol. The provider reads the row under the
+    // cursor at drag-start (the mouse press selects it first); the symbol is
+    // the cell text (col 0), like on_cell_clicked. Group None: the pushpin chip
+    // owns the broadcast group, so the source group is irrelevant here.
+    symbol_dnd::installDragSource(table_->viewport(), [this]() -> SymbolRef {
+        if (!table_)
+            return {};
+        const int r = table_->currentRow();
+        if (r < 0)
+            return {};
+        auto* item = table_->item(r, 0);
+        if (!item || item->text().isEmpty())
+            return {};
+        SymbolRef ref;
+        ref.symbol = item->text();
+        ref.asset_class = QStringLiteral("crypto");
+        return ref;
+    });
 }
 
 void CryptoWatchlist::changeEvent(QEvent* event) {

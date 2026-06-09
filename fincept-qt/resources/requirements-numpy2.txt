@@ -24,6 +24,10 @@ databento==0.66.0
 databento-dbn==0.44.0
 feedparser==6.0.12
 gnews==0.4.2
+# Offline, finance-tuned headline sentiment for the Equity Research → Sentiment
+# tab (news_nlp.py). Pure-python, no model download; news_nlp falls back to a
+# keyword scorer if this is absent.
+vaderSentiment==3.3.2
 geopy>=2.4.0
 akshare>=1.14.0
 aiohappyeyeballs==2.6.1
@@ -98,7 +102,6 @@ river>=0.21.0
 
 # Technical analysis
 ta==0.11.0
-talipp==2.7.0
 
 # Portfolio optimization
 finquant-enhanced

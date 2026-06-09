@@ -682,7 +682,7 @@ int main(int argc, char* argv[]) {
                 log.set_tag_level(tag, lvl_map.value(level));
         }
     }
-    LOG_INFO("App", "Fincept Terminal v4.0.3 starting...");
+    LOG_INFO("App", "Fincept Terminal v4.1.0 starting...");
     LOG_INFO("App", QString("TLS backend: %1 (available: %2)")
                         .arg(QSslSocket::activeBackend(),
                              QSslSocket::availableBackends().join(", ")));
@@ -975,30 +975,15 @@ int main(int argc, char* argv[]) {
             }
 
             if (!recovered) {
+                // Single primary window by default — see the matching no-setup
+                // path below for the full rationale. Extra windows stay an
+                // explicit user action ("New Window" / Ctrl+Shift+N / tear-off).
                 const QList<int> saved_ids =
                     fincept::SessionManager::instance().load_window_ids();
-                const int max_windows = static_cast<int>(QGuiApplication::screens().size());
-
-                if (saved_ids.isEmpty()) {
-                    auto* window = new fincept::WindowFrame(0);
-                    window->setAttribute(Qt::WA_DeleteOnClose);
-                    window->show();
-                } else {
-                    const int count = std::min(static_cast<int>(saved_ids.size()), max_windows);
-                    for (int i = 0; i < count; ++i) {
-                        auto* w = new fincept::WindowFrame(saved_ids[i]);
-                        w->setAttribute(Qt::WA_DeleteOnClose);
-                        w->show();
-                    }
-                    if (count < saved_ids.size()) {
-                        QList<int> trimmed = saved_ids.mid(0, count);
-                        fincept::SessionManager::instance().save_window_ids(trimmed);
-                                                LOG_INFO("App", QString("Clamped %1 saved windows to %2 (available screens)")
-                                            .arg(saved_ids.size()).arg(count));
-                    }
-                    if (count > 1)
-                        LOG_INFO("App", QString("Restored %1 window(s) from last session").arg(count));
-                }
+                const int primary_id = saved_ids.isEmpty() ? 0 : saved_ids.first();
+                auto* window = new fincept::WindowFrame(primary_id);
+                window->setAttribute(Qt::WA_DeleteOnClose);
+                window->show();
             }
 
             // Wire new-window handler + Launchpad surface now that the
@@ -1038,36 +1023,23 @@ int main(int argc, char* argv[]) {
         recovered = dlg.was_restored();
     }
 
-    // Restore the set of windows from last session. saved_ids is the complete
-    // set written by closeEvent (including the primary). If empty (first run),
-    // create a single primary window. Clamp to the number of available screens
-    // so a 3-monitor layout doesn't stack 3 windows on 1 screen after the user
-    // disconnects external displays.
+    // Restore a SINGLE primary window at startup. The previous session may
+    // have had several windows spread across multiple monitors, but auto-
+    // reopening all of them surprised multi-monitor users — every launch
+    // popped a second terminal on the second screen. Opening additional
+    // windows stays an EXPLICIT action (toolbar "New Window", Ctrl+Shift+N,
+    // the Launchpad button, tear-off), consistent with the single-instance
+    // relaunch policy in wire_app_lifecycle(). We reopen the lowest saved
+    // window_id (the primary) so its geometry + dock layout come back; the
+    // user spawns extra windows on demand. closeEvent self-heals the saved
+    // id set to the surviving windows, so this converges to [primary] cleanly.
     if (!recovered) {
         const QList<int> saved_ids =
             fincept::SessionManager::instance().load_window_ids();
-        const int max_windows = static_cast<int>(QGuiApplication::screens().size());
-
-        if (saved_ids.isEmpty()) {
-            auto* primary = new fincept::WindowFrame(0);
-            primary->setAttribute(Qt::WA_DeleteOnClose);
-            primary->show();
-        } else {
-            const int count = std::min(static_cast<int>(saved_ids.size()), max_windows);
-            for (int i = 0; i < count; ++i) {
-                auto* w = new fincept::WindowFrame(saved_ids[i]);
-                w->setAttribute(Qt::WA_DeleteOnClose);
-                w->show();
-            }
-            if (count < saved_ids.size()) {
-                QList<int> trimmed = saved_ids.mid(0, count);
-                fincept::SessionManager::instance().save_window_ids(trimmed);
-                                LOG_INFO("App", QString("Clamped %1 saved windows to %2 (available screens)")
-                                    .arg(saved_ids.size()).arg(count));
-            }
-            if (count > 1)
-                LOG_INFO("App", QString("Restored %1 window(s) from last session").arg(count));
-        }
+        const int primary_id = saved_ids.isEmpty() ? 0 : saved_ids.first();
+        auto* primary = new fincept::WindowFrame(primary_id);
+        primary->setAttribute(Qt::WA_DeleteOnClose);
+        primary->show();
     }
 
     // Wire new-window handler + Launchpad surface — see wire_app_lifecycle()

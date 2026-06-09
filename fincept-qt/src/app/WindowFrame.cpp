@@ -445,6 +445,32 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
                 }, Qt::QueuedConnection);
     });
 
+    // Equity Research "BUY/SELL" → reuse the Equity Trading order ticket without
+    // leaving Research. We materialise the trading screen (hidden — no tab switch)
+    // if it doesn't exist yet, then open its app-modal ticket, which pops over the
+    // current tab. The trading screen owns the form + the paper/live placement path.
+    EventBus::instance().subscribe("equity.open_order_ticket", [this](const QVariantMap& d) {
+        const QString symbol = d.value("symbol").toString();
+        if (symbol.isEmpty())
+            return;
+        const QString exchange = d.value("exchange").toString();
+        const QStringList match_exchanges = d.value("match_exchanges").toStringList();
+        const bool is_buy = d.value("is_buy").toBool();
+        const double price = d.value("price").toDouble();
+        QMetaObject::invokeMethod(
+            this,
+            [this, symbol, exchange, match_exchanges, is_buy, price]() {
+                if (locked_ || !dock_router_)
+                    return;
+                const QString id = QStringLiteral("equity_trading");
+                if (!dock_router_->screen_widget(id))
+                    dock_router_->materialize_now(id); // create hidden, don't raise
+                if (auto* trading = qobject_cast<screens::EquityTradingScreen*>(dock_router_->screen_widget(id)))
+                    trading->open_external_order_ticket(symbol, exchange, match_exchanges, is_buy, price);
+            },
+            Qt::QueuedConnection);
+    });
+
     // ── Keyboard shortcuts via ActionRegistry (Phase 4) ───────────────────────
     //
     // Every global action is now defined once in core/actions/builtin_actions.cpp

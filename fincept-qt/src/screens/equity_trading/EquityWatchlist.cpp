@@ -2,6 +2,8 @@
 #include "screens/equity_trading/EquityWatchlist.h"
 
 #include "screens/equity_trading/EquityTypes.h"
+#include "core/symbol/SymbolDragSource.h"
+#include "core/symbol/SymbolRef.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/instruments/InstrumentNormalize.h"
@@ -236,6 +238,26 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     connect(table_, &QTableWidget::customContextMenuRequested, this,
             &EquityWatchlist::on_table_context_menu);
     layout->addWidget(table_, 1);
+
+    // Drag-out: hold-and-drag a symbol row to ship the ticker to any drop
+    // target — drop it on the pushpin bar at the top to pin + broadcast it,
+    // matching the standalone Watchlist tab (WatchlistScreen). The provider
+    // reads the row under the cursor at drag-start (the mouse press selects it
+    // first), so it always ships the row actually grabbed. Group is None: the
+    // pushpin chip owns the broadcast group, so the source group is irrelevant
+    // for the drag-to-pin flow.
+    symbol_dnd::installDragSource(table_->viewport(), [this]() -> SymbolRef {
+        if (!table_)
+            return {};
+        const int r = table_->currentRow();
+        if (r < 0)
+            return {};
+        auto* item = table_->item(r, 0);
+        if (!item)
+            return {};
+        const QString sym = item->data(Qt::UserRole).toString();
+        return sym.isEmpty() ? SymbolRef{} : SymbolRef::equity(sym);
+    });
 }
 
 void EquityWatchlist::set_watchlists(const QVector<QPair<QString, QString>>& lists,

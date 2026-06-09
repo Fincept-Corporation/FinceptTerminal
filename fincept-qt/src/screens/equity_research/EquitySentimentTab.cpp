@@ -1,6 +1,6 @@
 #include "screens/equity_research/EquitySentimentTab.h"
 
-#include "services/equity/MarketSentimentService.h"
+#include "services/equity/EquitySentimentService.h"
 #include "ui/theme/Theme.h"
 
 #include <QCoreApplication>
@@ -13,108 +13,61 @@ namespace fincept::screens {
 
 namespace {
 
-// make_panel / make_stat_box optionally capture the title label so the caller
-// can re-translate it via retranslateUi. When title_lbl_out is nullptr the
-// helper still constructs the title but doesn't expose it (caller is
-// responsible for any later retranslation).
-QFrame* make_panel(const QString& title, QLabel** title_lbl_out = nullptr) {
+// Distinct helper names (anonymous namespace) to avoid unity-build ODR clashes.
+QFrame* sentiment_make_panel(const QString& title, QVBoxLayout** body_out, QLabel** title_out = nullptr) {
     auto* frame = new QFrame;
-    frame->setStyleSheet(
-        QString("QFrame { background:%1; border:1px solid %2; border-radius:4px; }")
-            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    frame->setStyleSheet(QString("QFrame { background:%1; border:1px solid %2; border-radius:4px; }")
+                             .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     auto* layout = new QVBoxLayout(frame);
     layout->setContentsMargins(12, 10, 12, 10);
-    layout->setSpacing(6);
+    layout->setSpacing(8);
 
     auto* label = new QLabel(title);
     label->setStyleSheet(
         QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px; background:transparent; border:0;")
             .arg(ui::colors::AMBER()));
     layout->addWidget(label);
-    if (title_lbl_out)
-        *title_lbl_out = label;
+    if (title_out)
+        *title_out = label;
+    if (body_out)
+        *body_out = layout;
     return frame;
 }
 
-QWidget* make_stat_box(const QString& title, QLabel** value_label, QLabel** title_label_out = nullptr) {
-    auto* box = new QFrame;
-    box->setStyleSheet(
-        QString("QFrame { background:%1; border:1px solid %2; border-radius:4px; }")
-            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
-    auto* layout = new QVBoxLayout(box);
-    layout->setContentsMargins(10, 10, 10, 10);
-    layout->setSpacing(4);
-
-    auto* title_label = new QLabel(title);
-    title_label->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px; background:transparent; border:0;")
-            .arg(ui::colors::TEXT_TERTIARY()));
-    layout->addWidget(title_label);
-    if (title_label_out)
-        *title_label_out = title_label;
-
-    auto* value = new QLabel(QStringLiteral("—"));
-    value->setStyleSheet(
-        QString("color:%1; font-size:18px; font-weight:700; background:transparent; border:0;")
-            .arg(ui::colors::TEXT_PRIMARY()));
-    layout->addWidget(value);
-
-    *value_label = value;
-    return box;
-}
-
-QString alignment_label(const QString& alignment) {
-    // Caller is a Q_OBJECT instance method; we route translation through
-    // QCoreApplication so lupdate associates these strings with the
-    // EquitySentimentTab context.
-    if (alignment == "aligned")
-        return QCoreApplication::translate("EquitySentimentTab", "ALIGNED");
-    if (alignment == "mixed")
-        return QCoreApplication::translate("EquitySentimentTab", "MIXED");
-    if (alignment == "divergent")
-        return QCoreApplication::translate("EquitySentimentTab", "DIVERGENT");
-    if (alignment == "single_source")
-        return QCoreApplication::translate("EquitySentimentTab", "SINGLE SOURCE");
-    return QCoreApplication::translate("EquitySentimentTab", "UNAVAILABLE");
-}
-
-QString alignment_color(const QString& alignment) {
-    if (alignment == "aligned") {
+QString sentiment_label_color(const QString& label) {
+    if (label == "BULLISH")
         return ui::colors::POSITIVE();
-    }
-    if (alignment == "mixed" || alignment == "single_source") {
-        return ui::colors::WARNING();
-    }
-    if (alignment == "divergent") {
+    if (label == "BEARISH")
         return ui::colors::NEGATIVE();
-    }
     return ui::colors::TEXT_TERTIARY();
+}
+
+QString sentiment_fmt_score(double score) {
+    return QString("%1%2").arg(score >= 0.0 ? "+" : "", QString::number(score, 'f', 2));
 }
 
 } // namespace
 
 EquitySentimentTab::EquitySentimentTab(QWidget* parent) : QWidget(parent) {
     build_ui();
-    auto& service = services::equity::MarketSentimentService::instance();
-    connect(&service, &services::equity::MarketSentimentService::snapshot_loaded,
-            this, &EquitySentimentTab::on_snapshot_loaded);
+    connect(&services::equity::EquitySentimentService::instance(),
+            &services::equity::EquitySentimentService::sentiment_loaded, this,
+            &EquitySentimentTab::on_sentiment_loaded);
 }
 
 void EquitySentimentTab::set_symbol(const QString& symbol) {
-    if (symbol.isEmpty()) {
+    if (symbol.isEmpty())
         return;
-    }
     current_symbol_ = symbol;
     snapshot_loaded_ = false;
     company_label_->setText(symbol);
-    coverage_label_->setText("");
+    caption_label_->setText("");
     content_widget_->hide();
-    clear_sources();
-    status_label_->setText(tr("Loading market sentiment…"));
+    status_label_->setText(tr("Loading sentiment…"));
     status_label_->show();
     loading_overlay_->show_loading(tr("LOADING SENTIMENT…"));
-    services::equity::MarketSentimentService::instance().fetch_snapshot(symbol);
+    services::equity::EquitySentimentService::instance().fetch_sentiment(symbol);
 }
 
 void EquitySentimentTab::build_ui() {
@@ -125,6 +78,7 @@ void EquitySentimentTab::build_ui() {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
+    // ── Header ────────────────────────────────────────────────────────────────
     auto* header = new QWidget;
     header->setStyleSheet(
         QString("background:%1; border-bottom:2px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::AMBER()));
@@ -138,15 +92,13 @@ void EquitySentimentTab::build_ui() {
             .arg(ui::colors::AMBER()));
     header_layout->addWidget(title_lbl_);
 
-    coverage_label_ = new QLabel;
-    coverage_label_->setStyleSheet(
-        QString("color:%1; font-size:10px; background:transparent; border:0;")
-            .arg(ui::colors::TEXT_TERTIARY()));
-    header_layout->addWidget(coverage_label_);
+    caption_label_ = new QLabel;
+    caption_label_->setStyleSheet(
+        QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
+    header_layout->addWidget(caption_label_);
 
     company_label_ = new QLabel;
-    company_label_->setStyleSheet(
-        QString("color:%1; font-size:10px; background:transparent; border:0;").arg("#22d3ee"));
+    company_label_->setStyleSheet(QString("color:%1; font-size:10px; background:transparent; border:0;").arg("#22d3ee"));
     header_layout->addWidget(company_label_);
 
     header_layout->addStretch();
@@ -158,24 +110,21 @@ void EquitySentimentTab::build_ui() {
                 "QPushButton:hover { border-color:%3; color:%3; }")
             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     connect(refresh_btn_, &QPushButton::clicked, this, [this]() {
-        if (!current_symbol_.isEmpty()) {
-            content_widget_->hide();
-            clear_sources();
-            status_label_->setText(tr("Refreshing market sentiment…"));
-            status_label_->show();
-            loading_overlay_->show_loading(tr("REFRESHING SENTIMENT…"));
-            services::equity::MarketSentimentService::instance().fetch_snapshot(current_symbol_, 7, true);
-        }
+        if (!current_symbol_.isEmpty())
+            set_symbol(current_symbol_);
     });
     header_layout->addWidget(refresh_btn_);
     root->addWidget(header);
 
-    status_label_ = new QLabel(tr("Open a symbol and enable Adanos Market Sentiment in Data Sources to load a snapshot."));
+    // ── Idle / status text ──────────────────────────────────────────────────────
+    status_label_ = new QLabel(tr("Open a symbol to compute sentiment from news and price momentum."));
     status_label_->setAlignment(Qt::AlignCenter);
+    status_label_->setWordWrap(true);
     status_label_->setStyleSheet(
         QString("color:%1; font-size:12px; padding:20px; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     root->addWidget(status_label_);
 
+    // ── Scrollable content ────────────────────────────────────────────────────
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
@@ -185,117 +134,225 @@ void EquitySentimentTab::build_ui() {
     auto* content_layout = new QVBoxLayout(content_widget_);
     content_layout->setContentsMargins(12, 12, 12, 12);
     content_layout->setSpacing(12);
-    content_layout->addWidget(build_summary_panel());
 
-    auto* sources_panel = make_panel(tr("SOURCE BREAKDOWN"), &sources_title_lbl_);
-    sources_widget_ = sources_panel;
-    sources_layout_ = new QGridLayout;
+    // Net score badge + distribution bar in one summary panel.
+    QVBoxLayout* summary_body = nullptr;
+    auto* summary_panel = sentiment_make_panel(tr("OVERALL"), &summary_body, &summary_title_lbl_);
+
+    auto* badge_row = new QHBoxLayout;
+    badge_row->setContentsMargins(0, 0, 0, 0);
+    badge_row->setSpacing(16);
+
+    net_label_ = new QLabel(QStringLiteral("—"));
+    net_label_->setStyleSheet(
+        QString("color:%1; font-size:26px; font-weight:800; background:transparent; border:0;")
+            .arg(ui::colors::TEXT_PRIMARY()));
+    badge_row->addWidget(net_label_);
+
+    net_score_label_ = new QLabel;
+    net_score_label_->setStyleSheet(
+        QString("color:%1; font-size:22px; font-weight:700; background:transparent; border:0;")
+            .arg(ui::colors::TEXT_SECONDARY()));
+    badge_row->addWidget(net_score_label_);
+
+    badge_row->addStretch();
+
+    net_conf_label_ = new QLabel;
+    net_conf_label_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    net_conf_label_->setStyleSheet(
+        QString("color:%1; font-size:11px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
+    badge_row->addWidget(net_conf_label_);
+    summary_body->addLayout(badge_row);
+
+    // Distribution bar (bull / neutral / bear proportions).
+    auto* dist_bar = new QFrame;
+    dist_bar->setFixedHeight(10);
+    dist_bar->setStyleSheet("background:transparent; border:0;");
+    dist_layout_ = new QHBoxLayout(dist_bar);
+    dist_layout_->setContentsMargins(0, 0, 0, 0);
+    dist_layout_->setSpacing(2);
+    summary_body->addWidget(dist_bar);
+
+    dist_counts_label_ = new QLabel;
+    dist_counts_label_->setStyleSheet(
+        QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
+    summary_body->addWidget(dist_counts_label_);
+
+    content_layout->addWidget(summary_panel);
+
+    // Source breakdown.
+    QVBoxLayout* sources_body = nullptr;
+    auto* sources_panel = sentiment_make_panel(tr("SIGNAL SOURCES"), &sources_body, &sources_title_lbl_);
+    sources_layout_ = new QVBoxLayout;
     sources_layout_->setContentsMargins(0, 0, 0, 0);
-    sources_layout_->setSpacing(10);
-    static_cast<QVBoxLayout*>(sources_panel->layout())->addLayout(sources_layout_);
+    sources_layout_->setSpacing(6);
+    sources_body->addLayout(sources_layout_);
     content_layout->addWidget(sources_panel);
-    content_layout->addStretch();
 
+    // Per-article list.
+    QVBoxLayout* articles_body = nullptr;
+    auto* articles_panel = sentiment_make_panel(tr("HEADLINES"), &articles_body, &articles_title_lbl_);
+    articles_layout_ = new QVBoxLayout;
+    articles_layout_->setContentsMargins(0, 0, 0, 0);
+    articles_layout_->setSpacing(6);
+    articles_body->addLayout(articles_layout_);
+    content_layout->addWidget(articles_panel);
+
+    content_layout->addStretch();
     scroll->setWidget(content_widget_);
     root->addWidget(scroll, 1);
     content_widget_->hide();
 }
 
-QWidget* EquitySentimentTab::build_summary_panel() {
-    auto* panel = make_panel(tr("SUMMARY"), &summary_title_lbl_);
-    auto* grid = new QGridLayout;
-    grid->setContentsMargins(0, 0, 0, 0);
-    grid->setSpacing(10);
-
-    grid->addWidget(make_stat_box(tr("AVERAGE BUZZ"), &avg_buzz_value_,    &avg_buzz_title_),    0, 0);
-    grid->addWidget(make_stat_box(tr("BULLISH %"),    &avg_bullish_value_, &avg_bullish_title_), 0, 1);
-    grid->addWidget(make_stat_box(tr("COVERAGE"),     &coverage_value_,    &coverage_title_),    1, 0);
-    grid->addWidget(make_stat_box(tr("ALIGNMENT"),    &alignment_value_,   &alignment_title_),   1, 1);
-
-    static_cast<QVBoxLayout*>(panel->layout())->addLayout(grid);
-    return panel;
-}
-
-void EquitySentimentTab::clear_sources() {
-    while (sources_layout_->count() > 0) {
-        auto* item = sources_layout_->takeAt(0);
-        if (item->widget()) {
+void EquitySentimentTab::clear_layout(QLayout* layout) {
+    if (!layout)
+        return;
+    while (layout->count() > 0) {
+        auto* item = layout->takeAt(0);
+        if (item->widget())
             item->widget()->deleteLater();
-        }
+        if (item->layout())
+            clear_layout(item->layout());
         delete item;
     }
 }
 
-void EquitySentimentTab::populate(const services::equity::MarketSentimentSnapshot& snapshot) {
-    avg_buzz_value_->setText(QString::number(snapshot.average_buzz, 'f', 1));
-    avg_bullish_value_->setText(QString("%1%").arg(QString::number(snapshot.average_bullish_pct, 'f', 1)));
-    coverage_value_->setText(QString("%1 / %2").arg(snapshot.coverage).arg(snapshot.sources.size()));
-    alignment_value_->setText(alignment_label(snapshot.source_alignment));
-    alignment_value_->setStyleSheet(
-        QString("color:%1; font-size:18px; font-weight:700; background:transparent; border:0;")
-            .arg(alignment_color(snapshot.source_alignment)));
+void EquitySentimentTab::populate(const services::equity::EquitySentimentSnapshot& snapshot) {
+    // ── Net badge ──────────────────────────────────────────────────────────────
+    net_label_->setText(snapshot.label);
+    net_label_->setStyleSheet(QString("color:%1; font-size:26px; font-weight:800; background:transparent; border:0;")
+                                  .arg(sentiment_label_color(snapshot.label)));
+    net_score_label_->setText(sentiment_fmt_score(snapshot.overall_score));
+    net_conf_label_->setText(tr("Confidence %1%").arg(QString::number(snapshot.confidence * 100.0, 'f', 0)));
 
-    clear_sources();
-    for (int i = 0; i < snapshot.sources.size(); ++i) {
-        const auto& source = snapshot.sources.at(i);
-        auto* card = make_panel(source.label);
-        auto* layout = static_cast<QVBoxLayout*>(card->layout());
+    // ── Distribution bar ─────────────────────────────────────────────────────
+    clear_layout(dist_layout_);
+    const int total = snapshot.bullish + snapshot.bearish + snapshot.neutral;
+    auto add_segment = [this](int count, const QString& color) {
+        if (count <= 0)
+            return;
+        auto* seg = new QFrame;
+        seg->setFixedHeight(10);
+        seg->setStyleSheet(QString("background:%1; border:0; border-radius:2px;").arg(color));
+        dist_layout_->addWidget(seg, count);
+    };
+    if (total > 0) {
+        add_segment(snapshot.bullish, ui::colors::POSITIVE());
+        add_segment(snapshot.neutral, ui::colors::BORDER_DIM());
+        add_segment(snapshot.bearish, ui::colors::NEGATIVE());
+    } else {
+        auto* seg = new QFrame;
+        seg->setFixedHeight(10);
+        seg->setStyleSheet(QString("background:%1; border:0; border-radius:2px;").arg(ui::colors::BORDER_DIM()));
+        dist_layout_->addWidget(seg, 1);
+    }
+    dist_counts_label_->setText(tr("%1 bullish · %2 neutral · %3 bearish  (%4 headlines)")
+                                    .arg(snapshot.bullish)
+                                    .arg(snapshot.neutral)
+                                    .arg(snapshot.bearish)
+                                    .arg(snapshot.article_count));
 
-        auto add_row = [layout](const QString& key, const QString& value, const QString& color = QString()) {
-            auto* row = new QWidget;
-            auto* row_layout = new QHBoxLayout(row);
-            row_layout->setContentsMargins(0, 0, 0, 0);
-            row_layout->setSpacing(6);
+    // ── Signal sources ─────────────────────────────────────────────────────────
+    clear_layout(sources_layout_);
+    for (const auto& src : snapshot.sources) {
+        auto* row = new QWidget;
+        auto* row_layout = new QHBoxLayout(row);
+        row_layout->setContentsMargins(0, 0, 0, 0);
+        row_layout->setSpacing(8);
 
-            auto* key_label = new QLabel(key);
-            key_label->setStyleSheet(
-                QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_SECONDARY()));
-            row_layout->addWidget(key_label);
+        auto* name = new QLabel(src.label);
+        name->setStyleSheet(
+            QString("color:%1; font-size:11px; font-weight:600; background:transparent; border:0;")
+                .arg(ui::colors::TEXT_PRIMARY()));
+        row_layout->addWidget(name);
+        row_layout->addStretch();
 
-            auto* value_label = new QLabel(value);
-            value_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-            value_label->setStyleSheet(
-                QString("color:%1; font-size:11px; font-weight:600; background:transparent; border:0;")
-                    .arg(color.isEmpty() ? ui::colors::TEXT_PRIMARY() : color));
-            row_layout->addWidget(value_label, 1);
-            layout->addWidget(row);
-        };
+        if (src.available) {
+            auto* score = new QLabel(sentiment_fmt_score(src.score));
+            score->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; background:transparent; border:0;")
+                                     .arg(src.score >= 0.0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+            row_layout->addWidget(score);
 
-        if (source.available) {
-            add_row(tr("Buzz"),      QString::number(source.buzz_score, 'f', 1));
-            add_row(tr("Bullish"),   QString("%1%").arg(QString::number(source.bullish_pct, 'f', 1)));
-            add_row(tr("Activity"),  QString::number(source.activity_count, 'f', 0));
-            add_row(tr("Sentiment"), QString::number(source.sentiment_score, 'f', 2),
-                    source.sentiment_score >= 0.0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE());
+            auto* weight = new QLabel(tr("wt %1%").arg(QString::number(src.weight * 100.0, 'f', 0)));
+            weight->setStyleSheet(QString("color:%1; font-size:10px; background:transparent; border:0;")
+                                      .arg(ui::colors::TEXT_TERTIARY()));
+            row_layout->addWidget(weight);
         } else {
-            auto* empty = new QLabel(tr("No snapshot available."));
-            empty->setWordWrap(true);
-            empty->setStyleSheet(
-                QString("color:%1; font-size:11px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
-            layout->addWidget(empty);
+            auto* na = new QLabel(tr("n/a"));
+            na->setStyleSheet(QString("color:%1; font-size:10px; background:transparent; border:0;")
+                                  .arg(ui::colors::TEXT_TERTIARY()));
+            row_layout->addWidget(na);
         }
+        sources_layout_->addWidget(row);
+    }
 
-        sources_layout_->addWidget(card, i / 2, i % 2);
+    // ── Headlines ───────────────────────────────────────────────────────────────
+    clear_layout(articles_layout_);
+    if (snapshot.articles.isEmpty()) {
+        auto* empty = new QLabel(tr("No headlines available for this symbol."));
+        empty->setStyleSheet(
+            QString("color:%1; font-size:11px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
+        articles_layout_->addWidget(empty);
+    }
+    for (const auto& article : snapshot.articles) {
+        auto* row = new QFrame;
+        row->setStyleSheet(QString("QFrame { background:%1; border:1px solid %2; border-radius:3px; }")
+                               .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        auto* row_layout = new QHBoxLayout(row);
+        row_layout->setContentsMargins(8, 6, 8, 6);
+        row_layout->setSpacing(8);
+
+        const QString chip_color = sentiment_label_color(article.label);
+        auto* chip = new QLabel(article.label.left(4));
+        chip->setAlignment(Qt::AlignCenter);
+        chip->setFixedWidth(46);
+        chip->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1px; "
+                                    "border:1px solid %1; border-radius:3px; padding:2px 0; background:transparent;")
+                                .arg(chip_color));
+        row_layout->addWidget(chip, 0, Qt::AlignTop);
+
+        auto* text_col = new QVBoxLayout;
+        text_col->setContentsMargins(0, 0, 0, 0);
+        text_col->setSpacing(2);
+
+        auto* headline = new QLabel(article.title);
+        headline->setWordWrap(true);
+        headline->setStyleSheet(
+            QString("color:%1; font-size:11px; background:transparent; border:0;").arg(ui::colors::TEXT_PRIMARY()));
+        text_col->addWidget(headline);
+
+        QString meta = article.publisher;
+        const QString date = article.published_date.left(10);
+        if (!date.isEmpty())
+            meta = meta.isEmpty() ? date : QString("%1 · %2").arg(meta, date);
+        if (!meta.isEmpty()) {
+            auto* meta_lbl = new QLabel(meta);
+            meta_lbl->setStyleSheet(
+                QString("color:%1; font-size:9px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
+            text_col->addWidget(meta_lbl);
+        }
+        row_layout->addLayout(text_col, 1);
+        articles_layout_->addWidget(row);
     }
 }
 
-void EquitySentimentTab::on_snapshot_loaded(QString symbol, fincept::services::equity::MarketSentimentSnapshot snapshot) {
-    if (symbol != current_symbol_) {
+void EquitySentimentTab::on_sentiment_loaded(QString symbol,
+                                             fincept::services::equity::EquitySentimentSnapshot snapshot) {
+    if (symbol != current_symbol_)
         return;
-    }
 
     loading_overlay_->hide_loading();
     cached_snapshot_ = snapshot;
     snapshot_loaded_ = true;
 
-    coverage_label_->setText(snapshot.coverage > 0
-                                  ? tr("%1 sources live").arg(snapshot.coverage)
-                                  : tr("Optional alternative data"));
+    caption_label_->setText(snapshot.available && !snapshot.engine.isEmpty()
+                                ? tr("engine: %1").arg(snapshot.engine)
+                                : tr("self-computed"));
 
-    if (!snapshot.configured || !snapshot.available) {
+    if (!snapshot.available) {
         content_widget_->hide();
         status_label_->setText(snapshot.message.isEmpty()
-                                   ? tr("No market sentiment snapshot is available for this symbol.")
+                                   ? tr("No sentiment is available for this symbol.")
                                    : snapshot.message);
         status_label_->show();
         return;
@@ -309,35 +366,28 @@ void EquitySentimentTab::on_snapshot_loaded(QString symbol, fincept::services::e
 // ── Re-translation ───────────────────────────────────────────────────────────
 
 void EquitySentimentTab::changeEvent(QEvent* event) {
-    if (event->type() == QEvent::LanguageChange) {
+    if (event->type() == QEvent::LanguageChange)
         retranslateUi();
-    }
     QWidget::changeEvent(event);
 }
 
 void EquitySentimentTab::retranslateUi() {
-    if (title_lbl_)         title_lbl_->setText(tr("MARKET SENTIMENT"));
-    if (refresh_btn_)       refresh_btn_->setText(tr("REFRESH"));
-    if (sources_title_lbl_) sources_title_lbl_->setText(tr("SOURCE BREAKDOWN"));
-    if (summary_title_lbl_) summary_title_lbl_->setText(tr("SUMMARY"));
-    if (avg_buzz_title_)    avg_buzz_title_->setText(tr("AVERAGE BUZZ"));
-    if (avg_bullish_title_) avg_bullish_title_->setText(tr("BULLISH %"));
-    if (coverage_title_)    coverage_title_->setText(tr("COVERAGE"));
-    if (alignment_title_)   alignment_title_->setText(tr("ALIGNMENT"));
+    if (title_lbl_)
+        title_lbl_->setText(tr("MARKET SENTIMENT"));
+    if (refresh_btn_)
+        refresh_btn_->setText(tr("REFRESH"));
+    if (summary_title_lbl_)
+        summary_title_lbl_->setText(tr("OVERALL"));
+    if (sources_title_lbl_)
+        sources_title_lbl_->setText(tr("SIGNAL SOURCES"));
+    if (articles_title_lbl_)
+        articles_title_lbl_->setText(tr("HEADLINES"));
 
-    // Idle status text — only overwrite when nothing's loaded yet.
     if (status_label_ && current_symbol_.isEmpty())
-        status_label_->setText(tr("Open a symbol and enable Adanos Market Sentiment in Data Sources to load a snapshot."));
+        status_label_->setText(tr("Open a symbol to compute sentiment from news and price momentum."));
 
-    // Re-render from cached snapshot so coverage caption, alignment badge,
-    // and per-source rows pick up the new locale.
-    if (snapshot_loaded_) {
-        coverage_label_->setText(cached_snapshot_.coverage > 0
-                                      ? tr("%1 sources live").arg(cached_snapshot_.coverage)
-                                      : tr("Optional alternative data"));
-        if (cached_snapshot_.configured && cached_snapshot_.available)
-            populate(cached_snapshot_);
-    }
+    if (snapshot_loaded_ && cached_snapshot_.available)
+        populate(cached_snapshot_);
 }
 
 } // namespace fincept::screens

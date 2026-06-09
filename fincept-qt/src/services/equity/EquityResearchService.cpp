@@ -4,15 +4,138 @@
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
+#include "storage/repositories/DataSourceRepository.h"
+#include "trading/AccountManager.h"
+#include "trading/BrokerInterface.h"
+#include "trading/BrokerRegistry.h"
+#include "trading/HistoricalDataService.h"
 
+#include <QDate>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QPointer>
+#include <QUrl>
+#include <QUrlQuery>
 
+#include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace fincept::services::equity {
+
+namespace {
+
+// yfinance symbol → broker region. ".NS"/".BO" are Indian (NSE/BSE); a bare
+// ticker with no exchange suffix is a US listing (yfinance convention, e.g.
+// AAPL/SPGI). Other suffixes (.L, .TO, .HK …) aren't routable via the wired
+// brokers → empty region. Mirrors research_symbol_region() in the screen.
+QString candle_symbol_region(const QString& sym) {
+    if (sym.endsWith(QStringLiteral(".NS"), Qt::CaseInsensitive) ||
+        sym.endsWith(QStringLiteral(".BO"), Qt::CaseInsensitive))
+        return QStringLiteral("IN");
+    if (!sym.contains(QLatin1Char('.')))
+        return QStringLiteral("US");
+    return {};
+}
+
+// yfinance form (RELIANCE.NS / TCS.BO) → bare broker symbol. US tickers are
+// already bare.
+QString candle_bare_symbol(const QString& sym) {
+    if (sym.endsWith(QStringLiteral(".NS"), Qt::CaseInsensitive) ||
+        sym.endsWith(QStringLiteral(".BO"), Qt::CaseInsensitive))
+        return sym.left(sym.length() - 3);
+    return sym;
+}
+
+// Pick the first *Connected* active account whose broker region matches the
+// symbol's market, so RELIANCE.NS routes through a live Indian broker and a US
+// ticker through a live US broker — never cross-region. Returns false when no
+// usable broker exists (caller then uses yfinance).
+bool resolve_connected_data_broker(const QString& symbol, QString& broker_id, QString& account_id) {
+    const QString region = candle_symbol_region(symbol);
+    if (region.isEmpty())
+        return false;
+    const auto accounts = fincept::trading::AccountManager::instance().active_accounts();
+    for (const auto& a : accounts) {
+        if (a.state != fincept::trading::ConnectionState::Connected)
+            continue;
+        auto* b = fincept::trading::BrokerRegistry::instance().get(a.broker_id);
+        if (b && b->profile().region == region) {
+            broker_id = a.broker_id;
+            account_id = a.account_id;
+            return true;
+        }
+    }
+    return false;
+}
+
+// yfinance period string ("2y"/"1y"/"6mo"/"3mo"/"1mo"/"5d"/"max") → lookback
+// days for the broker history request. Defaults to ~2y (good indicator warm-up).
+int candle_lookback_days(const QString& period) {
+    const QString p = period.trimmed().toLower();
+    if (p == QLatin1String("max"))
+        return 3650;
+    auto num = [&](int trim) { return p.left(p.size() - trim).toInt(); };
+    if (p.endsWith(QLatin1String("mo"))) {
+        int n = num(2);
+        if (n > 0)
+            return n * 31;
+    } else if (p.endsWith(QLatin1Char('y'))) {
+        int n = num(1);
+        if (n > 0)
+            return n * 365;
+    } else if (p.endsWith(QLatin1String("wk"))) {
+        int n = num(2);
+        if (n > 0)
+            return n * 7;
+    } else if (p.endsWith(QLatin1Char('d'))) {
+        int n = num(1);
+        if (n > 0)
+            return n;
+    }
+    return 730;
+}
+
+// trading-layer BrokerCandle[] → the yfinance-shaped JSON array the indicator
+// scripts consume: [{timestamp(sec), open, high, low, close, volume}, …], ascending.
+// Timestamps are normalised to epoch SECONDS (some brokers, e.g. Fyers, return
+// milliseconds — the chart and the indicator engine assume seconds).
+QString broker_candles_to_json(const QVector<fincept::trading::BrokerCandle>& candles) {
+    struct Row {
+        qint64 ts;
+        const fincept::trading::BrokerCandle* c;
+    };
+    std::vector<Row> rows;
+    rows.reserve(static_cast<size_t>(candles.size()));
+    for (const auto& c : candles) {
+        qint64 ts = c.timestamp;
+        if (ts > 1000000000000LL) // > ~Sep 2001 in ms → milliseconds, convert to seconds
+            ts /= 1000;
+        if (ts <= 0)
+            continue;
+        rows.push_back({ts, &c});
+    }
+    std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.ts < b.ts; });
+
+    QJsonArray arr;
+    for (const auto& r : rows) {
+        QJsonObject o;
+        o["timestamp"] = static_cast<double>(r.ts);
+        o["open"] = r.c->open;
+        o["high"] = r.c->high;
+        o["low"] = r.c->low;
+        o["close"] = r.c->close;
+        o["volume"] = r.c->volume;
+        arr.append(o);
+    }
+    return QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+}
+
+} // namespace
 
 // ── Singleton ─────────────────────────────────────────────────────────────────
 EquityResearchService& EquityResearchService::instance() {
@@ -180,14 +303,8 @@ void EquityResearchService::fetch_financials(const QString& symbol) {
 
 // ── Technicals ────────────────────────────────────────────────────────────────
 void EquityResearchService::fetch_technicals(const QString& symbol, const QString& period) {
-    // Step 1: fetch historical (from CacheManager), then step 2: compute technicals
-    QString cached_json;
-    {
-        const QVariant hcv = fincept::CacheManager::instance().get("equity:candles:" + symbol);
-        if (!hcv.isNull())
-            cached_json = hcv.toString();
-    }
-
+    // Candles come from ensure_candles (cache → region-matched connected broker →
+    // yfinance fallback); compute_technicals.py then derives the rating + indicators.
     auto run_compute = [this, symbol](const QString& hist_json) {
         run_python("compute_technicals.py", {hist_json}, [this, symbol](bool ok2, const QString& out2) {
             if (!ok2) {
@@ -203,21 +320,16 @@ void EquityResearchService::fetch_technicals(const QString& symbol, const QStrin
         });
     };
 
-    if (!cached_json.isEmpty()) {
-        run_compute(cached_json);
-    } else {
-        run_python("yfinance_data.py", {"historical_period", symbol, period, "1d"},
-                   [this, symbol, run_compute](bool ok, const QString& out) {
-                       if (!ok) {
-                           emit error_occurred("Technicals", "Failed historical fetch");
-                           return;
-                       }
-                       auto raw = python::extract_json(out);
-                       fincept::CacheManager::instance().put("equity:candles:" + symbol, QVariant(raw),
-                                                             kHistoricalTtlSec, "equity");
-                       run_compute(raw);
-                   });
-    }
+    QPointer<EquityResearchService> self = this;
+    ensure_candles(symbol, period, [self, run_compute](bool ok, const QString& hist_json) {
+        if (!self)
+            return;
+        if (!ok || hist_json.trimmed().isEmpty()) {
+            emit self->error_occurred("Technicals", "Failed historical fetch");
+            return;
+        }
+        run_compute(hist_json);
+    });
 }
 
 // ── Peers ─────────────────────────────────────────────────────────────────────
@@ -238,7 +350,89 @@ void EquityResearchService::fetch_peers(const QString& symbol, const QStringList
 }
 
 // ── News ──────────────────────────────────────────────────────────────────────
-void EquityResearchService::fetch_news(const QString& symbol, int count) {
+// Turn a yfinance company_name into a Google-News-friendly query by dropping the
+// trailing corporate suffix(es) and punctuation — "Reliance Industries Limited" →
+// "Reliance Industries", "Tesla, Inc." → "Tesla". Materially improves GNews recall.
+static QString gnews_query_from_company_name(const QString& company_name) {
+    static const QStringList kSuffixes = {"Limited", "Ltd",  "Incorporated", "Inc",     "Corporation", "Corp",
+                                          "Company", "Co",    "PLC",          "Holdings", "Holding",     "Group",
+                                          "SA",      "NV",    "AG",           "SE",       "SpA",         "AB"};
+    QString q = company_name.trimmed();
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        q = q.trimmed();
+        while (q.endsWith(QLatin1Char(',')) || q.endsWith(QLatin1Char('.')))
+            q.chop(1);
+        for (const auto& suf : kSuffixes) {
+            if (q.endsWith(QLatin1Char(' ') + suf, Qt::CaseInsensitive)) {
+                q.chop(suf.size() + 1);
+                changed = true;
+                break;
+            }
+        }
+    }
+    return q.trimmed();
+}
+
+// Build the news search query for a symbol: the cleaned company name from cached
+// info when available, else the bare ticker (.NS/.BO suffix stripped).
+static QString news_query_for_symbol(const QString& symbol) {
+    const bool indian = symbol.endsWith(QStringLiteral(".NS"), Qt::CaseInsensitive) ||
+                        symbol.endsWith(QStringLiteral(".BO"), Qt::CaseInsensitive);
+    QString query = indian ? symbol.left(symbol.length() - 3) : symbol;
+    const QVariant icv = fincept::CacheManager::instance().get("equity:info:" + symbol);
+    if (!icv.isNull()) {
+        const auto info = QJsonDocument::fromJson(icv.toString().toUtf8()).object();
+        const QString cleaned = gnews_query_from_company_name(info.value("company_name").toString());
+        if (!cleaned.isEmpty())
+            query = cleaned;
+    }
+    return query;
+}
+
+// NewsAPI /v2/everything query for a symbol. Builds an EXACT-PHRASE (quoted) match
+// on the company name (ticker as fallback) so results are about THIS company.
+// Paired with searchIn=title,description at the call site, this keeps the feed
+// stock-specific — the default everything search also scans the full article body,
+// so a bare word like "Apple"/"Reliance" otherwise pulled in unrelated general news.
+static QString newsapi_query_for_symbol(const QString& symbol) {
+    const bool indian = symbol.endsWith(QStringLiteral(".NS"), Qt::CaseInsensitive) ||
+                        symbol.endsWith(QStringLiteral(".BO"), Qt::CaseInsensitive);
+    const QString ticker = indian ? symbol.left(symbol.length() - 3) : symbol;
+    QString company;
+    const QVariant icv = fincept::CacheManager::instance().get("equity:info:" + symbol);
+    if (!icv.isNull()) {
+        const auto info = QJsonDocument::fromJson(icv.toString().toUtf8()).object();
+        company = gnews_query_from_company_name(info.value("company_name").toString());
+    }
+    QString phrase = company;
+    if (phrase.isEmpty())
+        phrase = ticker;
+    if (phrase.isEmpty())
+        phrase = symbol;
+    return QStringLiteral("\"%1\"").arg(phrase); // quotes → NewsAPI exact-phrase match
+}
+
+void EquityResearchService::fetch_news(const QString& symbol, int count, NewsProvider provider) {
+    // NewsAPI.org provider (opt-in): use it only when a key is configured, and
+    // cache it under a separate key so switching providers doesn't surface the
+    // other provider's cached result.
+    if (provider == NewsProvider::NewsApi) {
+        const QString key = configured_newsapi_key();
+        if (!key.isEmpty()) {
+            const QVariant ncv = fincept::CacheManager::instance().get("equity:news:newsapi:" + symbol);
+            if (!ncv.isNull()) {
+                const QJsonArray arr = QJsonDocument::fromJson(ncv.toString().toUtf8()).array();
+                emit news_loaded(symbol, parse_news(arr));
+                return;
+            }
+            fetch_news_newsapi(symbol, count, key);
+            return;
+        }
+        // No key configured → fall through to the default Auto chain below.
+    }
+
     {
         const QVariant ncv = fincept::CacheManager::instance().get("equity:news:" + symbol);
         if (!ncv.isNull()) {
@@ -247,6 +441,45 @@ void EquityResearchService::fetch_news(const QString& symbol, int count) {
             return;
         }
     }
+
+    // Primary source: Google News (fetch_company_news.py) — broader, more current
+    // company coverage than yfinance's Yahoo feed. Google News recall is far better
+    // for a clean company NAME than a bare ticker or the full legal name (e.g.
+    // "Reliance Industries" returns articles where "RELIANCE" and "Reliance
+    // Industries Limited" both return none), so query by the cleaned company_name
+    // from the cached info when available, falling back to the bare ticker.
+    const bool indian = symbol.endsWith(QStringLiteral(".NS"), Qt::CaseInsensitive) ||
+                        symbol.endsWith(QStringLiteral(".BO"), Qt::CaseInsensitive);
+    const QString country = indian ? QStringLiteral("IN") : QStringLiteral("US");
+    const QString query = news_query_for_symbol(symbol);
+
+    run_python(
+        "fetch_company_news.py",
+        {"search", query, QString::number(count), QStringLiteral("1M"), QStringLiteral("en"), country},
+        [this, symbol, count](bool ok, const QString& out) {
+            if (ok) {
+                const auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
+                // GNews returns {"success":true,"data":[...]}. Only accept a
+                // non-empty result; anything else falls through to yfinance.
+                if (obj.value("success").toBool()) {
+                    const auto arr = obj.value("data").toArray();
+                    if (!arr.isEmpty()) {
+                        fincept::CacheManager::instance().put(
+                            "equity:news:" + symbol,
+                            QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))), kNewsTtlSec,
+                            "equity");
+                        emit news_loaded(symbol, parse_news(arr));
+                        return;
+                    }
+                }
+            }
+            // Google News unavailable (e.g. gnews missing / network) or empty →
+            // fall back to the Yahoo/yfinance feed.
+            fetch_news_yfinance(symbol, count);
+        });
+}
+
+void EquityResearchService::fetch_news_yfinance(const QString& symbol, int count) {
     run_python(
         "yfinance_data.py", {"news", symbol, QString::number(count)}, [this, symbol](bool ok, const QString& out) {
             if (!ok) {
@@ -262,49 +495,163 @@ void EquityResearchService::fetch_news(const QString& symbol, int count) {
         });
 }
 
-// ── TALIpp ────────────────────────────────────────────────────────────────────
-void EquityResearchService::compute_talipp(const QString& symbol, const QString& indicator, const QVariantMap& params,
-                                           const QString& period) {
-    auto run_talipp = [this, indicator, params](const QString& hist_json) {
-        QJsonObject p_obj;
-        for (auto it = params.constBegin(); it != params.constEnd(); ++it)
-            p_obj[it.key()] = QJsonValue::fromVariant(it.value());
-        QString params_json = QJsonDocument(p_obj).toJson(QJsonDocument::Compact);
+// ── NewsAPI.org ─────────────────────────────────────────────────────────────
+// The configured & enabled NewsAPI key from the Data Sources tab (provider id
+// "newsapi", set by ConnectionConfigDialog as ds.provider = connector id). Empty
+// when no enabled NewsAPI connection has a non-empty apiKey.
+QString EquityResearchService::configured_newsapi_key() const {
+    const auto res = fincept::DataSourceRepository::instance().list_all();
+    if (res.is_err())
+        return {};
+    for (const auto& ds : res.value()) {
+        if (!ds.enabled || ds.provider != QLatin1String("newsapi"))
+            continue;
+        const auto cfg = QJsonDocument::fromJson(ds.config.toUtf8()).object();
+        const QString key = cfg.value("apiKey").toString().trimmed();
+        if (!key.isEmpty())
+            return key;
+    }
+    return {};
+}
 
-        run_python("equity_talipp.py", {indicator, hist_json, params_json},
-                   [this, indicator](bool ok, const QString& out) {
-                       if (!ok) {
-                           emit error_occurred("TALIpp", out);
-                           return;
-                       }
-                       auto doc = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
-                       QVector<double> values;
-                       QVector<qint64> timestamps;
-                       for (const auto& v : doc["values"].toArray())
-                           values.append(v.toDouble());
-                       for (const auto& t : doc["timestamps"].toArray())
-                           timestamps.append(static_cast<qint64>(t.toDouble()));
-                       emit talipp_result(indicator, values, timestamps);
-                   });
+// Fetch stock-specific news from newsapi.org/v2/everything. On any failure
+// (network error, non-"ok" status such as 401/quota, or no usable articles) it
+// falls back to the default Auto chain so the tab always shows news.
+void EquityResearchService::fetch_news_newsapi(const QString& symbol, int count, const QString& api_key) {
+    if (!news_nam_)
+        news_nam_ = new QNetworkAccessManager(this);
+
+    QUrl url(QStringLiteral("https://newsapi.org/v2/everything"));
+    QUrlQuery params;
+    // Exact-phrase company query restricted to title+description (NOT the full
+    // article body) so results are about THIS company, not any article that
+    // merely mentions the word. This is what makes the feed stock-specific.
+    params.addQueryItem(QStringLiteral("q"), newsapi_query_for_symbol(symbol));
+    params.addQueryItem(QStringLiteral("searchIn"), QStringLiteral("title,description"));
+    params.addQueryItem(QStringLiteral("language"), QStringLiteral("en"));
+    params.addQueryItem(QStringLiteral("sortBy"), QStringLiteral("publishedAt"));
+    params.addQueryItem(QStringLiteral("pageSize"), QString::number(std::clamp(count, 1, 100)));
+    params.addQueryItem(QStringLiteral("from"), QDate::currentDate().addDays(-30).toString(Qt::ISODate));
+    url.setQuery(params);
+
+    QNetworkRequest req(url);
+    req.setRawHeader("X-Api-Key", api_key.toUtf8()); // key in header, not the URL
+    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("FinceptTerminal"));
+
+    QNetworkReply* reply = news_nam_->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, symbol, count]() {
+        reply->deleteLater();
+        const auto fall_back = [this, symbol, count]() { fetch_news(symbol, count, NewsProvider::Auto); };
+
+        if (reply->error() != QNetworkReply::NoError) {
+            LOG_WARN("EquityResearch",
+                     QString("NewsAPI request failed (%1) — falling back").arg(reply->errorString()));
+            fall_back();
+            return;
+        }
+        const auto obj = QJsonDocument::fromJson(reply->readAll()).object();
+        if (obj.value("status").toString() != QLatin1String("ok")) {
+            LOG_WARN("EquityResearch",
+                     QString("NewsAPI error: %1 — falling back").arg(obj.value("message").toString("unknown")));
+            fall_back();
+            return;
+        }
+
+        // Reshape NewsAPI articles into the {title, description, url, publisher,
+        // published_date} shape parse_news() consumes.
+        QJsonArray reshaped;
+        for (const auto& v : obj.value("articles").toArray()) {
+            const auto a = v.toObject();
+            const QString title = a.value("title").toString();
+            if (title.isEmpty() || title == QLatin1String("[Removed]"))
+                continue;
+            reshaped.append(QJsonObject{
+                {"title", title},
+                {"description", a.value("description").toString()},
+                {"url", a.value("url").toString()},
+                {"publisher", a.value("source").toObject().value("name").toString()},
+                {"published_date", a.value("publishedAt").toString()},
+            });
+        }
+        if (reshaped.isEmpty()) {
+            fall_back(); // nothing usable from NewsAPI → Auto chain
+            return;
+        }
+        fincept::CacheManager::instance().put(
+            "equity:news:newsapi:" + symbol,
+            QVariant(QString::fromUtf8(QJsonDocument(reshaped).toJson(QJsonDocument::Compact))), kNewsTtlSec, "equity");
+        emit news_loaded(symbol, parse_news(reshaped));
+    });
+}
+
+// ── Candle source: connected broker first, yfinance fallback ─────────────────
+// Shared by fetch_technicals (and any future indicator path). Order:
+//   1. cache hit                                 → return immediately
+//   2. region-matched *connected* broker         → broker get_history (live, reliable)
+//   3. yfinance                                  → fallback (no broker, or broker empty/failed)
+// The result is cached under "equity:candles:<symbol>". done(ok, hist_json) is
+// always invoked on the main thread.
+void EquityResearchService::ensure_candles(const QString& symbol, const QString& period,
+                                           std::function<void(bool, const QString&)> done) {
+    const QString cache_key = "equity:candles:" + symbol;
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        // Reject a cached empty payload ("" or "[]") — a stale rate-limited
+        // result would otherwise wedge the tab on "No data returned".
+        const QString c = cached.toString().trimmed();
+        if (!c.isEmpty() && c != QLatin1String("[]")) {
+            done(true, cached.toString());
+            return;
+        }
+    }
+
+    QPointer<EquityResearchService> self = this;
+    auto run_yfinance = [self, symbol, period, cache_key, done]() {
+        if (!self) {
+            done(false, {});
+            return;
+        }
+        self->run_python("yfinance_data.py", {"historical_period", symbol, period, "1d"},
+                         [cache_key, done](bool ok, const QString& out) {
+                             if (!ok) {
+                                 done(false, {});
+                                 return;
+                             }
+                             const QString raw = python::extract_json(out);
+                             const QString trimmed = raw.trimmed();
+                             if (trimmed.isEmpty() || trimmed == QLatin1String("[]")) {
+                                 done(false, {}); // yfinance rate-limited / unknown symbol
+                                 return;
+                             }
+                             fincept::CacheManager::instance().put(cache_key, QVariant(raw), kHistoricalTtlSec, "equity");
+                             done(true, raw);
+                         });
     };
 
-    // Use cached historical if available, else fetch
-    const QVariant cached_candles = fincept::CacheManager::instance().get("equity:candles:" + symbol);
-    if (!cached_candles.isNull()) {
-        run_talipp(cached_candles.toString());
-    } else {
-        run_python("yfinance_data.py", {"historical_period", symbol, period, "1d"},
-                   [this, symbol, run_talipp](bool ok, const QString& out) {
-                       if (!ok) {
-                           emit error_occurred("TALIpp", "Historical fetch failed");
-                           return;
-                       }
-                       auto raw = python::extract_json(out);
-                       fincept::CacheManager::instance().put("equity:candles:" + symbol, QVariant(raw),
-                                                             kHistoricalTtlSec, "equity");
-                       run_talipp(raw);
-                   });
+    QString broker_id, account_id;
+    if (resolve_connected_data_broker(symbol, broker_id, account_id)) {
+        const QString bare = candle_bare_symbol(symbol);
+        const int lookback = candle_lookback_days(period);
+        LOG_INFO("EquityResearch",
+                 QString("Candles for %1 via broker %2").arg(symbol, broker_id));
+        fincept::trading::HistoricalDataService::instance().fetch(
+            bare, QStringLiteral("1d"), lookback, broker_id, account_id,
+            [cache_key, done, run_yfinance](bool ok, const QVector<fincept::trading::BrokerCandle>& candles,
+                                            const QString& /*err*/) {
+                if (ok && !candles.isEmpty()) {
+                    const QString json = broker_candles_to_json(candles);
+                    if (!json.isEmpty() && json != QLatin1String("[]")) {
+                        fincept::CacheManager::instance().put(cache_key, QVariant(json), kHistoricalTtlSec, "equity");
+                        done(true, json);
+                        return;
+                    }
+                }
+                run_yfinance(); // broker had no data — fall back
+            });
+        return;
     }
+
+    run_yfinance(); // no connected region-matched broker
 }
 
 // ── Parsers ───────────────────────────────────────────────────────────────────

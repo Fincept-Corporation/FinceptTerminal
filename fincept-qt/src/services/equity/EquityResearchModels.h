@@ -207,4 +207,47 @@ struct MarketSentimentSnapshot {
     QString fetched_at;
 };
 
+// ── Self-computed (keyless) sentiment ───────────────────────────────────────
+// Produced by EquitySentimentService by blending free signals (news headline
+// NLP + price/technical momentum, plus optional Adanos when keyed). Replaces
+// the Adanos-only view as the default Sentiment tab content.
+
+// One scored headline, for the per-article list.
+struct ArticleSentiment {
+    QString title;
+    QString publisher;
+    QString published_date;
+    QString url;
+    QString label; // "BULLISH" | "BEARISH" | "NEUTRAL"
+    double score = 0.0; // -1..1
+};
+
+// One contributing signal in the blend (news / price / adanos).
+struct SentimentSource {
+    QString id;    // "news" | "price" | "adanos"
+    QString label; // human-readable
+    double score = 0.0; // -1..1
+    double weight = 0.0; // normalized blend weight actually applied (0..1)
+    double confidence = 0.0; // 0..1
+    bool available = false;
+};
+
+struct EquitySentimentSnapshot {
+    QString symbol;
+    bool available = false;
+    QString status; // "ok" | "loading" | "unavailable"
+    QString message;
+    QString engine; // "vader" | "lexicon"
+    double overall_score = 0.0; // -1..1 blended
+    QString label;              // "BULLISH" | "BEARISH" | "NEUTRAL"
+    double confidence = 0.0;    // 0..1
+    int bullish = 0;
+    int bearish = 0;
+    int neutral = 0;
+    int article_count = 0;
+    QVector<SentimentSource> sources;
+    QVector<ArticleSentiment> articles;
+    QString fetched_at;
+};
+
 } // namespace fincept::services::equity

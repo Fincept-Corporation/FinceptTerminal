@@ -602,7 +602,7 @@ namespace {
 
 // IST = UTC + 5:30. The UTC instant at which the given IST calendar day begins.
 QDateTime ist_day_start_utc(const QDate& ist_day) {
-    QDateTime utc_midnight(ist_day, QTime(0, 0, 0), Qt::UTC);
+    QDateTime utc_midnight(ist_day, QTime(0, 0, 0), QTimeZone::UTC);
     return utc_midnight.addSecs(-330 * 60); // shift IST-midnight back to its UTC instant
 }
 
@@ -611,7 +611,7 @@ QDate ist_date_of(const QString& iso_utc, const QDate& fallback) {
     QDateTime dt = QDateTime::fromString(iso_utc, Qt::ISODate);
     if (!dt.isValid())
         return fallback;
-    dt.setTimeSpec(Qt::UTC); // timestamps are UTC; reinterpret if no zone was parsed
+    dt.setTimeZone(QTimeZone::UTC); // timestamps are UTC; reinterpret if no zone was parsed
     return dt.addSecs(330 * 60).date();
 }
 
@@ -702,7 +702,7 @@ int pt_settle_intraday(const QString& portfolio_id) {
         // cutoff that's today's 15:30; for a carried-over position it's that prior
         // day's close — so a catch-up auto-square lands in THAT day's book, never
         // polluting today's order list with trades the user didn't place.
-        const QDateTime close_utc = QDateTime(opened_ist, QTime(15, 30, 0), Qt::UTC).addSecs(-330 * 60);
+        const QDateTime close_utc = QDateTime(opened_ist, QTime(15, 30, 0), QTimeZone::UTC).addSecs(-330 * 60);
         const QString close_iso = close_utc.toString(Qt::ISODate);
 
         // Square off = insert a reduce-only market order on the opposite side and

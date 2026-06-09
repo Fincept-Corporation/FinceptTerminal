@@ -387,6 +387,7 @@ ApiResponse<QVector<BrokerPosition>> FlattradeBroker::get_positions(const Broker
         pos.avg_price = o.value("netavgprc").toString().toDouble();
         pos.ltp = o.value("lp").toString().toDouble();
         pos.pnl = o.value("urmtom").toString().toDouble() + o.value("rpnl").toString().toDouble();
+        pos.pnl_pct = (pos.avg_price > 0.0) ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 : 0.0;
         pos.side = net_qty > 0 ? "LONG" : "SHORT";
         positions.append(pos);
     }
@@ -455,6 +456,8 @@ ApiResponse<QVector<BrokerHolding>> FlattradeBroker::get_holdings(const BrokerCr
         h.exchange = exchange;
         h.quantity = total_qty;
         h.avg_price = o.value("upldprc").toString().toDouble();
+        // Holdings response carries no LTP field — hydrate via GetQuotes for live MTM.
+        // TODO: hydrate LTP to populate current_value/pnl
         h.ltp = 0.0;
         h.invested_value = total_qty * h.avg_price;
         h.current_value = 0.0;

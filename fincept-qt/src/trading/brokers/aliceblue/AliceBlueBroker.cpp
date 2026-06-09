@@ -381,6 +381,7 @@ ApiResponse<QVector<BrokerPosition>> AliceBlueBroker::get_positions(const Broker
         pos.avg_price = p["dayBuyPrice"].toDouble() > 0 ? p["dayBuyPrice"].toDouble() : p["netAveragePrice"].toDouble();
         pos.ltp = p["ltp"].toDouble();
         pos.pnl = p["unrealisedPnl"].toDouble();
+        pos.pnl_pct = (pos.avg_price > 0.0) ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 : 0.0;
         pos.product_type = p["product"].toString();
         positions.append(pos);
     }
@@ -422,9 +423,11 @@ ApiResponse<QVector<BrokerHolding>> AliceBlueBroker::get_holdings(const BrokerCr
                 continue;
             QString exchange = nse_sym.isEmpty() ? "BSE" : "NSE";
 
-            int qty = h["dpQuantity"].toInt();
+            // totalQuantity is the true total holding (settled + T1); dpQuantity is
+            // settled-only and would drop unsettled T1 quantity.
+            int qty = h["totalQuantity"].toInt();
             if (qty == 0)
-                qty = h["totalQuantity"].toInt();
+                qty = h["dpQuantity"].toInt();
             double avg_price = h["averageTradedPrice"].toDouble();
             if (avg_price == 0.0)
                 avg_price = h["investedPrice"].toDouble();

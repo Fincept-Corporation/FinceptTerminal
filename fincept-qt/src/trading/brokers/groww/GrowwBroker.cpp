@@ -534,6 +534,8 @@ ApiResponse<QVector<BrokerPosition>> GrowwBroker::get_positions(const BrokerCred
             pos.ltp = 0.0; // Not returned by positions endpoint; query live-data/ltp separately if needed.
             pos.pnl = p["realised_pnl"].toDouble();
             pos.product_type = p["product"].toString();
+            // TODO: hydrate LTP to populate pnl_pct
+            pos.pnl_pct = (pos.avg_price > 0.0) ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 : 0.0;
             positions.append(pos);
         }
         return true;
@@ -568,8 +570,12 @@ ApiResponse<QVector<BrokerHolding>> GrowwBroker::get_holdings(const BrokerCreden
         holding.exchange = h.contains("exchange") ? h["exchange"].toString() : QStringLiteral("NSE");
         holding.quantity = h["quantity"].toInt();
         holding.avg_price = h["average_price"].toDouble();
+        holding.invested_value = holding.quantity * holding.avg_price;
+        // TODO: hydrate LTP to populate current_value/pnl
         holding.ltp = 0.0; // Not returned by holdings endpoint; query live-data/ltp separately if needed.
+        holding.current_value = 0.0;
         holding.pnl = 0.0; // Derived value — compute in the service layer once LTP is fetched.
+        holding.pnl_pct = 0.0;
         holdings.append(holding);
     }
 

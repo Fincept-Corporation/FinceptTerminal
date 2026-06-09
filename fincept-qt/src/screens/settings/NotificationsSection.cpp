@@ -260,7 +260,7 @@ void NotificationsSection::build_ui() {
             req.trigger = NotifTrigger::Manual;
 
             QPointer<QLabel> status_ptr = pw.status_lbl;
-            NotificationService::instance().send_to(pid, req, [this, status_ptr](bool ok, const QString& err) {
+            NotificationService::instance().send_to(pid, req, [status_ptr](bool ok, const QString& err) {
                 if (!status_ptr) return;
                 if (ok) {
                     status_ptr->setText(tr("✓ Sent successfully"));

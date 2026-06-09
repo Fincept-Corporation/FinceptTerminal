@@ -96,7 +96,7 @@ static AltField combo_field(const QString& key, const QString& label, const QStr
 
 // ── Category definitions ─────────────────────────────────────────────────────
 
-static QList<AltCategory> build_categories() {
+[[maybe_unused]] static QList<AltCategory> build_categories() {
     return {
         {"bonds",
          "Bonds & Fixed Income",

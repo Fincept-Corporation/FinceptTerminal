@@ -5,8 +5,20 @@ This script fetches latest news articles for a given company/symbol
 
 import sys
 import json
+import email.utils
 from datetime import datetime
 from gnews import GNews
+
+
+def _to_iso_date(raw):
+    """Normalize GNews RFC-822 dates ('Mon, 02 Jun 2025 07:00:00 GMT') to ISO
+    ('2025-06-02T07:00:00') so downstream consumers can slice YYYY-MM-DD."""
+    if not raw:
+        return ""
+    try:
+        return email.utils.parsedate_to_datetime(raw).strftime("%Y-%m-%dT%H:%M:%S")
+    except Exception:
+        return raw
 
 def fetch_company_news(query, max_results=10, period='7d', language='en', country='US'):
     """
@@ -52,7 +64,7 @@ def fetch_company_news(query, max_results=10, period='7d', language='en', countr
                 "url": article.get('url', '#'),
                 "publisher": article.get('publisher', {}).get('title', 'Unknown'),
                 "publisher_url": article.get('publisher', {}).get('href', '#'),
-                "published_date": article.get('published date', 'Unknown'),
+                "published_date": _to_iso_date(article.get('published date', '')),
                 "image_url": None  # GNews doesn't provide images directly
             }
             articles.append(processed_article)

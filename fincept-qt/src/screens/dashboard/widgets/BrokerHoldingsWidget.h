@@ -12,6 +12,8 @@
 #include <QTableWidget>
 #include <QVector>
 
+class QPushButton;
+
 namespace fincept::screens::widgets {
 
 class BrokerHoldingsWidget : public BaseWidget {
@@ -37,11 +39,21 @@ class BrokerHoldingsWidget : public BaseWidget {
     void hub_unsubscribe_all();
     QString resolve_account_id() const;
 
+    // Square-off: places MARKET SELL / CNC orders for holdings of THIS account
+    // only — never touches positions. `square_off_all` exits every holding;
+    // `square_off_holding` exits one row.
+    void square_off_all();
+    void square_off_holding(const trading::BrokerHolding& h);
+
     QString account_id_;
     QString broker_id_;
 
     QTableWidget* table_ = nullptr;
     QLabel* header_hint_ = nullptr;
+    QPushButton* square_off_all_btn_ = nullptr;
+
+    // Last holdings rendered — source of truth for square-off actions.
+    QVector<trading::BrokerHolding> holdings_;
 
     bool hub_active_ = false;
 };

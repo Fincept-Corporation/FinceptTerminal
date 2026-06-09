@@ -75,6 +75,11 @@ class EquityBottomPanel : public QWidget {
     void replicate_portfolio_requested();
     void cancel_all_orders_requested(const QString& account_id);
     void close_all_positions_requested(const QString& account_id);
+    // Square off ALL holdings (delivery/CNC) — carries the current holdings so the
+    // screen can close each. Positions are NOT affected.
+    void square_off_all_holdings_requested(const QVector<trading::BrokerHolding>& holdings);
+    // Square off a single holding (per-row SELL) — screen confirms then closes it.
+    void square_off_holding_requested(const QString& symbol, const QString& exchange);
     // Paper: convert an open position's product in place (MIS -> CNC), identified
     // by its paper position id.
     void convert_position_requested(const QString& position_id, const QString& symbol, const QString& new_product);
@@ -112,6 +117,13 @@ class EquityBottomPanel : public QWidget {
     // value / P&L for the symbol's row and the summary strip, in place — same per
     // tick refresh as the Positions table so Holdings tracks in real time.
     void update_holding_quote(const QString& symbol, double ltp);
+
+    // Blank the shared positions/holdings/orders tables (and their row-aligned
+    // caches). Called on every account or paper↔live transition so one account's
+    // (or one mode's) data never lingers under another — e.g. Fyers paper orders
+    // showing under a Zerodha live account. The incoming context repaints via
+    // refresh_paper_panels() (paper) or the live broker hub topics (live).
+    void clear_blotter_tables();
 
     static QTableWidgetItem* ensure_item(QTableWidget* table, int row, int col);
 
@@ -167,6 +179,7 @@ class EquityBottomPanel : public QWidget {
     QLabel* holdings_pnl_pct_caption_ = nullptr;
     class QPushButton* holdings_import_btn_ = nullptr;
     class QPushButton* holdings_replicate_btn_ = nullptr;
+    class QPushButton* holdings_square_off_btn_ = nullptr;
     QVector<trading::BrokerHolding> last_holdings_;
     QTableWidget* orders_table_ = nullptr;
     QDateEdit* orders_date_edit_ = nullptr;        // per-day order book selector

@@ -208,7 +208,7 @@ void AlgoEngine::execute_order(const AlgoOrderSignal& signal) {
 
     const QString account_id = signal.account_id;
 
-    QtConcurrent::run([self, dep_id, account_id, order, submitted_price]() {
+    (void)QtConcurrent::run([self, dep_id, account_id, order, submitted_price]() {
         auto response = fincept::trading::UnifiedTrading::instance()
                             .place_order(account_id, order);
 
@@ -439,7 +439,7 @@ void AlgoEngine::persist_deployment(const services::algo::AlgoDeployment& d) {
 
 void AlgoEngine::list_deployments() {
     QPointer<AlgoEngine> self = this;
-    QtConcurrent::run([self]() {
+    (void)QtConcurrent::run([self]() {
         auto db = fincept::Database::instance().connection();
         QSqlQuery q(db);
         q.exec(QStringLiteral("SELECT * FROM algo_deployments ORDER BY created_at DESC"));

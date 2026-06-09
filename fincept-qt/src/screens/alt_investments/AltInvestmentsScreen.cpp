@@ -265,7 +265,7 @@ static QList<AltCategory> build_categories() {
 
 // ── Per-analyzer form fields ─────────────────────────────────────────────────
 
-static QList<AltField> fields_for(const QString& id) {
+[[maybe_unused]] static QList<AltField> fields_for(const QString& id) {
     if (id == "high-yield")
         return {
             text_field("name", "BOND NAME", "HY Corp Bond"),

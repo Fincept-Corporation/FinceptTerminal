@@ -201,6 +201,7 @@ void EquityBottomPanel::retranslateUi() {
     if (close_all_btn_)      close_all_btn_->setText(tr("SQUARE OFF ALL"));
     if (cancel_all_btn_)     cancel_all_btn_->setText(tr("CANCEL ALL ORDERS"));
     if (holdings_import_btn_) holdings_import_btn_->setText(tr("IMPORT TO PORTFOLIO"));
+    if (holdings_square_off_btn_) holdings_square_off_btn_->setText(tr("SQUARE OFF ALL"));
 
     // Holdings summary-strip captions
     if (holdings_count_caption_)    holdings_count_caption_->setText(tr("HOLDINGS"));
@@ -451,13 +452,44 @@ void EquityBottomPanel::setup_holdings_tab() {
             [this]() { emit replicate_portfolio_requested(); });
     strip_layout->addWidget(holdings_replicate_btn_);
 
+    // SQUARE OFF ALL — sells every holding (delivery/CNC) at market. Mirrors the
+    // Positions tab button, but acts ONLY on holdings; positions are untouched.
+    holdings_square_off_btn_ = new QPushButton(tr("SQUARE OFF ALL"));
+    holdings_square_off_btn_->setCursor(Qt::PointingHandCursor);
+    holdings_square_off_btn_->setEnabled(false);
+    holdings_square_off_btn_->setStyleSheet(
+        QString("QPushButton{background:rgba(220,38,38,0.12);color:%1;border:1px solid %2;"
+                "padding:4px 14px;font-size:11px;font-weight:700;letter-spacing:0.5px;border-radius:2px;}"
+                "QPushButton:hover{background:rgba(220,38,38,0.25);}"
+                "QPushButton:disabled{color:%3;border-color:%2;}")
+            .arg(fincept::ui::colors::NEGATIVE(), fincept::ui::colors::NEGATIVE_DIM(),
+                 fincept::ui::colors::TEXT_SECONDARY()));
+    connect(holdings_square_off_btn_, &QPushButton::clicked, this, [this]() {
+        LOG_INFO("sqoff", QString("[panel] SQUARE OFF ALL clicked: account_id='%1' holdings=%2")
+                              .arg(account_id_)
+                              .arg(last_holdings_.size()));
+        if (account_id_.isEmpty() || last_holdings_.isEmpty())
+            return;
+        auto answer = QMessageBox::warning(
+            this, tr("Square Off All Holdings"),
+            tr("This will place MARKET SELL orders to exit ALL %1 holding(s).\n\n"
+               "Positions are NOT affected. Are you sure?")
+                .arg(last_holdings_.size()),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (answer != QMessageBox::Yes)
+            return;
+        emit square_off_all_holdings_requested(last_holdings_);
+    });
+    strip_layout->addWidget(holdings_square_off_btn_);
+
     v->addWidget(strip);
 
     holdings_table_ = new QTableWidget;
     holdings_table_->setObjectName("eqTable");
-    holdings_table_->setColumnCount(8);
-    holdings_table_->setHorizontalHeaderLabels(
-        {tr("Symbol"), tr("Qty"), tr("Avg Price"), tr("LTP"), tr("Invested"), tr("Current"), tr("P&L"), tr("P&L %")});
+    holdings_table_->setColumnCount(9);
+    holdings_table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Qty"), tr("Avg Price"), tr("LTP"),
+                                                tr("Invested"), tr("Current"), tr("P&L"), tr("P&L %"),
+                                                tr("Action")});
     holdings_table_->verticalHeader()->setVisible(false);
     holdings_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     holdings_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -660,12 +692,31 @@ void EquityBottomPanel::setup_stats_tab() {
 
 // ── Data Setters ───────────────────────────────────────────────────────────
 
+void EquityBottomPanel::clear_blotter_tables() {
+    if (positions_table_) positions_table_->setRowCount(0);
+    if (holdings_table_)  holdings_table_->setRowCount(0);
+    if (orders_table_)    orders_table_->setRowCount(0);
+    last_positions_.clear();
+    last_paper_positions_.clear();
+    last_holdings_.clear();
+    update_positions_summary(); // zero the net-P&L / winners-losers strip
+}
+
 void EquityBottomPanel::set_mode(bool is_paper) {
+    if (is_paper_ == is_paper)
+        return;
     is_paper_ = is_paper;
+    // Paper and live share the same tables — clear so the previous mode's rows
+    // can't linger under the new one until fresh data arrives.
+    clear_blotter_tables();
 }
 
 void EquityBottomPanel::set_account_id(const QString& account_id) {
+    if (account_id_ == account_id)
+        return;
     account_id_ = account_id;
+    // Different account → drop the previous account's positions/holdings/orders.
+    clear_blotter_tables();
 }
 
 void EquityBottomPanel::set_currency(const QString& sym) {
@@ -887,8 +938,12 @@ QWidget* EquityBottomPanel::make_positions_action_cell(const QString& symbol, co
                             .arg(fincept::ui::colors::NEGATIVE(), fincept::ui::colors::BORDER_MED()));
     const double held = qAbs(qty);
     const QString prod = product.isEmpty() ? QStringLiteral("MIS") : product;
-    connect(sell, &QPushButton::clicked, this,
-            [this, symbol, prod, held]() { emit trade_symbol_requested(symbol, prod, false, held); });
+    connect(sell, &QPushButton::clicked, this, [this, symbol, prod, held]() {
+        LOG_INFO("sqoff", QString("[panel] per-row SELL clicked: sym='%1' prod='%2' qty=%3")
+                              .arg(symbol, prod)
+                              .arg(held));
+        emit trade_symbol_requested(symbol, prod, false, held);
+    });
     lay->addWidget(sell);
 
     // Paper intraday only: convert MIS → CNC (carry overnight).
@@ -1097,6 +1152,8 @@ void EquityBottomPanel::set_holdings(const QVector<trading::BrokerHolding>& hold
     last_holdings_ = holdings;
     if (holdings_import_btn_)
         holdings_import_btn_->setEnabled(!holdings.isEmpty());
+    if (holdings_square_off_btn_)
+        holdings_square_off_btn_->setEnabled(!holdings.isEmpty());
 
     // Disable sorting during population so setItem assignments stay at intended rows.
     const bool was_sorting = holdings_table_->isSortingEnabled();
@@ -1133,6 +1190,32 @@ void EquityBottomPanel::set_holdings(const QVector<trading::BrokerHolding>& hold
         pct_item->setData(Qt::DisplayRole, QString("%1%").arg(h.pnl_pct, 0, 'f', 2));
         pct_item->setData(Qt::EditRole, h.pnl_pct);
         pct_item->setForeground(h.pnl_pct >= 0 ? pos_color : neg_color);
+
+        // Per-row SELL → square off just this holding (market, CNC). Routed through
+        // the screen's close_position path (same as SQUARE OFF ALL) so it reliably
+        // reduces the holding instead of opening a counter-position.
+        auto* action_cell = new QWidget;
+        auto* action_lay = new QHBoxLayout(action_cell);
+        action_lay->setContentsMargins(2, 0, 2, 0);
+        action_lay->setSpacing(4);
+        auto* sell_btn = new QPushButton(tr("SELL"));
+        sell_btn->setObjectName("eqTableBtn");
+        sell_btn->setFixedHeight(18);
+        sell_btn->setCursor(Qt::PointingHandCursor);
+        sell_btn->setToolTip(tr("Square off %1 — sells the full holding at market").arg(h.symbol));
+        sell_btn->setStyleSheet(QString("QPushButton#eqTableBtn{background:rgba(239,68,68,0.15);color:%1;"
+                                        "border:1px solid %2;font-size:10px;padding:0 6px;border-radius:2px;}"
+                                        "QPushButton#eqTableBtn:hover{background:rgba(239,68,68,0.30);}")
+                                    .arg(fincept::ui::colors::NEGATIVE(), fincept::ui::colors::BORDER_MED()));
+        const QString row_sym = h.symbol;
+        const QString row_exch = h.exchange;
+        connect(sell_btn, &QPushButton::clicked, this, [this, row_sym, row_exch]() {
+            LOG_INFO("sqoff", QString("[panel] per-row SELL clicked: sym='%1' exch='%2'").arg(row_sym, row_exch));
+            emit square_off_holding_requested(row_sym, row_exch);
+        });
+        action_lay->addWidget(sell_btn);
+        action_lay->addStretch();
+        holdings_table_->setCellWidget(i, 8, action_cell);
 
         total_invested += h.invested_value;
         total_current  += h.current_value;

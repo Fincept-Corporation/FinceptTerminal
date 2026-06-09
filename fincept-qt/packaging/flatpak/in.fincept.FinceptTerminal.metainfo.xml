@@ -71,6 +71,11 @@
   </provides>
 
   <releases>
+    <release version="4.1.0" date="2026-06-09">
+      <description>
+        <p>Adds an optional NewsAPI.org provider for stock-specific company news in Equity Research, broker-sourced technical indicators, and assorted fixes. Removes the redundant TALIpp tab.</p>
+      </description>
+    </release>
     <release version="4.0.3" date="2026-05-25">
       <description>
         <p>Patch release with bug fixes, new provider integrations, and i18n improvements.</p>

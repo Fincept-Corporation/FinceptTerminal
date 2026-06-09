@@ -151,7 +151,12 @@ Result<qint64> PortfolioRepository::add_asset(const QString& portfolio_id, const
     if (existing.is_ok() && !existing.value().isEmpty()) {
         auto& asset = existing.value().first();
         double new_qty = asset.quantity + qty;
-        double new_avg = ((asset.avg_buy_price * asset.quantity) + (price * qty)) / new_qty;
+        // Guard the weighted-average against a zero/near-zero total quantity — a
+        // 0/0 here would write NaN into avg_buy_price and poison every portfolio
+        // total downstream.
+        double new_avg = (new_qty > 1e-9)
+                             ? ((asset.avg_buy_price * asset.quantity) + (price * qty)) / new_qty
+                             : asset.avg_buy_price;
         QString merged_sector = sector.isEmpty() ? asset.sector : sector;
         QString merged_broker_symbol = broker_symbol.isEmpty() ? asset.broker_symbol : broker_symbol;
         QString merged_exchange = exchange.isEmpty() ? asset.exchange : exchange;

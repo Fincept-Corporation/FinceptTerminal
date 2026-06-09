@@ -44,7 +44,7 @@ using namespace fincept::ui;
 
 static const QList<fincept::mcp::MarketplaceEntry>& g_catalog = fincept::mcp::marketplace_catalog();
 
-inline QString kStyle() {
+[[maybe_unused]] inline QString kStyle() {
     return QString(
 
                // Screen / header

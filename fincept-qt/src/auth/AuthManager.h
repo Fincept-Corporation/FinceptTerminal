@@ -28,6 +28,12 @@ class AuthManager : public QObject {
 
     // Auth flows
     void login(const QString& email, const QString& password, bool force_login = false);
+
+    /// Desktop Google sign-in via the website loopback handoff. Opens the
+    /// browser, redeems the returned one-time code, then drives the same
+    /// post-login flow as login() (emits login_succeeded / login_failed).
+    void login_with_google();
+
     void signup(const QString& username, const QString& email, const QString& password, const QString& phone,
                 const QString& country = {}, const QString& country_code = {});
     void verify_otp(const QString& email, const QString& otp);
@@ -85,6 +91,9 @@ class AuthManager : public QObject {
     void fetch_user_profile(std::function<void()> on_done = {});
     void fetch_user_subscription(std::function<void()> on_done = {});
     void complete_auth_flow(std::function<void()> on_done);
+    /// Inject a redeemed desktop-handoff session (api_key + session_token) and
+    /// run the shared post-login flow. Shared by login_with_google().
+    void complete_desktop_login(const QString& api_key, const QString& session_token);
     void auto_configure_fincept_llm();
     QString generate_device_id() const;
     QJsonObject unwrap_data(const QJsonObject& raw) const;

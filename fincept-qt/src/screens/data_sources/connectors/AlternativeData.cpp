@@ -1,5 +1,5 @@
-// Alternative Data connectors (9): RavenPack, Bloomberg Second Measure, SafeGraph, Orbital Insight,
-// Refinitiv Tick History, Earnest Research, Thinknum, Revelio Labs, Adanos Market Sentiment
+// Alternative Data connectors (10): RavenPack, Bloomberg Second Measure, SafeGraph, Orbital Insight,
+// Refinitiv Tick History, Earnest Research, Thinknum, Revelio Labs, Adanos Market Sentiment, NewsAPI
 #include "screens/data_sources/ConnectorRegistry.h"
 
 namespace fincept::screens::datasources {
@@ -178,6 +178,18 @@ static QVector<ConnectorConfig> alt_data_configs() {
          true,
          {{"apiKey", "API Key", FieldType::Password, "sk_live_...", true, "", {}},
           {"defaultUniverse", "Default Universe (optional)", FieldType::Text, "AAPL,MSFT,NVDA", false, "", {}}}},
+
+        {"newsapi",
+         "NewsAPI.org",
+         "newsapi",
+         Category::AlternativeData,
+         "N",
+         "#C4302B",
+         "Stock and company news from 150k+ sources via newsapi.org. Optional provider in the Equity "
+         "Research → News tab; get a free key at newsapi.org.",
+         true,
+         true,
+         {{"apiKey", "API Key", FieldType::Password, "your-newsapi-key", true, "", {}}}},
     };
 }
 

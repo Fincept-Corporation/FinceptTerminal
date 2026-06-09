@@ -1,6 +1,7 @@
 #include "auth/AuthManager.h"
 
 #include "auth/AuthApi.h"
+#include "auth/GoogleDesktopLogin.h"
 #include "auth/PinManager.h"
 #include "auth/UserApi.h"
 #include "core/logging/Logger.h"
@@ -357,6 +358,55 @@ void AuthManager::login(const QString& email, const QString& password, bool forc
         // Fetch profile then subscription; on_done emits login_succeeded
         fetch_user_profile([this] { emit login_succeeded(); });
     });
+}
+
+// ── Google desktop login (website loopback handoff) ──────────────────────────
+
+void AuthManager::login_with_google() {
+    set_loading(true);
+
+    // Owned by AuthManager; self-deletes after emitting code_received/failed.
+    auto* flow = new GoogleDesktopLogin(this);
+
+    connect(flow, &GoogleDesktopLogin::code_received, this, [this](const QString& code) {
+        AuthApi::instance().redeem_desktop_handoff(code, [this](ApiResponse r) {
+            if (!r.success) {
+                set_loading(false);
+                emit login_failed(r.error.isEmpty() ? "Google login failed" : r.error);
+                return;
+            }
+            const auto data = unwrap_data(r.data);
+            complete_desktop_login(data["api_key"].toString(), data["session_token"].toString());
+        });
+    });
+
+    connect(flow, &GoogleDesktopLogin::failed, this, [this](const QString& message) {
+        set_loading(false);
+        emit login_failed(message);
+    });
+
+    flow->start();
+}
+
+void AuthManager::complete_desktop_login(const QString& api_key, const QString& session_token) {
+    if (api_key.isEmpty()) {
+        set_loading(false);
+        emit login_failed("No API key returned from server");
+        return;
+    }
+
+    // Mirror the login() success tail exactly so the desktop handoff lands in
+    // the same post-login machinery (profile + subscription fetch, save_session,
+    // fincept LLM auto-config, login_succeeded).
+    apply_tokens(api_key, session_token);
+
+    session_.authenticated = true;
+    session_.api_key = api_key;
+    session_.session_token = session_token;
+    session_.device_id = generate_device_id();
+
+    LOG_INFO("Auth", "Desktop (Google) login successful");
+    fetch_user_profile([this] { emit login_succeeded(); });
 }
 
 // ── Signup ───────────────────────────────────────────────────────────────────

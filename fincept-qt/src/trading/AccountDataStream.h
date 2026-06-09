@@ -37,6 +37,15 @@ class AccountDataStream : public QObject {
     void resume();  // Restart timers (screen shown)
     bool is_running() const { return running_; }
 
+    // Force an immediate one-shot refresh of positions / holdings / orders /
+    // funds, bypassing the ADS_PORTFOLIO_POLL_MS (5-min) poll cadence. Called on
+    // UI transitions where the stream is already running so start()/resume()
+    // won't re-fetch on their own — screen reopen, account switch, paper↔live
+    // toggle. Without it the blotter shows stale (or, after a context clear,
+    // blank) data until the next poll. Each underlying fetch self-guards on
+    // credentials, so this is a no-op for an unconfigured account.
+    void refresh_portfolio_now();
+
     // --- Symbol management (multi-consumer) ---
     // Each consumer ("equity:watchlist", "algo:<deploymentId>", …) owns an
     // independent symbol set. The WS/poll universe is the UNION across all

@@ -7,7 +7,10 @@ on:
 env:
   BUILD_TYPE: Release
   QT_VERSION: "6.8.3"
-  QT_MODULES: "qtcharts qtwebsockets qtmultimedia qtwebengine qtwebchannel qtpositioning"
+  # qtserialport: the qtpositioning NMEA plugin (libqtposition_nmea) links
+  # Qt6SerialPort; without it linuxdeploy/macdeployqt/windeployqt fail resolving
+  # libQt6SerialPort. The app doesn't use serial GPS — this just satisfies deploy.
+  QT_MODULES: "qtcharts qtwebsockets qtmultimedia qtwebengine qtwebchannel qtpositioning qtserialport"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -108,21 +111,32 @@ jobs:
           echo "CC=gcc-12"  >> "$GITHUB_ENV"
           echo "CXX=g++-12" >> "$GITHUB_ENV"
 
-      # ---- OpenSSL dev libs (Windows) ----
+      # ---- OpenSSL + zlib dev libs (Windows) ----
       # windows-2022 runners ship only the "Light" OpenSSL (no .lib files).
       # vcpkg is pre-installed on every windows-2022 runner at C:\vcpkg.
-      - name: Install OpenSSL (Windows)
+      # zlib is required by find_package(ZLIB) (InstrumentDecompress.cpp).
+      - name: Install OpenSSL + zlib (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
           set -euo pipefail
           VCPKG_ROOT="${VCPKG_INSTALLATION_ROOT:-C:/vcpkg}"
           echo "Using vcpkg at: $VCPKG_ROOT"
-          "$VCPKG_ROOT/vcpkg" install openssl:x64-windows --no-print-usage
+          "$VCPKG_ROOT/vcpkg" install openssl:x64-windows zlib:x64-windows --no-print-usage
           OPENSSL_DIR="$VCPKG_ROOT/installed/x64-windows"
           echo "OPENSSL_ROOT_DIR=$OPENSSL_DIR" >> "$GITHUB_ENV"
-          echo "OpenSSL installed at: $OPENSSL_DIR"
+          echo "ZLIB_ROOT=$OPENSSL_DIR" >> "$GITHUB_ENV"
+          echo "OpenSSL + zlib installed at: $OPENSSL_DIR"
           ls "$OPENSSL_DIR/lib/libcrypto.lib" && echo "libcrypto.lib confirmed"
+          # zlib: find_package(ZLIB) (no FIND_LIBRARY_PREFIXES override in our CMake)
+          # locates the release import lib via ZLIB_ROOT, searching name "zlib".
+          # vcpkg normally installs lib/zlib.lib; if this build named it differently,
+          # alias it so the lookup can't miss. Diagnostic listing is non-fatal.
+          if [ ! -f "$OPENSSL_DIR/lib/zlib.lib" ]; then
+            ALT="$(ls "$OPENSSL_DIR"/lib/*.lib 2>/dev/null | grep -iE 'z(lib)?[0-9]*\.lib$' | head -1 || true)"
+            if [ -n "$ALT" ]; then cp "$ALT" "$OPENSSL_DIR/lib/zlib.lib"; echo "Aliased $(basename "$ALT") -> zlib.lib"; fi
+          fi
+          ls -la "$OPENSSL_DIR"/lib/ | grep -i zlib || echo "::warning::no zlib import lib found in $OPENSSL_DIR/lib"
 
       # ---- Qt6 target (Windows/macOS) ----
       - name: Install Qt6
@@ -309,6 +323,18 @@ jobs:
             if [ -f "${QT_BIN}/${ssl_dll}" ] && [ ! -f "dist/${ssl_dll}" ]; then
               cp "${QT_BIN}/${ssl_dll}" dist/
               echo "Copied ${ssl_dll}"
+            fi
+          done
+
+          # zlib — find_package(ZLIB) links zlib1.dll (vcpkg, dynamic); not a Qt
+          # DLL, so windeployqt skips it. Copy from the vcpkg install or Qt bin/.
+          for zlib_dll in zlib1.dll; do
+            if [ -n "${ZLIB_ROOT:-}" ] && [ -f "${ZLIB_ROOT}/bin/${zlib_dll}" ] && [ ! -f "dist/${zlib_dll}" ]; then
+              cp "${ZLIB_ROOT}/bin/${zlib_dll}" dist/
+              echo "Copied ${zlib_dll}"
+            elif [ -f "${QT_BIN}/${zlib_dll}" ] && [ ! -f "dist/${zlib_dll}" ]; then
+              cp "${QT_BIN}/${zlib_dll}" dist/
+              echo "Copied ${zlib_dll}"
             fi
           done
 
@@ -552,8 +578,8 @@ jobs:
             <key>CFBundleIdentifier</key><string>com.fincept.terminal</string>
             <key>CFBundleName</key><string>FinceptTerminal</string>
             <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>4.0.3</string>
-            <key>CFBundleVersion</key><string>4.0.3</string>
+            <key>CFBundleShortVersionString</key><string>4.1.0</string>
+            <key>CFBundleVersion</key><string>4.1.0</string>
             <key>LSMinimumSystemVersion</key><string>13.0</string>
             <key>NSHighResolutionCapable</key><true/>
           </dict></plist>

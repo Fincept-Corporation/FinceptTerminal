@@ -155,6 +155,14 @@ void EquityTradingScreen::showEvent(QShowEvent* event) {
     // Hub subscriptions for streaming data (D4)
     hub_subscribe_streaming();
 
+    // On REOPEN (not first show — init_focused_account handles that), the stream
+    // stayed running while hidden, so neither start() nor resume() re-fetches the
+    // portfolio. Force an immediate live refresh so Holdings/Positions/Orders show
+    // current broker data right away instead of staying stale (or blank) until the
+    // 5-min poll. Paper data is repainted by refresh_paper_panels() just below.
+    if (initialized_ && !focused_is_paper_ && !focused_account_id_.isEmpty())
+        DataStreamManager::instance().refresh_portfolio(focused_account_id_);
+
     // Catch up intraday auto-square for paper portfolios (e.g. the app was closed
     // at 15:30, so yesterday's MIS positions never squared). Refresh picks up the
     // resulting state; it no-ops for live accounts.
@@ -431,6 +439,10 @@ void EquityTradingScreen::setup_ui() {
             [this](const QString&) { on_cancel_all_orders(); });
     connect(bottom_panel_, &EquityBottomPanel::close_all_positions_requested, this,
             [this](const QString&) { on_close_all_positions(); });
+    connect(bottom_panel_, &EquityBottomPanel::square_off_all_holdings_requested, this,
+            &EquityTradingScreen::on_square_off_all_holdings);
+    connect(bottom_panel_, &EquityBottomPanel::square_off_holding_requested, this,
+            &EquityTradingScreen::on_square_off_holding);
     connect(bottom_panel_, &EquityBottomPanel::import_holdings_requested, this, &EquityTradingScreen::on_import_holdings_requested);
     connect(bottom_panel_, &EquityBottomPanel::replicate_portfolio_requested, this,
             &EquityTradingScreen::on_replicate_portfolio_requested);

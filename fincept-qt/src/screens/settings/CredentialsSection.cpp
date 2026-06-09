@@ -141,7 +141,7 @@ void CredentialsSection::build_ui() {
         bhl->addWidget(save_btn);
         cred_save_btns_[key] = save_btn;
 
-        connect(save_btn, &QPushButton::clicked, this, [this, key, field, status_lbl]() {
+        connect(save_btn, &QPushButton::clicked, this, [key, field, status_lbl]() {
             QString val = field->text().trimmed();
             if (val.isEmpty()) {
                 SecureStorage::instance().remove(key);
