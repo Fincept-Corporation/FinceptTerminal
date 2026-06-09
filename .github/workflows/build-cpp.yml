@@ -7,7 +7,10 @@ on:
 env:
   BUILD_TYPE: Release
   QT_VERSION: "6.8.3"
-  QT_MODULES: "qtcharts qtwebsockets qtmultimedia qtwebengine qtwebchannel qtpositioning"
+  # qtserialport: the qtpositioning NMEA plugin (libqtposition_nmea) links
+  # Qt6SerialPort; without it linuxdeploy/macdeployqt/windeployqt fail resolving
+  # libQt6SerialPort. The app doesn't use serial GPS — this just satisfies deploy.
+  QT_MODULES: "qtcharts qtwebsockets qtmultimedia qtwebengine qtwebchannel qtpositioning qtserialport"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -125,7 +128,15 @@ jobs:
           echo "ZLIB_ROOT=$OPENSSL_DIR" >> "$GITHUB_ENV"
           echo "OpenSSL + zlib installed at: $OPENSSL_DIR"
           ls "$OPENSSL_DIR/lib/libcrypto.lib" && echo "libcrypto.lib confirmed"
-          ls "$OPENSSL_DIR/lib/zlib.lib" && echo "zlib.lib confirmed"
+          # zlib: find_package(ZLIB) (no FIND_LIBRARY_PREFIXES override in our CMake)
+          # locates the release import lib via ZLIB_ROOT, searching name "zlib".
+          # vcpkg normally installs lib/zlib.lib; if this build named it differently,
+          # alias it so the lookup can't miss. Diagnostic listing is non-fatal.
+          if [ ! -f "$OPENSSL_DIR/lib/zlib.lib" ]; then
+            ALT="$(ls "$OPENSSL_DIR"/lib/*.lib 2>/dev/null | grep -iE 'z(lib)?[0-9]*\.lib$' | head -1 || true)"
+            if [ -n "$ALT" ]; then cp "$ALT" "$OPENSSL_DIR/lib/zlib.lib"; echo "Aliased $(basename "$ALT") -> zlib.lib"; fi
+          fi
+          ls -la "$OPENSSL_DIR"/lib/ | grep -i zlib || echo "::warning::no zlib import lib found in $OPENSSL_DIR/lib"
 
       # ---- Qt6 target (Windows/macOS) ----
       - name: Install Qt6

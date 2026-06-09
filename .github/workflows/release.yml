@@ -14,7 +14,10 @@ on:
 env:
   BUILD_TYPE: Release
   QT_VERSION: "6.8.3"
-  QT_MODULES: "qtcharts qtwebsockets qtmultimedia qtwebengine qtwebchannel qtpositioning"
+  # qtserialport: the qtpositioning NMEA plugin (libqtposition_nmea) links
+  # Qt6SerialPort; without it linuxdeploy/macdeployqt/windeployqt fail resolving
+  # libQt6SerialPort. The app doesn't use serial GPS — this just satisfies deploy.
+  QT_MODULES: "qtcharts qtwebsockets qtmultimedia qtwebengine qtwebchannel qtpositioning qtserialport"
   QT_IFW_VERSION: "4.7"
   QT_IFW_TOOL: "tools_ifw"
   APP_NAME: FinceptTerminal
@@ -48,7 +51,15 @@ jobs:
           echo "OPENSSL_ROOT_DIR=$OPENSSL_DIR" >> "$GITHUB_ENV"
           echo "ZLIB_ROOT=$OPENSSL_DIR" >> "$GITHUB_ENV"
           ls "$OPENSSL_DIR/lib/libcrypto.lib" && echo "libcrypto.lib confirmed"
-          ls "$OPENSSL_DIR/lib/zlib.lib" && echo "zlib.lib confirmed"
+          # zlib: find_package(ZLIB) (no FIND_LIBRARY_PREFIXES override in our CMake)
+          # locates the release import lib via ZLIB_ROOT, searching name "zlib".
+          # vcpkg normally installs lib/zlib.lib; if this build named it differently,
+          # alias it so the lookup can't miss. Diagnostic listing is non-fatal.
+          if [ ! -f "$OPENSSL_DIR/lib/zlib.lib" ]; then
+            ALT="$(ls "$OPENSSL_DIR"/lib/*.lib 2>/dev/null | grep -iE 'z(lib)?[0-9]*\.lib$' | head -1 || true)"
+            if [ -n "$ALT" ]; then cp "$ALT" "$OPENSSL_DIR/lib/zlib.lib"; echo "Aliased $(basename "$ALT") -> zlib.lib"; fi
+          fi
+          ls -la "$OPENSSL_DIR"/lib/ | grep -i zlib || echo "::warning::no zlib import lib found in $OPENSSL_DIR/lib"
 
       # ── Qt ────────────────────────────────────────────────────────────────
       - name: Install Qt ${{ env.QT_VERSION }}
@@ -1547,7 +1558,15 @@ jobs:
                 -D CPACK_PACKAGE_FILE_NAME="${BASENAME}" --verbose )
 
           WIZ_APP="build/${BASENAME}.app"
-          [ -d "${WIZ_APP}" ] || { echo "::error::IFW installer not produced"; ls -la build; exit 1; }
+          # CPack's IFW generator emits a .dmg on macOS (not a raw .app bundle), so
+          # the .app-based sign/notarize path below doesn't apply. This optional
+          # "wizard" installer is additive to the signed -setup.dmg (next step) and
+          # this path is not yet validated for the .dmg output — skip gracefully
+          # rather than fail the release. (See the step's NOTE above.)
+          if [ ! -d "${WIZ_APP}" ]; then
+            echo "::warning::macOS IFW wizard .app not produced (cpack emitted: $(ls build/${BASENAME}.* 2>/dev/null | xargs -n1 basename 2>/dev/null | tr '\n' ' ')). Skipping optional wizard installer; signed -setup.dmg is unaffected."
+            exit 0
+          fi
 
           # Sign the installer app's own Mach-Os leaf-first (the payload is an
           # embedded archive that is already signed+notarized+stapled).
