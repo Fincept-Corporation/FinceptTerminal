@@ -32,7 +32,7 @@ void HorizontalLineLayer::attach(QGraphicsScene* scene, QChart* chart) {
     reposition(chart);
 }
 
-void HorizontalLineLayer::detach(QGraphicsScene* scene, QChart*) {
+void HorizontalLineLayer::detach(QGraphicsScene*, QChart*) {
     clear_items();
     scene_ = nullptr;
     chart_ = nullptr;

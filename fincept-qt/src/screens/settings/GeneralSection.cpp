@@ -21,7 +21,7 @@ namespace fincept::screens {
 namespace {
 constexpr const char* kKeyOnClose       = "general.on_last_window_close";
 constexpr const char* kDefaultOnClose   = "quit";
-constexpr const char* kKeyLanguage      = "general.language";
+[[maybe_unused]] constexpr const char* kKeyLanguage      = "general.language";
 constexpr const char* kDefaultLanguage  = "en";
 
 // make_row() builds the label (and optional description) QLabel internally and

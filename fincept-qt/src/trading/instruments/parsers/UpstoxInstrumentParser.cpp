@@ -94,7 +94,7 @@ QVector<Instrument> parse_upstox(const QByteArray& json) {
         QString exp_nd;
         const qint64 exp_ms = static_cast<qint64>(o.value("expiry").toDouble());
         if (exp_ms > 0) {
-            const QDate d = QDateTime::fromMSecsSinceEpoch(exp_ms, Qt::UTC).date();
+            const QDate d = QDateTime::fromMSecsSinceEpoch(exp_ms, QTimeZone::UTC).date();
             exp_nd = norm::expiry_to_nodash(d.toString("yyyy-MM-dd"));
             inst.expiry = norm::nodash_to_display(exp_nd);
         }

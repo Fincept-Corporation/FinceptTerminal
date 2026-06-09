@@ -28,7 +28,7 @@ AdapterResult nb_ok() {
     r.ok = true;
     return r;
 }
-AdapterResult nb_retry(const QString& why) {
+[[maybe_unused]] AdapterResult nb_retry(const QString& why) {
     AdapterResult r;
     r.retry = true;
     r.error = why;

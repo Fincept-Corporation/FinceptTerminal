@@ -95,7 +95,7 @@ QJsonObject cell_to_json(const screens::GridCell& c) {
                         {"min_w", c.min_w}, {"min_h", c.min_h}};
 }
 
-screens::GridCell json_to_cell(const QJsonObject& j, const screens::GridCell& fallback = {}) {
+[[maybe_unused]] screens::GridCell json_to_cell(const QJsonObject& j, const screens::GridCell& fallback = {}) {
     screens::GridCell c = fallback;
     if (j.contains("x"))     c.x = j["x"].toInt();
     if (j.contains("y"))     c.y = j["y"].toInt();

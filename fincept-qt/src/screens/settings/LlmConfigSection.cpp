@@ -30,7 +30,7 @@
 
 namespace fincept::screens {
 
-static constexpr const char* TAG = "LlmConfigSection";
+[[maybe_unused]] static constexpr const char* TAG = "LlmConfigSection";
 
 
 const QStringList LlmConfigSection::KNOWN_PROVIDERS = {"openai",  "anthropic", "gemini",   "groq",  "deepseek",

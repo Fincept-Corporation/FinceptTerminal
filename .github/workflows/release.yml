@@ -35,16 +35,20 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
-      # ── OpenSSL dev libs ──────────────────────────────────────────────────
-      - name: Install OpenSSL
+      # ── OpenSSL + zlib dev libs ───────────────────────────────────────────
+      # zlib is required by find_package(ZLIB) (InstrumentDecompress.cpp); the
+      # build points CMake at vcpkg via *_ROOT vars (no vcpkg toolchain file).
+      - name: Install OpenSSL + zlib
         shell: bash
         run: |
           set -euo pipefail
           VCPKG_ROOT="${VCPKG_INSTALLATION_ROOT:-C:/vcpkg}"
-          "$VCPKG_ROOT/vcpkg" install openssl:x64-windows --no-print-usage
+          "$VCPKG_ROOT/vcpkg" install openssl:x64-windows zlib:x64-windows --no-print-usage
           OPENSSL_DIR="$VCPKG_ROOT/installed/x64-windows"
           echo "OPENSSL_ROOT_DIR=$OPENSSL_DIR" >> "$GITHUB_ENV"
+          echo "ZLIB_ROOT=$OPENSSL_DIR" >> "$GITHUB_ENV"
           ls "$OPENSSL_DIR/lib/libcrypto.lib" && echo "libcrypto.lib confirmed"
+          ls "$OPENSSL_DIR/lib/zlib.lib" && echo "zlib.lib confirmed"
 
       # ── Qt ────────────────────────────────────────────────────────────────
       - name: Install Qt ${{ env.QT_VERSION }}
@@ -147,6 +151,15 @@ jobs:
               cp "${QT_BIN}/${ssl_dll}" "${BUILD_DIR}/" || true
             [ -f "${OPENSSL_ROOT_DIR}/bin/${ssl_dll}" ] && [ ! -f "${BUILD_DIR}/${ssl_dll}" ] && \
               cp "${OPENSSL_ROOT_DIR}/bin/${ssl_dll}" "${BUILD_DIR}/" || true
+          done
+
+          # zlib — find_package(ZLIB) links zlib1.dll (vcpkg, dynamic). windeployqt
+          # won't grab a non-Qt dep, so copy it from the vcpkg install or Qt bin/.
+          for zlib_dll in zlib1.dll zlibd1.dll; do
+            [ -n "${ZLIB_ROOT:-}" ] && [ -f "${ZLIB_ROOT}/bin/${zlib_dll}" ] && [ ! -f "${BUILD_DIR}/${zlib_dll}" ] && \
+              cp "${ZLIB_ROOT}/bin/${zlib_dll}" "${BUILD_DIR}/" || true
+            [ -f "${QT_BIN}/${zlib_dll}" ] && [ ! -f "${BUILD_DIR}/${zlib_dll}" ] && \
+              cp "${QT_BIN}/${zlib_dll}" "${BUILD_DIR}/" || true
           done
 
           # MSVC runtime — --compiler-runtime covers most but not all VS2022 17.x

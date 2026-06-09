@@ -67,9 +67,9 @@ class SectorCardClickForwarder : public QObject {
 // English source keys returned by verdict_for_*. Translated to display strings
 // in the rendering code below (kept English here so verdict_color can pattern-
 // match without depending on the active locale).
-constexpr const char* kVerdictDiversified  = "Diversified";
-constexpr const char* kVerdictBalanced     = "Balanced";
-constexpr const char* kVerdictConcentrated = "Concentrated";
+[[maybe_unused]] constexpr const char* kVerdictDiversified  = "Diversified";
+[[maybe_unused]] constexpr const char* kVerdictBalanced     = "Balanced";
+[[maybe_unused]] constexpr const char* kVerdictConcentrated = "Concentrated";
 
 QString verdict_for_hhi(double hhi) {
     // HHI convention uses fractions of 10,000; we use percent-squared so

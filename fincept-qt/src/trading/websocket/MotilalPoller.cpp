@@ -100,7 +100,7 @@ void MotilalPoller::poll_once() {
     // P8: QPointer guard — the poller may be destroyed before the worker
     // lambda runs; bail out instead of dereferencing a dangling this.
     QPointer<MotilalPoller> self = this;
-    QtConcurrent::run([self, creds, symbols]() {
+    (void)QtConcurrent::run([self, creds, symbols]() {
         IBroker* broker = BrokerRegistry::instance().get("motilal");
         ApiResponse<QVector<BrokerQuote>> resp;
         if (broker)

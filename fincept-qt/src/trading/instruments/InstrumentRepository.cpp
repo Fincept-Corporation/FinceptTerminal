@@ -245,7 +245,7 @@ QDateTime InstrumentRepository::last_updated(const QString& broker_id) const {
     if (!q.next() || q.value(0).isNull())
         return {};
     QDateTime dt = QDateTime::fromString(q.value(0).toString(), "yyyy-MM-dd HH:mm:ss");
-    dt.setTimeSpec(Qt::UTC); // updated_at is written as datetime('now') (UTC)
+    dt.setTimeZone(QTimeZone::UTC); // updated_at is written as datetime('now') (UTC)
     return dt;
 }
 

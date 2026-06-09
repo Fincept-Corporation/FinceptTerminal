@@ -228,7 +228,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
                                .arg(ui::fonts::TINY)
                                .arg(module_.color.name())
                                .arg(ui::colors::BG_BASE()));
-    connect(mcp_btn, &QPushButton::toggled, this, [this, mcp_btn, status_txt](bool checked) {
+    connect(mcp_btn, &QPushButton::toggled, this, [mcp_btn, status_txt](bool checked) {
         if (checked) {
             status_txt->setText(tr("Starting MCP tool server..."));
             AIQuantLabService::instance().rd_agent_start_mcp_server();

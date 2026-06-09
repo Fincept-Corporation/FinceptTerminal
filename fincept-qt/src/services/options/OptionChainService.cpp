@@ -661,7 +661,7 @@ void OptionChainService::refresh_chain_fyers(const QString& broker_id, const QSt
         int month = kMon.value(expiry.mid(3, 3).toUpper(), 0);
         int year = 2000 + QStringView(expiry).mid(7, 2).toInt();
         if (month > 0) {
-            QDateTime dt(QDate(year, month, day), QTime(15, 30), Qt::UTC);
+            QDateTime dt(QDate(year, month, day), QTime(15, 30), QTimeZone::UTC);
             constexpr int kIstOffset = 5 * 3600 + 30 * 60;
             expiry_ts = dt.toSecsSinceEpoch() - kIstOffset;
         }

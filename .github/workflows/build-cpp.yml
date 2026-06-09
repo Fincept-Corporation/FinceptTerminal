@@ -108,21 +108,24 @@ jobs:
           echo "CC=gcc-12"  >> "$GITHUB_ENV"
           echo "CXX=g++-12" >> "$GITHUB_ENV"
 
-      # ---- OpenSSL dev libs (Windows) ----
+      # ---- OpenSSL + zlib dev libs (Windows) ----
       # windows-2022 runners ship only the "Light" OpenSSL (no .lib files).
       # vcpkg is pre-installed on every windows-2022 runner at C:\vcpkg.
-      - name: Install OpenSSL (Windows)
+      # zlib is required by find_package(ZLIB) (InstrumentDecompress.cpp).
+      - name: Install OpenSSL + zlib (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
           set -euo pipefail
           VCPKG_ROOT="${VCPKG_INSTALLATION_ROOT:-C:/vcpkg}"
           echo "Using vcpkg at: $VCPKG_ROOT"
-          "$VCPKG_ROOT/vcpkg" install openssl:x64-windows --no-print-usage
+          "$VCPKG_ROOT/vcpkg" install openssl:x64-windows zlib:x64-windows --no-print-usage
           OPENSSL_DIR="$VCPKG_ROOT/installed/x64-windows"
           echo "OPENSSL_ROOT_DIR=$OPENSSL_DIR" >> "$GITHUB_ENV"
-          echo "OpenSSL installed at: $OPENSSL_DIR"
+          echo "ZLIB_ROOT=$OPENSSL_DIR" >> "$GITHUB_ENV"
+          echo "OpenSSL + zlib installed at: $OPENSSL_DIR"
           ls "$OPENSSL_DIR/lib/libcrypto.lib" && echo "libcrypto.lib confirmed"
+          ls "$OPENSSL_DIR/lib/zlib.lib" && echo "zlib.lib confirmed"
 
       # ---- Qt6 target (Windows/macOS) ----
       - name: Install Qt6
@@ -309,6 +312,18 @@ jobs:
             if [ -f "${QT_BIN}/${ssl_dll}" ] && [ ! -f "dist/${ssl_dll}" ]; then
               cp "${QT_BIN}/${ssl_dll}" dist/
               echo "Copied ${ssl_dll}"
+            fi
+          done
+
+          # zlib — find_package(ZLIB) links zlib1.dll (vcpkg, dynamic); not a Qt
+          # DLL, so windeployqt skips it. Copy from the vcpkg install or Qt bin/.
+          for zlib_dll in zlib1.dll; do
+            if [ -n "${ZLIB_ROOT:-}" ] && [ -f "${ZLIB_ROOT}/bin/${zlib_dll}" ] && [ ! -f "dist/${zlib_dll}" ]; then
+              cp "${ZLIB_ROOT}/bin/${zlib_dll}" dist/
+              echo "Copied ${zlib_dll}"
+            elif [ -f "${QT_BIN}/${zlib_dll}" ] && [ ! -f "dist/${zlib_dll}" ]; then
+              cp "${QT_BIN}/${zlib_dll}" dist/
+              echo "Copied ${zlib_dll}"
             fi
           done
 

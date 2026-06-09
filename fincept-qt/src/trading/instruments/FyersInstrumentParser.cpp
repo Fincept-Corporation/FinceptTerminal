@@ -33,7 +33,7 @@ static QString format_expiry(qint64 unix_ts) {
     // IST = UTC+5:30. Offset directly instead of QTimeZone("Asia/Kolkata")
     // which can silently fail on Windows when the IANA tz database is missing.
     constexpr int kIstOffsetSecs = 5 * 3600 + 30 * 60;
-    QDateTime dt = QDateTime::fromSecsSinceEpoch(unix_ts + kIstOffsetSecs, Qt::UTC);
+    QDateTime dt = QDateTime::fromSecsSinceEpoch(unix_ts + kIstOffsetSecs, QTimeZone::UTC);
     return dt.toString("dd-MMM-yy").toUpper(); // "26-MAY-26"
 }
 

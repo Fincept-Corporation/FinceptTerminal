@@ -184,7 +184,7 @@ QJsonObject futures_result_to_json(const DatabentoFuturesResult& /*r*/) {
 // listens for one of (vol_surface_ready, surface_ready, ohlcv_ready,
 // futures_ready, fetch_failed); the first match resolves the promise.
 template <typename SignalSig, typename KickFn, typename PayloadFn>
-void bridge_db_fetch(QPointer<QObject> holder_parent, ToolContext ctx,
+void bridge_db_fetch(QPointer<QObject> /*holder_parent*/, ToolContext ctx,
                      std::shared_ptr<QPromise<ToolResult>> promise,
                      KickFn&& kick, SignalSig signal_member, PayloadFn&& payload_fn) {
     auto* svc = &DatabentoService::instance();
@@ -359,7 +359,7 @@ std::vector<ToolDef> get_surface_analytics_tools() {
 
     // Generic single-arg fetch builder for surface_ready endpoints.
     auto make_db_surface_tool = [](const QString& name, const QString& desc,
-                                    std::function<void(const QJsonObject&)> kick) {
+                                    std::function<void(const QJsonObject&)> /*kick*/) {
         ToolDef t;
         t.name = name;
         t.description = desc;

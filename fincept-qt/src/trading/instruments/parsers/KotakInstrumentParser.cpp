@@ -166,7 +166,7 @@ QVector<Instrument> parse_kotak(const QByteArray& payload) {
         if (esec > 0) {
             if (seg == "NSE_FO" || seg == "CDE_FO")
                 esec += 315513000;
-            const QDate d = QDateTime::fromSecsSinceEpoch(esec, Qt::UTC).date();
+            const QDate d = QDateTime::fromSecsSinceEpoch(esec, QTimeZone::UTC).date();
             exp_nd = norm::expiry_to_nodash(d.toString("yyyy-MM-dd"));
             inst.expiry = norm::nodash_to_display(exp_nd);
         }

@@ -125,7 +125,7 @@ void NewsScreen::connect_signals() {
                 if (command_bar_)
                     command_bar_->set_live_state(connected);
             });
-    connect(command_bar_, &NewsCommandBar::live_toggle_clicked, this, [this]() {
+    connect(command_bar_, &NewsCommandBar::live_toggle_clicked, this, []() {
         auto& svc = services::NewsService::instance();
         if (svc.is_live_connected()) {
             svc.disconnect_live_feed();

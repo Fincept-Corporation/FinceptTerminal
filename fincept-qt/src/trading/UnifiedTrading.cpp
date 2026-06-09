@@ -647,7 +647,7 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
                           [](const UnifiedOrder& o) { return o.side == OrderSide::Buy; });
 
     QPointer<UnifiedTrading> self = this;
-    QtConcurrent::run([self, orders, is_paper, broker, creds, paper_portfolio_id, callback]() {
+    (void)QtConcurrent::run([self, orders, is_paper, broker, creds, paper_portfolio_id, callback]() {
         BasketOrderResult result;
         result.total = orders.size();
 
@@ -803,7 +803,7 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
     const int delay_ms = request.delay_between_ms;
 
     QPointer<UnifiedTrading> self = this;
-    QtConcurrent::run([self, base, chunk_qtys, delay_ms, is_paper, broker, creds,
+    (void)QtConcurrent::run([self, base, chunk_qtys, delay_ms, is_paper, broker, creds,
                        paper_portfolio_id, callback]() {
         SplitOrderResult result;
 

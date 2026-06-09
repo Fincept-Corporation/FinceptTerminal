@@ -68,7 +68,7 @@ constexpr int DP_MULT = 32;
 constexpr int DP_PREC = 33;
 
 // Shared string field indices (STRING_INDEX).
-constexpr int STR_NAME = 51;
+[[maybe_unused]] constexpr int STR_NAME = 51;
 constexpr int STR_SYMBOL = 52; // token ("tk")
 constexpr int STR_EXCHG = 53;  // exchange ("e")
 constexpr int STR_TSYMBOL = 54; // trading symbol ("ts")
