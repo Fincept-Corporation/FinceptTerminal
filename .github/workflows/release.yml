@@ -604,8 +604,12 @@ jobs:
           # Remove leading whitespace from spec file
           sed -i 's/^          //' ~/rpmbuild/SPECS/fincept-terminal.spec
 
+          # --buildroot MUST differ from RPM_ROOT (the cmake-staged tree): rpmbuild
+          # wipes %{buildroot} before %install, so reusing RPM_ROOT would delete the
+          # staged files and the spec's `cp -a RPM_ROOT/* %{buildroot}/` would then
+          # copy an empty dir into itself ("cannot stat ... No such file or directory").
           rpmbuild -bb ~/rpmbuild/SPECS/fincept-terminal.spec \
-            --buildroot "${PWD}/${RPM_ROOT}" \
+            --buildroot "${PWD}/build/rpm-buildroot" \
             --define "_rpmdir ${PWD}/build"
 
           mv build/x86_64/fincept-terminal-${VERSION}-1.x86_64.rpm \
@@ -647,10 +651,16 @@ jobs:
           BASENAME="FinceptTerminal-${VERSION}-linux-x64-wizard"
           ( cd build && cpack -G IFW -D CPACK_PACKAGE_FILE_NAME="${BASENAME}" --verbose )
 
-          # IFW emits <name>.run; rename to .bin so the updater regex
-          # (\.run$|linux.*setup) never selects it over the AppImage.
-          SRC=$(ls build/${BASENAME}.run 2>/dev/null | head -1)
-          [ -n "${SRC}" ] || { echo "::error::IFW .run not produced"; ls -la build; exit 1; }
+          # IFW emits <name>.run on Linux; rename to .bin so the updater regex
+          # (\.run$|linux.*setup) never selects it over the AppImage. This wizard
+          # is optional/additive (AppImage/.deb/.rpm are the real artifacts) and the
+          # IFW-on-Linux path is unvalidated — if cpack didn't emit a .run, skip
+          # gracefully rather than fail the release.
+          SRC=$(ls build/${BASENAME}.run 2>/dev/null | head -1 || true)
+          if [ -z "${SRC}" ]; then
+            echo "::warning::IFW wizard .run not produced (cpack emitted: $(ls build/${BASENAME}* 2>/dev/null | xargs -n1 basename 2>/dev/null | tr '\n' ' ')). Skipping optional Linux wizard installer; AppImage/.deb/.rpm are unaffected."
+            exit 0
+          fi
           mv "${SRC}" "build/${BASENAME}.bin"
           chmod +x "build/${BASENAME}.bin"
           echo "Built: ${BASENAME}.bin ($(du -sh "build/${BASENAME}.bin" | cut -f1))"

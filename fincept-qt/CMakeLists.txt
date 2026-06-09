@@ -205,6 +205,15 @@ if(MSVC)
     # /W4          : level-4 warnings (highest practical without /Wall noise)
     # /WX only in CI so local iteration isn't blocked by new warnings
     add_compile_options(/Z7 /Oi /bigobj /permissive- /W4)
+    # Suppress /W4 warnings that have NO -Wall/-Wextra equivalent on GCC/Clang, so
+    # all three compilers enforce a consistent policy under -Werror/-WX:
+    #   C4456-C4459 = variable shadowing (GCC/Clang's -Wshadow, deliberately NOT in
+    #                 -Wall -Wextra — pervasive/benign in Qt code, e.g. a local
+    #                 'data' hiding QWidget::data, or 'self'/'w' shadowing a local).
+    #   C4804       = bool used in a comparison (e.g. the Qt6 idiom
+    #                 `QHash::remove(k) > 0`, where remove() now returns bool).
+    # These are style, not bugs — the same code compiles clean under GCC/Clang.
+    add_compile_options(/wd4456 /wd4457 /wd4458 /wd4459 /wd4804)
     if(DEFINED ENV{CI})
         add_compile_options(/WX)
     endif()
