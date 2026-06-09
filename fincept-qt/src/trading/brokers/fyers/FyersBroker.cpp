@@ -346,6 +346,7 @@ ApiResponse<QVector<BrokerPosition>> FyersBroker::get_positions(const BrokerCred
         pos.avg_price = p.value("netAvg").toDouble();
         pos.ltp = p.value("ltp").toDouble();
         pos.pnl = p.value("pl").toDouble();
+        pos.pnl_pct = (pos.avg_price > 0.0) ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 : 0.0;
         pos.side = pos.quantity >= 0 ? "buy" : "sell";
         positions.append(pos);
     }

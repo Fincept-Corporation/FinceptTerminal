@@ -268,8 +268,19 @@ std::optional<PtPosition> PaperTradingRepository::find_position(const QString& p
 }
 
 Result<void> PaperTradingRepository::update_position(const QString& id, double quantity, double entry_price) {
-    return exec_write("UPDATE pt_positions SET quantity = ?, entry_price = ? WHERE id = ?",
-                      {quantity, entry_price, id});
+    // Recompute unrealized_pnl in the same write. Previously this updated only
+    // quantity/entry_price, leaving unrealized_pnl stale after an averaging fill
+    // or a partial close until the next price tick — so a freshly averaged/reduced
+    // position showed P&L against the OLD entry/qty. Recompute against the last
+    // good current_price (guarded: a 0/unset mark keeps the existing value so we
+    // never surface a phantom full-notional P&L).
+    return exec_write(
+        "UPDATE pt_positions SET quantity = ?, entry_price = ?, "
+        "unrealized_pnl = CASE WHEN current_price > 0 THEN "
+        "(CASE WHEN side = 'long' THEN (current_price - ?) * ? ELSE (? - current_price) * ? END) "
+        "ELSE unrealized_pnl END "
+        "WHERE id = ?",
+        {quantity, entry_price, entry_price, quantity, entry_price, quantity, id});
 }
 
 Result<void> PaperTradingRepository::update_position_price(const QString& portfolio_id, const QString& symbol,

@@ -40,6 +40,12 @@ class DataStreamManager : public QObject
     void pause_all();   // Screen hidden — pause all timers
     void resume_all();  // Screen shown — resume all timers
 
+    // Force an immediate portfolio (positions/holdings/orders/funds) refetch for
+    // one account, bypassing the 5-min poll. No-op if no stream exists for the
+    // account. Used by UI transitions (reopen / account switch / mode toggle) so
+    // the blotter shows fresh broker data right away instead of stale-or-blank.
+    void refresh_portfolio(const QString& account_id);
+
     // --- Query ---
     bool has_stream(const QString& account_id) const;
     QStringList active_stream_ids() const;

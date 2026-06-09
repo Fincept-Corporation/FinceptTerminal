@@ -1,6 +1,6 @@
 // EquityResearchTools.cpp — Tools that drive the Equity Research screen.
 //
-// 12 tools in category "equity-research":
+// 10 tools in category "equity-research":
 //   1. search_equity_symbols
 //   2. load_equity_symbol            — combined quote + info + historical
 //   3. get_equity_quote              — quote only (price/change/vol)
@@ -10,9 +10,7 @@
 //   7. get_equity_technicals         — indicators + overall signal
 //   8. get_equity_peers              — peer-group comparison
 //   9. get_equity_news               — recent news articles for a symbol
-//  10. compute_equity_talipp         — run a talipp indicator (generic)
-//  11. list_equity_talipp_indicators — talipp indicator catalog (sync)
-//  12. get_equity_sentiment          — MarketSentimentService snapshot
+//  10. get_equity_sentiment          — MarketSentimentService snapshot
 //
 // EquityResearchService signals do NOT carry a per-call request_id; most
 // carry the symbol (or indicator) so we filter by that. Concurrent calls
@@ -249,46 +247,6 @@ QJsonObject sentiment_to_json(const services::equity::MarketSentimentSnapshot& s
         {"sources", sources},
     };
 }
-
-// Hand-curated talipp catalogue mirrored from EquityTalippTab::categories().
-// Kept in this TU to avoid pulling the UI header into the tools layer.
-struct TalippEntry { const char* id; const char* label; const char* data_type; const char* category; };
-static const TalippEntry kTalipp[] = {
-    // trend
-    {"sma","SMA","prices","trend"}, {"ema","EMA","prices","trend"}, {"wma","WMA","prices","trend"},
-    {"dema","DEMA","prices","trend"}, {"tema","TEMA","prices","trend"}, {"hma","HMA","prices","trend"},
-    {"kama","KAMA","prices","trend"}, {"alma","ALMA","prices","trend"}, {"t3","T3","prices","trend"},
-    {"zlema","ZLEMA","prices","trend"},
-    // trend advanced
-    {"adx","ADX","ohlcv","trend_advanced"}, {"aroon","Aroon","ohlcv","trend_advanced"},
-    {"ichimoku","Ichimoku","ohlcv","trend_advanced"}, {"parabolic_sar","Parabolic SAR","ohlcv","trend_advanced"},
-    {"supertrend","SuperTrend","ohlcv","trend_advanced"},
-    // momentum
-    {"rsi","RSI","prices","momentum"}, {"macd","MACD","prices","momentum"},
-    {"stoch","Stochastic","ohlcv","momentum"}, {"stoch_rsi","StochRSI","prices","momentum"},
-    {"cci","CCI","ohlcv","momentum"}, {"roc","ROC","prices","momentum"},
-    {"tsi","TSI","prices","momentum"}, {"williams","Williams %R","ohlcv","momentum"},
-    // volatility
-    {"atr","ATR","ohlcv","volatility"}, {"bb","Bollinger Bands","prices","volatility"},
-    {"keltner","Keltner Channels","ohlcv","volatility"}, {"donchian","Donchian Channels","ohlcv","volatility"},
-    {"chandelier_stop","Chandelier Stop","ohlcv","volatility"}, {"natr","NATR","ohlcv","volatility"},
-    // volume
-    {"obv","OBV","ohlcv","volume"}, {"vwap","VWAP","ohlcv","volume"},
-    {"vwma","VWMA","ohlcv","volume"}, {"mfi","MFI","ohlcv","volume"},
-    {"chaikin_osc","Chaikin Osc","ohlcv","volume"}, {"force_index","Force Index","ohlcv","volume"},
-    // specialized
-    {"ao","Awesome Osc","ohlcv","specialized"}, {"accu_dist","Accum/Dist","ohlcv","specialized"},
-    {"bop","Balance of Pwr","ohlcv","specialized"}, {"chop","CHOP","ohlcv","specialized"},
-    {"coppock_curve","Coppock Curve","prices","specialized"}, {"dpo","DPO","prices","specialized"},
-    {"emv","EMV","ohlcv","specialized"}, {"ibs","IBS","ohlcv","specialized"},
-    {"kst","KST","prices","specialized"}, {"kvo","KVO","ohlcv","specialized"},
-    {"mass_index","Mass Index","ohlcv","specialized"}, {"mcginley","McGinley","prices","specialized"},
-    {"mean_dev","Mean Dev","prices","specialized"}, {"smma","SMMA","prices","specialized"},
-    {"sobv","Smoothed OBV","ohlcv","specialized"}, {"stc","STC","prices","specialized"},
-    {"std_dev","Std Dev","prices","specialized"}, {"trix","TRIX","prices","specialized"},
-    {"ttm","TTM Squeeze","ohlcv","specialized"}, {"uo","Ultimate Osc","ohlcv","specialized"},
-    {"vtx","Vortex","ohlcv","specialized"}, {"zigzag","ZigZag","ohlcv","specialized"},
-};
 
 } // namespace
 
@@ -646,92 +604,7 @@ std::vector<ToolDef> get_equity_research_tools() {
         tools.push_back(std::move(t));
     }
 
-    // ── 10. compute_equity_talipp ───────────────────────────────────────
-    {
-        ToolDef t;
-        t.name = "compute_equity_talipp";
-        t.description = "Compute a talipp technical indicator over historical data for a symbol.";
-        t.category = "equity-research";
-        t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .string("symbol", "Ticker symbol").required().length(1, 32)
-            .string("indicator", "Indicator id (use list_equity_talipp_indicators)").required().length(1, 32)
-            .object("params", "Indicator-specific params (e.g. {period: 20})")
-            .string("period", "Historical period").default_str("2y").length(1, 8)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
-            const QString sym = args["symbol"].toString().toUpper();
-            const QString ind = args["indicator"].toString();
-            const QJsonObject params = args["params"].toObject();
-            const QString period = args["period"].toString("2y");
-
-            // Convert JSON params object → QVariantMap for the service API.
-            QVariantMap pmap;
-            for (auto it = params.constBegin(); it != params.constEnd(); ++it)
-                pmap.insert(it.key(), it.value().toVariant());
-
-            auto* svc = &services::equity::EquityResearchService::instance();
-            AsyncDispatch::callback_to_promise(
-                svc, std::move(ctx), promise,
-                [svc, sym, ind, pmap, period](auto resolve) {
-                    auto* holder = new QObject(svc);
-                    QObject::connect(svc, &services::equity::EquityResearchService::talipp_result, holder,
-                                      [ind, resolve, holder](QString got_ind, QVector<double> vs,
-                                                              QVector<qint64> ts) {
-                                          if (got_ind != ind) return;
-                                          QJsonArray values;
-                                          for (double v : vs) values.append(v);
-                                          QJsonArray timestamps;
-                                          for (qint64 t : ts) timestamps.append(t);
-                                          resolve(ToolResult::ok_data(QJsonObject{
-                                              {"indicator", got_ind},
-                                              {"values", values},
-                                              {"timestamps", timestamps},
-                                              {"count", static_cast<int>(vs.size())},
-                                          }));
-                                          holder->deleteLater();
-                                      });
-                    QObject::connect(svc, &services::equity::EquityResearchService::error_occurred, holder,
-                                      [resolve, holder](QString, QString msg) {
-                                          resolve(ToolResult::fail(msg));
-                                          holder->deleteLater();
-                                      });
-                    svc->compute_talipp(sym, ind, pmap, period);
-                });
-        };
-        tools.push_back(std::move(t));
-    }
-
-    // ── 11. list_equity_talipp_indicators ───────────────────────────────
-    {
-        ToolDef t;
-        t.name = "list_equity_talipp_indicators";
-        t.description = "List all talipp indicators (id, label, category, data_type: 'prices' or 'ohlcv').";
-        t.category = "equity-research";
-        t.input_schema = ToolSchemaBuilder()
-            .string("category", "Optional category filter (trend, trend_advanced, momentum, volatility, volume, specialized)")
-                .default_str("").length(0, 32)
-            .build();
-        t.handler = [](const QJsonObject& args) -> ToolResult {
-            const QString filter = args["category"].toString();
-            QJsonArray arr;
-            for (const auto& e : kTalipp) {
-                if (!filter.isEmpty() && filter != QString::fromUtf8(e.category))
-                    continue;
-                arr.append(QJsonObject{
-                    {"id", QString::fromUtf8(e.id)},
-                    {"label", QString::fromUtf8(e.label)},
-                    {"data_type", QString::fromUtf8(e.data_type)},
-                    {"category", QString::fromUtf8(e.category)},
-                });
-            }
-            return ToolResult::ok_data(arr);
-        };
-        tools.push_back(std::move(t));
-    }
-
-    // ── 12. get_equity_sentiment ────────────────────────────────────────
+    // ── 10. get_equity_sentiment ────────────────────────────────────────
     {
         ToolDef t;
         t.name = "get_equity_sentiment";

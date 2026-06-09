@@ -59,6 +59,24 @@ struct InfrastructureItem {
     double distance_km = 0;
 };
 
+// ── Sentiment Types ───────────────────────────────────────────────────────────
+
+struct ArticleSentimentResult {
+    QString id;
+    QString label; // "BULLISH" | "BEARISH" | "NEUTRAL"
+    double score = 0.0; // -1..1
+    double confidence = 0.0; // 0..1
+};
+
+struct NewsSentimentResult {
+    QString engine; // "vader" | "lexicon"
+    double overall_score = 0.0; // -1..1
+    int bullish = 0;
+    int bearish = 0;
+    int neutral = 0;
+    QVector<ArticleSentimentResult> per_article;
+};
+
 // ── Service ─────────────────────────────────────────────────────────────────
 
 class NewsNlpService : public QObject {
@@ -69,11 +87,16 @@ class NewsNlpService : public QObject {
     using InfraCallback = std::function<void(bool, QVector<InfrastructureItem>)>;
     using TranslateCallback = std::function<void(bool, QString translated, QString detected_lang)>;
     using SemanticClustersCallback = std::function<void(bool, QJsonArray clusters)>;
+    using SentimentCallback = std::function<void(bool, NewsSentimentResult)>;
 
     static NewsNlpService& instance();
 
     /// Extract entities (countries, orgs, people, tickers) from articles.
     void extract_entities(const QVector<NewsArticle>& articles, EntitiesCallback cb);
+
+    /// Headline sentiment (VADER when available, keyword fallback) via
+    /// news_nlp.py. Per-article results are keyed by NewsArticle::id.
+    void analyze_sentiment(const QVector<NewsArticle>& articles, SentimentCallback cb);
 
     /// Semantic clustering via TF-IDF cosine similarity.
     void cluster_semantic(const QVector<NewsArticle>& articles, SemanticClustersCallback cb);

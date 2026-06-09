@@ -16,6 +16,7 @@
 #include <QDesktopServices>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMessageBox>
@@ -48,6 +49,135 @@ static QLabel* make_field_label(const QString& text) {
     auto* l = new QLabel(text);
     l->setObjectName("fieldLabel");
     return l;
+}
+
+// Assembled exchange_token() inputs. The generic dialog collects one value per
+// declared CredentialField, but each broker's exchange_token(api_key, api_secret,
+// auth_code) parses those three args differently (some pack multiple secrets into
+// one). Centralising the packing here keeps per-broker quirks in ONE place
+// instead of scattered branches in the connect handler — add a broker by adding
+// one case below, not by editing the form + handler + loader separately.
+struct ExchangeArgs {
+    QString api_key;
+    QString api_secret;
+    QString auth_code;
+    QString additional_data; // pre-exchange additional_data to merge after token exchange
+};
+
+static ExchangeArgs assemble_exchange_args(const QString& broker_id,
+                                           const QMap<int, QString>& f) {
+    using CF = CredentialField;
+    ExchangeArgs a;
+    a.api_key = f.value(static_cast<int>(CF::ApiKey));
+    a.api_secret = f.value(static_cast<int>(CF::ApiSecret));
+    a.auth_code = f.value(static_cast<int>(CF::AuthCode));
+    const QString client_code = f.value(static_cast<int>(CF::ClientCode));
+
+    if (broker_id == QLatin1String("angelone")) {
+        // AngelOne logs in via TOTP: exchange_token() expects client_code AND the
+        // Base32 TOTP secret packed into auth_code as JSON {"client_code","totp_secret"}
+        // (AngelOneBroker.cpp). exchange_token() never receives additional_data, so
+        // the old generic path — which stashed client_code in additional_data and
+        // passed the bare TOTP secret as auth_code — always failed with
+        // "Client code is required". Pack them the way the broker parses them.
+        const QJsonObject o{{"client_code", client_code}, {"totp_secret", a.auth_code}};
+        a.auth_code = QJsonDocument(o).toJson(QJsonDocument::Compact);
+        return a; // api_key = API key, api_secret = MPIN (already set above)
+    }
+
+    // Default mapping (unchanged historical behaviour): api_key/api_secret/auth_code
+    // pass straight through; a ClientCode field rides in additional_data as JSON so
+    // load_saved_credentials() can repopulate it on reopen.
+    if (!client_code.isEmpty())
+        a.additional_data =
+            QJsonDocument(QJsonObject{{"client_code", client_code}}).toJson(QJsonDocument::Compact);
+    return a;
+}
+
+// ── Custom multi-sub-field credential forms ──────────────────────────────────
+// Some brokers pack several distinct secrets into a single exchange_token() arg
+// with a delimiter (e.g. fivepaisa api_key = "app:::user:::client"). The plain
+// profile form has one box per CredentialField, which forced the user to hand-
+// type the delimiters into one box — undiscoverable and error-prone. Instead we
+// render one labelled box PER real secret and pack them here exactly the way each
+// broker's exchange_token() parses them (verified against each <Broker>.cpp).
+struct CredSubField {
+    QString key;   // identifier used by the packer below
+    QString label; // UI label
+    bool secret;   // echo as password
+};
+
+// Returns the custom sub-field list for a broker, or empty if the broker uses the
+// plain profile-driven form. Keys MUST match pack_custom_credentials() below.
+static QVector<CredSubField> custom_cred_fields(const QString& broker_id) {
+    if (broker_id == QLatin1String("fivepaisa"))
+        return {{"app_key", QObject::tr("APP KEY"), false},
+                {"user_id", QObject::tr("USER ID"), false},
+                {"client_id", QObject::tr("CLIENT ID"), false},
+                {"app_secret", QObject::tr("APP SECRET (EncryKey)"), true},
+                {"email", QObject::tr("EMAIL"), false},
+                {"pin", QObject::tr("PIN"), true},
+                {"totp", QObject::tr("TOTP (current 6-digit code)"), true}};
+    if (broker_id == QLatin1String("iifl"))
+        return {{"trade_app_key", QObject::tr("INTERACTIVE APP KEY"), false},
+                {"trade_secret", QObject::tr("INTERACTIVE SECRET KEY"), true},
+                {"market_app_key", QObject::tr("MARKET-DATA APP KEY"), false},
+                {"market_secret", QObject::tr("MARKET-DATA SECRET KEY"), true}};
+    if (broker_id == QLatin1String("kotak"))
+        return {{"portal_token", QObject::tr("ACCESS TOKEN (from Kotak Neo portal)"), true},
+                {"mobile", QObject::tr("MOBILE NUMBER (10-digit or +91…)"), false},
+                {"ucc", QObject::tr("UCC (Client ID)"), false},
+                {"mpin", QObject::tr("MPIN"), true},
+                {"totp_secret", QObject::tr("TOTP SECRET (Base32)"), true}};
+    if (broker_id == QLatin1String("flattrade"))
+        return {{"uid", QObject::tr("CLIENT ID (UID)"), false},
+                {"apikey", QObject::tr("API KEY"), true},
+                {"api_secret", QObject::tr("API SECRET"), true},
+                {"request_code", QObject::tr("REQUEST CODE (from web login)"), false}};
+    if (broker_id == QLatin1String("shoonya"))
+        return {{"uid", QObject::tr("USER ID"), false},
+                {"password", QObject::tr("PASSWORD"), true},
+                {"vendor_code", QObject::tr("VENDOR CODE"), false},
+                {"totp", QObject::tr("TOTP (current 6-digit code)"), true}};
+    if (broker_id == QLatin1String("motilal"))
+        return {{"userid", QObject::tr("USER ID / API KEY"), false},
+                {"password", QObject::tr("PASSWORD"), true},
+                {"dob", QObject::tr("DATE OF BIRTH (DD/MM/YYYY)"), false},
+                {"totp", QObject::tr("TOTP (current 6-digit code, if enabled)"), true}};
+    return {};
+}
+
+// Pack custom sub-field values into the exact exchange_token() args each broker
+// parses. Delimiters/order verified against the corresponding <Broker>.cpp.
+static ExchangeArgs pack_custom_credentials(const QString& broker_id, const QMap<QString, QString>& v) {
+    const QString S = QStringLiteral(":::");
+    ExchangeArgs a;
+    if (broker_id == QLatin1String("fivepaisa")) {
+        a.api_key = v.value("app_key") + S + v.value("user_id") + S + v.value("client_id");
+        a.api_secret = v.value("app_secret");
+        a.auth_code = v.value("email") + S + v.value("pin") + S + v.value("totp");
+    } else if (broker_id == QLatin1String("iifl")) {
+        a.api_key = v.value("trade_app_key") + S + v.value("trade_secret");
+        a.api_secret = v.value("market_app_key") + S + v.value("market_secret");
+    } else if (broker_id == QLatin1String("kotak")) {
+        a.api_key = v.value("portal_token") + QStringLiteral("|||") + v.value("mobile")
+                    + QStringLiteral("|||") + v.value("ucc");
+        a.api_secret = v.value("mpin");
+        a.auth_code = v.value("totp_secret");
+    } else if (broker_id == QLatin1String("flattrade")) {
+        a.api_key = v.value("uid") + S + v.value("apikey");
+        a.api_secret = v.value("api_secret");
+        a.auth_code = v.value("request_code");
+    } else if (broker_id == QLatin1String("shoonya")) {
+        a.api_key = v.value("uid");
+        a.api_secret = v.value("password");
+        a.auth_code = v.value("vendor_code") + S + v.value("totp");
+    } else if (broker_id == QLatin1String("motilal")) {
+        a.api_key = v.value("userid");
+        a.api_secret = v.value("password");
+        a.auth_code = v.value("dob") + S + v.value("totp");
+    }
+    return a;
 }
 
 // ── constructor ──────────────────────────────────────────────────────────────
@@ -430,6 +560,7 @@ void AccountManagementDialog::build_credential_form(const trading::BrokerProfile
         f->deleteLater();
     cred_fields_.clear();
     cred_field_defs_ = profile.credential_fields;
+    cred_form_keys_.clear();
 
     // Remove old widgets from layout
     while (fields_layout_->count() > 0) {
@@ -437,6 +568,22 @@ void AccountManagementDialog::build_credential_form(const trading::BrokerProfile
         if (item->widget())
             item->widget()->deleteLater();
         delete item;
+    }
+
+    // Brokers that pack several secrets into one exchange_token() arg get a custom
+    // multi-sub-field form — one labelled box per real secret — instead of the
+    // plain profile form (which would force the user to hand-type ":::"/"|||"
+    // delimiters). on_connect_account packs the values back via pack_custom_credentials.
+    const auto custom = custom_cred_fields(profile.id);
+    if (!custom.isEmpty()) {
+        for (const auto& sf : custom) {
+            fields_layout_->addWidget(make_field_label(sf.label));
+            auto* field = make_field(QString(), sf.secret);
+            fields_layout_->addWidget(field);
+            cred_fields_.append(field);
+            cred_form_keys_.append(sf.key);
+        }
+        return;
     }
 
     // Build fields from BrokerProfile::credential_fields
@@ -491,6 +638,12 @@ void AccountManagementDialog::load_saved_credentials(const QString& account_id) 
             mt4_account_type_->setCurrentIndex(acct_type == "live" ? 1 : 0);
         return;
     }
+
+    // Custom multi-sub-field forms (delimiter brokers) can't be cleanly unpacked
+    // back into individual boxes — and they're daily-expiring TOTP logins anyway —
+    // so leave them blank for re-entry rather than mis-populate from packed creds.
+    if (!cred_form_keys_.isEmpty())
+        return;
 
     int idx = 0;
     for (const auto& def : cred_field_defs_) {
@@ -592,36 +745,36 @@ void AccountManagementDialog::on_connect_account() {
     if (!broker)
         return;
 
-    // Collect credentials from form fields
+    // Collect one raw value per declared credential field, then assemble the exact
+    // exchange_token() arguments this broker expects. assemble_exchange_args()
+    // centralises per-broker packing (e.g. AngelOne needs client_code + TOTP secret
+    // packed into auth_code as JSON) so brokers like AngelOne actually connect.
     BrokerCredentials creds;
     creds.broker_id = account.broker_id;
-    QString auth_code;
-    int idx = 0;
-    for (const auto& def : cred_field_defs_) {
-        if (def.field == CredentialField::Environment)
-            continue;
-        if (idx >= cred_fields_.size())
-            break;
-        const QString val = cred_fields_[idx]->text().trimmed();
-        switch (def.field) {
-        case CredentialField::ApiKey:
-            creds.api_key = val;
-            break;
-        case CredentialField::ApiSecret:
-            creds.api_secret = val;
-            break;
-        case CredentialField::AuthCode:
-            auth_code = val;
-            break;
-        case CredentialField::ClientCode:
-            // Store in additional_data as JSON
-            creds.additional_data = QJsonDocument(QJsonObject{{"client_code", val}}).toJson(QJsonDocument::Compact);
-            break;
-        default:
-            break;
+    ExchangeArgs ex;
+    if (!cred_form_keys_.isEmpty()) {
+        // Custom multi-sub-field form: collect values by key, pack per broker.
+        QMap<QString, QString> kv;
+        for (int i = 0; i < cred_form_keys_.size() && i < cred_fields_.size(); ++i)
+            kv.insert(cred_form_keys_[i], cred_fields_[i]->text().trimmed());
+        ex = pack_custom_credentials(account.broker_id, kv);
+    } else {
+        QMap<int, QString> field_values;
+        int idx = 0;
+        for (const auto& def : cred_field_defs_) {
+            if (def.field == CredentialField::Environment)
+                continue;
+            if (idx >= cred_fields_.size())
+                break;
+            field_values.insert(static_cast<int>(def.field), cred_fields_[idx]->text().trimmed());
+            ++idx;
         }
-        ++idx;
+        ex = assemble_exchange_args(account.broker_id, field_values);
     }
+    creds.api_key = ex.api_key;
+    creds.api_secret = ex.api_secret;
+    creds.additional_data = ex.additional_data;
+    QString auth_code = ex.auth_code;
 
     // Attempt token exchange asynchronously — exchange_token() makes a blocking
     // HTTP call (BrokerHttp::execute uses QEventLoop), so running it on the UI
@@ -697,17 +850,37 @@ void AccountManagementDialog::on_connect_account() {
 }
 
 void AccountManagementDialog::on_rename_account() {
-    if (selected_account_id_.isEmpty())
+    if (selected_account_id_.isEmpty()) {
+        QMessageBox::information(this, tr("Rename Account"),
+                                tr("Select an account first, then rename it."));
         return;
-    const QString new_name = display_name_input_->text().trimmed();
-    if (new_name.isEmpty())
+    }
+
+    // Ask for the new name inline, seeded with the current one. The RENAME
+    // buttons live on the right-hand broker forms — far from the left-panel
+    // "Account name..." field, which is shared with + ADD. The old handler read
+    // that field, so RENAME silently did nothing whenever it was empty (the
+    // common case), making the button look dead. Prompting here makes every
+    // RENAME button self-contained.
+    const QString acct_id = selected_account_id_;
+    const auto account = AccountManager::instance().get_account(acct_id);
+    bool ok = false;
+    const QString new_name =
+        QInputDialog::getText(this, tr("Rename Account"), tr("New account name:"),
+                              QLineEdit::Normal, account.display_name, &ok)
+            .trimmed();
+    if (!ok || new_name.isEmpty() || new_name == account.display_name)
         return;
-    AccountManager::instance().update_display_name(selected_account_id_, new_name);
-    display_name_input_->clear();
+
+    AccountManager::instance().update_display_name(acct_id, new_name);
+
+    // refresh_account_list() clears the list, which emits currentRowChanged(-1)
+    // and wipes selected_account_id_ — so re-select via the captured acct_id,
+    // not the member. Re-selecting also refreshes the broker form's title with
+    // the new name.
     refresh_account_list();
-    // Re-select the account
     for (int i = 0; i < account_list_->count(); ++i) {
-        if (account_list_->item(i)->data(Qt::UserRole).toString() == selected_account_id_) {
+        if (account_list_->item(i)->data(Qt::UserRole).toString() == acct_id) {
             account_list_->setCurrentRow(i);
             break;
         }

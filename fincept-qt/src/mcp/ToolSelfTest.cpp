@@ -92,7 +92,7 @@ std::vector<EvalCase> corpus() {
         // ── equity research ──
         {"pull the latest financial statements for Apple", {"get_equity_financials", "edgar_get_financials"}},
         {"what is the analyst sentiment on NVDA", {"get_equity_sentiment"}},
-        {"show technical indicators for the SPY", {"get_equity_technicals", "compute_equity_talipp"}},
+        {"show technical indicators for the SPY", {"get_equity_technicals"}},
         {"who are the peer companies of Microsoft", {"get_equity_peers"}},
 
         // ── SEC EDGAR ──

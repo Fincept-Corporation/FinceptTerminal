@@ -61,6 +61,20 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void restore_state(const QVariantMap& state) override;
     QString state_key() const override { return QStringLiteral("equity_trading"); }
 
+    // External entry point — opens the SAME quick order ticket used in-screen for
+    // an arbitrary symbol/side, driven from another screen (e.g. Equity Research).
+    // Ensures a broker account is focused (the credential-aware pick this tab uses
+    // on show) and seeds a reference price the caller already has, so paper market
+    // orders fill even when this screen's own quote stream hasn't ticked for the
+    // symbol. The trading tab's own symbol selection is saved and restored, so this
+    // never disturbs an in-progress trade here. Reuses open_order_ticket_for() +
+    // on_order_submitted() — no duplicate form, no duplicate placement logic.
+    // match_exchanges are the broker exchanges that can trade the symbol's market
+    // (e.g. {"NSE"} or the US venues); the order routes to a usable account whose
+    // broker serves one of them, so multi-broker setups pick the right account.
+    void open_external_order_ticket(const QString& symbol, const QString& exchange,
+                                    const QStringList& match_exchanges, bool is_buy, double ref_price);
+
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
@@ -78,7 +92,12 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void on_order_submitted(const trading::UnifiedOrder& order);
     void on_cancel_order(const QString& order_id);
     void on_cancel_all_orders();                                          // CANCEL ALL ORDERS button
-    void on_close_all_positions();                                        // SQUARE OFF ALL button
+    void on_close_all_positions();                                        // SQUARE OFF ALL button (positions)
+    // SQUARE OFF ALL button on the Holdings tab — market-sells every holding
+    // (CNC/delivery). Acts ONLY on holdings; positions are untouched.
+    void on_square_off_all_holdings(const QVector<trading::BrokerHolding>& holdings);
+    // Per-row SELL on the Holdings tab — confirm then close that single holding.
+    void on_square_off_holding(const QString& symbol, const QString& exchange);
     void on_strategy_submitted(const trading::BasketOrderRequest& basket); // options strategy → basket
     void on_ob_price_clicked(double price);
     void on_import_holdings_requested(const QVector<trading::BrokerHolding>& holdings);
@@ -154,6 +173,10 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     // from the positions/holdings tables). Routes through on_order_submitted().
     void open_order_ticket_for(const QString& symbol, const QString& exchange, const QString& product, bool is_buy,
                                double qty = 0.0);
+    // Pick a usable account (paper, or live + Connected) whose broker can trade one
+    // of `match_exchanges` (broker.exchanges ∩ match). Prefers the already-focused
+    // account, then a live match, then a paper match. Empty when nothing matches.
+    QString pick_account_for_exchanges(const QStringList& match) const;
     // Re-reads the focused account's paper portfolio into the panels. No-op for
     // live accounts (their data flows from AccountDataStream via the hub).
     void refresh_paper_panels();

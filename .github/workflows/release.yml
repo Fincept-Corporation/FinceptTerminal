@@ -591,6 +591,46 @@ jobs:
 
           echo "Built: FinceptTerminal-${VERSION}-linux-x64.rpm ($(du -sh "build/FinceptTerminal-${VERSION}-linux-x64.rpm" | cut -f1))"
 
+      # ── Optional: QtIFW "wizard" installer with a Target Directory page ─────
+      # Additive to the portable AppImage (which stays the auto-update channel).
+      # Packages the linuxdeploy AppDir (binary + bundled Qt + plugins) so the
+      # install is relocatable to ANY chosen path; the staged qt.conf + rpath
+      # resolve Qt at the install location. Renamed "-wizard.bin" so it never
+      # matches the updater regex (\.run$|linux.*setup).
+      # NOTE: VALIDATE ON A REAL RUNNER — first IFW-on-Linux build with bundled
+      # Qt; confirm the installed app launches (platform plugin loads via qt.conf).
+      - name: Generate IFW wizard installer
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -Po 'project\(FinceptTerminal VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
+          if [ ! -d build/AppDir/usr ]; then
+            echo "::error::build/AppDir/usr missing — the AppImage step must run first"; exit 1
+          fi
+
+          # QtIFW tool (binarycreator)
+          python3 -m pip install --upgrade aqtinstall
+          aqt install-tool linux desktop ${{ env.QT_IFW_TOOL }} --outputdir "${{ runner.temp }}/qtifw"
+          export QT_IFW_DIR="${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}"
+          export PATH="${QT_IFW_DIR}/bin:${PATH}"
+          command -v binarycreator >/dev/null || { echo "::error::binarycreator not on PATH"; exit 1; }
+
+          # Reconfigure with the installer path ON + the linuxdeploy AppDir as the
+          # relocatable payload. deb/rpm already built (FHS), so order is safe.
+          cmake -S . -B build \
+            -DFINCEPT_BUILD_INSTALLER=ON \
+            -DFINCEPT_IFW_PAYLOAD="${PWD}/build/AppDir/usr" >/dev/null
+          BASENAME="FinceptTerminal-${VERSION}-linux-x64-wizard"
+          ( cd build && cpack -G IFW -D CPACK_PACKAGE_FILE_NAME="${BASENAME}" --verbose )
+
+          # IFW emits <name>.run; rename to .bin so the updater regex
+          # (\.run$|linux.*setup) never selects it over the AppImage.
+          SRC=$(ls build/${BASENAME}.run 2>/dev/null | head -1)
+          [ -n "${SRC}" ] || { echo "::error::IFW .run not produced"; ls -la build; exit 1; }
+          mv "${SRC}" "build/${BASENAME}.bin"
+          chmod +x "build/${BASENAME}.bin"
+          echo "Built: ${BASENAME}.bin ($(du -sh "build/${BASENAME}.bin" | cut -f1))"
+
       # ── Upload ────────────────────────────────────────────────────────────
       # Version-stamped filename so update-manifest regex picks it up.
       - name: Upload artifact
@@ -602,6 +642,7 @@ jobs:
             fincept-qt/build/FinceptTerminal-*-linux-x64-setup.run.zsync
             fincept-qt/build/FinceptTerminal-*-linux-x64.deb
             fincept-qt/build/FinceptTerminal-*-linux-x64.rpm
+            fincept-qt/build/FinceptTerminal-*-linux-x64-wizard.bin
           retention-days: 30
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -636,6 +677,17 @@ jobs:
           modules: ${{ env.QT_MODULES }}
           cache: true
           cache-key-prefix: qt-macos-arm64-release
+
+      # ── Qt Installer Framework (for the optional wizard installer) ─────────
+      - name: Install Qt Installer Framework
+        run: |
+          set -euo pipefail
+          python3 -m pip install --upgrade aqtinstall
+          aqt install-tool mac desktop ${{ env.QT_IFW_TOOL }} \
+            --outputdir "${{ runner.temp }}/qtifw"
+          IFW_DIR="${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}"
+          echo "QT_IFW_DIR=${IFW_DIR}" >> "$GITHUB_ENV"
+          echo "${IFW_DIR}/bin" >> "$GITHUB_PATH"
 
       - name: Install Python 3.12
         run: brew install python@3.12 || brew upgrade python@3.12 || true
@@ -737,8 +789,8 @@ jobs:
             <key>CFBundleIdentifier</key><string>com.fincept.terminal</string>
             <key>CFBundleName</key><string>FinceptTerminal</string>
             <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>4.0.3</string>
-            <key>CFBundleVersion</key><string>4.0.3</string>
+            <key>CFBundleShortVersionString</key><string>4.1.0</string>
+            <key>CFBundleVersion</key><string>4.1.0</string>
             <key>LSMinimumSystemVersion</key><string>13.0</string>
             <key>NSHighResolutionCapable</key><true/>
           </dict></plist>
@@ -1453,6 +1505,62 @@ jobs:
           cp -R "build/${{ env.APP_NAME }}.app" "dist/"
           echo "Final bundle size: $(du -sh "dist/${{ env.APP_NAME }}.app" | cut -f1)"
 
+      # ── Optional: QtIFW "wizard" installer with a Target Directory page ─────
+      # Additive to the DMG (which stays the auto-update channel). The CMake
+      # install rule copies the SIGNED build/FinceptTerminal.app via `ditto`, so
+      # code signatures survive (issue #139). Output is named "-wizard.zip" so it
+      # never matches the updater regex (\.dmg$|macos.*setup) — it won't compete
+      # with the DMG for the auto-update asset.
+      # NOTE: VALIDATE ON A REAL RUNNER — this is the first IFW-on-macOS
+      # build/sign/notarize path. The bundle is signed + stapled BEFORE this step
+      # (the staple step above), satisfying the install-rule contract.
+      - name: Generate IFW wizard installer (sign + notarize)
+        working-directory: fincept-qt
+        env:
+          SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -Eo 'project\(FinceptTerminal VERSION [0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt | awk '{print $3}')
+          command -v binarycreator >/dev/null || { echo "::error::binarycreator not on PATH"; exit 1; }
+
+          # Reconfigure with the installer path ON (reuses the cached build); the
+          # install(CODE ditto) rule packages the already-signed bundle.
+          cmake -S . -B build -DFINCEPT_BUILD_INSTALLER=ON >/dev/null
+          BASENAME="FinceptTerminal-${VERSION}-macos-arm64-wizard"
+          ( cd build && cpack -G IFW -C ${{ env.BUILD_TYPE }} \
+                -D CPACK_PACKAGE_FILE_NAME="${BASENAME}" --verbose )
+
+          WIZ_APP="build/${BASENAME}.app"
+          [ -d "${WIZ_APP}" ] || { echo "::error::IFW installer not produced"; ls -la build; exit 1; }
+
+          # Sign the installer app's own Mach-Os leaf-first (the payload is an
+          # embedded archive that is already signed+notarized+stapled).
+          while IFS= read -r m; do
+            codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$m" || true
+          done < <(find "${WIZ_APP}" -type f \( -perm -u+x -o -name "*.dylib" \) 2>/dev/null)
+          codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "${WIZ_APP}"
+
+          # Notarize a zip of the installer app, then staple. (For production,
+          # adopt the submit/poll/staple loop used by the DMG step — --wait has
+          # no retry on the runner's transient notary network errors.)
+          ZIP="${RUNNER_TEMP}/${BASENAME}.zip"
+          /usr/bin/ditto -c -k --keepParent "${WIZ_APP}" "${ZIP}"
+          if SUB_ID=$(xcrun notarytool submit "${ZIP}" \
+                --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$NOTARY_PASSWORD" \
+                --wait --output-format json | jq -r '.id // empty') && [ -n "${SUB_ID}" ]; then
+            xcrun stapler staple "${WIZ_APP}" || echo "::warning::stapling wizard failed"
+          else
+            echo "::warning::wizard installer notarization unconfirmed — validate manually"
+          fi
+
+          # Ship as a zip (a bare .app can't be a GH release asset).
+          DIST_ZIP="build/${BASENAME}.zip"
+          /usr/bin/ditto -c -k --keepParent "${WIZ_APP}" "${DIST_ZIP}"
+          ls -lh "${DIST_ZIP}"
+
       # ── Generate Installer (DMG via hdiutil) ──────────────────────────────
       # We intentionally skip CPack IFW on macOS: CPack's install(TARGETS ...
       # BUNDLE) rule packages the raw build-tree .app, NOT the post-processed
@@ -1596,7 +1704,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: FinceptTerminal-macOS-arm64-installer
-          path: fincept-qt/build/FinceptTerminal-*-macos-arm64-setup.dmg
+          path: |
+            fincept-qt/build/FinceptTerminal-*-macos-arm64-setup.dmg
+            fincept-qt/build/FinceptTerminal-*-macos-arm64-wizard.zip
           retention-days: 30
 
 # ═════════════════════════════════════════════════════════════════════════════

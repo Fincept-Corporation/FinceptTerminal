@@ -480,6 +480,7 @@ ApiResponse<QVector<BrokerPosition>> FivePaisaBroker::get_positions(const Broker
         pos.avg_price = p["AvgRate"].toDouble();
         pos.ltp = p["LTP"].toDouble();
         pos.pnl = p["MTOM"].toDouble();
+        pos.pnl_pct = (pos.avg_price > 0.0) ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 : 0.0;
         pos.product_type = product;
         positions.append(pos);
     }
@@ -519,7 +520,10 @@ ApiResponse<QVector<BrokerHolding>> FivePaisaBroker::get_holdings(const BrokerCr
         holding.quantity = qty;
         holding.avg_price = avg;
         holding.ltp = ltp;
+        holding.invested_value = qty * avg;
+        holding.current_value = qty * ltp;
         holding.pnl = (ltp - avg) * qty;
+        holding.pnl_pct = (holding.invested_value > 0.0) ? (holding.pnl / holding.invested_value) * 100.0 : 0.0;
         holdings.append(holding);
     }
 

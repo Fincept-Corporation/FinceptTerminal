@@ -373,12 +373,12 @@ ApiResponse<QVector<BrokerPosition>> DhanBroker::get_positions(const BrokerCrede
             pos.avg_price = p.value("avgCostPrice").toDouble();
         // Positions don't carry an LTP field; callers wanting live MTM must
         // refresh via /v2/marketfeed/ltp. Leave 0 here.
+        // TODO: hydrate LTP to populate pnl_pct
         pos.ltp = 0.0;
         pos.pnl = p.value("unrealizedProfit").toDouble();
         pos.day_pnl = p.value("realizedProfit").toDouble();
         pos.side = qty > 0 ? "LONG" : "SHORT";
-        if (pos.avg_price > 0 && pos.ltp > 0)
-            pos.pnl_pct = (pos.ltp - pos.avg_price) / pos.avg_price * 100.0;
+        pos.pnl_pct = (pos.avg_price > 0.0) ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 : 0.0;
         positions.append(pos);
     }
     return {true, positions, "", ts};
@@ -410,6 +410,7 @@ ApiResponse<QVector<BrokerHolding>> DhanBroker::get_holdings(const BrokerCredent
         holding.avg_price = h.value("avgCostPrice").toDouble();
         // /v2/holdings does NOT return an LTP field. Caller must hydrate via
         // /v2/marketfeed/ltp using securityId — leave zero rather than fabricate.
+        // TODO: hydrate LTP to populate current_value/pnl
         holding.ltp = 0.0;
         holding.invested_value = holding.quantity * holding.avg_price;
         holding.current_value = 0.0;

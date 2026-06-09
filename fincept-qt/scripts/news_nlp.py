@@ -345,56 +345,109 @@ def cluster_semantic(headlines_json):
     }
 
 
+# Finance keyword lexicon — doubles as the VADER lexicon nudge and the offline
+# fallback scorer. Weights are valences on VADER's [-4, 4] scale.
+_FINANCE_POSITIVE = {
+    "surge": 3.0, "soar": 3.2, "skyrocket": 3.5, "breakthrough": 3.0, "boom": 2.8,
+    "rally": 2.5, "gain": 2.0, "gains": 2.0, "rise": 1.8, "jump": 2.5,
+    "jumps": 2.5, "climb": 2.0, "rebound": 2.2, "boost": 2.0, "beat": 2.2,
+    "beats": 2.2, "exceed": 2.0, "outperform": 2.5, "upgrade": 2.5, "profit": 1.8,
+    "growth": 1.8, "recover": 2.0, "record": 1.5, "strong": 1.5, "robust": 1.5,
+    "bullish": 3.0, "optimism": 1.8, "milestone": 1.5, "approval": 1.8, "deal": 1.2,
+}
+_FINANCE_NEGATIVE = {
+    "crash": -3.5, "plunge": -3.2, "collapse": -3.5, "meltdown": -3.5, "bankruptcy": -3.8,
+    "fall": -1.8, "drop": -2.0, "decline": -2.0, "tumble": -2.5, "slump": -2.5,
+    "miss": -2.0, "misses": -2.0, "fail": -2.2, "recession": -2.8, "crisis": -2.5,
+    "sanction": -2.0, "tariff": -1.8, "escalat": -1.5, "layoff": -2.2, "layoffs": -2.2,
+    "downgrade": -2.5, "fraud": -3.5, "scandal": -2.8, "selloff": -2.5, "default": -2.5,
+    "lawsuit": -1.8, "probe": -1.5, "weak": -1.5, "loss": -1.5, "deficit": -1.2,
+    "fear": -1.5, "threat": -1.5, "warning": -1.5, "bearish": -3.0, "halt": -1.5,
+}
+
+# Integer-weighted view used by the keyword fallback scorer (and confidence).
+_KW_POSITIVE = {k: max(1, int(round(abs(v) / 1.6))) for k, v in _FINANCE_POSITIVE.items()}
+_KW_NEGATIVE = {k: max(1, int(round(abs(v) / 1.6))) for k, v in _FINANCE_NEGATIVE.items()}
+
+_VADER = None
+_VADER_TRIED = False
+
+
+def _get_vader():
+    """Lazily build a finance-tuned VADER analyzer; None if unavailable."""
+    global _VADER, _VADER_TRIED
+    if _VADER_TRIED:
+        return _VADER
+    _VADER_TRIED = True
+    try:
+        from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+        analyzer = SentimentIntensityAnalyzer()
+        analyzer.lexicon.update(_FINANCE_POSITIVE)
+        analyzer.lexicon.update(_FINANCE_NEGATIVE)
+        _VADER = analyzer
+    except Exception:
+        _VADER = None
+    return _VADER
+
+
+def _keyword_signals(text):
+    """Finance keyword hit counts (used for fallback scoring and confidence)."""
+    pos = sum(w for p, w in _KW_POSITIVE.items() if p in text)
+    neg = sum(w for p, w in _KW_NEGATIVE.items() if p in text)
+    return pos, neg
+
+
+def _label_from_score(score):
+    if score >= 0.15:
+        return "BULLISH"
+    if score <= -0.15:
+        return "BEARISH"
+    return "NEUTRAL"
+
+
 def analyze_sentiment_batch(headlines_json):
-    """Batch sentiment analysis with confidence scores."""
+    """Batch sentiment analysis with confidence scores.
+
+    Prefers VADER (finance-tuned) when ``vaderSentiment`` is installed; otherwise
+    falls back to the offline keyword scorer. Output schema is stable across both
+    engines; ``engine`` reports which path ran."""
     try:
         articles = json.loads(headlines_json) if isinstance(headlines_json, str) else headlines_json
     except json.JSONDecodeError:
         return {"success": False, "error": "Invalid JSON"}
 
-    positives = {
-        "surge": 3, "soar": 3, "skyrocket": 3, "breakthrough": 3, "boom": 3,
-        "record high": 3, "rally": 2, "gain": 2, "rise": 2, "jump": 2,
-        "climb": 2, "rebound": 2, "boost": 2, "beat": 2, "exceed": 2,
-        "upgrade": 2, "profit": 2, "growth": 2, "recover": 2, "victory": 2,
-        "ceasefire": 2, "strong": 1, "robust": 1, "bullish": 1, "optimism": 1,
-        "milestone": 1, "positive": 1, "success": 1, "approval": 1, "deal": 1,
-    }
-    negatives = {
-        "crash": 3, "plunge": 3, "collapse": 3, "devastat": 3, "catastroph": 3,
-        "invasion": 3, "war crime": 3, "bankruptcy": 3, "meltdown": 3,
-        "fall": 2, "drop": 2, "decline": 2, "tumble": 2, "slump": 2, "miss": 2,
-        "fail": 2, "recession": 2, "crisis": 2, "conflict": 2, "attack": 2,
-        "sanction": 2, "tariff": 2, "escalat": 2, "layoff": 2, "downgrade": 2,
-        "fraud": 2, "scandal": 2, "disaster": 2, "weak": 1, "loss": 1,
-        "deficit": 1, "fear": 1, "threat": 1, "warning": 1, "bearish": 1,
-        "volatile": 1, "uncertain": 1, "ban": 1, "suspend": 1,
-    }
+    analyzer = _get_vader()
+    engine = "vader" if analyzer else "lexicon"
 
     results = []
     for article in articles:
         text = (article.get("headline", "") + " " + article.get("summary", "")).lower()
-        pos_score = sum(w for p, w in positives.items() if p in text)
-        neg_score = sum(w for p, w in negatives.items() if p in text)
+        pos_score, neg_score = _keyword_signals(text)
         total = pos_score + neg_score
-        net = pos_score - neg_score
 
-        if total == 0:
-            sentiment = "NEUTRAL"
-            score = 0.0
-            confidence = 0.2
-        elif net >= 2:
-            sentiment = "BULLISH"
-            score = min(net / max(total, 1), 1.0)
-            confidence = min(0.4 + total * 0.05, 0.95)
-        elif net <= -2:
-            sentiment = "BEARISH"
-            score = max(net / max(total, 1), -1.0)
-            confidence = min(0.4 + total * 0.05, 0.95)
+        if analyzer is not None:
+            score = analyzer.polarity_scores(text)["compound"]  # -1..1
+            sentiment = _label_from_score(score)
+            if sentiment == "NEUTRAL":
+                confidence = round(min(0.2 + abs(score) * 0.8, 0.4), 3)
+            else:
+                confidence = round(min(0.45 + abs(score) * 0.45 + total * 0.02, 0.97), 3)
         else:
-            sentiment = "NEUTRAL"
-            score = net / max(total, 1)
-            confidence = 0.3
+            net = pos_score - neg_score
+            if total == 0:
+                sentiment, score, confidence = "NEUTRAL", 0.0, 0.2
+            elif net >= 2:
+                sentiment = "BULLISH"
+                score = min(net / max(total, 1), 1.0)
+                confidence = min(0.4 + total * 0.05, 0.95)
+            elif net <= -2:
+                sentiment = "BEARISH"
+                score = max(net / max(total, 1), -1.0)
+                confidence = min(0.4 + total * 0.05, 0.95)
+            else:
+                sentiment = "NEUTRAL"
+                score = net / max(total, 1)
+                confidence = 0.3
 
         results.append({
             "id": article.get("id", ""),
@@ -412,6 +465,7 @@ def analyze_sentiment_batch(headlines_json):
 
     return {
         "success": True,
+        "engine": engine,
         "results": results,
         "aggregate": {"bullish": bull, "bearish": bear, "neutral": neut},
         "overall_score": round(sum(r["score"] for r in results) / max(len(results), 1), 3),

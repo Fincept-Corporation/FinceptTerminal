@@ -242,6 +242,7 @@ void PortfolioService::finalize_summary(const QString& portfolio_id,
     double total_mv = 0;
     double total_cost = 0;
     double total_day = 0;
+    double total_prev = 0; // previous-close value of PRICED holdings only (day% base)
 
     for (const auto& asset : assets) {
         portfolio::HoldingWithQuote h;
@@ -260,6 +261,7 @@ void PortfolioService::finalize_summary(const QString& portfolio_id,
             h.current_price = it->price;
             h.day_change = it->change;
             h.day_change_percent = it->change_pct;
+            total_prev += (h.current_price - h.day_change) * h.quantity; // priced holdings only
         } else {
             // Fallback to avg buy price if no quote (broker missed the symbol,
             // or yfinance returned nothing).
@@ -292,8 +294,10 @@ void PortfolioService::finalize_summary(const QString& portfolio_id,
     summary.total_unrealized_pnl = total_mv - total_cost;
     summary.total_unrealized_pnl_percent = (total_cost > 0) ? ((total_mv - total_cost) / total_cost) * 100.0 : 0;
     summary.total_day_change = total_day;
-    summary.total_day_change_percent =
-        (total_mv - total_day > 0) ? (total_day / (total_mv - total_day)) * 100.0 : 0;
+    // Percent off the previous-close base of PRICED holdings only. Using
+    // (total_mv − total_day) folded unpriced holdings' full stale value into the
+    // denominator, diluting the day % whenever any symbol failed to quote.
+    summary.total_day_change_percent = (total_prev > 0) ? (total_day / total_prev) * 100.0 : 0;
     summary.total_positions = assets.size();
     summary.last_updated = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 

@@ -332,8 +332,12 @@ ApiResponse<QVector<BrokerPosition>> TradierBroker::get_positions(const BrokerCr
         pos.symbol = o.value("symbol").toString();
         pos.exchange = "US";
         pos.quantity = qty;
+        // avg_price = cost_basis / qty. For options this reflects the 100× contract
+        // multiplier (cost_basis is the full notional); we do NOT un-bake it here.
         pos.avg_price = (qty != 0) ? o.value("cost_basis").toDouble() / qty : 0.0;
         pos.side = qty > 0 ? "LONG" : "SHORT";
+        // TODO: hydrate LTP for current_value/pnl — the positions endpoint carries no
+        // price, so ltp/pnl/pnl_pct stay 0 (do not fabricate prices).
         positions.append(pos);
     }
 
@@ -374,8 +378,14 @@ ApiResponse<QVector<BrokerHolding>> TradierBroker::get_holdings(const BrokerCred
         h.symbol = o.value("symbol").toString();
         h.exchange = "US";
         h.quantity = qty;
+        // avg_price = cost_basis / qty. For options this reflects the 100× contract
+        // multiplier (cost_basis is the full notional); we do NOT un-bake it here.
         h.avg_price = (qty > 0) ? o.value("cost_basis").toDouble() / qty : 0.0;
-        h.invested_value = o.value("cost_basis").toDouble();
+        // Prefer the API cost_basis; fall back to qty*avg_price when it's absent.
+        const double cost_basis = o.value("cost_basis").toDouble();
+        h.invested_value = (cost_basis != 0.0) ? cost_basis : h.quantity * h.avg_price;
+        // TODO: hydrate LTP for current_value/pnl — the positions endpoint carries no
+        // price, so ltp/current_value/pnl/pnl_pct stay 0 (do not fabricate prices).
         holdings.append(h);
     }
 

@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "trading/AccountManager.h"
+#include "trading/BrokerRegistry.h"
 
 #    include "datahub/DataHub.h"
 #    include "datahub/DataHubMetaTypes.h"
@@ -17,13 +18,14 @@ namespace fincept::trading {
 namespace {
 constexpr const char* DSM_TAG = "DataStreamManager";
 
-// Brokers whose tokens expire daily at ~3:00 AM IST. Crypto and international
-// brokers (alpaca, ibkr, tradier, saxo) are intentionally excluded.
-const QSet<QString>& indian_brokers() {
-    static const QSet<QString> kSet = {
-        "zerodha", "angelone", "upstox", "fyers", "dhan", "groww",
-        "kotak", "iifl", "fivepaisa", "aliceblue", "shoonya", "motilal"};
-    return kSet;
+// Brokers whose tokens expire daily at ~3:00 AM IST: every Indian-region broker.
+// Derived from each broker's own profile (region == "IN") rather than a
+// hand-maintained list, so newly-added Indian brokers (samco, flattrade, paytm,
+// tradejini, icicidirect, …) are covered automatically and can't silently drift
+// out of the sweep. International brokers (US/EU regions) are excluded by region.
+bool is_daily_expiring_broker(const QString& broker_id) {
+    auto* b = BrokerRegistry::instance().get(broker_id);
+    return b != nullptr && b->profile().region == QLatin1String("IN");
 }
 
 // Hourly cadence is enough to catch the 3:00 AM IST window without polling
@@ -80,7 +82,7 @@ void DataStreamManager::check_indian_token_expiry() {
     for (const auto& acct : accounts) {
         if (!acct.is_active || acct.trading_mode != "live")
             continue;
-        if (!indian_brokers().contains(acct.broker_id))
+        if (!is_daily_expiring_broker(acct.broker_id))
             continue;
         if (am.connection_state(acct.account_id) == ConnectionState::TokenExpired)
             continue;
@@ -170,6 +172,11 @@ void DataStreamManager::pause_all() {
 void DataStreamManager::resume_all() {
     for (auto* stream : streams_)
         stream->resume();
+}
+
+void DataStreamManager::refresh_portfolio(const QString& account_id) {
+    if (auto* s = stream_for(account_id))
+        s->refresh_portfolio_now();
 }
 
 // ── Query ───────────────────────────────────────────────────────────────────

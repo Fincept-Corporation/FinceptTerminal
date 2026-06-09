@@ -440,6 +440,7 @@ ApiResponse<QVector<BrokerPosition>> IIFLBroker::get_positions(const BrokerCrede
         pos.avg_price = o.value("AveragePrice").toDouble();
         pos.ltp = o.value("LastPrice").toDouble();
         pos.pnl = o.value("UnrealizedMTM").toDouble();
+        pos.pnl_pct = (pos.avg_price > 0.0) ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 : 0.0;
         pos.product_type = o.value("ProductType").toString();
         positions.append(pos);
     }
@@ -485,7 +486,10 @@ ApiResponse<QVector<BrokerHolding>> IIFLBroker::get_holdings(const BrokerCredent
         h.quantity = o.value("HoldingQuantity").toInt();
         h.avg_price = o.value("BuyPrice").toDouble();
         h.ltp = o.value("Price").toDouble();
+        h.invested_value = h.quantity * h.avg_price;
+        h.current_value = h.quantity * h.ltp;
         h.pnl = (h.ltp - h.avg_price) * h.quantity;
+        h.pnl_pct = (h.invested_value > 0.0) ? (h.pnl / h.invested_value) * 100.0 : 0.0;
         holdings.append(h);
     }
 

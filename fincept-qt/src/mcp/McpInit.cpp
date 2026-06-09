@@ -167,7 +167,7 @@ void initialize_all_tools() {
     // gov-data — 10 government providers (US Treasury/Congress, France, HK, UK, Australia, ...)
     provider.register_tools(tools::get_gov_data_tools());
 
-    // equity-research — symbol search, load, financials, technicals, peers, news, talipp, sentiment
+    // equity-research — symbol search, load, financials, technicals, peers, news, sentiment
     provider.register_tools(tools::get_equity_research_tools());
 
     // workspace — monitors, windows, panels, layouts, snapshots, symbol groups, actions, command-bar

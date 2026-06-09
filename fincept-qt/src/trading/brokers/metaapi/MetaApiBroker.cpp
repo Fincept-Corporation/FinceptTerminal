@@ -550,6 +550,10 @@ ApiResponse<QVector<BrokerHolding>> MetaApiBroker::get_holdings(const BrokerCred
         h.avg_price = p.avg_price;
         h.ltp = p.ltp;
         h.pnl = p.pnl;
+        // TODO: invested/current ignore contract (lot) size; pnl from API 'profit' is authoritative.
+        // quantity is in lots (e.g. 0.10), not units, so price*lots is off by the
+        // contract size. The MetaAPI position payload carries no contract/lot-size
+        // field to scale by, so the arithmetic is left as-is.
         h.invested_value = p.avg_price * p.quantity;
         h.current_value = p.ltp * p.quantity;
         holdings.append(h);

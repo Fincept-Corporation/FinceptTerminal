@@ -3,6 +3,8 @@
 #include "trading/PaperTrading.h"
 #include "trading/instruments/InstrumentService.h"
 
+#include <QSet>
+
 #include <cmath>
 
 namespace fincept::trading::replication {
@@ -151,10 +153,28 @@ SymbolResolver make_instrument_resolver(const QString& source_broker_id,
 
 ReplicationResult execute_plan(const ReplicationPlan& plan) {
     ReplicationResult res;
+
+    // Idempotency + no-close guard. Replication must ESTABLISH positions in the
+    // target — it must never trade AGAINST an existing one. Routing a sell (or a
+    // re-imported symbol) through the normal fill engine takes its close-netting
+    // leg and books phantom REALIZED P&L (e.g. a source short selling into a just-
+    // bought long), and re-running would double exposure. So we skip any symbol the
+    // target already holds. To intentionally re-replicate, clear the paper account
+    // first. (Matched on the broker-native/normalised symbol the order will use.)
+    QSet<QString> already_held;
+    for (const auto& p : pt_get_positions(plan.target_paper_portfolio_id))
+        already_held.insert(p.symbol.toUpper());
+
     for (const auto& po : plan.orders) {
         if (!po.included) {
             ++res.skipped;
             res.rows.push_back({po.norm_symbol, false, po.warning.isEmpty() ? QStringLiteral("skipped") : po.warning});
+            continue;
+        }
+        if (already_held.contains(po.norm_symbol.toUpper())) {
+            ++res.skipped;
+            res.rows.push_back({po.norm_symbol, false,
+                                QStringLiteral("already in target — skipped (clear paper account to re-replicate)")});
             continue;
         }
         try {
@@ -165,6 +185,7 @@ ReplicationResult execute_plan(const ReplicationPlan& plan) {
                                       QStringLiteral("market"), po.quantity, price_opt, std::nullopt,
                                       /*reduce_only=*/false, po.exchange, po.product);
             pt_fill_order(ord.id, po.est_price);
+            already_held.insert(po.norm_symbol.toUpper()); // a later same-symbol leg must not net against this
             ++res.placed;
             res.rows.push_back({po.norm_symbol, true, QString()});
         } catch (const std::exception& e) {

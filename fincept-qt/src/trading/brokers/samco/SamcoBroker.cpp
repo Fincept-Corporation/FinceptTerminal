@@ -374,6 +374,7 @@ ApiResponse<QVector<BrokerPosition>> SamcoBroker::get_positions(const BrokerCred
         pos.avg_price = samco_d(o.value("averagePrice"));
         pos.ltp = samco_d(o.value("lastTradedPrice"));
         pos.pnl = samco_d(o.value("realizedGainAndLoss")) + samco_d(o.value("mtmGainLoss"));
+        pos.pnl_pct = (pos.avg_price > 0.0) ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 : 0.0;
         pos.side = net_qty > 0 ? "LONG" : "SHORT";
         positions.append(pos);
     }

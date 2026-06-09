@@ -580,11 +580,19 @@ ApiResponse<QVector<BrokerPosition>> KotakBroker::get_positions(const BrokerCred
         pos.product_type = o.value("prod").toString();
         pos.quantity = net_qty;
         pos.avg_price = buy_qty > 0 ? buy_amt / buy_qty : 0.0;
+        // Net-short (sold more than bought; buy_qty may be 0) has no buy leg to
+        // derive an entry price from — fall back to the sell leg so avg_price and
+        // pnl_pct are meaningful instead of 0.
+        if (net_qty < 0)
+            pos.avg_price = sell_qty > 0 ? sell_amt / sell_qty : pos.avg_price;
         pos.ltp = o.value("ltp").toString().toDouble();
         pos.pnl = (pos.ltp * net_qty) - (buy_amt - sell_amt);
         pos.side = net_qty > 0 ? "LONG" : "SHORT";
-        if (pos.avg_price > 0)
-            pos.pnl_pct = (pos.ltp - pos.avg_price) / pos.avg_price * 100.0;
+        // ltp is populated from the positions response above. Sign the % by side so
+        // a short shows a gain when price falls below the (sell-leg) entry price.
+        pos.pnl_pct = (pos.avg_price > 0.0)
+                          ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 * (net_qty < 0 ? -1.0 : 1.0)
+                          : 0.0;
         positions.append(pos);
     }
     return {true, positions, "", ts};

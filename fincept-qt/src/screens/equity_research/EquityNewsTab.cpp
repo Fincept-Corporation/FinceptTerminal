@@ -9,6 +9,7 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QStandardItemModel>
 #include <QUrl>
 
 namespace fincept::screens {
@@ -24,13 +25,57 @@ void EquityNewsTab::set_symbol(const QString& symbol) {
         return;
     current_symbol_ = symbol;
     news_loaded_ = false;
+    company_label_->setText(symbol);
+    refresh_provider_availability();
+    start_fetch();
+}
+
+// (Re)fetch the current symbol's news using the selected provider. Sole owner of
+// the news fetch — the screen no longer triggers it, so the dropdown is authoritative.
+void EquityNewsTab::start_fetch() {
+    if (current_symbol_.isEmpty())
+        return;
     clear_cards();
     count_label_->setText("");
-    company_label_->setText(symbol);
     status_label_->setText(tr("Loading news…"));
     status_label_->show();
     loading_overlay_->show_loading(tr("LOADING NEWS…"));
-    services::equity::EquityResearchService::instance().fetch_news(symbol, 20);
+    using NP = services::equity::NewsProvider;
+    services::equity::EquityResearchService::instance().fetch_news(current_symbol_, 20,
+                                                                   use_newsapi_ ? NP::NewsApi : NP::Auto);
+}
+
+// Enable the "NewsAPI" item only when a key is configured in Data Sources; if it
+// was selected but the key went away, fall back to Auto.
+void EquityNewsTab::refresh_provider_availability() {
+    if (!provider_combo_)
+        return;
+    const bool avail = !services::equity::EquityResearchService::instance().configured_newsapi_key().isEmpty();
+    if (auto* model = qobject_cast<QStandardItemModel*>(provider_combo_->model())) {
+        if (auto* item = model->item(1)) {
+            item->setEnabled(avail);
+            item->setToolTip(avail ? QString() : tr("Add a NewsAPI key in the Data Sources tab"));
+        }
+    }
+    if (!avail && use_newsapi_) {
+        use_newsapi_ = false;
+        suppress_provider_signal_ = true;
+        provider_combo_->setCurrentIndex(0);
+        suppress_provider_signal_ = false;
+    }
+}
+
+QString EquityNewsTab::provider_key() const {
+    return use_newsapi_ ? QStringLiteral("newsapi") : QStringLiteral("auto");
+}
+
+void EquityNewsTab::set_provider_key(const QString& key) {
+    use_newsapi_ = (key == QLatin1String("newsapi"));
+    if (provider_combo_) {
+        suppress_provider_signal_ = true;
+        provider_combo_->setCurrentIndex(use_newsapi_ ? 1 : 0);
+        suppress_provider_signal_ = false;
+    }
 }
 
 void EquityNewsTab::build_ui() {
@@ -66,21 +111,38 @@ void EquityNewsTab::build_ui() {
 
     hl->addStretch();
 
+    // ── Provider switch ─────────────────────────────────────────────────────────
+    // "NewsAPI" stays disabled until a key is configured in the Data Sources tab.
+    provider_combo_ = new QComboBox;
+    provider_combo_->addItem(tr("Auto (GNews → Yahoo)"));
+    provider_combo_->addItem(QStringLiteral("NewsAPI"));
+    provider_combo_->setToolTip(tr("News source"));
+    provider_combo_->setStyleSheet(
+        QString("QComboBox { background:%1; color:%2; border:1px solid %3; border-radius:3px; "
+                "padding:3px 8px; font-size:10px; font-weight:700; }"
+                "QComboBox::drop-down { border:0; width:14px; }"
+                "QComboBox QAbstractItemView { background:%1; color:%2; border:1px solid %3; "
+                "selection-background-color:%4; }")
+            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
+                 ui::colors::BG_RAISED()));
+    connect(provider_combo_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        if (suppress_provider_signal_)
+            return;
+        use_newsapi_ = (idx == 1);
+        start_fetch();
+    });
+    hl->addWidget(provider_combo_);
+
     refresh_btn_ = new QPushButton(tr("REFRESH"));
     refresh_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2; "
                                         "border-radius:3px; padding:4px 12px; font-size:10px; font-weight:700; }"
                                         "QPushButton:hover { border-color:%3; color:%3; }")
                                     .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
-    connect(refresh_btn_, &QPushButton::clicked, this, [this]() {
-        if (!current_symbol_.isEmpty()) {
-            clear_cards();
-            status_label_->show();
-            loading_overlay_->show_loading(tr("LOADING NEWS…"));
-            services::equity::EquityResearchService::instance().fetch_news(current_symbol_, 20);
-        }
-    });
+    connect(refresh_btn_, &QPushButton::clicked, this, [this]() { start_fetch(); });
     hl->addWidget(refresh_btn_);
     vl->addWidget(hdr);
+
+    refresh_provider_availability(); // set the initial enabled state of the NewsAPI item
 
     // ── Status label ──────────────────────────────────────────────────────────
     status_label_ = new QLabel(tr("Search for a symbol to load news."));
@@ -248,6 +310,10 @@ void EquityNewsTab::changeEvent(QEvent* event) {
 void EquityNewsTab::retranslateUi() {
     if (title_lbl_)   title_lbl_->setText(tr("LATEST NEWS"));
     if (refresh_btn_) refresh_btn_->setText(tr("REFRESH"));
+    if (provider_combo_) {
+        provider_combo_->setItemText(0, tr("Auto (GNews → Yahoo)"));
+        provider_combo_->setToolTip(tr("News source"));
+    }
 
     if (status_label_) {
         // Pick the appropriate idle text — never overwrite a live "Loading…"

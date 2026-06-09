@@ -103,6 +103,11 @@ class AccountManagementDialog : public QDialog {
     // Dynamic credential fields (rebuilt per broker profile)
     QVector<QLineEdit*> cred_fields_;
     QVector<trading::CredentialFieldDef> cred_field_defs_;
+    // Non-empty when the focused broker uses a custom multi-sub-field form (the
+    // delimiter brokers — fivepaisa/iifl/kotak/flattrade/shoonya/motilal — whose
+    // exchange_token() packs several secrets into one arg). Holds the per-field
+    // keys, row-aligned with cred_fields_, used to pack the values back together.
+    QStringList cred_form_keys_;
 
     // Zerodha-specific widgets
     QLabel*        z_title_ = nullptr;
