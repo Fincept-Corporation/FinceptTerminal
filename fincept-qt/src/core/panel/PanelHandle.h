@@ -73,7 +73,10 @@ class PanelHandle : public QObject {
     int last_state_version() const { return last_state_version_; }
 
     /// Live dock widget pointer, or nullptr while Suspended/Closed.
-    ads::CDockWidget* dock_widget() const { return dock_widget_.data(); }
+    /// Defined out-of-line in the .cpp: QPointer::data() static_casts to
+    /// CDockWidget*, which needs the complete ADS type (only the forward
+    /// declaration is visible here to keep this header lightweight).
+    ads::CDockWidget* dock_widget() const;
 
     /// Render-time samples (most-recent first). Phase 8 surfaces these in
     /// the debug overlay; Phase 4 stores them so the pipeline is in place.

@@ -39,6 +39,10 @@ void PanelHandle::set_state(State s) {
     emit state_changed(s);
 }
 
+ads::CDockWidget* PanelHandle::dock_widget() const {
+    return dock_widget_.data();
+}
+
 void PanelHandle::set_dock_widget(ads::CDockWidget* dw) {
     dock_widget_ = dw;
 }

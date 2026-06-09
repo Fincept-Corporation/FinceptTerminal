@@ -164,9 +164,21 @@ endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ── Build performance ─────────────────────────────────────────────────────────
-# Unity build for infrastructure layers (safe — no local symbol conflicts)
-# Screens are excluded below via SKIP_UNITY_BUILD_INCLUSION (too many local statics/functions)
-set(CMAKE_UNITY_BUILD ON)
+# Developer iteration build. Set ON by the `win-dev` preset. Flips unity build
+# OFF (so a single-file edit recompiles only that file, not its 20-file bundle)
+# and enables /DEBUG:FASTLINK below for much faster incremental links. Release
+# builds (Release/linux/macos presets) leave this OFF for the smaller, faster
+# binary that unity + full PDB linking produce.
+option(FINCEPT_DEV_BUILD "Developer iteration build: unity OFF + FASTLINK for fast single-file rebuilds" OFF)
+
+# Unity build for infrastructure layers (safe — no local symbol conflicts).
+# Screens are excluded below via SKIP_UNITY_BUILD_INCLUSION (too many local statics/functions).
+# Disabled in dev builds so a one-line edit only recompiles that translation unit.
+if(FINCEPT_DEV_BUILD)
+    set(CMAKE_UNITY_BUILD OFF)
+else()
+    set(CMAKE_UNITY_BUILD ON)
+endif()
 set(CMAKE_UNITY_BUILD_BATCH_SIZE 20)
 
 # FetchContent: default to skipping the update step after first download to cut
@@ -230,6 +242,14 @@ if(MSVC)
         # /INCREMENTAL:NO; override here.
         add_link_options($<$<CONFIG:Release>:/INCREMENTAL>)
         add_link_options($<$<CONFIG:RelWithDebInfo>:/INCREMENTAL>)
+        # Dev iteration: /DEBUG:FASTLINK keeps debug info in the .obj files and
+        # builds a thin PDB that references them rather than copying it all in.
+        # This is the single biggest lever on incremental link wall-clock for a
+        # 400+ object target. The objects must stay on disk (fine for a dev tree).
+        # Release builds keep the default full PDB (portable, no obj dependency).
+        if(FINCEPT_DEV_BUILD)
+            add_link_options($<$<CONFIG:RelWithDebInfo>:/DEBUG:FASTLINK>)
+        endif()
         # Replace any /INCREMENTAL:NO that CMake's defaults inserted.
         foreach(flag_var
                 CMAKE_EXE_LINKER_FLAGS_RELEASE
