@@ -355,6 +355,36 @@ jobs:
           echo "Binary: $BINARY ($(du -sh "$BINARY" | cut -f1))"
           file "$BINARY"
 
+      # ── Generate Linux desktop icon (shared by AppImage/.deb/.rpm) ─────────
+      # CMake's install rule renames resources/fincept.png → fincept-terminal.png
+      # (the name the .desktop `Icon=` key and the .rpm %files manifest expect).
+      # The repo only ships resources/fincept.ico, so derive the PNG here once,
+      # before any packaging step runs `cmake --install`. Without this the .rpm
+      # build fails with: File not found: .../fincept-terminal.png.
+      - name: Generate Linux icon PNG
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          if [ ! -f resources/fincept.png ]; then
+            if [ -f resources/icons/app_icon_256.png ]; then
+              cp resources/icons/app_icon_256.png resources/fincept.png
+            elif [ -f resources/fincept.ico ]; then
+              # ICO may hold multiple frames — [0] selects the primary/largest.
+              convert "ico:resources/fincept.ico[0]" -resize 256x256 -background none -flatten "png:resources/fincept.png"
+            else
+              # Solid-color last resort, written with a valid IDAT+CRC.
+              convert -size 256x256 xc:'#1a1a1a' "png:resources/fincept.png"
+            fi
+          fi
+          # Fail fast on a missing/empty/corrupt PNG — a bad icon here breaks both
+          # the AppImage (linuxdeploy's libpng pass) and the .rpm %files check.
+          if [ ! -s resources/fincept.png ] || ! file resources/fincept.png | grep -q 'PNG image data'; then
+            echo "::error::resources/fincept.png is missing or not a valid PNG"
+            file resources/fincept.png 2>&1 || true
+            exit 1
+          fi
+          echo "Icon ready: resources/fincept.png ($(du -h resources/fincept.png | cut -f1))"
+
       # ── Build self-contained AppImage ─────────────────────────────────────
       # The previous release workflow ran CPack IFW on Linux but didn't bundle
       # Qt at all — the installer produced a "binary + desktop file" payload
@@ -585,6 +615,11 @@ jobs:
           License:        AGPL-3.0-or-later
           URL:            https://github.com/Fincept-Corporation/FinceptTerminal
           AutoReqProv:    no
+
+          # cmake --install also stages flatpak-named copies
+          # (in.fincept.FinceptTerminal.{desktop,metainfo.xml,png}) that this
+          # curated %files list intentionally omits — warn, don't fail, on them.
+          %define _unpackaged_files_terminate_build 0
 
           %description
           Native C++20 desktop terminal with real-time market data, AI analytics,
