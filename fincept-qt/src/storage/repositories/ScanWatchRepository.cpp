@@ -13,7 +13,7 @@ namespace {
 const char* kCols =
     "id, name, conditions_json, logic, symbols, timeframe, lookback_days,"
     " data_source, broker_id, account_id, mode, interval_sec, cooldown_min,"
-    " actions_json, active, status, last_eval_at, last_fired_at";
+    " actions_json, active, status, last_eval_at, last_fired_at, universe";
 
 QString json_array_to_str(const QJsonArray& a) {
     return QString::fromUtf8(QJsonDocument(a).toJson(QJsonDocument::Compact));
@@ -51,6 +51,7 @@ ScanWatch ScanWatchRepository::map_row(QSqlQuery& q) {
     w.status        = q.value(15).toString();
     w.last_eval_at  = q.value(16).toLongLong();
     w.last_fired_at = q.value(17).toLongLong();
+    w.universe      = q.value(18).toString();
     return w;
 }
 
@@ -62,12 +63,12 @@ Result<ScanWatch> ScanWatchRepository::create(const ScanWatch& in) {
     auto r = exec_write(
         "INSERT INTO scan_watches (id, name, conditions_json, logic, symbols, timeframe,"
         " lookback_days, data_source, broker_id, account_id, mode, interval_sec, cooldown_min,"
-        " actions_json, active, status, last_eval_at, last_fired_at, created_at, updated_at)"
-        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        " actions_json, active, status, last_eval_at, last_fired_at, universe, created_at, updated_at)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         {nn(w.id), nn(w.name), nn(json_array_to_str(w.conditions)), nn(w.logic), nn(w.symbols.join('\n')),
          nn(w.timeframe), w.lookback_days, nn(w.data_source), nn(w.broker_id), nn(w.account_id), nn(w.mode),
          w.interval_sec, w.cooldown_min, nn(json_obj_to_str(w.actions)), w.active ? 1 : 0,
-         nn(w.status), w.last_eval_at, w.last_fired_at, now, now});
+         nn(w.status), w.last_eval_at, w.last_fired_at, nn(w.universe), now, now});
     if (r.is_err())
         return Result<ScanWatch>::err(r.error());
     SyncOutbox::record("scan_watch", w.id, "create");
@@ -79,10 +80,10 @@ Result<void> ScanWatchRepository::update(const ScanWatch& w) {
     auto r = exec_write(
         "UPDATE scan_watches SET name=?, conditions_json=?, logic=?, symbols=?, timeframe=?,"
         " lookback_days=?, data_source=?, broker_id=?, account_id=?, mode=?, interval_sec=?,"
-        " cooldown_min=?, actions_json=?, active=?, updated_at=? WHERE id=?",
+        " cooldown_min=?, actions_json=?, active=?, universe=?, updated_at=? WHERE id=?",
         {nn(w.name), nn(json_array_to_str(w.conditions)), nn(w.logic), nn(w.symbols.join('\n')), nn(w.timeframe),
          w.lookback_days, nn(w.data_source), nn(w.broker_id), nn(w.account_id), nn(w.mode), w.interval_sec,
-         w.cooldown_min, nn(json_obj_to_str(w.actions)), w.active ? 1 : 0, now, nn(w.id)});
+         w.cooldown_min, nn(json_obj_to_str(w.actions)), w.active ? 1 : 0, nn(w.universe), now, nn(w.id)});
     if (r.is_ok())
         SyncOutbox::record("scan_watch", w.id, "update");
     return r;

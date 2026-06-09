@@ -2,6 +2,7 @@
 #pragma once
 #include "algo_engine/AlgoEngineTypes.h"
 #include "algo_engine/DeploymentRunner.h"
+#include "algo_engine/fno/FnoDataBridge.h"
 #include "services/algo_trading/AlgoTradingTypes.h"
 
 #include <QHash>
@@ -40,6 +41,11 @@ public:
     bool has_active_duplicate(const QString& strategy_id, const QString& symbol,
                               const QString& mode, const QString& entry_side) const;
 
+    // GUI-thread bridge for option-chain data. Created before moveToThread so it
+    // stays on the main thread. Accessible to callers that need to check its state
+    // from the main thread (e.g. the F&O Algo deploy dialog).
+    fincept::algo::fno::FnoDataBridge* fno_bridge() const { return fno_bridge_; }
+
 signals:
     void deployment_started(const QString& deployment_id);
     void deployment_stopped(const QString& deployment_id);
@@ -60,6 +66,15 @@ private:
     Q_DISABLE_COPY(AlgoEngine)
 
     void execute_order(const AlgoOrderSignal& signal);
+    // Multi-leg F&O basket execution (P3.4). Dispatched from execute_order when
+    // signal.legs is non-empty. Paper (signal.mode != "live") routes every leg to
+    // the deployment's paper portfolio via pt_place_order — NEVER the broker, even
+    // on a live account (the safety gate). Live (signal.mode == "live" only) sends
+    // a broker basket and rolls back filled legs if any leg fails on entry.
+    void execute_basket(const AlgoOrderSignal& signal);
+    // Resolve the paper portfolio for a basket: the signal's paper_portfolio_id,
+    // else the deployment account's, else a reused/created "F&O Paper" portfolio.
+    QString resolve_paper_portfolio_id(const AlgoOrderSignal& signal);
     // Writes the deployment row to algo_deployments so the Dashboard (which reads
     // that table) can see it. Without this the runner starts in memory only and
     // the deploy is invisible to the UI.
@@ -71,6 +86,7 @@ private:
     QThread engine_thread_;
     mutable QMutex mutex_;
     QHash<QString, DeploymentRunner*> runners_;
+    fincept::algo::fno::FnoDataBridge* fno_bridge_ = nullptr;
 };
 
 } // namespace fincept::algo

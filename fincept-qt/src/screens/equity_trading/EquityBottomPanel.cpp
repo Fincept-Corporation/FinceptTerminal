@@ -1,6 +1,7 @@
 // EquityBottomPanel.cpp — tabbed portfolio display
 #include "screens/equity_trading/EquityBottomPanel.h"
 
+#include "core/logging/Logger.h"
 #include "ui/theme/Theme.h"
 
 #include <QDate>
@@ -360,11 +361,24 @@ void EquityBottomPanel::setup_positions_tab() {
         QMenu menu(this);
         QAction* buy = menu.addAction(tr("Buy / Add  %1").arg(symbol));
         QAction* sell = menu.addAction(tr("Sell / Reduce  %1").arg(symbol));
+        auto* qty_item = positions_table_->item(row, 4); // Qty column
+        const double held = qty_item ? qAbs(qty_item->text().toDouble()) : 0.0;
         QAction* chosen = menu.exec(positions_table_->viewport()->mapToGlobal(p));
         if (chosen == buy)
-            emit trade_symbol_requested(symbol, product, true);
+            emit trade_symbol_requested(symbol, product, true, 0.0); // add → ticket defaults to 1
         else if (chosen == sell)
-            emit trade_symbol_requested(symbol, product, false);
+            emit trade_symbol_requested(symbol, product, false, held); // reduce → pre-fill held qty
+    });
+
+    // Left-click a position row → load that symbol's chart (parity with the
+    // watchlist). Clicks on the Action cell-widget (col 9) go to its buttons, not
+    // here, so the SELL button keeps working.
+    connect(positions_table_, &QTableWidget::cellClicked, this, [this](int row, int col) {
+        auto* sym_item = positions_table_->item(row, 0);
+        LOG_INFO("posdbg", QString("positions cellClicked row=%1 col=%2 sym='%3'")
+                               .arg(row).arg(col).arg(sym_item ? sym_item->text() : QStringLiteral("<null>")));
+        if (sym_item && !sym_item->text().isEmpty())
+            emit chart_symbol_requested(sym_item->text());
     });
 
     vlay->addWidget(positions_table_, 1);
@@ -430,6 +444,13 @@ void EquityBottomPanel::setup_holdings_tab() {
     });
     strip_layout->addWidget(holdings_import_btn_);
 
+    holdings_replicate_btn_ = new QPushButton(tr("REPLICATE → PAPER"));
+    holdings_replicate_btn_->setCursor(Qt::PointingHandCursor);
+    holdings_replicate_btn_->setStyleSheet(holdings_import_btn_->styleSheet());
+    connect(holdings_replicate_btn_, &QPushButton::clicked, this,
+            [this]() { emit replicate_portfolio_requested(); });
+    strip_layout->addWidget(holdings_replicate_btn_);
+
     v->addWidget(strip);
 
     holdings_table_ = new QTableWidget;
@@ -465,11 +486,13 @@ void EquityBottomPanel::setup_holdings_tab() {
         QMenu menu(this);
         QAction* buy = menu.addAction(tr("Buy / Add  %1").arg(symbol));
         QAction* sell = menu.addAction(tr("Sell / Reduce  %1").arg(symbol));
+        auto* qty_item = holdings_table_->item(row, 1); // Qty column
+        const double held = qty_item ? qAbs(qty_item->text().toDouble()) : 0.0;
         QAction* chosen = menu.exec(holdings_table_->viewport()->mapToGlobal(p));
         if (chosen == buy)
-            emit trade_symbol_requested(symbol, QStringLiteral("CNC"), true);
+            emit trade_symbol_requested(symbol, QStringLiteral("CNC"), true, 0.0);
         else if (chosen == sell)
-            emit trade_symbol_requested(symbol, QStringLiteral("CNC"), false);
+            emit trade_symbol_requested(symbol, QStringLiteral("CNC"), false, held);
     });
 
     v->addWidget(holdings_table_, 1);
@@ -734,26 +757,12 @@ void EquityBottomPanel::set_paper_positions(const QVector<trading::PtPosition>& 
         pct_item->setText(QString::number(pct, 'f', 2) + "%");
         pct_item->setForeground(pct >= 0 ? pos_color : neg_color);
 
-        // Col 9 — CONVERT to CNC (carry overnight). Only intraday (MIS) positions
-        // can be converted to delivery; NRML/CNC show nothing.
-        if (trading::product_is_intraday(p.product)) {
-            auto* btn = new QPushButton(tr("→ CNC"));
-            btn->setObjectName("eqTableBtn");
-            btn->setFixedHeight(18);
-            btn->setCursor(Qt::PointingHandCursor);
-            btn->setToolTip(tr("Convert to CNC delivery (carry overnight, locks full cash)"));
-            btn->setStyleSheet(QString("QPushButton#eqTableBtn{background:rgba(37,99,235,0.15);color:%1;"
-                                       "border:1px solid %2;font-size:10px;padding:0 6px;border-radius:2px;}"
-                                       "QPushButton#eqTableBtn:hover{background:rgba(37,99,235,0.30);}")
-                                   .arg(fincept::ui::colors::INFO(), fincept::ui::colors::BORDER_MED()));
-            const QString pid = p.id;
-            const QString sym = p.symbol;
-            connect(btn, &QPushButton::clicked, this,
-                    [this, pid, sym]() { emit convert_position_requested(pid, sym, QStringLiteral("CNC")); });
-            positions_table_->setCellWidget(i, 9, btn);
-        } else {
-            positions_table_->setCellWidget(i, 9, nullptr);
-        }
+        // Col 9 — Action: SELL (exit, pre-filled qty) + for intraday (MIS), a
+        // "→ CNC" convert-to-delivery button. NRML/CNC rows get SELL only.
+        positions_table_->setCellWidget(
+            i, 9,
+            make_positions_action_cell(p.symbol, p.product, p.quantity,
+                                       trading::product_is_intraday(p.product), p.id));
     }
     update_positions_summary();
 }
@@ -857,6 +866,51 @@ void EquityBottomPanel::set_orders_date(const QDate& day) {
     suppress_orders_date_signal_ = false;
 }
 
+QWidget* EquityBottomPanel::make_positions_action_cell(const QString& symbol, const QString& product,
+                                                       double qty, bool show_convert,
+                                                       const QString& paper_pid) {
+    auto* cell = new QWidget;
+    auto* lay = new QHBoxLayout(cell);
+    lay->setContentsMargins(2, 0, 2, 0);
+    lay->setSpacing(4);
+
+    // SELL → opens the order ticket pre-filled with the held quantity (parity with
+    // the FNO tab's per-strike order button, instead of right-click-only).
+    auto* sell = new QPushButton(tr("SELL"));
+    sell->setObjectName("eqTableBtn");
+    sell->setFixedHeight(18);
+    sell->setCursor(Qt::PointingHandCursor);
+    sell->setToolTip(tr("Sell / exit %1 — opens an order ticket pre-filled with the held quantity").arg(symbol));
+    sell->setStyleSheet(QString("QPushButton#eqTableBtn{background:rgba(239,68,68,0.15);color:%1;"
+                                "border:1px solid %2;font-size:10px;padding:0 6px;border-radius:2px;}"
+                                "QPushButton#eqTableBtn:hover{background:rgba(239,68,68,0.30);}")
+                            .arg(fincept::ui::colors::NEGATIVE(), fincept::ui::colors::BORDER_MED()));
+    const double held = qAbs(qty);
+    const QString prod = product.isEmpty() ? QStringLiteral("MIS") : product;
+    connect(sell, &QPushButton::clicked, this,
+            [this, symbol, prod, held]() { emit trade_symbol_requested(symbol, prod, false, held); });
+    lay->addWidget(sell);
+
+    // Paper intraday only: convert MIS → CNC (carry overnight).
+    if (show_convert && !paper_pid.isEmpty()) {
+        auto* cnc = new QPushButton(tr("→ CNC"));
+        cnc->setObjectName("eqTableBtn");
+        cnc->setFixedHeight(18);
+        cnc->setCursor(Qt::PointingHandCursor);
+        cnc->setToolTip(tr("Convert to CNC delivery (carry overnight, locks full cash)"));
+        cnc->setStyleSheet(QString("QPushButton#eqTableBtn{background:rgba(37,99,235,0.15);color:%1;"
+                                   "border:1px solid %2;font-size:10px;padding:0 6px;border-radius:2px;}"
+                                   "QPushButton#eqTableBtn:hover{background:rgba(37,99,235,0.30);}")
+                               .arg(fincept::ui::colors::INFO(), fincept::ui::colors::BORDER_MED()));
+        connect(cnc, &QPushButton::clicked, this, [this, paper_pid, symbol]() {
+            emit convert_position_requested(paper_pid, symbol, QStringLiteral("CNC"));
+        });
+        lay->addWidget(cnc);
+    }
+    lay->addStretch();
+    return cell;
+}
+
 void EquityBottomPanel::set_positions(const QVector<trading::BrokerPosition>& positions) {
     last_positions_ = positions; // keep row-aligned for live-quote patching
     const QColor pos_color(fincept::ui::colors::POSITIVE());
@@ -880,7 +934,9 @@ void EquityBottomPanel::set_positions(const QVector<trading::BrokerPosition>& po
         pct_item->setText(QString("%1%").arg(p.pnl_pct, 0, 'f', 2));
         pct_item->setForeground(p.pnl_pct >= 0 ? pos_color : neg_color);
 
-        positions_table_->setCellWidget(i, 9, nullptr); // no convert action in live mode
+        // SELL (exit) action; no MIS→CNC convert in live mode (paper-only).
+        positions_table_->setCellWidget(
+            i, 9, make_positions_action_cell(p.symbol, p.product_type, p.quantity, false, QString()));
     }
     update_positions_summary();
 }
@@ -960,6 +1016,26 @@ void EquityBottomPanel::update_quote(const QString& symbol, const trading::Broke
     const double ltp = quote.ltp;
     if (ltp <= 0.0 || symbol.isEmpty())
         return; // ignore empty / zero-price ticks — keep the last good values
+
+    {
+        // [posdbg] throttled — which quote symbols arrive vs the position symbols.
+        static qint64 s_last = 0;
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        if (now - s_last > 3000) {
+            s_last = now;
+            QStringList ps;
+            if (is_paper_)
+                for (const auto& p : last_paper_positions_)
+                    ps << p.symbol;
+            else
+                for (const auto& p : last_positions_)
+                    ps << p.symbol;
+            LOG_INFO("posdbg", QString("update_quote sym='%1' ltp=%2 (%3) positions=[%4]")
+                                   .arg(symbol)
+                                   .arg(ltp, 0, 'f', 2)
+                                   .arg(is_paper_ ? "paper" : "live", ps.join(',')));
+        }
+    }
 
     // Holdings (CNC) live the same quote stream as positions — patch them too.
     update_holding_quote(symbol, ltp);

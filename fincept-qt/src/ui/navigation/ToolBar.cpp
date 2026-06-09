@@ -329,6 +329,9 @@ QMenu* ToolBar::build_file_menu() {
         }
     });
 
+    m->addAction(tr("Close Window"),      this, [this]() { emit action_triggered("close_window"); });
+    m->addAction(tr("Close All Windows"), this, [this]() { emit action_triggered("close_all_windows"); });
+
     m->addSeparator();
     m->addAction(tr("New Layout"),       this, [this]() { emit action_triggered("layout_new"); });
     m->addAction(tr("Open Layout…"),     this, [this]() { emit action_triggered("layout_open"); });

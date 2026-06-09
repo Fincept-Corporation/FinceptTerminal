@@ -35,6 +35,13 @@ public:
     void update_price(double price);
     void reset_daily();
 
+    // Multi-leg (F&O basket) mode — parallel to the single-position equity path.
+    void record_entry_legs(const QVector<fincept::algo::AlgoLegPosition>& legs, int64_t time_ms);
+    double record_exit_legs(int64_t time_ms);                  // realizes basket P&L, clears legs
+    void update_leg_price(const QString& symbol, double ltp);  // marks one leg, recomputes basket unrealized
+    bool has_legs() const;                                     // multi_leg_ && !legs_.isEmpty()
+    QVector<fincept::algo::AlgoLegPosition> legs() const;      // mutex copy
+
 private:
     void update_drawdown();
 
@@ -48,6 +55,12 @@ private:
     double trailing_stop_pct_;
     double max_order_value_;
     double max_daily_loss_;
+
+    // Multi-leg basket state (P3)
+    QVector<fincept::algo::AlgoLegPosition> legs_;
+    bool   multi_leg_         = false;
+    double basket_entry_value_ = 0; // Σ |entry_price * quantity| at entry
+    double basket_peak_pnl_   = 0;  // trailing-stop high-water mark (basket P&L)
 
     mutable QMutex mutex_;
 };

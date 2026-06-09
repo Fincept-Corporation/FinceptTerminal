@@ -9,6 +9,7 @@
 #include "screens/algo_trading/ScannerPanel.h"
 #include "screens/algo_trading/StrategyBuilderPanel.h"
 #include "screens/algo_trading/StrategyListPanel.h"
+#include "screens/algo_trading/UniverseScannerPanel.h"
 #include "services/algo_trading/AlgoTradingService.h"
 #include "ui/theme/Theme.h"
 
@@ -71,12 +72,14 @@ void AlgoTradingScreen::build_ui() {
     scanner_ = new ScannerPanel(this);
     alerts_ = new AlertsPanel(this);
     dashboard_ = new DeploymentDashboard(this);
+    universe_ = new UniverseScannerPanel(this);
 
     content_stack_->addWidget(builder_);     // 0
     content_stack_->addWidget(strategies_);  // 1
     content_stack_->addWidget(scanner_);     // 2
     content_stack_->addWidget(alerts_);      // 3
     content_stack_->addWidget(dashboard_);   // 4
+    content_stack_->addWidget(universe_);    // 5
     root->addWidget(content_stack_, 1);
 
     // "Edit" in My Strategies opens the Builder (tab 0) pre-filled with that strategy.
@@ -133,8 +136,8 @@ QWidget* AlgoTradingScreen::build_top_bar() {
     hl->addWidget(div);
 
     // Tab buttons
-    QStringList tabs   = {tr("BUILDER"), tr("MY STRATEGIES"), tr("SCANNER"), tr("ALERTS"), tr("DASHBOARD")};
-    QStringList colors = {"#FF6B35", "#00E5FF", "#FFC400", "#FF4081", "#00D66F"};
+    QStringList tabs   = {tr("BUILDER"), tr("MY STRATEGIES"), tr("SCANNER"), tr("ALERTS"), tr("DASHBOARD"), tr("UNIVERSE")};
+    QStringList colors = {"#FF6B35", "#00E5FF", "#FFC400", "#FF4081", "#00D66F", "#A78BFA"};
 
     for (int i = 0; i < tabs.size(); ++i) {
         auto* btn = new QPushButton(tabs[i], bar);
@@ -208,7 +211,7 @@ void AlgoTradingScreen::on_tab_changed(int index) {
 }
 
 void AlgoTradingScreen::update_tab_buttons() {
-    QStringList colors = {"#FF6B35", "#00E5FF", "#FFC400", "#FF4081", "#00D66F"};
+    QStringList colors = {"#FF6B35", "#00E5FF", "#FFC400", "#FF4081", "#00D66F", "#A78BFA"};
     for (int i = 0; i < tab_buttons_.size(); ++i) {
         bool active = (i == active_tab_);
         tab_buttons_[i]->setStyleSheet(
@@ -241,12 +244,13 @@ void AlgoTradingScreen::retranslateUi() {
     if (deploy_count_label_) deploy_count_label_->setText(tr("%1 LIVE").arg(active_deployments_));
 
     // Tab button labels — fixed order matches build_top_bar().
-    if (tab_buttons_.size() == 5) {
+    if (tab_buttons_.size() == 6) {
         tab_buttons_[0]->setText(tr("BUILDER"));
         tab_buttons_[1]->setText(tr("MY STRATEGIES"));
         tab_buttons_[2]->setText(tr("SCANNER"));
         tab_buttons_[3]->setText(tr("ALERTS"));
         tab_buttons_[4]->setText(tr("DASHBOARD"));
+        tab_buttons_[5]->setText(tr("UNIVERSE"));
     }
 }
 

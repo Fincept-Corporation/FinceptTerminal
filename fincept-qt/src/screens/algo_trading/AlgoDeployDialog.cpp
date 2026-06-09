@@ -47,6 +47,48 @@ void AlgoDeployDialog::set_symbol(const QString& symbol) {
         symbol_edit_->setText(symbol.trimmed().toUpper());
 }
 
+void AlgoDeployDialog::set_fno_context(const QString& instrument_type, const QString& underlying,
+                                        const QString& expiry_rule) {
+    fno_instrument_type_ = instrument_type;
+    fno_underlying_      = underlying;
+    fno_expiry_rule_     = expiry_rule;
+
+    if (instrument_type == QLatin1String("equity"))
+        return;
+
+    // F&O deployment: the symbol field is not a free-text instrument symbol.
+    // Show the underlying and expiry rule as read-only context; disable editing.
+    if (symbol_edit_) {
+        QString label = underlying;
+        if (!underlying.isEmpty() && !expiry_rule.isEmpty())
+            label = underlying + QStringLiteral(" · ") + expiry_rule;
+        else if (underlying.isEmpty())
+            label = expiry_rule;
+        symbol_edit_->setText(label);
+        symbol_edit_->setEnabled(false);
+    }
+    if (symbol_label_)
+        symbol_label_->setText(tr("Underlying:"));
+
+    // Default exchange to NFO for F&O if available.
+    if (exchange_combo_) {
+        const int nfo_idx = exchange_combo_->findText(QStringLiteral("NFO"));
+        if (nfo_idx >= 0)
+            exchange_combo_->setCurrentIndex(nfo_idx);
+    }
+
+    // Default product type to NRML/Margin if available (case-insensitive search).
+    if (product_type_combo_) {
+        int nrml_idx = product_type_combo_->findText(QStringLiteral("NRML"),
+                                                      Qt::MatchFixedString | Qt::MatchCaseSensitive);
+        if (nrml_idx < 0)
+            nrml_idx = product_type_combo_->findText(QStringLiteral("Margin"),
+                                                      Qt::MatchFixedString | Qt::MatchCaseSensitive);
+        if (nrml_idx >= 0)
+            product_type_combo_->setCurrentIndex(nrml_idx);
+    }
+}
+
 void AlgoDeployDialog::build_ui() {
     auto* root = new QVBoxLayout(this);
     root->setSpacing(12);
@@ -202,8 +244,15 @@ void AlgoDeployDialog::populate_broker_fields(const QString& account_id) {
 }
 
 void AlgoDeployDialog::on_ok() {
-    if (symbol_edit_->text().trimmed().isEmpty()) {
+    // For F&O deployments the symbol field holds a read-only context label, not a
+    // tradeable symbol — skip the "symbol required" guard.
+    const bool is_fno = (fno_instrument_type_ != QLatin1String("equity"));
+    if (!is_fno && symbol_edit_->text().trimmed().isEmpty()) {
         QMessageBox::warning(this, tr("Validation"), tr("Symbol is required."));
+        return;
+    }
+    if (is_fno && fno_underlying_.trimmed().isEmpty()) {
+        QMessageBox::warning(this, tr("Deploy"), tr("Select an underlying for the F&O deployment."));
         return;
     }
     if (quantity_spin_->value() <= 0) {
@@ -254,6 +303,17 @@ void AlgoDeployDialog::on_ok() {
     }
     result_.backend = backend_to_string(mode == "live" ? TradingBackend::EquityBroker
                                                        : TradingBackend::Paper);
+
+    // F&O override: set instrument_type/underlying/resolved_expiry and clear symbol.
+    // Concrete legs and expiry are resolved at entry-time by the runner (P3).
+    // The equity branch (is_fno == false) is unaffected.
+    if (is_fno) {
+        result_.instrument_type  = fno_instrument_type_;
+        result_.underlying       = fno_underlying_;
+        result_.resolved_expiry  = fno_expiry_rule_; // expiry RULE; concrete expiry resolved at entry (P3)
+        // Multi-leg F&O has no single symbol; concrete legs are resolved at entry by the runner (P3).
+        result_.symbol.clear();
+    }
 
     accept();
 }

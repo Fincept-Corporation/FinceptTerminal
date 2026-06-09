@@ -8,6 +8,7 @@
 #include <QHBoxLayout>
 #include <QLocale>
 #include <QSignalBlocker>
+#include <QStyle>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -190,12 +191,22 @@ void FnoHeaderBar::set_expiries(const QStringList& exps, const QString& selected
 void FnoHeaderBar::update_from_chain(const OptionChain& chain) {
     lbl_spot_->setText(chain.spot > 0 ? QString::number(chain.spot, 'f', 2) : "--");
 
-    // Day change is derived from the underlying quote — but we don't carry
-    // the underlying BrokerQuote in OptionChain (only spot). For Phase 2
-    // we leave change blank; Phase 3's WS path will plumb spot quote +
-    // day change through the chain payload.
-    lbl_change_->setText("--");
-    lbl_change_->setObjectName("fnoHdrValue");
+    // Day change — underlying's absolute + % move, plumbed through OptionChain
+    // from the spot quote (REST refresh; WS keeps option legs current). Coloured
+    // green/red via the #fnoHdrValuePos / #fnoHdrValueNeg style selectors.
+    if (chain.spot_change != 0.0 || chain.spot_change_pct != 0.0) {
+        const bool up = chain.spot_change >= 0.0;
+        const QString sign = up ? QStringLiteral("+") : QString();
+        lbl_change_->setText(sign + QString::number(chain.spot_change, 'f', 2) + " (" + sign +
+                             QString::number(chain.spot_change_pct, 'f', 2) + "%)");
+        lbl_change_->setObjectName(up ? "fnoHdrValuePos" : "fnoHdrValueNeg");
+    } else {
+        lbl_change_->setText("--");
+        lbl_change_->setObjectName("fnoHdrValue");
+    }
+    // objectName drives the QSS colour selector — re-polish so it repaints.
+    lbl_change_->style()->unpolish(lbl_change_);
+    lbl_change_->style()->polish(lbl_change_);
 
     lbl_atm_->setText(chain.atm_strike > 0 ? QString::number(chain.atm_strike, 'f', 0) : "--");
     lbl_pcr_->setText(chain.pcr > 0 ? QString::number(chain.pcr, 'f', 3) : "--");
@@ -237,8 +248,11 @@ void FnoHeaderBar::update_from_chain(const OptionChain& chain) {
                                                    .arg(pctile, 0, 'f', 0)
                                                    .arg(hist.size()));
                 } else {
-                    lbl_iv_pctile_->setText("—");
-                    lbl_iv_pctile_->setToolTip(tr("Needs ≥30 days of data — have %1.").arg(hist.size()));
+                    // Not enough history yet — show accumulation progress instead
+                    // of a blank dash so it's clear it's building, not broken.
+                    lbl_iv_pctile_->setText(tr("…%1/30").arg(hist.size()));
+                    lbl_iv_pctile_->setToolTip(
+                        tr("Building IV history — %1 of 30 days needed for a percentile.").arg(hist.size()));
                 }
             } else {
                 lbl_iv_pctile_->setText("—");

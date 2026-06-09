@@ -25,6 +25,10 @@ class AlgoDeployDialog : public QDialog {
     // AlgoStrategy, so it's pushed in after construction).
     void set_symbol(const QString& symbol);
 
+    // F&O context for option/future deployments (set by the StrategyBuilder before exec()).
+    void set_fno_context(const QString& instrument_type, const QString& underlying,
+                         const QString& expiry_rule);
+
   protected:
     void changeEvent(QEvent* event) override;
 
@@ -41,6 +45,10 @@ class AlgoDeployDialog : public QDialog {
 
     QString strategy_id_;
     QString strategy_name_;
+
+    QString fno_instrument_type_ = "equity";
+    QString fno_underlying_;
+    QString fno_expiry_rule_;
 
     QLineEdit*      symbol_edit_        = nullptr;
     QComboBox*      mode_combo_         = nullptr;

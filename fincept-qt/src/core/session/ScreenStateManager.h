@@ -87,6 +87,17 @@ class ScreenStateManager : public QObject {
     /// closes permanently (vs. temporary dematerialisation).
     void erase_by_uuid(const QString& instance_uuid);
 
+    // ── Synchronous saves for shutdown ───────────────────────────────────────
+    //
+    // save_now*/notify_changed* dispatch the SQLite write via QtConcurrent so
+    // the UI thread never blocks. That's correct at runtime but WRONG on quit:
+    // panels visible at close never receive visibilityChanged(false), and an
+    // async write fired from closeEvent races process exit and is usually lost.
+    // These variants write on the CALLING thread (blocking, no QtConcurrent) so
+    // the row is on disk before the app exits. Use ONLY from shutdown paths.
+    void save_now_sync(screens::IStatefulScreen* screen);
+    void save_now_by_uuid_sync(screens::IStatefulScreen* screen, const QString& instance_uuid);
+
   private:
     explicit ScreenStateManager(QObject* parent = nullptr);
 

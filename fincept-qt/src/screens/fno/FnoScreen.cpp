@@ -9,6 +9,7 @@
 #include "screens/fno/OISubTab.h"
 #include "screens/fno/OptionChainTable.h"
 #include "screens/fno/ScreenerSubTab.h"
+#include "screens/common/PaperBlotterPanel.h"
 #include "services/options/OptionChainService.h"
 #include "ui/theme/Theme.h"
 
@@ -52,6 +53,7 @@ QString FnoScreen::tab_label_for(int index) {
         case TabMultiStraddle: return tr("Multi-Stra");
         case TabFiiDii:        return tr("FII / DII");
         case TabScreener:      return tr("Screener");
+        case TabPositions:     return tr("Positions");
         default:               return {};
     }
 }
@@ -64,6 +66,7 @@ QString FnoScreen::tab_detail_for(int index) {
         case TabMultiStraddle: return tr("Multi straddle / strangle charts (Phase 9)");
         case TabFiiDii:        return tr("Institutional flows (Phase 8)");
         case TabScreener:      return tr("Chain screener (Phase 9)");
+        case TabPositions:     return tr("Paper positions, orders & square-off");
         default:               return {};
     }
 }
@@ -202,6 +205,14 @@ void FnoScreen::ensure_tab_built(SubTab which) {
         ScreenerSubTab* p = nullptr;
         replace_placeholder<ScreenerSubTab>(stack_, tabs_, TabScreener, p, this);
         screener_tab_ = p;
+    }
+    if (which == TabPositions && !positions_tab_) {
+        // Shared paper blotter: open positions / working orders / trades for every
+        // active paper account, with square-off. Self-populating and live via
+        // PaperMarkService — no per-screen marking wiring needed here.
+        common::PaperBlotterPanel* p = nullptr;
+        replace_placeholder<common::PaperBlotterPanel>(stack_, tabs_, TabPositions, p, this);
+        positions_tab_ = p;
     }
     // Phase 9: all six F&O sub-tabs are real (no more placeholders).
 }

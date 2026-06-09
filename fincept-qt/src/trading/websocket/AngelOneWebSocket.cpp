@@ -385,7 +385,9 @@ AoTick AngelOneWebSocket::parse_tick(const QByteArray& data) const {
     // Each entry: flag(u16,2) qty(i64,8) price(i64,8) orders(u16,2)
     // flag==0 → buy, flag!=0 → sell
     int buy_idx = 0, sell_idx = 0;
-    for (int i = 0; i < 10 && buy_idx < 5 && sell_idx < 5; ++i) {
+    // Continue while EITHER side still needs levels. && exits as soon as one
+    // side fills (buys arrive first), dropping the opposite side of the book.
+    for (int i = 0; i < 10 && (buy_idx < 5 || sell_idx < 5); ++i) {
         const uchar* entry = buf + 147 + i * 20;
         quint16 flag = read_u16_le(entry);
         qint64 qty = read_i64_le(entry + 2);

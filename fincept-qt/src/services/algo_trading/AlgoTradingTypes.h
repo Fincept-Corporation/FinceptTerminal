@@ -58,8 +58,10 @@ struct AlgoStrategy {
     QString name;
     QString description;
     QString timeframe; // live, 1m, 5m, 15m, 1h, 4h, 1d
+    QString instrument_type = "equity"; // equity | option | future
     QJsonArray entry_conditions;
     QJsonArray exit_conditions;
+    QJsonArray legs; // F&O leg-rule definitions (see fno::fno_legs_to_json); empty for equity
     QString entry_logic = "AND"; // AND, OR
     QString exit_logic = "AND";
     double stop_loss = 0;
@@ -83,6 +85,10 @@ struct AlgoDeployment {
     QString strategy_kind = "dsl";              // 'dsl' | 'qc' — cached from strategy_id prefix at deploy time
     QString symbol;
     QString exchange;                            // e.g. "NSE", "NASDAQ" — from broker profile
+    QString instrument_type = "equity";          // equity | option | future
+    QString underlying;                          // F&O underlying, e.g. "NIFTY" (option/future only)
+    QString resolved_expiry;                     // concrete expiry chosen at entry, "DD-MMM-YY"
+    QJsonArray resolved_legs;                    // concrete contracts placed at entry (restart reattach)
     QString product_type;                        // e.g. "MIS", "CNC" — broker-specific
     QString mode;                                // paper | live
     QString entry_side = "BUY";                 // BUY | SELL — direction of the entry signal

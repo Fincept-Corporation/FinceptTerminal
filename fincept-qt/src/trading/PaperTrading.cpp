@@ -213,6 +213,14 @@ PtPortfolio pt_get_portfolio(const QString& id) {
     return r.value();
 }
 
+void pt_set_balance(const QString& portfolio_id, double new_balance) {
+    if (!std::isfinite(new_balance) || new_balance < 0.0)
+        throw std::runtime_error("Invalid balance: must be finite and non-negative");
+    auto r = repo().update_balance(portfolio_id, new_balance);
+    if (r.is_err())
+        throw std::runtime_error(r.error());
+}
+
 std::optional<PtPortfolio> pt_find_portfolio(const QString& name, const QString& exchange) {
     return repo().find_portfolio(name, exchange);
 }

@@ -2,15 +2,23 @@
 #include "screens/algo_trading/StrategyBuilderPanel.h"
 
 #include "algo_engine/AlgoEngine.h"
+#include "algo_engine/fno/FnoAlgoTypes.h"
+#include "algo_engine/fno/FnoStrategyPreview.h"
 #include "core/currency/Currency.h"
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "screens/algo_trading/AlgoDeployDialog.h"
+#include "screens/fno/BuilderAnalyticsRibbon.h"
+#include "screens/fno/PayoffChartWidget.h"
 #include "services/algo_trading/AlgoTradingService.h"
+#include "services/options/OptionChainService.h"
+#include "services/options/StrategyAnalytics.h"
 #include "trading/AccountManager.h"
+#include "trading/BrokerAccount.h"
 #include "trading/BrokerInterface.h"
 #include "trading/BrokerRegistry.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/algo/FnoLegRuleEditor.h"
 
 #include <QDate>
 #include <QDateEdit>
@@ -25,6 +33,7 @@
 #include <QMessageBox>
 #include <QScrollArea>
 #include <QSet>
+#include <QSignalBlocker>
 #include <QSplitter>
 #include <QTimer>
 #include <QUuid>
@@ -286,6 +295,14 @@ QWidget* StrategyBuilderPanel::build_top_toolbar() {
         template_combo_->addItem(t.name);
     template_combo_->setToolTip(tr("Load a ready-made strategy as a starting point"));
 
+    // ── Instrument-type selector (P2.3) ──
+    instrument_type_combo_ = new QComboBox(this);
+    instrument_type_combo_->setObjectName(QStringLiteral("builderInstrumentType"));
+    instrument_type_combo_->addItem(tr("Equity"),  QStringLiteral("equity"));
+    instrument_type_combo_->addItem(tr("Option"),  QStringLiteral("option"));
+    instrument_type_combo_->addItem(tr("Future"),  QStringLiteral("future"));
+    instrument_type_combo_->setToolTip(tr("Instrument type this strategy trades"));
+
     // ── State chip + primary actions ──
     state_chip_ = new QLabel(tr("NEW DRAFT"), this);
     state_chip_->setObjectName(QStringLiteral("builderStateChip"));
@@ -314,6 +331,9 @@ QWidget* StrategyBuilderPanel::build_top_toolbar() {
     layout->addWidget(caption(tr("TF")));
     layout->addWidget(timeframe_combo_);
     layout->addWidget(template_combo_);
+    layout->addWidget(divider());
+    layout->addWidget(caption(tr("TYPE")));
+    layout->addWidget(instrument_type_combo_);
     layout->addStretch();
     layout->addWidget(state_chip_);
     layout->addWidget(save_btn_);
@@ -323,6 +343,8 @@ QWidget* StrategyBuilderPanel::build_top_toolbar() {
     connect(deploy_btn_, &QPushButton::clicked, this, &StrategyBuilderPanel::on_deploy);
     connect(template_combo_, QOverload<int>::of(&QComboBox::activated), this,
             &StrategyBuilderPanel::load_template);
+    connect(instrument_type_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &StrategyBuilderPanel::on_instrument_type_changed);
 
     return toolbar;
 }
@@ -364,6 +386,7 @@ QWidget* StrategyBuilderPanel::build_right_panel() {
 
     // ── BACKTEST SETUP card — every test input in one place ──────────────────
     auto* setup_card = new QFrame(right);
+    bt_setup_card_ = setup_card;  // store for show/hide in on_instrument_type_changed
     setup_card->setObjectName(QStringLiteral("builderSetupCard"));
     setup_card->setStyleSheet(QString("QFrame#builderSetupCard{background:%1;border:1px solid %2;"
                                        "border-left:2px solid %3;border-radius:5px;}")
@@ -442,6 +465,11 @@ QWidget* StrategyBuilderPanel::build_right_panel() {
 
     layout->addWidget(setup_card);
 
+    // ── F&O section (P2.3) — hidden until instrument type != equity ──────────
+    build_fno_section();
+    layout->addWidget(fno_section_);
+    fno_section_->setVisible(false); // equity is default
+
     // ── RESULTS card — clearly separated from the controls above ─────────────
     auto* results_card = new QFrame(right);
     results_card->setObjectName(QStringLiteral("builderResultsCard"));
@@ -465,6 +493,129 @@ QWidget* StrategyBuilderPanel::build_right_panel() {
     connect(backtest_btn_, &QPushButton::clicked, this, &StrategyBuilderPanel::on_backtest);
 
     return right;
+}
+
+// ── F&O Section (P2.3) ───────────────────────────────────────────────────────
+
+void StrategyBuilderPanel::build_fno_section() {
+    fno_section_ = new QWidget(this);
+    fno_section_->setObjectName(QStringLiteral("builderFnoSection"));
+
+    auto* layout = new QVBoxLayout(fno_section_);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(6);
+
+    // ── Header row: underlying + expiry mode ──
+    auto* header_row = new QHBoxLayout();
+    header_row->setSpacing(8);
+
+    underlying_combo_ = new QComboBox(fno_section_);
+    underlying_combo_->setObjectName(QStringLiteral("builderFnoUnderlying"));
+    underlying_combo_->setToolTip(tr("Underlying instrument"));
+    underlying_combo_->setMinimumWidth(100);
+    populate_underlyings();
+
+    expiry_mode_combo_ = new QComboBox(fno_section_);
+    expiry_mode_combo_->setObjectName(QStringLiteral("builderFnoExpiryMode"));
+    expiry_mode_combo_->setToolTip(tr("Expiry selection rule"));
+    expiry_mode_combo_->addItem(tr("Weekly"),      QStringLiteral("weekly"));
+    expiry_mode_combo_->addItem(tr("Monthly"),     QStringLiteral("monthly"));
+    expiry_mode_combo_->addItem(tr("Nearest DTE"), QStringLiteral("nearest_dte"));
+    expiry_mode_combo_->addItem(tr("Absolute"),    QStringLiteral("absolute"));
+
+    header_row->addWidget(field_label(tr("Underlying")));
+    header_row->addWidget(underlying_combo_, 1);
+    header_row->addWidget(field_label(tr("Expiry")));
+    header_row->addWidget(expiry_mode_combo_, 1);
+    layout->addLayout(header_row);
+
+    // ── Leg rule editor ──
+    leg_editor_ = new fincept::ui::algo::FnoLegRuleEditor(fno_section_);
+    layout->addWidget(leg_editor_);
+
+    // ── Analytics ribbon + payoff chart ──
+    analytics_ribbon_ = new fincept::screens::fno::BuilderAnalyticsRibbon(fno_section_);
+    layout->addWidget(analytics_ribbon_);
+
+    payoff_chart_ = new fincept::screens::fno::PayoffChartWidget(fno_section_);
+    payoff_chart_->setMinimumHeight(200);
+    layout->addWidget(payoff_chart_, 1);
+
+    // Connect all preview-trigger signals to refresh_fno_preview()
+    connect(leg_editor_, &fincept::ui::algo::FnoLegRuleEditor::legs_changed,
+            this, &StrategyBuilderPanel::refresh_fno_preview);
+    connect(underlying_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &StrategyBuilderPanel::refresh_fno_preview);
+    connect(expiry_mode_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &StrategyBuilderPanel::refresh_fno_preview);
+    connect(&fincept::services::options::OptionChainService::instance(),
+            &fincept::services::options::OptionChainService::chain_published,
+            this, [this](const fincept::services::options::OptionChain&) {
+                refresh_fno_preview();
+            });
+}
+
+void StrategyBuilderPanel::populate_underlyings() {
+    if (!underlying_combo_)
+        return;
+    const QStringList list =
+        fincept::services::options::OptionChainService::instance().list_underlyings(fno_broker_id());
+    {
+        QSignalBlocker blocker(underlying_combo_);
+        underlying_combo_->clear();
+        if (list.isEmpty()) {
+            underlying_combo_->addItem(tr("(connect broker)"));
+            underlying_combo_->setEnabled(false);
+        } else {
+            for (const auto& u : list)
+                underlying_combo_->addItem(u);
+            underlying_combo_->setEnabled(true);
+        }
+    }
+}
+
+void StrategyBuilderPanel::refresh_fno_preview() {
+    namespace an = fincept::services::options::analytics;
+    const auto& chain = fincept::services::options::OptionChainService::instance().last_chain();
+    const auto legs = leg_editor_->legs();
+    if (legs.isEmpty() || chain.rows.isEmpty()) {
+        analytics_ribbon_->clear();
+        payoff_chart_->clear_payoff();
+        return;
+    }
+    fincept::services::options::Strategy s = fincept::algo::fno::build_preview_strategy(legs, chain);
+    an::PayoffComputeOptions opts;
+    opts.current_spot = chain.spot;
+    const auto curve = an::compute_payoff(s, opts);
+    const auto bes = an::compute_breakevens(curve);
+    const auto a = an::compute_all(s, chain, opts);
+    payoff_chart_->set_payoff(curve, chain.spot, bes);
+    analytics_ribbon_->update_from(s, a);
+}
+
+void StrategyBuilderPanel::on_instrument_type_changed() {
+    if (!instrument_type_combo_)
+        return;
+    const QString type = instrument_type_combo_->currentData().toString();
+    if (type == QLatin1String("equity")) {
+        if (bt_setup_card_) bt_setup_card_->setVisible(true);
+        if (fno_section_)   fno_section_->setVisible(false);
+    } else {
+        if (bt_setup_card_) bt_setup_card_->setVisible(false);
+        if (fno_section_)   fno_section_->setVisible(true);
+        if (underlying_combo_) populate_underlyings();
+        refresh_fno_preview();
+    }
+}
+
+QString StrategyBuilderPanel::fno_broker_id() const {
+    // Mirror ChainSubTab: prefer a Connected account's broker_id, else "databento".
+    for (const auto& acc : fincept::trading::AccountManager::instance().active_accounts()) {
+        if (fincept::trading::AccountManager::instance().connection_state(acc.account_id) ==
+            fincept::trading::ConnectionState::Connected)
+            return acc.broker_id;
+    }
+    return QStringLiteral("databento");
 }
 
 void StrategyBuilderPanel::connect_service() {
@@ -496,6 +647,11 @@ services::algo::AlgoStrategy StrategyBuilderPanel::build_strategy() {
     strat.take_profit = risk_panel_->take_profit();
     strat.trailing_stop = risk_panel_->trailing_stop();
     strat.position_size_pct = risk_panel_->capital_pct();
+    // P2.3: persist instrument type and F&O leg rules
+    strat.instrument_type = instrument_type_combo_ ? instrument_type_combo_->currentData().toString()
+                                                   : QStringLiteral("equity");
+    if (strat.instrument_type != QLatin1String("equity") && leg_editor_)
+        strat.legs = fincept::algo::fno::fno_legs_to_json(leg_editor_->legs());
     return strat;
 }
 
@@ -559,6 +715,11 @@ void StrategyBuilderPanel::on_deploy() {
 
     auto* dialog = new AlgoDeployDialog(strat, this);
     dialog->set_symbol(symbol_combo_->currentText()); // carry the builder's symbol in
+    if (instrument_type_combo_ && instrument_type_combo_->currentData().toString() != QLatin1String("equity")) {
+        dialog->set_fno_context(instrument_type_combo_->currentData().toString(),
+                                underlying_combo_ ? underlying_combo_->currentText() : QString(),
+                                expiry_mode_combo_ ? expiry_mode_combo_->currentData().toString() : QString());
+    }
     if (dialog->exec() == QDialog::Accepted) {
         auto deployment = dialog->deployment();
         deployment.quantity = risk_panel_->quantity();
@@ -651,6 +812,18 @@ void StrategyBuilderPanel::load_strategy(const services::algo::AlgoStrategy& s) 
     exit_section_->set_conditions(s.exit_conditions, s.exit_logic.isEmpty() ? QStringLiteral("AND") : s.exit_logic);
     risk_panel_->set_values(s.stop_loss, s.take_profit, s.trailing_stop, 1.0, 0.0,
                             s.position_size_pct > 0 ? s.position_size_pct : 100.0);
+    // P2.3: restore instrument type and F&O leg rules
+    if (instrument_type_combo_) {
+        const int idx = instrument_type_combo_->findData(s.instrument_type.isEmpty()
+                                                             ? QStringLiteral("equity") : s.instrument_type);
+        {
+            QSignalBlocker blocker(instrument_type_combo_);
+            instrument_type_combo_->setCurrentIndex(idx >= 0 ? idx : 0);
+        }
+    }
+    if (leg_editor_)
+        leg_editor_->set_legs(fincept::algo::fno::fno_legs_from_json(s.legs));
+    on_instrument_type_changed();
     // Size the backtest range to the strategy's timeframe (daily needs years for
     // long indicators; intraday must stay under Yahoo's history cap).
     const QDate today = QDate::currentDate();

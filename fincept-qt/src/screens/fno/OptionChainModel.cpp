@@ -136,6 +136,26 @@ QVariant OptionChainModel::headerData(int section, Qt::Orientation orient, int r
 }
 
 void OptionChainModel::set_chain(const OptionChain& chain) {
+    // When the strike/token structure is unchanged (same expiry republished —
+    // e.g. a WS-driven live re-publish or a periodic reconcile), merge in place
+    // and repaint instead of resetting the model. A full reset would drop the
+    // user's scroll position and selection on every refresh; this keeps them.
+    bool same_structure = chain.rows.size() == chain_.rows.size() && !chain_.rows.isEmpty();
+    if (same_structure) {
+        for (int i = 0; i < chain.rows.size(); ++i) {
+            if (chain.rows[i].ce_token != chain_.rows[i].ce_token ||
+                chain.rows[i].pe_token != chain_.rows[i].pe_token) {
+                same_structure = false;
+                break;
+            }
+        }
+    }
+    if (same_structure) {
+        chain_ = chain;
+        recompute_oi_bounds();
+        emit dataChanged(index(0, 0), index(chain_.rows.size() - 1, ColCount - 1));
+        return;
+    }
     beginResetModel();
     chain_ = chain;
     recompute_oi_bounds();

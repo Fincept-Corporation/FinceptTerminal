@@ -1,8 +1,11 @@
 // src/algo_engine/AlgoEngine.cpp
 #include "algo_engine/AlgoEngine.h"
+#include "algo_engine/fno/FnoExecution.h"
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "storage/sqlite/Database.h"
+#include "trading/AccountManager.h"
+#include "trading/PaperTrading.h"
 #include "trading/UnifiedTrading.h"
 
 #include <QDateTime>
@@ -28,6 +31,11 @@ AlgoEngine::AlgoEngine() {
     qRegisterMetaType<fincept::algo::AlgoMetrics>("fincept::algo::AlgoMetrics");
     qRegisterMetaType<fincept::algo::AlgoTradeRecord>("fincept::algo::AlgoTradeRecord");
 
+    // Create the FnoDataBridge BEFORE moveToThread so it stays on the main thread.
+    // Do NOT parent it to `this` — `this` moves to the engine thread, which would
+    // carry fno_bridge_ along. Ownership: deleted in dtor.
+    fno_bridge_ = new fincept::algo::fno::FnoDataBridge();
+
     engine_thread_.setObjectName(QStringLiteral("AlgoEngineThread"));
     engine_thread_.start();
     moveToThread(&engine_thread_);
@@ -37,6 +45,8 @@ AlgoEngine::~AlgoEngine() {
     stop_all();
     engine_thread_.quit();
     engine_thread_.wait(5000);
+    delete fno_bridge_;
+    fno_bridge_ = nullptr;
 }
 
 void AlgoEngine::start_deployment(const services::algo::AlgoDeployment& deployment,
@@ -48,6 +58,7 @@ void AlgoEngine::start_deployment(const services::algo::AlgoDeployment& deployme
     }
 
     auto* runner = new DeploymentRunner(deployment, strategy);
+    runner->set_fno_bridge(fno_bridge_);
     runner->moveToThread(&engine_thread_);
 
     connect(runner, &DeploymentRunner::trade_executed, this, &AlgoEngine::trade_executed);
@@ -152,6 +163,12 @@ void AlgoEngine::on_order_requested(const AlgoOrderSignal& signal) {
 }
 
 void AlgoEngine::execute_order(const AlgoOrderSignal& signal) {
+    // Multi-leg F&O basket → dedicated path (paper portfolio / live broker basket).
+    if (!signal.legs.isEmpty()) {
+        execute_basket(signal);
+        return;
+    }
+
     QPointer<AlgoEngine> self = this;
     QString dep_id = signal.deployment_id;
     const double submitted_price = signal.price;
@@ -214,6 +231,174 @@ void AlgoEngine::execute_order(const AlgoOrderSignal& signal) {
     });
 }
 
+QString AlgoEngine::resolve_paper_portfolio_id(const AlgoOrderSignal& signal) {
+    // 1) Explicit portfolio stamped on the signal from the deployment.
+    if (!signal.paper_portfolio_id.isEmpty())
+        return signal.paper_portfolio_id;
+
+    // 2) The deployment account's linked paper portfolio.
+    if (!signal.account_id.isEmpty()) {
+        const auto acct = fincept::trading::AccountManager::instance().get_account(signal.account_id);
+        if (!acct.paper_portfolio_id.isEmpty())
+            return acct.paper_portfolio_id;
+    }
+
+    // 3) Reuse or create a shared "F&O Paper" portfolio (mirrors the F&O Builder).
+    if (auto existing = fincept::trading::pt_find_portfolio(QStringLiteral("F&O Paper"),
+                                                            QStringLiteral("NFO")))
+        return existing->id;
+    const auto created = fincept::trading::pt_create_portfolio(
+        QStringLiteral("F&O Paper"), 1000000.0, QStringLiteral("INR"),
+        1.0, QStringLiteral("cross"), 0.001, QStringLiteral("NFO"));
+    LOG_INFO("AlgoEngine", QString("Created F&O Paper portfolio %1 for basket execution")
+                               .arg(created.id));
+    return created.id;
+}
+
+void AlgoEngine::execute_basket(const AlgoOrderSignal& signal) {
+    QPointer<AlgoEngine> self = this;
+    const QString dep_id = signal.deployment_id;
+    const QVector<AlgoOrderLeg> legs = signal.legs;
+
+    // ── Paper: route every leg to the paper portfolio, NEVER the broker ──────────
+    // Hard safety gate: a paper deployment carries a real broker account as its
+    // data source, but its basket is simulated against pt_place_order. We never
+    // call place_basket_orders here (it routes by ACCOUNT mode and could fire real
+    // orders on a live data account).
+    if (signal.mode != QStringLiteral("live")) {
+        const QString portfolio_id = resolve_paper_portfolio_id(signal);
+        if (portfolio_id.isEmpty()) {
+            LOG_ERROR("AlgoEngine", QString("Deployment %1: PAPER basket: no portfolio").arg(dep_id));
+            return;
+        }
+        QMetaObject::invokeMethod(this, [self, dep_id, legs, portfolio_id]() {
+            if (!self) return;
+            QMutexLocker lock(&self->mutex_);
+            auto* runner = self->runners_.value(dep_id, nullptr);
+            if (!runner) return;
+            lock.unlock();
+
+            // Place each leg; immediate fill at the leg's reference price. If any
+            // leg fails, reverse the already-placed legs (reduce-only) and reject
+            // the whole basket so the runner records no position (atomic entry).
+            QVector<int> placed_ok;
+            bool any_fail = false;
+            for (int i = 0; i < legs.size(); ++i) {
+                const auto& leg = legs[i];
+                bool ok = true;
+                try {
+                    // pt_place_order inserts a pending order; a market order is
+                    // filled explicitly at the leg's reference price (same as the
+                    // Equity/F&O paper paths — there is no implicit market fill).
+                    const auto po = fincept::trading::pt_place_order(
+                        portfolio_id, leg.symbol, leg.side.toLower(),
+                        QStringLiteral("market"), leg.quantity, leg.price,
+                        std::nullopt, false, QStringLiteral("NFO"), QStringLiteral("NRML"));
+                    fincept::trading::pt_fill_order(po.id, leg.price);
+                } catch (const std::exception& e) {
+                    ok = false;
+                    any_fail = true;
+                    LOG_ERROR("AlgoEngine", QString("Deployment %1: PAPER leg %2 (%3) failed: %4")
+                                  .arg(dep_id).arg(i).arg(leg.symbol, QString::fromUtf8(e.what())));
+                }
+                if (ok) placed_ok.append(i);
+            }
+
+            if (!any_fail) {
+                for (int i = 0; i < legs.size(); ++i)
+                    runner->on_leg_filled(i, legs[i], legs[i].price, legs[i].quantity);
+                return;
+            }
+
+            // Rollback the legs that did fill, then reject every leg.
+            for (int i : std::as_const(placed_ok)) {
+                const auto& leg = legs[i];
+                const QString rev = (leg.side.toLower() == QStringLiteral("buy"))
+                                        ? QStringLiteral("sell") : QStringLiteral("buy");
+                try {
+                    const auto ro = fincept::trading::pt_place_order(
+                        portfolio_id, leg.symbol, rev, QStringLiteral("market"),
+                        leg.quantity, leg.price, std::nullopt, true,
+                        QStringLiteral("NFO"), QStringLiteral("NRML"));
+                    fincept::trading::pt_fill_order(ro.id, leg.price);
+                } catch (const std::exception& e) {
+                    LOG_ERROR("AlgoEngine", QString("Deployment %1: PAPER rollback leg %2 failed: %3")
+                                  .arg(dep_id).arg(i).arg(QString::fromUtf8(e.what())));
+                }
+            }
+            for (int i = 0; i < legs.size(); ++i)
+                runner->on_leg_rejected(i, QStringLiteral("paper basket aborted (partial fill)"));
+        }, Qt::QueuedConnection);
+        LOG_INFO("AlgoEngine", QString("Deployment %1: PAPER basket %2 legs -> portfolio %3")
+                                   .arg(dep_id).arg(legs.size()).arg(portfolio_id));
+        return;
+    }
+
+    // ── Live: broker basket (ONLY signal.mode == "live") ─────────────────────────
+    const QString account_id = signal.account_id;
+    const fincept::trading::BasketOrderRequest basket =
+        fincept::algo::fno::build_basket_request(legs, signal.product_type);
+
+    fincept::trading::UnifiedTrading::instance().place_basket_orders(
+        account_id, basket,
+        [self, dep_id, legs, account_id](const fincept::trading::BasketOrderResult& res) {
+            if (!self) return;
+            QMetaObject::invokeMethod(self, [self, dep_id, legs, account_id, res]() {
+                if (!self) return;
+                QMutexLocker lock(&self->mutex_);
+                auto* runner = self->runners_.value(dep_id, nullptr);
+                if (!runner) return;
+                lock.unlock();
+
+                // place_basket_orders reorders (BUY-first) and batches, so map each
+                // leg to its result by symbol rather than by index.
+                auto leg_succeeded = [&res](const QString& sym) -> bool {
+                    for (const auto& r : res.results)
+                        if (r.symbol == sym) return r.success;
+                    return false;
+                };
+
+                QVector<int> filled_idx;
+                bool any_fail = false;
+                for (int i = 0; i < legs.size(); ++i) {
+                    if (leg_succeeded(legs[i].symbol)) filled_idx.append(i);
+                    else                                any_fail = true;
+                }
+
+                if (!any_fail) {
+                    // Fills carry no price; mark at the leg's reference LTP (P3.5
+                    // replaces this with live leg-quote marks).
+                    for (int i = 0; i < legs.size(); ++i)
+                        runner->on_leg_filled(i, legs[i], legs[i].price, legs[i].quantity);
+                    return;
+                }
+
+                // Rollback: close the legs that filled, then reject the basket so no
+                // position is recorded, and surface the error.
+                if (!filled_idx.isEmpty()) {
+                    QVector<AlgoOrderLeg> reverse;
+                    for (int i : std::as_const(filled_idx)) {
+                        AlgoOrderLeg rl = legs[i];
+                        rl.side = (legs[i].side == QLatin1String("BUY"))
+                                      ? QStringLiteral("SELL") : QStringLiteral("BUY");
+                        reverse.append(rl);
+                    }
+                    const auto rb = fincept::algo::fno::build_basket_request(reverse, QString());
+                    fincept::trading::UnifiedTrading::instance().place_basket_orders(
+                        account_id, rb, [dep_id](const fincept::trading::BasketOrderResult&) {
+                            LOG_WARN("AlgoEngine", QString("Deployment %1: entry basket rolled back")
+                                         .arg(dep_id));
+                        });
+                }
+                for (int i = 0; i < legs.size(); ++i)
+                    runner->on_leg_rejected(i, QStringLiteral("live basket aborted (partial fill)"));
+                emit self->error_occurred(dep_id, QStringLiteral("F&O entry basket partially failed; rolled back"));
+            }, Qt::QueuedConnection);
+        });
+    LOG_INFO("AlgoEngine", QString("Deployment %1: LIVE basket %2 legs -> account %3")
+                               .arg(dep_id).arg(legs.size()).arg(account_id));
+}
+
 void AlgoEngine::persist_deployment(const services::algo::AlgoDeployment& d) {
     auto db = fincept::Database::instance().connection();
     QSqlQuery q(db);
@@ -221,8 +406,9 @@ void AlgoEngine::persist_deployment(const services::algo::AlgoDeployment& d) {
         "INSERT OR REPLACE INTO algo_deployments "
         "(id, strategy_id, strategy_name, strategy_kind, symbol, exchange, product_type, "
         " mode, entry_side, backend, broker_id, broker_account_id, paper_portfolio_id, "
-        " timeframe, quantity, max_order_value, max_daily_loss, status, created_at, updated_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))"));
+        " timeframe, quantity, max_order_value, max_daily_loss, "
+        " instrument_type, underlying, status, created_at, updated_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))"));
     q.addBindValue(d.id);
     q.addBindValue(d.strategy_id);
     q.addBindValue(d.strategy_name);
@@ -240,6 +426,8 @@ void AlgoEngine::persist_deployment(const services::algo::AlgoDeployment& d) {
     q.addBindValue(d.quantity);
     q.addBindValue(d.max_order_value);
     q.addBindValue(d.max_daily_loss);
+    q.addBindValue(d.instrument_type); // F&O: option|future — drives the multi-leg path on resume
+    q.addBindValue(d.underlying);      // F&O underlying for chain lookup on resume
     q.addBindValue(QStringLiteral("starting"));
     if (!q.exec())
         LOG_ERROR("AlgoEngine",
@@ -270,6 +458,9 @@ void AlgoEngine::list_deployments() {
             d.backend = q.value("backend").toString();
             d.broker_id = q.value("broker_id").toString();
             d.broker_account_id = q.value("broker_account_id").toString();
+            d.instrument_type = q.value("instrument_type").toString();
+            d.underlying = q.value("underlying").toString();
+            d.resolved_expiry = q.value("resolved_expiry").toString();
             d.status = q.value("status").toString();
             d.error_message = q.value("error_message").toString();
             d.timeframe = q.value("timeframe").toString();
@@ -339,6 +530,11 @@ void AlgoEngine::recover_orphaned() {
         d.quantity = q.value("quantity").toDouble();
         d.max_order_value = q.value("max_order_value").toDouble();
         d.max_daily_loss = q.value("max_daily_loss").toDouble();
+        // F&O: needed so the resumed runner takes the multi-leg path and can
+        // reattach its open basket (resolved_legs_json read in restore_state_from_db).
+        d.instrument_type = q.value("instrument_type").toString();
+        d.underlying = q.value("underlying").toString();
+        d.resolved_expiry = q.value("resolved_expiry").toString();
         to_resume.append(d);
     }
 

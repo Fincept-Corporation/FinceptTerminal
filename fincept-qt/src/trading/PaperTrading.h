@@ -21,6 +21,12 @@ QVector<PtPortfolio> pt_list_portfolios(const QString& exchange = "");
 void pt_delete_portfolio(const QString& id);
 PtPortfolio pt_reset_portfolio(const QString& id);
 
+// Set a paper portfolio's available cash directly (fake money). Used by the
+// portfolio-replication "top up" action so an exact 1:1 copy of a large source
+// portfolio always has enough simulated cash to fill. Persists immediately.
+// Throws std::runtime_error on a non-finite/negative amount or DB error.
+void pt_set_balance(const QString& portfolio_id, double new_balance);
+
 // --- Leverage / Margin config (Phase 3 §4) ---
 // Per-portfolio leverage rules + market-hours enforcement live in an in-memory
 // config map (the existing pt_portfolios schema has no columns for them, and we

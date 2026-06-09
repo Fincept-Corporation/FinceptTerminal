@@ -40,7 +40,13 @@ layout::FrameLayout WindowFrame::capture_layout() const {
     if (!dock_manager_ || !dock_router_)
         return fl;
 
-    // ADS dock state — opaque blob covering splits, tab order, sizes.
+    // ADS dock state — opaque blob covering splits, tab order, sizes. Prune
+    // closed panels first so workspace snapshots capture only the visible grid
+    // and don't carry phantom areas that reshuffle the layout on restore. The
+    // session-layout timer keeps the live tree pruned continuously, so this is
+    // normally a no-op; it just guarantees a clean blob if a snapshot lands in
+    // the sub-500ms window after a layout change.
+    dock_router_->prune_hidden_panels();
     fl.dock_state = dock_manager_->saveState();
 
     // Active panel — whichever dock widget currently has focus.

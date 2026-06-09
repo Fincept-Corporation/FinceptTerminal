@@ -3,7 +3,9 @@
 #include "screens/fno/OptionChainModel.h"
 #include "ui/theme/Theme.h"
 
+#include <QContextMenuEvent>
 #include <QHeaderView>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QStyledItemDelegate>
@@ -140,21 +142,69 @@ OptionChainTable::OptionChainTable(QWidget* parent) : QTableView(parent) {
 }
 
 void OptionChainTable::mousePressEvent(QMouseEvent* e) {
-    QModelIndex idx = indexAt(e->pos());
-    if (idx.isValid()) {
-        const int col = idx.column();
-        const bool is_ce_ltp = (col == OptionChainModel::ColCeLtp);
-        const bool is_pe_ltp = (col == OptionChainModel::ColPeLtp);
-        if (is_ce_ltp || is_pe_ltp) {
-            const qint64 token = is_ce_ltp ? idx.data(OptionChainModel::CeTokenRole).toLongLong()
-                                           : idx.data(OptionChainModel::PeTokenRole).toLongLong();
-            const double strike = idx.data(OptionChainModel::StrikeRole).toDouble();
-            const int lots = (e->button() == Qt::RightButton) ? -1 : 1;
-            if (token != 0)
-                emit leg_clicked(token, strike, is_ce_ltp, lots);
+    // Left-click an LTP cell adds the leg to the strategy builder. Right-click
+    // is handled by contextMenuEvent (Buy/Sell/Add-to-Builder), so it must NOT
+    // also fire leg_clicked here.
+    if (e->button() == Qt::LeftButton) {
+        QModelIndex idx = indexAt(e->pos());
+        if (idx.isValid()) {
+            const int col = idx.column();
+            const bool is_ce_ltp = (col == OptionChainModel::ColCeLtp);
+            const bool is_pe_ltp = (col == OptionChainModel::ColPeLtp);
+            if (is_ce_ltp || is_pe_ltp) {
+                const qint64 token = is_ce_ltp ? idx.data(OptionChainModel::CeTokenRole).toLongLong()
+                                               : idx.data(OptionChainModel::PeTokenRole).toLongLong();
+                const double strike = idx.data(OptionChainModel::StrikeRole).toDouble();
+                if (token != 0)
+                    emit leg_clicked(token, strike, is_ce_ltp, 1);
+            }
         }
     }
     QTableView::mousePressEvent(e);
+}
+
+void OptionChainTable::contextMenuEvent(QContextMenuEvent* e) {
+    const QModelIndex idx = indexAt(e->pos());
+    if (!idx.isValid() || !model_) {
+        QTableView::contextMenuEvent(e);
+        return;
+    }
+    const int col = idx.column();
+    const bool ce_side = (col >= OptionChainModel::ColCeOi && col <= OptionChainModel::ColCeLtp);
+    const bool pe_side = (col >= OptionChainModel::ColPeLtp && col <= OptionChainModel::ColPeOi);
+    if (!ce_side && !pe_side) {  // strike pivot — nothing to trade
+        QTableView::contextMenuEvent(e);
+        return;
+    }
+    const bool is_call = ce_side;
+    const qint64 token = idx.data(is_call ? OptionChainModel::CeTokenRole : OptionChainModel::PeTokenRole).toLongLong();
+    const double strike = idx.data(OptionChainModel::StrikeRole).toDouble();
+    if (token == 0) {
+        QTableView::contextMenuEvent(e);
+        return;
+    }
+
+    // Prefer the broker contract symbol for the menu label; fall back to strike+side.
+    QString label = QString::number(strike, 'f', 0) + (is_call ? QStringLiteral(" CE") : QStringLiteral(" PE"));
+    const auto& rows = model_->chain().rows;
+    if (idx.row() >= 0 && idx.row() < rows.size()) {
+        const QString sym = is_call ? rows[idx.row()].ce_symbol : rows[idx.row()].pe_symbol;
+        if (!sym.isEmpty())
+            label = sym;
+    }
+
+    QMenu menu(this);
+    QAction* buy = menu.addAction(tr("Buy %1").arg(label));
+    QAction* sell = menu.addAction(tr("Sell %1").arg(label));
+    menu.addSeparator();
+    QAction* to_builder = menu.addAction(tr("Add to Builder"));
+    QAction* chosen = menu.exec(e->globalPos());
+    if (chosen == buy)
+        emit order_requested(token, strike, is_call, /*is_buy=*/true);
+    else if (chosen == sell)
+        emit order_requested(token, strike, is_call, /*is_buy=*/false);
+    else if (chosen == to_builder)
+        emit leg_clicked(token, strike, is_call, 1);
 }
 
 } // namespace fincept::screens::fno

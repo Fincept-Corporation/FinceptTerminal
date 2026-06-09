@@ -72,6 +72,7 @@ class EquityBottomPanel : public QWidget {
     void cancel_order_requested(const QString& order_id);
     void modify_order_requested(const QString& order_id, double new_qty, double new_price);
     void import_holdings_requested(const QVector<trading::BrokerHolding>& holdings);
+    void replicate_portfolio_requested();
     void cancel_all_orders_requested(const QString& account_id);
     void close_all_positions_requested(const QString& account_id);
     // Paper: convert an open position's product in place (MIS -> CNC), identified
@@ -81,8 +82,12 @@ class EquityBottomPanel : public QWidget {
     void orders_day_changed(const QDate& day);
     // Square off the subset of open positions by P&L sign (+1 winners, -1 losers).
     void square_off_group_requested(const QString& account_id, int sign);
-    // Right-click Buy(add)/Sell(reduce) on a position or holding row.
-    void trade_symbol_requested(const QString& symbol, const QString& product, bool is_buy);
+    // Buy(add)/Sell(reduce) on a position or holding row — from the right-click
+    // menu or the per-row SELL button. `qty` pre-fills the order ticket (the held
+    // quantity for a reduce/exit; 0 = let the ticket default to 1).
+    void trade_symbol_requested(const QString& symbol, const QString& product, bool is_buy, double qty);
+    // Click a position/holding row → load that symbol's chart (like the watchlist).
+    void chart_symbol_requested(const QString& symbol);
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -109,6 +114,12 @@ class EquityBottomPanel : public QWidget {
     void update_holding_quote(const QString& symbol, double ltp);
 
     static QTableWidgetItem* ensure_item(QTableWidget* table, int row, int col);
+
+    // Build the Positions "Action" cell: a SELL button (opens an order ticket
+    // pre-filled with the held qty) plus, for paper intraday rows, a "→ CNC"
+    // convert button. `paper_pid` is empty for live rows (no convert).
+    QWidget* make_positions_action_cell(const QString& symbol, const QString& product, double qty,
+                                        bool show_convert, const QString& paper_pid);
 
     QTabWidget* tabs_ = nullptr;
 
@@ -155,6 +166,7 @@ class EquityBottomPanel : public QWidget {
     QLabel* holdings_pnl_caption_ = nullptr;
     QLabel* holdings_pnl_pct_caption_ = nullptr;
     class QPushButton* holdings_import_btn_ = nullptr;
+    class QPushButton* holdings_replicate_btn_ = nullptr;
     QVector<trading::BrokerHolding> last_holdings_;
     QTableWidget* orders_table_ = nullptr;
     QDateEdit* orders_date_edit_ = nullptr;        // per-day order book selector

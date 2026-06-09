@@ -359,6 +359,28 @@ void DockScreenRouter::show_tab_context_menu(const QString& id, const QPoint& gl
     menu.exec(global_pos);
 }
 
+int DockScreenRouter::prune_hidden_panels() {
+    if (!manager_)
+        return 0;
+    // dockWidgetsMap() returns a value copy, so removing while iterating the
+    // snapshot is safe; collect first regardless to keep intent obvious.
+    QList<ads::CDockWidget*> closed;
+    for (auto* dw : manager_->dockWidgetsMap()) {
+        if (dw && dw->isClosed())
+            closed.append(dw);
+    }
+    for (auto* dw : closed) {
+        // removeDockWidget() detaches the widget, drops it from the manager's
+        // map and collapses its now-empty area. It does NOT delete the widget,
+        // so the screen and its IStatefulScreen state stay alive in our
+        // dock_widgets_ map for re-add on the next navigate().
+        manager_->removeDockWidget(dw);
+    }
+    if (!closed.isEmpty())
+        LOG_DEBUG("DockRouter", QString("prune_hidden_panels: dropped %1 closed area(s)").arg(closed.size()));
+    return static_cast<int>(closed.size());
+}
+
 void DockScreenRouter::tile_2x2() {
     // Public `layout.tile_2x2` command: re-grid every open panel in its current
     // reading order. Delegates to the shared auto-grid implementation.

@@ -27,6 +27,7 @@
 #include "screens/equity_trading/EquityWatchlist.h"
 #include "screens/common/feeds/FeedPanel.h"
 #include "services/feeds/FeedMonitor.h"
+#include "screens/equity_trading/PortfolioReplicationDialog.h"
 #include "services/portfolio/PortfolioService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "trading/AccountManager.h"
@@ -431,6 +432,8 @@ void EquityTradingScreen::setup_ui() {
     connect(bottom_panel_, &EquityBottomPanel::close_all_positions_requested, this,
             [this](const QString&) { on_close_all_positions(); });
     connect(bottom_panel_, &EquityBottomPanel::import_holdings_requested, this, &EquityTradingScreen::on_import_holdings_requested);
+    connect(bottom_panel_, &EquityBottomPanel::replicate_portfolio_requested, this,
+            &EquityTradingScreen::on_replicate_portfolio_requested);
     connect(bottom_panel_, &EquityBottomPanel::convert_position_requested, this,
             &EquityTradingScreen::on_convert_position);
     connect(bottom_panel_, &EquityBottomPanel::orders_day_changed, this, &EquityTradingScreen::on_orders_day_changed);
@@ -438,6 +441,10 @@ void EquityTradingScreen::setup_ui() {
             &EquityTradingScreen::on_square_off_group);
     connect(bottom_panel_, &EquityBottomPanel::trade_symbol_requested, this,
             &EquityTradingScreen::on_trade_symbol_requested);
+    // Click a position/holding row → load that symbol on the chart (same slot the
+    // watchlist uses, so it sets the selected symbol, fetches candles + orderbook).
+    connect(bottom_panel_, &EquityBottomPanel::chart_symbol_requested, this,
+            &EquityTradingScreen::on_symbol_selected);
     connect(chart_, &EquityChartPanel::timeframe_changed, this, [this](const QString& tf) {
         auto* stream = DataStreamManager::instance().stream_for(focused_account_id_);
         if (stream)
@@ -563,7 +570,7 @@ void EquityTradingScreen::on_instruments_ready(const QString& broker_id) {
     auto* stream = DataStreamManager::instance().stream_for(focused_account_id_);
     if (stream) {
         stream->set_selected_symbol(selected_symbol_, selected_exchange_);
-        stream->subscribe_symbols(QStringLiteral("equity:watchlist"), watchlist_symbols_);
+        stream->subscribe_symbols(QStringLiteral("equity:watchlist"), effective_symbols());
         stream->fetch_candles(selected_symbol_, chart_->current_timeframe());
         stream->fetch_orderbook(selected_symbol_);
         stream->fetch_time_sales(selected_symbol_);
@@ -711,7 +718,7 @@ void EquityTradingScreen::init_focused_account() {
     auto* stream = dsm.stream_for(focused_account_id_);
     if (stream) {
         stream->set_selected_symbol(selected_symbol_, selected_exchange_);
-        stream->subscribe_symbols(QStringLiteral("equity:watchlist"), watchlist_symbols_);
+        stream->subscribe_symbols(QStringLiteral("equity:watchlist"), effective_symbols());
         stream->fetch_candles(selected_symbol_, chart_->current_timeframe());
         stream->fetch_orderbook(selected_symbol_);
         stream->fetch_time_sales(selected_symbol_);
@@ -827,6 +834,14 @@ void EquityTradingScreen::restore_state(const QVariantMap& state) {
     // Honour the restored list even when the account didn't change (idempotent).
     if (!wl.isEmpty() && !focused_account_id_.isEmpty())
         load_watchlists();
+}
+
+void EquityTradingScreen::on_replicate_portfolio_requested() {
+    fincept::screens::PortfolioReplicationDialog dlg(this);
+    dlg.exec();
+    // Reflect any new paper positions/holdings/funds in the panels. Safe to call
+    // unconditionally — it no-ops unless the focused account is paper.
+    refresh_paper_panels();
 }
 
 } // namespace fincept::screens

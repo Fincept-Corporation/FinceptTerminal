@@ -628,6 +628,12 @@ FetchContent_Declare(
     GIT_SHALLOW    TRUE
     UPDATE_DISCONNECTED TRUE
 )
+set(ADS_VERSION "4.5.0" CACHE STRING "" FORCE)   # skip git_describe() in qtads CMakeLists
+# qtads src/CMakeLists.txt does include(Versioning) unconditionally but only adds
+# cmake/modules to CMAKE_MODULE_PATH inside the if(NOT ADS_VERSION) branch.
+# Pre-set the path so the include succeeds regardless of which branch ran.
+# The _deps layout is stable: FetchContent always unpacks to <binary_dir>/_deps/<name_lower>-src.
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_BINARY_DIR}/_deps/qtads-src/cmake/modules")
 FetchContent_MakeAvailable(QtADS)
 # ADS target name is version-stamped: qtadvanceddocking-qt6
 # Disable unity build — ADS uses anonymous namespaces internally
@@ -684,6 +690,7 @@ set(CORE_SOURCES
     src/core/events/EventBus.cpp
     src/core/HealthMonitor.cpp
     src/core/layout/LayoutTypes.cpp
+    src/core/layout/DockLayoutSelftest.cpp
     src/core/layout/LayoutCatalog.cpp
     src/core/layout/LayoutTemplates.cpp
     src/core/layout/WorkspaceMatcher.cpp
@@ -861,6 +868,9 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v042_scan_watch_events.cpp
     src/storage/sqlite/migrations/v043_feed_subscriptions.cpp
     src/storage/sqlite/migrations/v044_feed_items.cpp
+    src/storage/sqlite/migrations/v045_scan_watch_universe.cpp
+    src/storage/sqlite/migrations/v046_fno_algo.cpp
+    src/storage/sqlite/migrations/v047_algo_multileg_trades.cpp
 
     # Historical OHLCV data store (Historify, Phase 3 §13)
     src/storage/HistoricalDataStore.cpp
@@ -966,6 +976,10 @@ set(MCP_SOURCES
 # Trading
 set(TRADING_SOURCES
     src/trading/PaperTrading.cpp
+    src/trading/PaperTradingSelftest.cpp
+    src/trading/replication/PortfolioReplicationService.cpp
+    src/trading/replication/PortfolioReplicationSelftest.cpp
+    src/trading/PaperMarkService.cpp
     src/trading/OrderMatcher.cpp
     src/trading/BrokerRegistry.cpp
     src/trading/UnifiedTrading.cpp
@@ -1078,7 +1092,15 @@ set(ALGO_ENGINE_SOURCES
     src/algo_engine/AlgoScanner.cpp
     src/algo_engine/CandleDataFetcher.cpp
     src/algo_engine/ScanMonitor.cpp
+    src/algo_engine/RealtimeScanRunner.cpp
+    src/algo_engine/UniverseScanSelftest.cpp
     src/algo_engine/BacktestEngine.cpp
+    src/algo_engine/fno/FnoAlgoTypes.cpp
+    src/algo_engine/fno/FnoAlgoSelftest.cpp
+    src/algo_engine/fno/FnoLegResolver.cpp
+    src/algo_engine/fno/FnoStrategyPreview.cpp
+    src/algo_engine/fno/FnoDataBridge.cpp
+    src/algo_engine/fno/FnoExecution.cpp
 )
 
 # Services
@@ -1352,6 +1374,7 @@ set(UI_SOURCES
     src/ui/widgets/algo/RiskManagementPanel.cpp
     src/ui/widgets/algo/SymbolSearchCombo.cpp
     src/ui/widgets/algo/SymbolChipInput.cpp
+    src/ui/widgets/algo/FnoLegRuleEditor.cpp
 )
 
 # Screens
@@ -1515,9 +1538,11 @@ set(SCREEN_SOURCES
     src/screens/equity_trading/EquityOrderEntry.cpp
     src/screens/equity_trading/EquityOrderBook.cpp
     src/screens/equity_trading/EquityBottomPanel.cpp
+    src/screens/common/PaperBlotterPanel.cpp
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
     src/screens/equity_trading/OrderConfirmDialog.cpp
+    src/screens/equity_trading/PortfolioReplicationDialog.cpp
     # Feed monitor (reusable across screens)
     src/screens/common/feeds/FeedCardView.cpp
     src/screens/common/feeds/FeedTableView.cpp
@@ -1671,6 +1696,7 @@ set(SCREEN_SOURCES
     src/screens/algo_trading/StrategyBuilderPanel.cpp
     src/screens/algo_trading/StrategyListPanel.cpp
     src/screens/algo_trading/ScannerPanel.cpp
+    src/screens/algo_trading/UniverseScannerPanel.cpp
     src/screens/algo_trading/AlertsPanel.cpp
     src/screens/algo_trading/DeploymentDashboard.cpp
     src/screens/algo_trading/AlgoDeployDialog.cpp
@@ -1931,6 +1957,7 @@ set_source_files_properties(
     src/screens/algo_trading/AlgoTradingScreen.cpp
     src/screens/algo_trading/DeploymentDashboard.cpp
     src/screens/algo_trading/ScannerPanel.cpp
+    src/screens/algo_trading/UniverseScannerPanel.cpp
     src/screens/algo_trading/AlertsPanel.cpp
     src/screens/algo_trading/StrategyBuilderPanel.cpp
     src/screens/algo_trading/StrategyListPanel.cpp
@@ -1985,9 +2012,11 @@ set_source_files_properties(
     src/screens/equity_trading/EquityOrderEntry.cpp
     src/screens/equity_trading/EquityOrderBook.cpp
     src/screens/equity_trading/EquityBottomPanel.cpp
+    src/screens/common/PaperBlotterPanel.cpp
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
     src/screens/equity_trading/OrderConfirmDialog.cpp
+    src/screens/equity_trading/PortfolioReplicationDialog.cpp
     # Feed monitor (reusable across screens)
     src/screens/common/feeds/FeedCardView.cpp
     src/screens/common/feeds/FeedTableView.cpp
@@ -2342,6 +2371,9 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v042_scan_watch_events.cpp
     src/storage/sqlite/migrations/v043_feed_subscriptions.cpp
     src/storage/sqlite/migrations/v044_feed_items.cpp
+    src/storage/sqlite/migrations/v045_scan_watch_universe.cpp
+    src/storage/sqlite/migrations/v046_fno_algo.cpp
+    src/storage/sqlite/migrations/v047_algo_multileg_trades.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
@@ -2487,6 +2519,10 @@ set_source_files_properties(
     src/mcp/tools/GeopoliticsTools.cpp
     src/mcp/tools/ExcelTools.cpp
     src/mcp/tools/SurfaceAnalyticsTools.cpp
+    src/algo_engine/fno/FnoAlgoSelftest.cpp
+    src/algo_engine/fno/FnoLegResolver.cpp
+    src/trading/PaperTradingSelftest.cpp
+    src/trading/PaperMarkService.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 

@@ -136,6 +136,9 @@ void AccountDataStream::resume() {
 // ── Symbol management ───────────────────────────────────────────────────────
 
 void AccountDataStream::subscribe_symbols(const QString& consumer_id, const QStringList& symbols) {
+    LOG_INFO("subdbg", QString("subscribe_symbols consumer='%1' (%2 syms): [%3] ws_connected=%4")
+                           .arg(consumer_id).arg(symbols.size())
+                           .arg(symbols.join(','), ws_connected() ? "Y" : "N"));
     if (symbols.isEmpty())
         consumer_symbols_.remove(consumer_id);
     else
@@ -770,6 +773,7 @@ void AccountDataStream::ws_init() {
             q.change = tick.ltp - tick.prev_close;
             q.change_pct = tick.prev_close > 0 ? ((tick.ltp - tick.prev_close) / tick.prev_close) * 100.0 : 0;
             q.timestamp = tick.timestamp;
+            q.oi = qint64(tick.oi);  // F&O open interest; 0 for cash/equity ticks
             quote_cache_[tick.symbol] = q;
             emit quote_updated(account_id_, tick.symbol, q);
         });
@@ -803,7 +807,19 @@ void AccountDataStream::ws_init() {
             LOG_INFO(ADS_TAG, QString("Fyers HSM connected for %1").arg(account_id_));
             emit connection_state_changed(account_id_, ConnectionState::Connected);
             auto to_fyers = [](const QString& sym) {
-                return sym.contains(':') ? sym : QStringLiteral("NSE:") + sym + QStringLiteral("-EQ");
+                // Strip any exchange prefix to inspect the bare contract: a held
+                // F&O option arrives as "NFO:NIFTY...CE" (paper) or "NIFTY...CE"
+                // (live) — both must resolve on Fyers' "NSE:" segment, NOT the
+                // equity "...-EQ" form, or the option never gets a live feed.
+                QString core = sym;
+                const int colon = core.indexOf(QLatin1Char(':'));
+                if (colon >= 0)
+                    core = core.mid(colon + 1);
+                if (is_fyers_fno_symbol(core))
+                    return QStringLiteral("NSE:") + core;
+                if (colon >= 0)
+                    return sym;  // already-qualified equity (e.g. "BSE:TCS")
+                return QStringLiteral("NSE:") + core + QStringLiteral("-EQ");
             };
             QStringList fyers_symbols;
             if (!selected_symbol_.isEmpty())
@@ -811,6 +827,16 @@ void AccountDataStream::ws_init() {
             for (const QString& s : subscribed_symbols())
                 fyers_symbols.append(to_fyers(s));
             fyers_symbols.removeDuplicates();
+            {
+                QStringList fno;
+                for (const auto& s : fyers_symbols)
+                    if (is_fyers_fno_symbol(s.section(QLatin1Char(':'), -1)))
+                        fno << s;
+                LOG_INFO("subdbg", QString("[connect] consumers=%1 → %2 fyers syms (F&O: [%3]); raw subscribed=[%4]")
+                                       .arg(subscribed_symbols().size())
+                                       .arg(fyers_symbols.size())
+                                       .arg(fno.join(','), subscribed_symbols().join(',')));
+            }
             if (auto* fws = qobject_cast<FyersWebSocket*>(ws_))
                 fws->subscribe(fyers_symbols);
         });
@@ -1183,7 +1209,18 @@ bool AccountDataStream::ws_connected() const {
 void AccountDataStream::ws_resubscribe() {
     if (auto* fws = qobject_cast<FyersWebSocket*>(ws_)) {
         auto to_fyers = [](const QString& sym) {
-            return sym.contains(':') ? sym : QStringLiteral("NSE:") + sym + QStringLiteral("-EQ");
+            // Mirror the connect-handler mapping: strip any exchange prefix and
+            // route F&O options onto Fyers' "NSE:" segment (handles the paper
+            // "NFO:...CE" prefix too), equities to "NSE:<sym>-EQ".
+            QString core = sym;
+            const int colon = core.indexOf(QLatin1Char(':'));
+            if (colon >= 0)
+                core = core.mid(colon + 1);
+            if (is_fyers_fno_symbol(core))
+                return QStringLiteral("NSE:") + core;
+            if (colon >= 0)
+                return sym;
+            return QStringLiteral("NSE:") + core + QStringLiteral("-EQ");
         };
         QStringList fyers_symbols;
         if (!selected_symbol_.isEmpty())
@@ -1191,6 +1228,16 @@ void AccountDataStream::ws_resubscribe() {
         for (const QString& s : subscribed_symbols())
             fyers_symbols.append(to_fyers(s));
         fyers_symbols.removeDuplicates();
+        {
+            QStringList fno;
+            for (const auto& s : fyers_symbols)
+                if (is_fyers_fno_symbol(s.section(QLatin1Char(':'), -1)))
+                    fno << s;
+            LOG_INFO("subdbg", QString("[ws_resubscribe] consumers=%1 → %2 fyers syms (F&O: [%3])")
+                                   .arg(subscribed_symbols().size())
+                                   .arg(fyers_symbols.size())
+                                   .arg(fno.join(',')));
+        }
         fws->set_subscriptions(fyers_symbols);
     }
 

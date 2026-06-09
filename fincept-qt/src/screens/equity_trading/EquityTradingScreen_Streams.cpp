@@ -26,6 +26,7 @@
 #include "trading/DataStreamManager.h"
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
+#include "trading/websocket/FyersTickTypes.h"
 
 #include <QTimer>
 
@@ -160,6 +161,8 @@ void EquityTradingScreen::hub_subscribe_quotes() {
     for (const auto& s : position_symbols_) // held symbols get live quotes too
         symbols.insert(s);
 
+    LOG_INFO("posdbg", QString("subscribing %1 quote topics for acct=%2: [%3]")
+                           .arg(symbols.size()).arg(aid, QStringList(symbols.begin(), symbols.end()).join(',')));
     for (const auto& sym : symbols) {
         const QString topic = broker_topic(bid, aid, QStringLiteral("quote"), sym);
         hub.subscribe(this, topic, [this, sym](const QVariant& v) {
@@ -213,6 +216,70 @@ void EquityTradingScreen::hub_subscribe_quotes() {
                 OrderMatcher::instance().check_sl_tp_triggers(focused_paper_portfolio_id_, sym, quote.ltp);
             }
         });
+    }
+}
+
+void EquityTradingScreen::route_option_quote(const QString& account_id, const QString& symbol,
+                                             const BrokerQuote& quote) {
+    // The live tick arrives in Fyers' HSM/brsymbol spelling ("NIFTY09JUN26C23200")
+    // which carries a parseable strike; equity ticks (e.g. "RELIANCE") don't parse
+    // as options and are ignored here.
+    const auto tick = trading::fyers_parse_option(symbol);
+    if (tick.valid) {
+        // [posdbg] throttled — confirm the router fires for option ticks, on which
+        // account, and what it tries to match. Remove once F&O pricing is verified.
+        static qint64 s_last = 0;
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        if (now - s_last > 3000) {
+            s_last = now;
+            LOG_INFO("posdbg", QString("route_option_quote tick='%1' acct=%2 focused=%3 pos=[%4]")
+                                   .arg(symbol, account_id, focused_account_id_,
+                                        position_symbols_.join(',')));
+        }
+    }
+    if (account_id != focused_account_id_ || quote.ltp <= 0.0)
+        return;
+    if (!tick.valid || tick.strike <= 0.0)
+        return;
+    const QString strike_str = QString::number(qRound64(tick.strike));
+
+    // Reconcile to a held position by (underlying, side, strike). The position
+    // symbol uses the REST "…<strike>CE" spelling, which never string-matches the
+    // tick's "…C<strike>" spelling — so match on the format-independent identity:
+    // same underlying root, same call/put, and the position's strike (trailing
+    // digits before CE/PE) equals the tick's strike.
+    for (const QString& pos_sym : position_symbols_) {
+        const auto leg = trading::fyers_parse_option(pos_sym);
+        if (!leg.valid || leg.is_call != tick.is_call || leg.underlying != tick.underlying)
+            continue;
+        QString core = pos_sym.section(QLatin1Char(':'), -1);
+        if (core.endsWith(QLatin1String("CE")) || core.endsWith(QLatin1String("PE")))
+            core.chop(2);
+        if (!core.endsWith(strike_str))
+            continue;
+
+        // Mark the position/holding row to market. Passing the position's OWN
+        // symbol lets update_quote's existing string match find the row.
+        bottom_panel_->update_quote(pos_sym, quote);
+
+        // Paper engine: buffer the option's price so funds/stats mark to market
+        // too, and run limit + SL/TP matching — the same coalesced-flush path the
+        // equity quote handler uses, keyed by the position's own symbol.
+        if (focused_is_paper_ && !focused_paper_portfolio_id_.isEmpty()) {
+            pending_paper_prices_[pos_sym] = quote.ltp;
+            if (!paper_flush_armed_) {
+                paper_flush_armed_ = true;
+                QTimer::singleShot(kPaperPriceFlushMs, this, [this]() { flush_paper_prices(); });
+            }
+            PriceData pd;
+            pd.last = quote.ltp;
+            pd.bid = quote.bid;
+            pd.ask = quote.ask;
+            pd.timestamp = quote.timestamp;
+            OrderMatcher::instance().check_orders(pos_sym, pd, focused_paper_portfolio_id_);
+            OrderMatcher::instance().check_sl_tp_triggers(focused_paper_portfolio_id_, pos_sym, quote.ltp);
+        }
+        return;
     }
 }
 

@@ -18,6 +18,14 @@
 #include <QString>
 #include <QWidget>
 
+// Forward-declare F&O widgets to avoid pulling heavy headers into every TU
+// that includes this header.
+namespace fincept::ui::algo { class FnoLegRuleEditor; }
+namespace fincept::screens::fno {
+    class PayoffChartWidget;
+    class BuilderAnalyticsRibbon;
+}
+
 namespace fincept::screens {
 
 class StrategyBuilderPanel : public QWidget {
@@ -48,7 +56,8 @@ private slots:
     void on_backtest_result(const QJsonObject& data);
     void on_error(const QString& context, const QString& msg);
 
-private:
+private: // NOLINT(readability-redundant-access-specifiers) — needed to end private slots: section
+    // --- F&O authoring (P2) ---
     void build_ui();
     void retranslateUi();
     void connect_service();
@@ -65,12 +74,21 @@ private:
     // Returns a human-readable error if the strategy is unrunnable, else empty.
     QString validate() const;
 
+    // F&O section builder + helpers
+    void build_fno_section();
+    void populate_underlyings();
+    void refresh_fno_preview();
+    void on_instrument_type_changed();
+    QString fno_broker_id() const;
+
     // Top toolbar
     QLineEdit* name_edit_ = nullptr;
     QLineEdit* desc_edit_ = nullptr;
     ui::algo::SymbolSearchCombo* symbol_combo_ = nullptr;
     QComboBox* timeframe_combo_ = nullptr;
     QComboBox* template_combo_ = nullptr;
+    // Instrument-type selector added by P2.3
+    QComboBox* instrument_type_combo_ = nullptr;
     QPushButton* save_btn_ = nullptr;
     QPushButton* backtest_btn_ = nullptr;
     QPushButton* deploy_btn_ = nullptr;
@@ -83,6 +101,7 @@ private:
     ui::algo::RiskManagementPanel* risk_panel_ = nullptr;
 
     // Right panel — backtest setup card
+    QWidget* bt_setup_card_ = nullptr;  // kept so we can show/hide in on_instrument_type_changed
     QLabel* bt_header_ = nullptr;
     QLabel* bt_symbol_label_ = nullptr;
     QLabel* bt_capital_label_ = nullptr;
@@ -102,6 +121,14 @@ private:
 
     // Inline validation banner shown above the builder when a guard fails.
     QLabel* validation_banner_ = nullptr;
+
+    // F&O section (hidden for Equity instrument type)
+    QWidget* fno_section_ = nullptr;
+    QComboBox* underlying_combo_ = nullptr;
+    QComboBox* expiry_mode_combo_ = nullptr;
+    fincept::ui::algo::FnoLegRuleEditor* leg_editor_ = nullptr;
+    fincept::screens::fno::PayoffChartWidget* payoff_chart_ = nullptr;
+    fincept::screens::fno::BuilderAnalyticsRibbon* analytics_ribbon_ = nullptr;
 };
 
 } // namespace fincept::screens

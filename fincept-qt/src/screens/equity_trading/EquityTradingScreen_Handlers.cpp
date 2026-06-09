@@ -85,6 +85,11 @@ void EquityTradingScreen::on_account_changed(const QString& account_id) {
     if (account.account_id.isEmpty())
         return;
 
+    // Wire the positions/orders header buttons (square-off winners/losers,
+    // SQUARE OFF ALL, cancel-all-orders) to this account. Without this the panel's
+    // account_id_ stays empty and every one of those buttons silently no-ops.
+    bottom_panel_->set_account_id(account_id);
+
     account_btn_->setText(account.display_name.toUpper());
 
     // Configure UI from broker profile
@@ -150,7 +155,7 @@ void EquityTradingScreen::on_account_changed(const QString& account_id) {
         auto* stream = dsm.stream_for(account_id);
         if (stream) {
             stream->set_selected_symbol(selected_symbol_, selected_exchange_);
-            stream->subscribe_symbols(QStringLiteral("equity:watchlist"), watchlist_symbols_);
+            stream->subscribe_symbols(QStringLiteral("equity:watchlist"), effective_symbols());
             stream->fetch_candles(selected_symbol_, chart_->current_timeframe());
             stream->fetch_orderbook(selected_symbol_);
             // US-only market data — skip for Indian/other brokers (no tape/calendar).
@@ -182,6 +187,8 @@ void EquityTradingScreen::on_account_changed(const QString& account_id) {
 }
 
 void EquityTradingScreen::on_symbol_selected(const QString& symbol) {
+    LOG_INFO("posdbg", QString("on_symbol_selected sym='%1' (current='%2' exch='%3')")
+                           .arg(symbol, selected_symbol_, selected_exchange_));
     if (symbol.isEmpty() || symbol == selected_symbol_)
         return;
     switch_symbol(symbol);
@@ -367,7 +374,7 @@ void EquityTradingScreen::on_accounts_clicked() {
         auto* stream = DataStreamManager::instance().stream_for(account_id);
         if (stream && account_id == focused_account_id_) {
             stream->set_selected_symbol(selected_symbol_, selected_exchange_);
-            stream->subscribe_symbols(QStringLiteral("equity:watchlist"), watchlist_symbols_);
+            stream->subscribe_symbols(QStringLiteral("equity:watchlist"), effective_symbols());
         }
         AccountManager::instance().set_connection_state(account_id, ConnectionState::Connected);
         update_connection_status();
@@ -831,13 +838,14 @@ void EquityTradingScreen::on_square_off_group(const QString& account_id, int sig
     });
 }
 
-void EquityTradingScreen::on_trade_symbol_requested(const QString& symbol, const QString& product, bool is_buy) {
+void EquityTradingScreen::on_trade_symbol_requested(const QString& symbol, const QString& product, bool is_buy,
+                                                    double qty) {
     // Exchange isn't carried on the row; default to the screen's current exchange.
-    open_order_ticket_for(symbol, QString(), product, is_buy);
+    open_order_ticket_for(symbol, QString(), product, is_buy, qty);
 }
 
 void EquityTradingScreen::open_order_ticket_for(const QString& symbol, const QString& exchange,
-                                                const QString& product, bool is_buy) {
+                                                const QString& product, bool is_buy, double qty) {
     if (focused_account_id_.isEmpty()) {
         order_entry_->show_order_status(tr("No account selected — add one via ACCOUNTS"), false);
         return;
@@ -862,7 +870,9 @@ void EquityTradingScreen::open_order_ticket_for(const QString& symbol, const QSt
 
     auto* qty_spin = new QSpinBox(&dlg);
     qty_spin->setRange(1, 10000000);
-    qty_spin->setValue(1);
+    // Pre-fill with the held quantity on a reduce/exit (qty > 0); otherwise default
+    // to 1. Lets "Sell" exit the whole position in one click, like the FNO ticket.
+    qty_spin->setValue(qty > 0.0 ? static_cast<int>(qty) : 1);
     form->addRow(tr("Qty"), qty_spin);
 
     auto* px_spin = new QDoubleSpinBox(&dlg);
@@ -972,27 +982,55 @@ void EquityTradingScreen::on_close_all_positions() {
         order_entry_->show_order_status(tr("No account selected — add one via ACCOUNTS"), false);
         return;
     }
+    auto account = AccountManager::instance().get_account(focused_account_id_);
+
+    // SQUARE OFF ALL acts on the POSITIONS tab only (intraday MIS/NRML). CNC /
+    // delivery exposure lives in Holdings and is squared off separately — this
+    // button never touches it. (The shared UnifiedTrading::close_all_positions
+    // closes everything, so we collect intraday-only targets and close each.)
+    struct Target {
+        QString symbol;
+        QString exchange;
+        QString product;
+    };
+    QVector<Target> targets;
+    if (account.trading_mode == "paper" && !account.paper_portfolio_id.isEmpty()) {
+        for (const auto& p : pt_get_positions(account.paper_portfolio_id)) {
+            if (p.quantity == 0.0 || product_is_delivery(p.product))
+                continue; // CNC/delivery -> Holdings, not squared here
+            targets.push_back({p.symbol, QString(), p.product});
+        }
+    } else {
+        // live_positions_ is the Positions tab feed (broker get_positions);
+        // Holdings come from a separate holdings feed and are not included.
+        for (const auto& p : live_positions_)
+            targets.push_back({p.symbol, p.exchange, p.product_type});
+    }
+    if (targets.isEmpty()) {
+        order_entry_->show_order_status(tr("No open positions to square off"), false);
+        return;
+    }
+
     const QString acct_id = focused_account_id_;
     QPointer<EquityTradingScreen> self = this;
-    (void)QtConcurrent::run([self, acct_id]() {
+    (void)QtConcurrent::run([self, acct_id, targets]() {
         if (!self)
             return;
-        auto result = UnifiedTrading::instance().close_all_positions(acct_id);
+        int ok = 0, fail = 0;
+        for (const auto& t : targets) {
+            auto r = UnifiedTrading::instance().close_position(acct_id, t.symbol, t.exchange, t.product);
+            r.success ? ++ok : ++fail;
+        }
         QMetaObject::invokeMethod(
             self,
-            [self, result]() {
+            [self, ok, fail]() {
                 if (!self)
                     return;
-                if (result.success && result.data) {
-                    const auto& r = *result.data;
-                    self->order_entry_->show_order_status(
-                        self->tr("Closed %1 position(s)%2")
-                            .arg(r.closed_symbols.size())
-                            .arg(r.failed.isEmpty() ? QString() : self->tr(", %1 failed").arg(r.failed.size())),
-                        r.failed.isEmpty());
-                } else {
-                    self->order_entry_->show_order_status(result.error, false);
-                }
+                self->order_entry_->show_order_status(
+                    self->tr("Closed %1 position(s)%2")
+                        .arg(ok)
+                        .arg(fail > 0 ? self->tr(", %1 failed").arg(fail) : QString()),
+                    fail == 0);
                 self->refresh_paper_panels();
             },
             Qt::QueuedConnection);

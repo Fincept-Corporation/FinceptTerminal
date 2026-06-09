@@ -80,12 +80,25 @@ ads::CDockWidget* DockScreenRouter::create_dock_widget(const QString& id) {
     // through duplicate_panel() which calls create_dock_widget with a
     // synthetic `<base>#dup<N>` id — each gets its own UUID.
     if (!instance_ids_.contains(id)) {
-        const PanelInstanceId panel_uuid = PanelInstanceId::generate();
-        instance_ids_.insert(id, panel_uuid);
-
         WindowId frame_id; // null if the router's parent isn't a WindowFrame
-        if (auto* frame = qobject_cast<WindowFrame*>(parent()))
+        int win_id = 0;
+        if (auto* frame = qobject_cast<WindowFrame*>(parent())) {
             frame_id = frame->frame_uuid();
+            win_id = frame->window_id();
+        }
+
+        // Derive the instance id DETERMINISTICALLY from window+dock id rather
+        // than a fresh random uuid. The dock id is stable across restarts (the
+        // ADS layout restores the same ids), so the same panel reuses the same
+        // PanelInstanceId every launch — which is what lets ScreenStateManager
+        // find the panel's saved UI state again (restore_by_uuid keys on this).
+        // A random generate() minted a new id each launch, so per-screen state
+        // (FNO underlying/expiry, equity symbol/watchlist, …) was written under
+        // an id that never matched on the next run and was effectively lost.
+        // window id is included so the same dock id in two windows stays unique.
+        const PanelInstanceId panel_uuid =
+            PanelInstanceId::from_name(QStringLiteral("w%1:%2").arg(win_id).arg(id));
+        instance_ids_.insert(id, panel_uuid);
 
         // Strip any "#dup<N>" suffix from the type id so two watchlists
         // share a type_id of "watchlist" while having distinct instance_ids.

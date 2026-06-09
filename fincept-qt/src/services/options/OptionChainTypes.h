@@ -78,6 +78,8 @@ struct OptionChain {
     UnderlyingKind kind = UnderlyingKind::Unknown;
 
     double  spot = 0;                // underlying LTP
+    double  spot_change = 0;         // underlying day change (absolute, ₹)
+    double  spot_change_pct = 0;     // underlying day change (%)
     double  atm_strike = 0;          // strike closest to spot
     double  pcr = 0;                 // sum(PE oi) / sum(CE oi)
     double  max_pain = 0;            // strike minimising total writer pain

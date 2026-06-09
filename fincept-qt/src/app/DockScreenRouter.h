@@ -110,6 +110,30 @@ class DockScreenRouter : public QObject {
     /// Panels 5+ tab into the bottom-right area.
     void tile_2x2();
 
+    /// Drop every closed/hidden dock widget out of the dock manager so it is
+    /// not serialised into the saved layout. ADS keeps a toggled-off widget in
+    /// its own area in the tree (Closed="1"); CDockManager::saveState() writes
+    /// all of them and restoreState() faithfully rebuilds them, so closed
+    /// panels accumulate across sessions into dozens of zero-size split areas
+    /// that corrupt the restored grid (a clean left|right comes back as a
+    /// reshuffled top/bottom split). Call this immediately before saveState().
+    ///
+    /// The CDockWidget objects survive — the router owns them in dock_widgets_,
+    /// so navigate()/tab_into()/add_alongside() re-add them on demand via their
+    /// needs_add path (triggered by dockManager()==nullptr). Returns the number
+    /// of panels pruned. No-op (returns 0) when nothing is hidden.
+    int prune_hidden_panels();
+
+    /// Synchronously persist the UI state of EVERY materialized stateful screen
+    /// (IStatefulScreen) right now, on the calling thread. Panels that are
+    /// visible at app-quit never receive visibilityChanged(false), so their
+    /// per-screen save never fires through the normal hide path; and an async
+    /// save dispatched from closeEvent would race process exit. WindowFrame
+    /// calls this at the top of closeEvent so each open tab's latest config
+    /// (FNO underlying/expiry/broker, equity symbol/watchlist, active sub-tab,
+    /// …) is on disk before shutdown. Returns the number of screens flushed.
+    int flush_all_screen_states();
+
     /// Phase 5: tear off a panel into a brand-new WindowFrame. Spawns the
     /// new frame on the next available monitor (mirrors the
     /// new-window-on-next-monitor placement policy). Then performs a
