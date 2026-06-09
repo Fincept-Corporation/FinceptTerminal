@@ -87,6 +87,25 @@ jobs:
         shell: bash
         run: pip install yt-dlp
 
+      # ── Strip dangling Qt SQL driver plugin CMake configs (aqt workaround) ──
+      # Same aqtinstall defect as the Linux job: Qt6Sql ships *DriverPlugin
+      # CMake target files for MySQL/PSQL/ODBC/Mimer but not the plugin DLLs
+      # they reference, so find_package(Qt6 ... Sql) aborts at configure time
+      # ("references the file .../qsqlmysql.dll but this file does not exist").
+      # We only use SQLite — drop the dangling configs before configuring.
+      - name: Remove dangling Qt SQL driver plugin CMake configs
+        shell: bash
+        run: |
+          set -euo pipefail
+          SQL_CMAKE="${QT_ROOT_DIR}/lib/cmake/Qt6Sql"
+          if [ -d "${SQL_CMAKE}" ]; then
+            for drv in QMYSQLDriverPlugin QPSQLDriverPlugin QODBCDriverPlugin QMimerSQLDriverPlugin; do
+              rm -fv "${SQL_CMAKE}/Qt6${drv}"*.cmake || true
+            done
+          else
+            echo "::warning::${SQL_CMAKE} not found — skipping SQL plugin config cleanup"
+          fi
+
       # ── Configure + Build ─────────────────────────────────────────────────
       - name: Configure CMake
         shell: bash
@@ -361,6 +380,29 @@ jobs:
             exit 1
           fi
           echo "Icon ready: resources/fincept.png ($(du -h resources/fincept.png | cut -f1))"
+
+      # ── Strip dangling Qt SQL driver plugin CMake configs (aqt workaround) ──
+      # aqtinstall ships Qt6Sql's MySQL/PSQL/ODBC/Mimer *DriverPlugin CMake
+      # target files but NOT the plugin binaries they reference — the Qt Company
+      # can't redistribute the GPL/commercial DB client libs. find_package(Qt6
+      # ... Sql) (CMakeLists.txt:400+ → Qt6SqlPlugins.cmake) then aborts at
+      # CONFIGURE time: imported target "Qt6::QMYSQLDriverPlugin" references
+      # ".../libqsqlmysql.so" but this file does not exist. We only use SQLite,
+      # so drop the dangling plugin configs. Qt6SqlPlugins.cmake globs the
+      # *DriverPluginConfig.cmake files, so removing them de-registers the
+      # plugins cleanly. MUST run before "Configure CMake". (The linuxdeploy
+      # step still rm's the .so's it would otherwise try to bundle at runtime.)
+      - name: Remove dangling Qt SQL driver plugin CMake configs
+        run: |
+          set -euo pipefail
+          SQL_CMAKE="${QT_ROOT_DIR}/lib/cmake/Qt6Sql"
+          if [ -d "${SQL_CMAKE}" ]; then
+            for drv in QMYSQLDriverPlugin QPSQLDriverPlugin QODBCDriverPlugin QMimerSQLDriverPlugin; do
+              rm -fv "${SQL_CMAKE}/Qt6${drv}"*.cmake || true
+            done
+          else
+            echo "::warning::${SQL_CMAKE} not found — skipping SQL plugin config cleanup"
+          fi
 
       # ── Configure + Build ─────────────────────────────────────────────────
       # No FINCEPT_BUILD_INSTALLER / no QtIFW on Linux — we ship an AppImage
@@ -814,6 +856,24 @@ jobs:
       # ── yt-dlp (bundled for dashboard video playback) ────────────────────
       - name: Install yt-dlp
         run: pip install yt-dlp
+
+      # ── Strip dangling Qt SQL driver plugin CMake configs (aqt workaround) ──
+      # Same aqtinstall defect as the Linux/Windows jobs: Qt6Sql ships
+      # *DriverPlugin CMake target files for MySQL/PSQL/ODBC/Mimer but not the
+      # plugin dylibs they reference, so find_package(Qt6 ... Sql) aborts at
+      # configure time ("references the file .../libqsqlmysql.dylib but this
+      # file does not exist"). We only use SQLite — drop the dangling configs.
+      - name: Remove dangling Qt SQL driver plugin CMake configs
+        run: |
+          set -euo pipefail
+          SQL_CMAKE="${QT_ROOT_DIR}/lib/cmake/Qt6Sql"
+          if [ -d "${SQL_CMAKE}" ]; then
+            for drv in QMYSQLDriverPlugin QPSQLDriverPlugin QODBCDriverPlugin QMimerSQLDriverPlugin; do
+              rm -fv "${SQL_CMAKE}/Qt6${drv}"*.cmake || true
+            done
+          else
+            echo "::warning::${SQL_CMAKE} not found — skipping SQL plugin config cleanup"
+          fi
 
       # ── Configure + Build ─────────────────────────────────────────────────
       # No FINCEPT_BUILD_INSTALLER on macOS — we ship a DMG built from the
