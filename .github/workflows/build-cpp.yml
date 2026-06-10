@@ -137,14 +137,19 @@ jobs:
           echo "ZLIB_ROOT=$ZLIB_DIR" >> "$GITHUB_ENV"
           echo "OpenSSL installed at: $OPENSSL_DIR ; static zlib at: $ZLIB_DIR"
           ls "$OPENSSL_DIR/lib/libcrypto.lib" && echo "libcrypto.lib confirmed"
-          # vcpkg installs the static zlib archive as lib/zlib.lib. Confirm it so
-          # find_package(ZLIB REQUIRED) cannot fall through to a stray system zlib.
+          # vcpkg's static-md zlib ships the archive as "zs.lib", which stock
+          # CMake FindZLIB does not search for. Alias it to "zlib.lib" (a name
+          # FindZLIB looks for) so find_package(ZLIB) links the static archive.
           if [ ! -f "$ZLIB_DIR/lib/zlib.lib" ]; then
-            echo "::error::static zlib.lib not found in $ZLIB_DIR/lib"
+            ALT="$(ls "$ZLIB_DIR"/lib/z*.lib 2>/dev/null | head -1 || true)"
+            if [ -n "$ALT" ]; then cp "$ALT" "$ZLIB_DIR/lib/zlib.lib"; echo "Aliased $(basename "$ALT") -> zlib.lib"; fi
+          fi
+          if [ ! -f "$ZLIB_DIR/lib/zlib.lib" ]; then
+            echo "::error::static zlib archive not found in $ZLIB_DIR/lib"
             ls -la "$ZLIB_DIR/lib/" 2>&1 || true
             exit 1
           fi
-          echo "static zlib.lib confirmed: $ZLIB_DIR/lib/zlib.lib"
+          echo "static zlib confirmed: $ZLIB_DIR/lib/zlib.lib"
 
       # ---- Qt6 target (Windows/macOS) ----
       - name: Install Qt6

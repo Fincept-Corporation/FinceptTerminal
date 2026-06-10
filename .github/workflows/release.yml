@@ -70,15 +70,21 @@ jobs:
           echo "OPENSSL_ROOT_DIR=$OPENSSL_DIR" >> "$GITHUB_ENV"
           echo "ZLIB_ROOT=$ZLIB_DIR" >> "$GITHUB_ENV"
           ls "$OPENSSL_DIR/lib/libcrypto.lib" && echo "libcrypto.lib confirmed"
-          # vcpkg installs the static zlib archive as lib/zlib.lib. Confirm it
-          # exists so a configure-time find_package(ZLIB REQUIRED) cannot fall
-          # through to a stray system zlib (the v4.1.0 failure mode) again.
+          # vcpkg's static-md zlib ships the archive as "zs.lib", a name stock
+          # CMake FindZLIB does NOT search for (it looks for z/zlib/zlib1/...).
+          # Alias it to "zlib.lib" so find_package(ZLIB) links the static
+          # archive instead of falling through to a stray system zlib (the
+          # v4.1.0 "z.dll" failure mode). It's a copy, so the archive is intact.
           if [ ! -f "$ZLIB_DIR/lib/zlib.lib" ]; then
-            echo "::error::static zlib.lib not found in $ZLIB_DIR/lib"
+            ALT="$(ls "$ZLIB_DIR"/lib/z*.lib 2>/dev/null | head -1 || true)"
+            if [ -n "$ALT" ]; then cp "$ALT" "$ZLIB_DIR/lib/zlib.lib"; echo "Aliased $(basename "$ALT") -> zlib.lib"; fi
+          fi
+          if [ ! -f "$ZLIB_DIR/lib/zlib.lib" ]; then
+            echo "::error::static zlib archive not found in $ZLIB_DIR/lib"
             ls -la "$ZLIB_DIR/lib/" 2>&1 || true
             exit 1
           fi
-          echo "static zlib.lib confirmed: $ZLIB_DIR/lib/zlib.lib"
+          echo "static zlib confirmed: $ZLIB_DIR/lib/zlib.lib"
 
       # ── Qt ────────────────────────────────────────────────────────────────
       - name: Install Qt ${{ env.QT_VERSION }}
