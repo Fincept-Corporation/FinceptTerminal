@@ -120,23 +120,31 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # zlib is linked STATICALLY (x64-windows-static-md). See release.yml's
+          # "Install OpenSSL + zlib" step for the full history: v4.1.0 shipped an
+          # exe importing an unbundled "z.dll" because ZLIB_ROOT was built from
+          # VCPKG_INSTALLATION_ROOT (backslashes, e.g. C:\vcpkg), which mangled
+          # the path FindZLIB consumed and let the link fall through to a stray
+          # system zlib named z.dll. Fix: normalise slashes + static zlib + pass
+          # ZLIB_ROOT/ZLIB_USE_STATIC_LIBS as -D cache vars at configure.
           VCPKG_ROOT="${VCPKG_INSTALLATION_ROOT:-C:/vcpkg}"
+          VCPKG_ROOT="${VCPKG_ROOT//\\//}"   # backslashes -> forward slashes (the v4.1.0 bug)
           echo "Using vcpkg at: $VCPKG_ROOT"
-          "$VCPKG_ROOT/vcpkg" install openssl:x64-windows zlib:x64-windows --no-print-usage
+          "$VCPKG_ROOT/vcpkg" install openssl:x64-windows zlib:x64-windows-static-md --no-print-usage
           OPENSSL_DIR="$VCPKG_ROOT/installed/x64-windows"
+          ZLIB_DIR="$VCPKG_ROOT/installed/x64-windows-static-md"
           echo "OPENSSL_ROOT_DIR=$OPENSSL_DIR" >> "$GITHUB_ENV"
-          echo "ZLIB_ROOT=$OPENSSL_DIR" >> "$GITHUB_ENV"
-          echo "OpenSSL + zlib installed at: $OPENSSL_DIR"
+          echo "ZLIB_ROOT=$ZLIB_DIR" >> "$GITHUB_ENV"
+          echo "OpenSSL installed at: $OPENSSL_DIR ; static zlib at: $ZLIB_DIR"
           ls "$OPENSSL_DIR/lib/libcrypto.lib" && echo "libcrypto.lib confirmed"
-          # zlib: find_package(ZLIB) (no FIND_LIBRARY_PREFIXES override in our CMake)
-          # locates the release import lib via ZLIB_ROOT, searching name "zlib".
-          # vcpkg normally installs lib/zlib.lib; if this build named it differently,
-          # alias it so the lookup can't miss. Diagnostic listing is non-fatal.
-          if [ ! -f "$OPENSSL_DIR/lib/zlib.lib" ]; then
-            ALT="$(ls "$OPENSSL_DIR"/lib/*.lib 2>/dev/null | grep -iE 'z(lib)?[0-9]*\.lib$' | head -1 || true)"
-            if [ -n "$ALT" ]; then cp "$ALT" "$OPENSSL_DIR/lib/zlib.lib"; echo "Aliased $(basename "$ALT") -> zlib.lib"; fi
+          # vcpkg installs the static zlib archive as lib/zlib.lib. Confirm it so
+          # find_package(ZLIB REQUIRED) cannot fall through to a stray system zlib.
+          if [ ! -f "$ZLIB_DIR/lib/zlib.lib" ]; then
+            echo "::error::static zlib.lib not found in $ZLIB_DIR/lib"
+            ls -la "$ZLIB_DIR/lib/" 2>&1 || true
+            exit 1
           fi
-          ls -la "$OPENSSL_DIR"/lib/ | grep -i zlib || echo "::warning::no zlib import lib found in $OPENSSL_DIR/lib"
+          echo "static zlib.lib confirmed: $ZLIB_DIR/lib/zlib.lib"
 
       # ---- Qt6 target (Windows/macOS) ----
       - name: Install Qt6
@@ -188,10 +196,17 @@ jobs:
           if [ -n "${OPENSSL_ROOT_DIR:-}" ]; then
             OPENSSL_ARG="-DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}"
           fi
+          # ZLIB_ROOT is set only on Windows (static zlib via vcpkg); on macOS it
+          # is empty so find_package(ZLIB) uses the system zlib as before.
+          ZLIB_ARG=""
+          if [ -n "${ZLIB_ROOT:-}" ]; then
+            ZLIB_ARG="-DZLIB_ROOT=${ZLIB_ROOT} -DZLIB_USE_STATIC_LIBS=ON"
+          fi
           cmake -B build \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
             ${OPENSSL_ARG} \
+            ${ZLIB_ARG} \
             -DFINCEPT_REQUIRE_BUNDLED_YTDLP=ON \
             ${{ runner.os == 'macOS' && '-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache' || '' }} \
             ${{ matrix.cmake_extra }}
@@ -206,12 +221,17 @@ jobs:
           if [ -n "${OPENSSL_ROOT_DIR:-}" ]; then
             OPENSSL_ARG="-DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}"
           fi
+          ZLIB_ARG=""
+          if [ -n "${ZLIB_ROOT:-}" ]; then
+            ZLIB_ARG="-DZLIB_ROOT=${ZLIB_ROOT} -DZLIB_USE_STATIC_LIBS=ON"
+          fi
           cmake -B build \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
             -DQT_HOST_PATH="${HOST_QT}" \
             -T ClangCL \
             ${OPENSSL_ARG} \
+            ${ZLIB_ARG} \
             -DFINCEPT_REQUIRE_BUNDLED_YTDLP=ON \
             ${{ matrix.cmake_extra }}
 
@@ -326,8 +346,10 @@ jobs:
             fi
           done
 
-          # zlib — find_package(ZLIB) links zlib1.dll (vcpkg, dynamic); not a Qt
-          # DLL, so windeployqt skips it. Copy from the vcpkg install or Qt bin/.
+          # zlib — the app now links zlib STATICALLY (x64-windows-static-md), so
+          # there is no runtime zlib DLL to ship. This loop is a harmless fallback
+          # for any transitive dynamic-zlib need; ZLIB_ROOT is the static-md dir
+          # and has no bin/*.dll, so it normally copies nothing. See release.yml.
           for zlib_dll in zlib1.dll; do
             if [ -n "${ZLIB_ROOT:-}" ] && [ -f "${ZLIB_ROOT}/bin/${zlib_dll}" ] && [ ! -f "dist/${zlib_dll}" ]; then
               cp "${ZLIB_ROOT}/bin/${zlib_dll}" dist/

@@ -38,28 +38,47 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
-      # ── OpenSSL + zlib dev libs ───────────────────────────────────────────
-      # zlib is required by find_package(ZLIB) (InstrumentDecompress.cpp); the
-      # build points CMake at vcpkg via *_ROOT vars (no vcpkg toolchain file).
+      # ── OpenSSL (dynamic) + zlib (STATIC) dev libs ────────────────────────
+      # zlib is required by find_package(ZLIB) (InstrumentDecompress.cpp).
+      #
+      # HISTORY (the "z.dll missing" bug): v4.1.0 shipped a Windows exe that
+      # imported a DLL named "z.dll" which was never bundled, so the app died
+      # on launch with "z.dll was not found". Root cause: ZLIB_ROOT was built
+      # from VCPKG_INSTALLATION_ROOT, which on the runner contains BACKSLASHES
+      # (e.g. C:\vcpkg). The backslash mangled the path CMake's FindZLIB
+      # consumed, so the vcpkg zlib was never found and the link fell through
+      # to a stray system zlib whose import name is "z.dll". The deploy step
+      # only ever copied "zlib1.dll" (the wrong name) and the final gate never
+      # checked it, so the broken installer shipped silently.
+      #
+      # FIX: (1) normalise the path to forward slashes; (2) link zlib
+      # STATICALLY via the x64-windows-static-md triplet (static lib + dynamic
+      # CRT, matching Qt/MSVC /MD) so there is NO runtime zlib DLL to bundle or
+      # miss; (3) pass ZLIB_ROOT + ZLIB_USE_STATIC_LIBS to configure as -D
+      # cache vars (authoritative — FindZLIB does a NO_DEFAULT_PATH search of
+      # ZLIB_ROOT first). The "Verify dependency closure" step below is the
+      # safety net that v4.1.0 lacked.
       - name: Install OpenSSL + zlib
         shell: bash
         run: |
           set -euo pipefail
           VCPKG_ROOT="${VCPKG_INSTALLATION_ROOT:-C:/vcpkg}"
-          "$VCPKG_ROOT/vcpkg" install openssl:x64-windows zlib:x64-windows --no-print-usage
+          VCPKG_ROOT="${VCPKG_ROOT//\\//}"   # backslashes -> forward slashes (the v4.1.0 bug)
+          "$VCPKG_ROOT/vcpkg" install openssl:x64-windows zlib:x64-windows-static-md --no-print-usage
           OPENSSL_DIR="$VCPKG_ROOT/installed/x64-windows"
+          ZLIB_DIR="$VCPKG_ROOT/installed/x64-windows-static-md"
           echo "OPENSSL_ROOT_DIR=$OPENSSL_DIR" >> "$GITHUB_ENV"
-          echo "ZLIB_ROOT=$OPENSSL_DIR" >> "$GITHUB_ENV"
+          echo "ZLIB_ROOT=$ZLIB_DIR" >> "$GITHUB_ENV"
           ls "$OPENSSL_DIR/lib/libcrypto.lib" && echo "libcrypto.lib confirmed"
-          # zlib: find_package(ZLIB) (no FIND_LIBRARY_PREFIXES override in our CMake)
-          # locates the release import lib via ZLIB_ROOT, searching name "zlib".
-          # vcpkg normally installs lib/zlib.lib; if this build named it differently,
-          # alias it so the lookup can't miss. Diagnostic listing is non-fatal.
-          if [ ! -f "$OPENSSL_DIR/lib/zlib.lib" ]; then
-            ALT="$(ls "$OPENSSL_DIR"/lib/*.lib 2>/dev/null | grep -iE 'z(lib)?[0-9]*\.lib$' | head -1 || true)"
-            if [ -n "$ALT" ]; then cp "$ALT" "$OPENSSL_DIR/lib/zlib.lib"; echo "Aliased $(basename "$ALT") -> zlib.lib"; fi
+          # vcpkg installs the static zlib archive as lib/zlib.lib. Confirm it
+          # exists so a configure-time find_package(ZLIB REQUIRED) cannot fall
+          # through to a stray system zlib (the v4.1.0 failure mode) again.
+          if [ ! -f "$ZLIB_DIR/lib/zlib.lib" ]; then
+            echo "::error::static zlib.lib not found in $ZLIB_DIR/lib"
+            ls -la "$ZLIB_DIR/lib/" 2>&1 || true
+            exit 1
           fi
-          ls -la "$OPENSSL_DIR"/lib/ | grep -i zlib || echo "::warning::no zlib import lib found in $OPENSSL_DIR/lib"
+          echo "static zlib.lib confirmed: $ZLIB_DIR/lib/zlib.lib"
 
       # ── Qt ────────────────────────────────────────────────────────────────
       - name: Install Qt ${{ env.QT_VERSION }}
@@ -115,6 +134,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
             -DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}" \
+            -DZLIB_ROOT="${ZLIB_ROOT}" \
+            -DZLIB_USE_STATIC_LIBS=ON \
             -DDEPLOY_QT=ON \
             -DFINCEPT_BUILD_INSTALLER=ON \
             -DFINCEPT_REQUIRE_BUNDLED_YTDLP=ON
@@ -183,8 +204,12 @@ jobs:
               cp "${OPENSSL_ROOT_DIR}/bin/${ssl_dll}" "${BUILD_DIR}/" || true
           done
 
-          # zlib — find_package(ZLIB) links zlib1.dll (vcpkg, dynamic). windeployqt
-          # won't grab a non-Qt dep, so copy it from the vcpkg install or Qt bin/.
+          # zlib — the app now links zlib STATICALLY (x64-windows-static-md), so
+          # FinceptTerminal.exe has NO runtime zlib DLL dependency. This loop is
+          # kept only as a fallback in case a bundled Qt/OpenSSL DLL pulls in a
+          # dynamic zlib; if neither source provides one, that's expected. The
+          # "Verify dependency closure" step is the real guarantee nothing is
+          # missing. (ZLIB_ROOT is the static-md dir and has no bin/*.dll.)
           for zlib_dll in zlib1.dll zlibd1.dll; do
             [ -n "${ZLIB_ROOT:-}" ] && [ -f "${ZLIB_ROOT}/bin/${zlib_dll}" ] && [ ! -f "${BUILD_DIR}/${zlib_dll}" ] && \
               cp "${ZLIB_ROOT}/bin/${zlib_dll}" "${BUILD_DIR}/" || true
@@ -253,6 +278,75 @@ jobs:
           done
           [ "$MISSING" -eq 1 ] && exit 1
           echo "=== $(find "${BUILD_DIR}" -type f | wc -l) files staged ==="
+
+      # ── Dependency-closure gate ───────────────────────────────────────────
+      # Walk the import table of the staged exe and, transitively, of every DLL
+      # we bundle; fail the build if any imported DLL is neither bundled nor
+      # provided by Windows. This is the safety net v4.1.0 lacked: that release
+      # shipped an exe importing "z.dll" with no z.dll in the payload and
+      # nothing caught it. A dependency is considered satisfied if it is in the
+      # stage dir, is an api-ms-*/ext-ms-* virtual DLL, or exists in System32
+      # (Windows ships it on every target). Anything else is a hard failure.
+      #
+      # NOTE: "exists in System32" trusts the runner to mirror end-user
+      # machines for OS DLLs. That holds for genuine Windows components; the
+      # MSVC runtime we additionally bundle ourselves. This catches the
+      # missing-our-own-dependency class of bug, which is what bit v4.1.0.
+      - name: Verify dependency closure
+        shell: pwsh
+        working-directory: fincept-qt
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $buildDir = Join-Path (Get-Location) 'build/Release'
+          $exe = Join-Path $buildDir 'FinceptTerminal.exe'
+          if (-not (Test-Path $exe)) { Write-Host "::error::Binary not found at $exe"; exit 1 }
+
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsroot  = & $vswhere -latest -prerelease -property installationPath | Select-Object -First 1
+          $dumpbin = Get-ChildItem "$vsroot\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $dumpbin) { Write-Host "::error::dumpbin.exe not found under $vsroot"; exit 1 }
+
+          $system32 = Join-Path $env:WINDIR 'System32'
+          $staged   = @{}
+          Get-ChildItem -Path $buildDir -Recurse -Filter *.dll | ForEach-Object { $staged[$_.Name.ToLower()] = $true }
+
+          function Get-Deps($path) {
+            $out = & $dumpbin.FullName /dependents $path 2>$null
+            $deps = @()
+            foreach ($line in $out) {
+              $t = $line.Trim()
+              if ($t -match '(?i)^[A-Za-z0-9_\-\.]+\.dll$') { $deps += $t }
+            }
+            return $deps
+          }
+
+          $missing = New-Object System.Collections.Generic.List[string]
+          $visited = @{}
+          $queue   = New-Object System.Collections.Generic.Queue[string]
+          $queue.Enqueue($exe)
+          $visited[(Split-Path $exe -Leaf).ToLower()] = $true
+
+          while ($queue.Count -gt 0) {
+            $cur = $queue.Dequeue()
+            foreach ($dep in (Get-Deps $cur)) {
+              $low = $dep.ToLower()
+              if ($visited.ContainsKey($low)) { continue }
+              $visited[$low] = $true
+              if ($low -like 'api-ms-*' -or $low -like 'ext-ms-*') { continue }   # virtual API set
+              if ($staged.ContainsKey($low)) {
+                $queue.Enqueue((Join-Path $buildDir $dep)); continue              # bundled -> recurse into it
+              }
+              if (Test-Path (Join-Path $system32 $dep)) { continue }              # Windows-provided
+              $missing.Add($dep)
+            }
+          }
+
+          if ($missing.Count -gt 0) {
+            Write-Host "::error::Unbundled runtime dependencies (not in payload, not in System32):"
+            $missing | Sort-Object -Unique | ForEach-Object { Write-Host "::error::  missing: $_" }
+            exit 1
+          }
+          Write-Host "Dependency closure OK - every imported DLL is bundled or provided by Windows."
 
       # ── Generate Installer ────────────────────────────────────────────────
       - name: Generate Installer (CPack IFW)
