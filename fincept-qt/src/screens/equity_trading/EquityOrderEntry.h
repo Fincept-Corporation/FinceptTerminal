@@ -10,10 +10,14 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QSet>
 #include <QTimer>
 #include <QWidget>
 
 #include <atomic>
+
+class QMenu;
+class QToolButton;
 
 namespace fincept::screens::equity {
 
@@ -36,6 +40,9 @@ class EquityOrderEntry : public QWidget {
   signals:
     void order_submitted(const trading::UnifiedOrder& order);
     void broadcast_requested(const trading::UnifiedOrder& order);
+    /// Emitted instead of order_submitted when the inline BROKERS selector has
+    /// ≥1 account checked — the same order goes to every selected account.
+    void multi_broker_submit(const trading::UnifiedOrder& order, const QStringList& account_ids);
     void strategy_order_submitted(const trading::BasketOrderRequest& basket);
 
   protected:
@@ -55,6 +62,10 @@ class EquityOrderEntry : public QWidget {
     // order-type / product-type mapping repeated across submit/broadcast/margin).
     trading::OrderType selected_order_type() const;
     trading::ProductType selected_product_type() const;
+
+    // Inline multi-broker selector (QWidgetAction checkboxes keep the menu open).
+    void rebuild_brokers_menu();
+    void update_brokers_btn();
 
     // Options strategy helpers
     bool build_strategy(trading::OptionsStrategy& out) const; // returns false when strategy == None or inputs invalid
@@ -85,6 +96,9 @@ class EquityOrderEntry : public QWidget {
     QLineEdit* tp_edit_ = nullptr;
     QPushButton* submit_btn_ = nullptr;
     QPushButton* broadcast_btn_ = nullptr;
+    QToolButton* brokers_btn_ = nullptr;  // inline multi-broker selector
+    QMenu* brokers_menu_ = nullptr;       // checkable account list (stays open)
+    QSet<QString> broadcast_ids_;         // checked account_ids; empty = focused only
     QWidget* advanced_section_ = nullptr;
     QPushButton* advanced_toggle_ = nullptr;
 

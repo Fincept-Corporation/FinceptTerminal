@@ -10,7 +10,9 @@
 //
 // On accept, the dialog stores the key in SecureStorage under the key
 // `alpha_arena/agent_key/<competition_id>` and writes a single immutable
-// `live_mode_accepted` event into aa_events with timestamp + hostname.
+// `live_mode_accepted` event into arena_events (ArenaStore) with timestamp +
+// hostname. The wizard passes competition_id="pending" (the competition does
+// not exist yet); ArenaEngine::start() re-keys the wallet handle to the real id.
 //
 // Reference: .grill-me/alpha-arena-production-refactor.md §Phase 7.
 

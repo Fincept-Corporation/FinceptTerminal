@@ -1,20 +1,15 @@
 #pragma once
-// IExchangeVenue — the only contract the OrderRouter knows about.
+// IExchangeVenue — abstract venue contract (legacy alpha_arena namespace).
 //
-// Two implementations:
-//  * PaperVenue — in-memory simulator that mirrors Hyperliquid fee/funding/
-//    liquidation math, fed real Hyperliquid mark prices for fidelity.
-//  * HyperliquidVenue — live, signs with an agent wallet (separate from the
-//    user's master wallet), routes via Hyperliquid REST + WS.
+// Sole remaining implementation: trading/exchanges/hyperliquid/
+// HyperliquidVenue, which signs with an agent wallet (separate from the
+// user's master wallet) and routes via Hyperliquid REST + WS. The new
+// fincept::arena engine drives it through HyperliquidLiveVenue.
 //
 // All callbacks marshal back onto the calling QObject's thread via
-// QPointer + invokeMethod (see PaperVenue.cpp / HyperliquidVenue.cpp).
-//
-// Reference: fincept-qt/.grill-me/alpha-arena-grill.md §7 (Order router).
+// QPointer + invokeMethod (see HyperliquidVenue.cpp).
 
 #include "core/result/Result.h"
-#include "services/alpha_arena/AlphaArenaSchema.h"
-#include "services/alpha_arena/AlphaArenaTypes.h"
 
 #include <QObject>
 #include <QString>
@@ -28,7 +23,7 @@ namespace fincept::services::alpha_arena {
 /// venue-side order id and signalling fills through fill_callback.
 struct OrderRequest {
     QString agent_id;          // logical agent identity (DB FK)
-    QString coin;              // base symbol from kPerpUniverse()
+    QString coin;              // base symbol, e.g. "BTC"
     QString side;              // "buy" | "sell"
     double qty = 0.0;          // base-asset units, > 0
     int leverage = 1;          // [1, 20]
@@ -93,7 +88,7 @@ class IExchangeVenue {
     /// Identity for logs / persistence / leaderboard badge ("paper" / "hyperliquid").
     virtual QString venue_kind() const = 0;
 
-    /// Connection state. Always "connected" for PaperVenue.
+    /// Connection state.
     enum class ConnectionState { Disconnected, Connecting, Connected, Degraded };
     virtual ConnectionState connection_state() const = 0;
 
@@ -111,7 +106,7 @@ class IExchangeVenue {
 
     /// Install/replace event sinks. Sinks are called on the venue's thread;
     /// implementations are responsible for marshalling into the callee's
-    /// thread (see PaperVenue::install_marshalled).
+    /// thread.
     virtual void on_fill(std::function<void(FillEvent)> cb) = 0;
     virtual void on_funding(std::function<void(FundingEvent)> cb) = 0;
     virtual void on_liquidation(std::function<void(LiquidationEvent)> cb) = 0;

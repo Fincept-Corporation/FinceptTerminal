@@ -2,20 +2,26 @@
 #include "screens/equity_trading/EquityOrderEntry.h"
 
 #include "core/logging/Logger.h"
+#include "screens/equity_trading/BasketOrdersDialog.h"
 #include "screens/equity_trading/EquityTypes.h"
+#include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/OptionsStrategyBuilder.h"
 #include "ui/theme/Theme.h"
 
+#include <QCheckBox>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QMenu>
 #include <QMetaObject>
 #include <QPointer>
 #include <QScrollArea>
 #include <QStyle>
 #include <QTimer>
+#include <QToolButton>
 #include <QVBoxLayout>
+#include <QWidgetAction>
 #include <QtConcurrent/QtConcurrent>
 
 #include <cmath>
@@ -373,6 +379,42 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
 
     form->addWidget(summary);
 
+    // Multi-broker selector: BUY/SELL fires the same order to every checked
+    // account (empty selection = normal focused-account flow). QWidgetAction-
+    // wrapped checkboxes keep the menu open across toggles.
+    brokers_btn_ = new QToolButton;
+    brokers_btn_->setObjectName("eqBrokersBtn");
+    brokers_btn_->setPopupMode(QToolButton::InstantPopup);
+    brokers_btn_->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    brokers_btn_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    brokers_btn_->setFixedHeight(24);
+    brokers_btn_->setCursor(Qt::PointingHandCursor);
+    brokers_menu_ = new QMenu(brokers_btn_);
+    brokers_btn_->setMenu(brokers_menu_);
+    connect(brokers_menu_, &QMenu::aboutToShow, this, &EquityOrderEntry::rebuild_brokers_menu);
+    update_brokers_btn();
+
+    // BASKETS — saved multi-leg order groups, executable on any account(s).
+    auto* baskets_btn = new QToolButton;
+    baskets_btn->setObjectName("eqBasketsBtn");
+    baskets_btn->setText(tr("BASKETS"));
+    baskets_btn->setFixedHeight(24);
+    baskets_btn->setCursor(Qt::PointingHandCursor);
+    baskets_btn->setStyleSheet(
+        QString("QToolButton{background:%1;border:1px solid %2;color:%3;font-size:10px;font-weight:700;"
+                "padding:2px 10px;}QToolButton:hover{border-color:%4;color:%4;}")
+            .arg(colors::BG_RAISED(), colors::BORDER_MED(), colors::TEXT_TERTIARY(), colors::AMBER()));
+    connect(baskets_btn, &QToolButton::clicked, this, [this]() {
+        BasketOrdersDialog dlg(this);
+        dlg.exec();
+    });
+
+    auto* brokers_row = new QHBoxLayout;
+    brokers_row->setSpacing(4);
+    brokers_row->addWidget(brokers_btn_, 1);
+    brokers_row->addWidget(baskets_btn);
+    form->addLayout(brokers_row);
+
     // Submit row: main submit + broadcast
     auto* submit_row = new QHBoxLayout;
     submit_row->setSpacing(4);
@@ -575,7 +617,69 @@ void EquityOrderEntry::on_submit() {
     order.take_profit = tp_edit_ ? tp_edit_->text().toDouble() : 0.0;
     order.product_type = selected_product_type();
 
+    if (!broadcast_ids_.isEmpty()) {
+        // Multi-broker route: the same order to every checked account; the
+        // screen confirms, gates per-account (Semi-Auto), and broadcasts.
+        emit multi_broker_submit(order, QStringList(broadcast_ids_.begin(), broadcast_ids_.end()));
+        return;
+    }
+
     emit order_submitted(order);
+}
+
+// ── Inline multi-broker selector ─────────────────────────────────────────────
+
+void EquityOrderEntry::rebuild_brokers_menu() {
+    brokers_menu_->clear();
+
+    const auto accounts = trading::AccountManager::instance().active_accounts();
+    QSet<QString> alive;
+    for (const auto& account : accounts) {
+        alive.insert(account.account_id);
+        auto* broker = trading::BrokerRegistry::instance().get(account.broker_id);
+        const QString broker_name = broker ? broker->profile().display_name : account.broker_id;
+        const QString mode_tag = account.trading_mode == "live" ? tr("[LIVE]") : tr("[PAPER]");
+        const QString text = QString("%1  [%2]  %3").arg(account.display_name, broker_name, mode_tag);
+
+        auto* cb = new QCheckBox(text, brokers_menu_);
+        cb->setChecked(broadcast_ids_.contains(account.account_id));
+        cb->setStyleSheet("QCheckBox{padding:4px 10px;font-size:11px;}");
+        const QString id = account.account_id;
+        connect(cb, &QCheckBox::toggled, this, [this, id](bool on) {
+            if (on)
+                broadcast_ids_.insert(id);
+            else
+                broadcast_ids_.remove(id);
+            update_brokers_btn();
+        });
+        auto* wa = new QWidgetAction(brokers_menu_); // checkbox click keeps the menu open
+        wa->setDefaultWidget(cb);
+        brokers_menu_->addAction(wa);
+    }
+
+    if (accounts.isEmpty()) {
+        auto* none = brokers_menu_->addAction(tr("No active accounts"));
+        none->setEnabled(false);
+    }
+
+    // Drop selections for accounts that were removed/deactivated since checked.
+    for (auto it = broadcast_ids_.begin(); it != broadcast_ids_.end();)
+        it = alive.contains(*it) ? std::next(it) : broadcast_ids_.erase(it);
+    update_brokers_btn();
+}
+
+void EquityOrderEntry::update_brokers_btn() {
+    const int n = int(broadcast_ids_.size());
+    brokers_btn_->setText(n == 0 ? tr("BROKERS: FOCUSED ▾") : tr("BROKERS: %1 SELECTED ▾").arg(n));
+    brokers_btn_->setToolTip(n == 0
+                                 ? tr("Orders go to the focused account. Click to pick multiple brokers.")
+                                 : tr("BUY/SELL will fire this order on %1 account(s)").arg(n));
+    // Amber accent when armed so a multi-broker submit is never a surprise.
+    brokers_btn_->setStyleSheet(
+        QString("QToolButton{background:%1;border:1px solid %2;color:%3;font-size:10px;font-weight:700;"
+                "padding:2px 8px;}QToolButton::menu-indicator{image:none;}")
+            .arg(colors::BG_RAISED(), n == 0 ? colors::BORDER_MED() : colors::AMBER(),
+                 n == 0 ? colors::TEXT_TERTIARY() : colors::AMBER()));
 }
 
 void EquityOrderEntry::show_order_status(const QString& msg, bool success) {

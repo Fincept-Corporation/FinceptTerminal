@@ -1,12 +1,13 @@
 #include "screens/alpha_arena/panels/LiveModeGateDialog.h"
 
 #include "core/logging/Logger.h"
-#include "services/alpha_arena/AlphaArenaRepo.h"
+#include "services/alpha_arena/ArenaStore.h"
 #include "storage/secure/SecureStorage.h"
 
 #include <QDateTime>
 #include <QHBoxLayout>
 #include <QHostInfo>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
 #include <QRegularExpression>
@@ -109,14 +110,16 @@ void LiveModeGateDialog::on_confirm() {
         return;
     }
 
-    QJsonObject payload{
+    // Immutable acceptance record (hostname doubles as the old ack's host field).
+    // competition_id_ may be "pending" when run from the wizard — the engine
+    // re-keys the wallet handle on start(); the event keeps the literal id.
+    const QJsonObject payload{
         {"hostname", QHostInfo::localHostName()},
         {"timestamp_iso", QDateTime::currentDateTimeUtc().toString(Qt::ISODate)},
         {"competition_id", competition_id_}};
-    services::alpha_arena::AlphaArenaRepo::instance()
-        .append_event(competition_id_, "", QStringLiteral("live_mode_accepted"), payload);
-    services::alpha_arena::AlphaArenaRepo::instance()
-        .mark_live_mode_ack(competition_id_, QHostInfo::localHostName());
+    fincept::arena::ArenaStore::instance().insert_event(
+        competition_id_, QString(), QStringLiteral("live_mode_accepted"),
+        QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact)));
 
     LOG_WARN("AlphaArena", QStringLiteral("Live mode accepted for competition %1").arg(competition_id_));
 

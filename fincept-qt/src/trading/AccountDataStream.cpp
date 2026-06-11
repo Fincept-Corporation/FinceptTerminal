@@ -742,6 +742,19 @@ void AccountDataStream::wire_base_ws(BrokerWebSocketBase* ws) {
     connect(ws, &BrokerWebSocketBase::depth_received, this, [this](const MarketDepth& d) {
         if (d.bids.isEmpty() && d.asks.isEmpty())
             return;
+        // FULL-mode feeds (e.g. Dhan) stream depth for EVERY subscribed watchlist
+        // symbol, but the depth table is single-symbol. Drop books that aren't for
+        // the selected symbol, else every stock's book rotates through the table.
+        // Guarded on a populated d.symbol so brokers that don't tag depth are unaffected.
+        auto bare = [](QString s) {
+            const int colon = s.lastIndexOf(QLatin1Char(':'));
+            if (colon >= 0) s = s.mid(colon + 1);
+            if (s.endsWith(QLatin1String("-EQ"))) s.chop(3);
+            return s;
+        };
+        if (!selected_symbol_.isEmpty() && !d.symbol.isEmpty() &&
+            bare(d.symbol).compare(bare(selected_symbol_), Qt::CaseInsensitive) != 0)
+            return;
         QVector<QPair<double, double>> bids, asks;
         for (const auto& b : d.bids)
             bids.append({b.price, static_cast<double>(b.quantity)});
@@ -982,11 +995,41 @@ void AccountDataStream::ws_init() {
             q.change_pct = tick.close > 0 ? (tick.ltp - tick.close) / tick.close * 100.0 : 0.0;
             q.oi = tick.oi;
             q.timestamp = tick.exchange_timestamp.isValid() ? tick.exchange_timestamp.toMSecsSinceEpoch() : 0;
+            // Market depth arrives only on the 184-byte "full" packet (the selected
+            // symbol is subscribed in full mode; the rest stay "quote" for latency).
+            const bool has_depth = tick.bids[0].price > 0.0 || tick.asks[0].price > 0.0;
+            if (has_depth) {
+                q.bid = tick.bids[0].price; // best bid/ask feed the ticker + order matcher
+                q.ask = tick.asks[0].price;
+            }
             quote_cache_[q.symbol] = q;
             emit quote_updated(account_id_, q.symbol, q);
+
+            // Publish the 5-level order book for the selected symbol (single-symbol
+            // depth table). Only the full-mode symbol carries depth, so this fires
+            // for it alone; the selected-symbol guard mirrors the Fyers path.
+            if (has_depth && q.symbol.compare(selected_symbol_, Qt::CaseInsensitive) == 0) {
+                QVector<QPair<double, double>> bids, asks;
+                QVector<int> bid_orders, ask_orders;
+                for (const auto& b : tick.bids)
+                    if (b.price > 0.0) { bids.append({b.price, double(b.quantity)}); bid_orders.append(b.orders); }
+                for (const auto& a : tick.asks)
+                    if (a.price > 0.0) { asks.append({a.price, double(a.quantity)}); ask_orders.append(a.orders); }
+                const double best_bid = bids.isEmpty() ? 0.0 : bids.first().first;
+                const double best_ask = asks.isEmpty() ? 0.0 : asks.first().first;
+                double spread = 0.0, spread_pct = 0.0;
+                if (best_bid > 0.0 && best_ask > 0.0) {
+                    spread = best_ask - best_bid;
+                    spread_pct = (spread / best_bid) * 100.0;
+                }
+                LOG_INFO(ADS_TAG, QString("Zerodha WS depth: %1 bids, %2 asks for %3")
+                                      .arg(bids.size()).arg(asks.size()).arg(q.symbol));
+                emit orderbook_fetched(account_id_, bids, asks, spread, spread_pct, bid_orders, ask_orders);
+            }
         });
         connect(zws, &ZerodhaWebSocket::connected, this, [this]() {
             LOG_INFO(ADS_TAG, QString("Zerodha WS connected for %1").arg(account_id_));
+            ws_permission_denied_ = false; // streaming is permitted after all
             emit connection_state_changed(account_id_, ConnectionState::Connected);
             ws_resubscribe(); // resolves current symbols → tokens and subscribes
         });
@@ -995,6 +1038,36 @@ void AccountDataStream::ws_init() {
         });
         connect(zws, &ZerodhaWebSocket::error_occurred, this, [this](const QString& e) {
             LOG_ERROR(ADS_TAG, QString("Zerodha WS error: %1").arg(e));
+            // A 403/Forbidden on the KiteTicker handshake is a permission verdict,
+            // not a transient network error: Kite refuses the streaming socket when
+            // the API key has no active Kite Connect (market-data) subscription —
+            // even though the *same* access_token authenticates the REST account
+            // APIs (profile/holdings 200, /quote and ws.kite.trade 403). The retry
+            // loop is futile and otherwise leaves the user staring at blank quote
+            // tables, so surface the cause once via the account's Error state.
+            if (!ws_permission_denied_ &&
+                (e.contains(QStringLiteral("403")) ||
+                 e.contains(QStringLiteral("Forbidden"), Qt::CaseInsensitive))) {
+                ws_permission_denied_ = true;
+                QPointer<AccountDataStream> self = this;
+                QMetaObject::invokeMethod(this, [self]() {
+                    if (!self)
+                        return;
+                    const QString msg = QStringLiteral(
+                        "Live market data unavailable — Kite refused the streaming "
+                        "connection (403). This Kite API key has no active Kite Connect "
+                        "subscription. Account data still works; live quotes and "
+                        "streaming require an active Kite Connect plan for this key.");
+                    AccountManager::instance().set_connection_state(
+                        self->account_id_, ConnectionState::Error, msg);
+                    LOG_WARN(ADS_TAG,
+                             QString("Zerodha streaming denied (403) for %1 — no Kite "
+                                     "Connect market-data subscription for this API key")
+                                 .arg(self->account_id_));
+                    emit self->connection_state_changed(self->account_id_, ConnectionState::Error);
+                }, Qt::QueuedConnection);
+                return;
+            }
             check_token_expiry(e);
         });
         zws->open();
@@ -1402,6 +1475,16 @@ void AccountDataStream::ws_resubscribe() {
             if (tok.has_value() && *tok > 0)
                 tokens.append(static_cast<quint32>(*tok));
         }
+        // Subscribe the selected symbol in "full" mode (5-level depth for the order
+        // book); every other symbol stays "quote" (lighter, no depth) for latency.
+        quint32 sel_token = 0;
+        if (!selected_symbol_.isEmpty()) {
+            const QString exch = selected_exchange_.isEmpty() ? QStringLiteral("NSE") : selected_exchange_;
+            auto t = svc.instrument_token(selected_symbol_, exch, broker_id_);
+            if (t.has_value() && *t > 0)
+                sel_token = static_cast<quint32>(*t);
+        }
+        zws->set_full_mode_token(sel_token);
         zws->set_subscriptions(tokens);
         return;
     }

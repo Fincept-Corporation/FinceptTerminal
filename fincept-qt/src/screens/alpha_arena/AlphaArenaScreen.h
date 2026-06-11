@@ -1,172 +1,81 @@
 #pragma once
-// AlphaArenaScreen — viewer over AlphaArenaEngine.
-//
-// Engine-side (AlphaArenaEngine, ModelDispatcher, OrderRouter, …) drives the
-// competition. The screen subscribes to engine signals while visible, posts
-// user intents (create / start / kill / halt), and delegates rendering to
-// per-tab panels (LeaderboardPanel / ModelChatPanel / PositionsPanel /
-// HitlPanel / RiskPanel / AuditPanel).
-//
-// Lifecycle (P3):
-//   * showEvent  → connect engine signals + first refresh
-//   * hideEvent  → disconnect engine signals; engine keeps running
-//
-// Reference: .grill-me/alpha-arena-production-refactor.md §Phase 7.
-
+// AlphaArenaScreen — nof1-style dashboard over fincept::arena::ArenaEngine.
+// Pure viewer: engine runs even when this screen is closed. Screen id
+// "alpha_arena" (CommandBar/ToolBar/WindowFrame registrations unchanged).
+// Terminal layout: header + mids ticker/cadence strip, then a splitter body
+// [equity chart | agent board] over the always-visible panel grid.
 #include "screens/common/IStatefulScreen.h"
+#include "services/alpha_arena/ArenaTypes.h"
 
-#include <QComboBox>
-#include <QDoubleSpinBox>
-#include <QEvent>
-#include <QGroupBox>
 #include <QHash>
-#include <QLabel>
-#include <QLineEdit>
-#include <QListWidget>
 #include <QMetaObject>
-#include <QPushButton>
-#include <QRadioButton>
-#include <QSpinBox>
-#include <QStackedWidget>
-#include <QString>
-#include <QStringList>
-#include <QTimer>
+#include <QVariantMap>
 #include <QVector>
 #include <QWidget>
 
+class QComboBox; class QLabel; class QPushButton; class QSpinBox; class QStackedWidget;
+class QTimer;
+
 namespace fincept::screens::alpha_arena {
 
-class LeaderboardPanel;
-class ModelChatPanel;
-class PositionsPanel;
-class HitlPanel;
-class RiskPanel;
-class AuditPanel;
-
-/// Lightweight descriptor for a user-configured LLM model entry.
-struct ArenaModelEntry {
-    QString display_name;
-    QString provider;
-    QString model_id;
-    QString api_key;
-    QString base_url;
-    QString profile_id;
-};
+class ArenaPanelGrid; class EquityCurveWidget; class LeaderboardCards;
 
 class AlphaArenaScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit AlphaArenaScreen(QWidget* parent = nullptr);
 
+    // IStatefulScreen (DockScreenRouter persists/restores lightweight UI state).
     void restore_state(const QVariantMap& state) override;
     QVariantMap save_state() const override;
     QString state_key() const override { return QStringLiteral("alpha_arena"); }
-    int state_version() const override { return 2; }
+    int state_version() const override { return 3; }
 
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
-    void changeEvent(QEvent* e) override;
-
-  private slots:
-    void on_create_clicked();
-    void on_start_clicked();
-    void on_force_tick_clicked();
-    void on_kill_all_clicked();
-    void on_live_mode_toggle_clicked();
-    void on_right_tab_changed(int idx);
-
-    void on_engine_tick(int seq);
-    void on_engine_decision_received(QString decision_id, QString agent_id);
-    void on_engine_hitl_requested(QString approval_id, QString agent_id, QString summary);
-    void on_engine_circuit_open(QString agent_id, QString reason);
-    void on_engine_status_changed(QString competition_id, QString status);
-    void on_engine_crash_recovery(QStringList competition_ids);
-
-    void on_hitl_resolved(QString approval_id, bool approved);
-
-    void on_countdown_tick();
 
   private:
-    void build_ui();
     QWidget* build_header();
-    QWidget* build_create_panel();
-    QWidget* build_main();
-    QWidget* build_right_stack();
+    QWidget* build_ticker_strip();       // mids ticker + cadence editor
+    QWidget* build_empty_state();
+    QWidget* build_dashboard();
+    void connect_engine();
+    void disconnect_engine();
+    void reload_competitions();          // switcher combo
+    void show_competition(const QString& id);
+    void refresh_dashboard();            // chart + board + panels (full, per round)
+    void update_ticker();                // mids ticker (every marks tick)
+    void rebuild_board_light();          // board from cached agents + live account_view
+    void on_new_competition();
+    void update_badges(const QString& status);
+    void maybe_offer_crash_recovery();   // Resume-or-End prompt (signal + showEvent)
 
-    /// Re-apply tr() lookups to persistent chrome after a QEvent::LanguageChange.
-    /// Status/venue badges and the tick line are re-derived from current state;
-    /// table/list data rows are model-driven and kept verbatim.
-    void retranslateUi();
-
-    void connect_engine_signals();
-    void disconnect_engine_signals();
-
-    void populate_model_list();
-    void apply_competition_id(const QString& id);
-    void update_status_badge(const QString& status);
-    void update_venue_badge();
-    void show_disclaimer_if_live(bool live);
-    void refresh_all_panels();
-
-    // State.
     QString competition_id_;
-    QString competition_status_;
-    bool live_mode_engaged_ = false;
-    QVector<ArenaModelEntry> model_entries_;
-
-    // Engine connection handles (so we can disconnect cleanly in hideEvent).
-    QVector<QMetaObject::Connection> engine_conns_;
-
-    // Header.
-    QLabel* title_label_ = nullptr;
+    QVector<QMetaObject::Connection> conns_;
+    QTimer* countdown_ = nullptr;
+    // Light-refresh caches (filled by refresh_dashboard; used on marks ticks).
+    QVector<fincept::arena::AgentRow> agents_cache_;
+    QHash<QString, qint64> tokens_cache_;
+    QHash<QString, double> last_mids_;   // previously displayed mids (ticker arrows)
+    double cap_ = 0;
+    // Header
     QLabel* venue_badge_ = nullptr;
     QLabel* status_badge_ = nullptr;
-    QLabel* tick_label_ = nullptr;
-    int tick_seq_ = 0;                        // last seq shown on tick_label_
+    QLabel* round_label_ = nullptr;
     QLabel* countdown_label_ = nullptr;
-    QPushButton* force_tick_btn_ = nullptr;
-    QPushButton* kill_all_btn_ = nullptr;
-    QPushButton* live_mode_btn_ = nullptr;
-    QLabel* cadence_label_ = nullptr;
-    QSpinBox* hot_cadence_spin_ = nullptr;
-    QPushButton* apply_cadence_btn_ = nullptr;
     QLabel* disclaimer_ = nullptr;
-
-    // Create panel.
-    QGroupBox* create_panel_ = nullptr;
-    QLabel* comp_name_lbl_ = nullptr;
-    QLabel* comp_mode_lbl_ = nullptr;
-    QLabel* comp_venue_lbl_ = nullptr;
-    QLabel* comp_capital_lbl_ = nullptr;
-    QLabel* comp_cadence_lbl_ = nullptr;
-    QLabel* comp_instruments_lbl_ = nullptr;
-    QLabel* comp_models_lbl_ = nullptr;
-    QLineEdit* comp_name_ = nullptr;
-    QComboBox* comp_mode_ = nullptr;
-    QRadioButton* venue_paper_ = nullptr;
-    QRadioButton* venue_hl_ = nullptr;
-    QRadioButton* venue_us_eq_ = nullptr;     // disabled — S2 stub
-    QDoubleSpinBox* comp_capital_ = nullptr;
-    QSpinBox* comp_cadence_ = nullptr;
-    QListWidget* comp_instruments_ = nullptr;
-    QListWidget* model_list_ = nullptr;
-    QPushButton* create_btn_ = nullptr;
-    QPushButton* start_btn_ = nullptr;
-
-    // Main split panels.
-    LeaderboardPanel* leaderboard_ = nullptr;
-    ModelChatPanel* modelchat_ = nullptr;
-    PositionsPanel* positions_ = nullptr;
-    HitlPanel* hitl_ = nullptr;
-    RiskPanel* risk_ = nullptr;
-    AuditPanel* audit_ = nullptr;
-
-    QStackedWidget* right_stack_ = nullptr;
-    QList<QPushButton*> right_tab_btns_;
-
-    // Visibility-driven countdown timer.
-    QTimer* countdown_timer_ = nullptr;
+    QLabel* ticker_ = nullptr;
+    QSpinBox* cadence_spin_ = nullptr;
+    QPushButton* pause_btn_ = nullptr;
+    QPushButton* force_btn_ = nullptr;
+    QPushButton* kill_btn_ = nullptr;
+    QComboBox* switcher_ = nullptr;
+    // Body
+    QStackedWidget* body_ = nullptr;     // 0 = empty state, 1 = dashboard
+    EquityCurveWidget* chart_ = nullptr;
+    LeaderboardCards* cards_ = nullptr;
+    ArenaPanelGrid* grid_ = nullptr;
 };
 
 } // namespace fincept::screens::alpha_arena

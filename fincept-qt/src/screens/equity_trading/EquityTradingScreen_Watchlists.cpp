@@ -251,6 +251,11 @@ QStringList EquityTradingScreen::effective_symbols() const {
     for (const auto& s : position_symbols_)
         if (!s.isEmpty() && !eff.contains(s))
             eff << s;
+    // Holdings get live WS prices too — otherwise their LTP only refreshes on the
+    // 5-minute REST portfolio poll and visibly lags the broker app.
+    for (const auto& s : holding_symbols_)
+        if (!s.isEmpty() && !eff.contains(s))
+            eff << s;
     return eff;
 }
 
@@ -266,6 +271,21 @@ void EquityTradingScreen::update_position_symbols(const QStringList& syms) {
     // Re-display + re-subscribe to the new active∪positions union so held symbols
     // get live WebSocket prices. Deferred to the next tick because this can fire
     // from inside a hub callback, and apply_active_watchlist re-subscribes the hub.
+    QMetaObject::invokeMethod(this, [this]() { apply_active_watchlist(true); }, Qt::QueuedConnection);
+}
+
+void EquityTradingScreen::update_holding_symbols(const QStringList& syms) {
+    QStringList deduped;
+    for (const auto& s : syms)
+        if (!s.isEmpty() && !deduped.contains(s))
+            deduped << s;
+    if (deduped == holding_symbols_)
+        return; // unchanged — avoid resubscribe churn
+    holding_symbols_ = deduped;
+    LOG_INFO("posdbg", QString("update_holding_symbols: [%1]").arg(deduped.join(',')));
+    // Same path as positions: re-subscribe the active∪positions∪holdings union so
+    // holding LTP streams live instead of waiting on the 5-minute REST poll.
+    // Deferred because this fires from inside the holdings hub callback.
     QMetaObject::invokeMethod(this, [this]() { apply_active_watchlist(true); }, Qt::QueuedConnection);
 }
 

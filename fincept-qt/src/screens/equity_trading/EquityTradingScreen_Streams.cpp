@@ -100,7 +100,14 @@ void EquityTradingScreen::hub_subscribe_streaming() {
                       [this](const QVariant& v) {
                           if (!v.canConvert<QVector<BrokerHolding>>())
                               return;
-                          bottom_panel_->set_holdings(v.value<QVector<BrokerHolding>>());
+                          const auto holdings = v.value<QVector<BrokerHolding>>();
+                          bottom_panel_->set_holdings(holdings);
+                          // Give held symbols live WS prices so their LTP updates in
+                          // real time instead of only on the 5-minute REST poll.
+                          QStringList hs;
+                          for (const auto& h : holdings)
+                              hs << h.symbol;
+                          update_holding_symbols(hs);
                       });
 
         // ── Orders ──
@@ -159,6 +166,8 @@ void EquityTradingScreen::hub_subscribe_quotes() {
     for (const auto& s : watchlist_symbols_)
         symbols.insert(s);
     for (const auto& s : position_symbols_) // held symbols get live quotes too
+        symbols.insert(s);
+    for (const auto& s : holding_symbols_) // holdings stream live too (not just 5-min REST)
         symbols.insert(s);
 
     LOG_INFO("posdbg", QString("subscribing %1 quote topics for acct=%2: [%3]")

@@ -122,13 +122,19 @@ QString ZerodhaInstrumentParser::normalise_symbol(const QString& tradingsymbol, 
 }
 
 // ── Row parser ────────────────────────────────────────────────────────────────
-// CSV column order from Zerodha:
-// 0:instrument_token  1:exchange_token  2:tradingsymbol  3:name
-// 4:expiry  5:strike  6:lot_size  7:instrument_type  8:exchange
-// 9:tick_size  10:segment
+// CSV column order from Zerodha's /instruments dump (Kite Connect v3 — 12 cols):
+// 0:instrument_token  1:exchange_token  2:tradingsymbol  3:name  4:last_price
+// 5:expiry  6:strike  7:tick_size  8:lot_size  9:instrument_type
+// 10:segment  11:exchange
+// NOTE: the dump has a `last_price` column at index 4 (ignored — not real-time),
+// and `exchange` is the LAST field. An earlier mapping assumed an 11-column
+// layout without last_price, which shifted every field after `name`: tick_size
+// landed in instrument_type (→ all "UNKNOWN") and lot_size landed in exchange
+// (→ exchange="1"), so symbol+exchange lookups (keyed on "NSE") matched nothing
+// and live quotes never resolved a token. Keep this aligned with the doc above.
 
 Instrument ZerodhaInstrumentParser::parse_row(const QStringList& cols) {
-    if (cols.size() < 11)
+    if (cols.size() < 12)
         return {};
 
     Instrument inst;
@@ -137,13 +143,14 @@ Instrument ZerodhaInstrumentParser::parse_row(const QStringList& cols) {
     inst.exchange_token = cols[1].toLongLong();
     inst.brsymbol = cols[2].trimmed();
     inst.name = cols[3].trimmed().toUpper();
-    QString expiry_iso = cols[4].trimmed(); // "2024-03-28" or ""
-    inst.strike = cols[5].toDouble();
-    inst.lot_size = cols[6].toInt();
-    QString itype = cols[7].trimmed().toUpper();
-    inst.brexchange = cols[8].trimmed().toUpper();
-    inst.tick_size = cols[9].toDouble();
+    // cols[4] = last_price — ignored (not real-time; we never store it)
+    QString expiry_iso = cols[5].trimmed(); // "2024-03-28" or ""
+    inst.strike = cols[6].toDouble();
+    inst.tick_size = cols[7].toDouble();
+    inst.lot_size = cols[8].toInt();
+    QString itype = cols[9].trimmed().toUpper();
     QString segment = cols[10].trimmed().toUpper();
+    inst.brexchange = cols[11].trimmed().toUpper();
 
     // Normalise expiry to DD-MMM-YY display format and nodashes for symbol
     QString exp_nd = expiry_nodashes(expiry_iso);
@@ -181,7 +188,7 @@ QVector<Instrument> ZerodhaInstrumentParser::parse(const QByteArray& csv_data) {
 
         // Simple CSV split — Zerodha's instruments CSV has no quoted fields with commas
         QStringList cols = line.split(',');
-        if (cols.size() < 11) {
+        if (cols.size() < 12) {
             LOG_WARN("ZerodhaParser", QString("Row %1: only %2 columns, skipping").arg(row).arg(cols.size()));
             ++row;
             continue;

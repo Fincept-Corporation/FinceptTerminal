@@ -116,7 +116,7 @@ class EquityBottomPanel : public QWidget {
     // Live-quote patch for the Holdings table (CNC delivery): updates LTP / current
     // value / P&L for the symbol's row and the summary strip, in place — same per
     // tick refresh as the Positions table so Holdings tracks in real time.
-    void update_holding_quote(const QString& symbol, double ltp);
+    void update_holding_quote(const QString& symbol, double ltp, double prev_close);
 
     // Blank the shared positions/holdings/orders tables (and their row-aligned
     // caches). Called on every account or paper↔live transition so one account's
@@ -170,6 +170,7 @@ class EquityBottomPanel : public QWidget {
     QLabel* holdings_current_label_ = nullptr;
     QLabel* holdings_pnl_label_ = nullptr;
     QLabel* holdings_pnl_pct_label_ = nullptr;
+    QLabel* holdings_day_pnl_label_ = nullptr; // "Today's P&L" total
     QLabel* holdings_count_label_ = nullptr;
     // Holdings summary-strip caption labels (cached for retranslateUi)
     QLabel* holdings_count_caption_ = nullptr;
@@ -177,6 +178,7 @@ class EquityBottomPanel : public QWidget {
     QLabel* holdings_current_caption_ = nullptr;
     QLabel* holdings_pnl_caption_ = nullptr;
     QLabel* holdings_pnl_pct_caption_ = nullptr;
+    QLabel* holdings_day_pnl_caption_ = nullptr;
     class QPushButton* holdings_import_btn_ = nullptr;
     class QPushButton* holdings_replicate_btn_ = nullptr;
     class QPushButton* holdings_square_off_btn_ = nullptr;

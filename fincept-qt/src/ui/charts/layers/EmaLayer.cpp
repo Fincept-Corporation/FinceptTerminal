@@ -1,6 +1,6 @@
 #include "ui/charts/layers/EmaLayer.h"
 
-#include "services/alpha_arena/Indicators.h"
+#include "ui/charts/ChartIndicators.h"
 
 namespace fincept::ui {
 
@@ -21,7 +21,7 @@ void EmaLayer::compute(const QVector<CandleData>& candles) {
         timestamps.append(c.timestamp);
     }
 
-    const auto values = fincept::services::alpha_arena::ema(closes, period_);
+    const auto values = indicators::ema(closes, period_);
     update_series_data(timestamps, values);
 }
 
