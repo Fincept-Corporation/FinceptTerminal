@@ -1777,6 +1777,8 @@ set(SCREEN_SOURCES
     src/screens/equity_research/EquityFinancialsTab_Views.cpp
     src/screens/equity_research/EquityFinancialsTab_Populate.cpp
     src/screens/equity_research/EquityAnalysisTab.cpp
+    src/screens/equity_research/EquityValuationTab.h
+    src/screens/equity_research/EquityValuationTab.cpp
     src/screens/equity_research/EquityTechnicalsTab.cpp
     src/screens/equity_research/EquityTalippTab.cpp
     src/screens/equity_research/EquityPeersTab.cpp
