@@ -71,7 +71,13 @@ void OnboardingTour::build_ui() {
 
     heading_ = new QLabel(this);
     QFont tf = heading_->font();
-    tf.setPointSizeF(tf.pointSizeF() * 1.4);
+    // App font is pixel-sized (pointSizeF() == -1), so scale whichever metric
+    // is actually set — multiplying a -1 point size yields a negative value
+    // that setPointSizeF rejects with a warning.
+    if (tf.pixelSize() > 0)
+        tf.setPixelSize(qRound(tf.pixelSize() * 1.4));
+    else if (tf.pointSizeF() > 0)
+        tf.setPointSizeF(tf.pointSizeF() * 1.4);
     tf.setBold(true);
     heading_->setFont(tf);
     root->addWidget(heading_);
@@ -117,7 +123,11 @@ QWidget* OnboardingTour::build_step(const QString& title, const QString& body,
     auto* h = new QLabel(title, w);
     QFont hf = h->font();
     hf.setBold(true);
-    hf.setPointSizeF(hf.pointSizeF() * 1.15);
+    // See note above — scale the pixel size when the font is pixel-defined.
+    if (hf.pixelSize() > 0)
+        hf.setPixelSize(qRound(hf.pixelSize() * 1.15));
+    else if (hf.pointSizeF() > 0)
+        hf.setPointSizeF(hf.pointSizeF() * 1.15);
     h->setFont(hf);
     l->addWidget(h);
 

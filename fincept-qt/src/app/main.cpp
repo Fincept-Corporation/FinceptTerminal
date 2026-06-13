@@ -5,6 +5,7 @@
 #include "services/llm/LlmService.h"
 #include "ui/notifications/DesktopNotifier.h"
 #include "app/MonitorPickerDialog.h"
+#include "app/ScreenSmokeTest.h"
 #include "app/WindowFrame.h"
 #include "app/TerminalShell.h"
 #include "core/window/WindowRegistry.h"
@@ -114,6 +115,7 @@
 #include <QUuid>
 
 #include <algorithm>
+#include <cstdio>
 #include <memory>
 
 #include "app/InstanceLock.h"
@@ -937,6 +939,21 @@ int main(int argc, char* argv[]) {
     // itself offloads prefill_completed_steps() to a background thread (P1).
     auto setup_status = fincept::python::PythonSetupManager::instance().check_status();
 
+    // --smoke-test: CI/clean-machine screen-construction walk. Force the normal
+    // boot path (we need a real WindowFrame + router to navigate every screen),
+    // and skip the Python first-run SetupScreen — the smoke test only verifies
+    // that screens CONSTRUCT on the bundled runtime, not that data fetches work.
+    // The actual walk is scheduled just after the primary window is shown.
+    bool smoke_mode = false;
+    for (int i = 1; i < argc; ++i) {
+        if (qstrcmp(argv[i], "--smoke-test") == 0)
+            smoke_mode = true;
+    }
+    if (smoke_mode) {
+        LOG_INFO("Smoke", "Smoke-test mode — forcing normal boot, skipping setup/recovery");
+        setup_status.needs_setup = false;
+    }
+
     if (setup_status.needs_setup) {
         LOG_INFO("App", "Python environment not ready — showing setup screen");
 
@@ -1016,7 +1033,7 @@ int main(int argc, char* argv[]) {
     // secondary-window restoration paths to avoid duplicating windows.
     bool recovered = false;
     if (auto* recovery = fincept::TerminalShell::instance().crash_recovery();
-        recovery && recovery->needs_recovery()) {
+        !smoke_mode && recovery && recovery->needs_recovery()) {
         fincept::screens::CrashRecoveryDialog dlg(
             recovery, fincept::TerminalShell::instance().snapshot_ring());
         dlg.exec();
@@ -1040,6 +1057,22 @@ int main(int argc, char* argv[]) {
         auto* primary = new fincept::WindowFrame(primary_id);
         primary->setAttribute(Qt::WA_DeleteOnClose);
         primary->show();
+
+        // Smoke test: once the window has painted, walk every screen and exit
+        // with the result. Deferred so the shell + router are fully wired. The
+        // CI job runs this with Qt/VS stripped from PATH, so a missing bundled
+        // runtime (DLL, plugin, or data file like QtWebEngineProcess.exe) shows
+        // up as a hard process abort or a non-constructing screen here — exactly
+        // the class of failure the static dependency gate cannot detect.
+        if (smoke_mode) {
+            QPointer<fincept::WindowFrame> w = primary;
+            QTimer::singleShot(2500, &app, [w]() {
+                const int rc = fincept::run_screen_smoke_test(w ? w->dock_router() : nullptr);
+                std::fprintf(stderr, "[Smoke] exit %d\n", rc);
+                std::fflush(stderr);
+                QCoreApplication::exit(rc);
+            });
+        }
     }
 
     // Wire new-window handler + Launchpad surface — see wire_app_lifecycle()

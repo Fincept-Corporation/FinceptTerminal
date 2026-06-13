@@ -1,5 +1,7 @@
 #include "ui/charts/KLineChartWidget.h"
 
+#include "core/logging/Logger.h"
+
 #ifdef HAS_QT_WEBENGINE
 #include <QWebEngineProfile>
 #include <QWebEngineSettings>
@@ -10,9 +12,11 @@
 #include <QContextMenuEvent>
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
+#include <QLibraryInfo>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPointer>
@@ -45,6 +49,35 @@ class ChartWebView : public QWebEngineView {
   private:
     KLineChartWidget* host_;
 };
+
+// HAS_QT_WEBENGINE is a COMPILE-time flag (Qt WebEngine was present on the build
+// machine). It says nothing about whether the *runtime* the app actually ships
+// with is complete. Qt WebEngine spawns a helper process — QtWebEngineProcess
+// (.exe on Windows) — and loads ICU/resource .pak files alongside it. If the
+// deployment is missing the helper (e.g. the installer didn't bundle it), the
+// Chromium bootstrap calls abort() the instant a QWebEngineView is constructed,
+// taking the whole app down — and it cannot be caught in C++. So we must detect
+// a broken/absent runtime BEFORE creating any view and degrade to the Qt-Charts
+// fallback. Probe the locations Qt searches for the helper: the Qt
+// libexec dir, the app dir, and an app/bin subdir.
+bool webengine_runtime_available() {
+#ifdef Q_OS_WIN
+    const QString proc = QStringLiteral("QtWebEngineProcess.exe");
+#else
+    const QString proc = QStringLiteral("QtWebEngineProcess");
+#endif
+    const QString app = QCoreApplication::applicationDirPath();
+    const QStringList candidates = {
+        QLibraryInfo::path(QLibraryInfo::LibraryExecutablesPath) + QStringLiteral("/") + proc,
+        app + QStringLiteral("/") + proc,
+        app + QStringLiteral("/bin/") + proc,
+    };
+    for (const QString& c : candidates) {
+        if (QFileInfo::exists(c))
+            return true;
+    }
+    return false;
+}
 } // namespace
 #endif
 
@@ -66,7 +99,16 @@ KLineChartWidget::KLineChartWidget(QWidget* parent) : QWidget(parent) {
 
 bool KLineChartWidget::is_available() const {
 #ifdef HAS_QT_WEBENGINE
-    return true;
+    // Computed once: the runtime layout can't change while the app is running.
+    static const bool ok = []() {
+        const bool present = webengine_runtime_available();
+        if (!present)
+            LOG_WARN("KLineChart",
+                     "Qt WebEngine runtime not found (QtWebEngineProcess missing from "
+                     "deployment) — falling back to the Qt-Charts chart");
+        return present;
+    }();
+    return ok;
 #else
     return false;
 #endif
@@ -81,6 +123,11 @@ void KLineChartWidget::showEvent(QShowEvent* e) {
 void KLineChartWidget::ensure_web_view() {
 #ifdef HAS_QT_WEBENGINE
     if (initialized_)
+        return;
+    // Defense-in-depth: never create a QWebEngineView when the runtime helper is
+    // absent — doing so aborts the process. Callers normally gate on
+    // is_available(), but guard here too so any direct user is crash-safe.
+    if (!webengine_runtime_available())
         return;
     initialized_ = true;
 

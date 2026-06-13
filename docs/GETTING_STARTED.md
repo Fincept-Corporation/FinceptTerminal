@@ -339,6 +339,15 @@ python scripts/yfinance_data.py quote AAPL   # Test directly
 sudo apt install libgl1-mesa-dev libglu1-mesa-dev
 ```
 
+### Build is extremely slow or hangs the whole computer
+
+Almost always **RAM exhaustion**, not a broken toolchain:
+
+- The build auto-caps parallel compiles based on your RAM (a Ninja job pool in `CMakeLists.txt`). If you removed it or forced a large `-j`, restore it — 12 simultaneous MSVC/Qt compiles need 15–48 GB and will swap a 16 GB machine until the OS freezes. Tune per-machine with `-DFINCEPT_MAX_COMPILE_JOBS=N`.
+- **Keep ≥5 GB RAM free while building.** The final link (1000+ objects) needs ~3–4 GB; starved of memory it pages and a one-line rebuild balloons from ~5 s to **minutes**. Close browsers / IDEs / other heavy apps first.
+- **Windows:** add Microsoft Defender real-time exclusions for the repo + `build/` tree and the `cl.exe` / `link.exe` / `ninja.exe` / `cmake.exe` binaries — scanning the 100 k+ build files is a big per-compile tax.
+- A normal one-line incremental rebuild should be **~5–6 s**. If it's much slower, check **free RAM first**. Full rationale: *Build performance & machine requirements* in `CLAUDE.md`.
+
 ---
 
 ## Getting Help

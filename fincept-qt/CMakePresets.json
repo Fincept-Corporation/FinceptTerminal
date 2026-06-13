@@ -16,7 +16,7 @@
     {
       "name": "win-dev",
       "displayName": "Windows Dev (fast incremental)",
-      "description": "Dev build — unity OFF + /DEBUG:FASTLINK incremental linking + PCH for fast single-file rebuilds (~10s vs ~2min). FINCEPT_DEV_BUILD drives the dev-only tweaks in CMakeLists.txt.",
+      "description": "Dev build — unity OFF + /DEBUG:FASTLINK incremental linking + PCH + RAM-capped Ninja compile pool + windeployqt-once-per-configure. ~5-6s per one-line change WHEN >5GB RAM is free; the 1000+ object link is RAM-bound and balloons to minutes (even hangs the OS at 12-wide) on a memory-starved machine. Override the pool with -DFINCEPT_MAX_COMPILE_JOBS=N. FINCEPT_DEV_BUILD drives the dev-only tweaks in CMakeLists.txt.",
       "inherits": "base",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
       "architecture": { "value": "x64", "strategy": "external" },

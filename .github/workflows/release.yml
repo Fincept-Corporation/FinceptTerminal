@@ -189,11 +189,20 @@ jobs:
           fi
 
           # Qt Core DLLs — belt-and-suspenders for anything windeployqt misses.
+          # The Qt6WebEngine*/Qt6Qml*/Qt6Quick* set backs the KLineChart trading
+          # chart (Equity Trading / Equity Research). windeployqt is unreliable at
+          # deploying the WebEngine stack, and v4.1.0 shipped WITHOUT it — opening
+          # the Equity Trading tab then crashed because Chromium could not find
+          # QtWebEngineProcess.exe. The runtime data files (icudtl.dat / *.pak /
+          # locales) and the helper exe are copied in a dedicated block below.
           for qt_dll in \
             Qt6Core.dll Qt6Gui.dll Qt6Widgets.dll Qt6Charts.dll Qt6PrintSupport.dll \
             Qt6Network.dll Qt6Sql.dll Qt6Concurrent.dll Qt6WebSockets.dll \
             Qt6Multimedia.dll Qt6MultimediaWidgets.dll Qt6OpenGL.dll \
-            Qt6OpenGLWidgets.dll Qt6Svg.dll Qt6Xml.dll Qt6TextToSpeech.dll; do
+            Qt6OpenGLWidgets.dll Qt6Svg.dll Qt6Xml.dll Qt6TextToSpeech.dll \
+            Qt6WebEngineCore.dll Qt6WebEngineWidgets.dll Qt6WebChannel.dll \
+            Qt6Quick.dll Qt6QuickWidgets.dll Qt6Qml.dll Qt6QmlMeta.dll \
+            Qt6QmlModels.dll Qt6QmlWorkerScript.dll Qt6Positioning.dll; do
             [ -f "${QT_BIN}/${qt_dll}" ] && [ ! -f "${BUILD_DIR}/${qt_dll}" ] && \
               cp "${QT_BIN}/${qt_dll}" "${BUILD_DIR}/" || true
           done
@@ -263,6 +272,37 @@ jobs:
 
           cp -r resources "${BUILD_DIR}/resources" 2>/dev/null || true
           bash "${GITHUB_WORKSPACE}/.github/scripts/sync_scripts.sh" scripts "${BUILD_DIR}/scripts"
+
+          # ── Qt WebEngine runtime (KLineChart trading chart) ──────────────────
+          # MUST run AFTER the repo-resources copy above so the WebEngine .pak /
+          # icudtl.dat files merge INTO the existing resources/ dir (rather than
+          # the dir being created here and the repo copy nesting under it).
+          # Qt resolves these relative to the exe (qt.conf Prefix=.):
+          #   ./QtWebEngineProcess.exe   ./resources/*.pak + icudtl.dat
+          #   ./translations/qtwebengine_locales/*.pak
+          # Without them, constructing a QWebEngineView aborts the whole process
+          # (this is the v4.1.0 Equity-tab crash). The dependency-closure gate
+          # below only inspects DLL imports, so it cannot catch these data files —
+          # the essential-files check is extended to cover them instead.
+          if [ -f "${QT_BIN}/QtWebEngineProcess.exe" ]; then
+            cp "${QT_BIN}/QtWebEngineProcess.exe" "${BUILD_DIR}/" || true
+          else
+            echo "::warning::QtWebEngineProcess.exe not found in ${QT_BIN} — WebEngine chart will be unavailable"
+          fi
+          # Resource paks + ICU data live in Qt's resources/ dir.
+          mkdir -p "${BUILD_DIR}/resources"
+          for pak in icudtl.dat qtwebengine_resources.pak qtwebengine_resources_100p.pak \
+            qtwebengine_resources_200p.pak qtwebengine_devtools_resources.pak; do
+            [ -f "${QT_ROOT_DIR}/resources/${pak}" ] && \
+              cp "${QT_ROOT_DIR}/resources/${pak}" "${BUILD_DIR}/resources/" || true
+          done
+          # WebEngine locale paks (NOT covered by windeployqt --no-translations).
+          if [ -d "${QT_ROOT_DIR}/translations/qtwebengine_locales" ]; then
+            mkdir -p "${BUILD_DIR}/translations/qtwebengine_locales"
+            cp -n "${QT_ROOT_DIR}/translations/qtwebengine_locales/"*.pak \
+              "${BUILD_DIR}/translations/qtwebengine_locales/" 2>/dev/null || true
+          fi
+
           # qt.conf — pins plugin and data paths relative to the executable.
           # Without this, Qt falls back to hardcoded build-time paths which
           # don't exist on a clean machine and cause plugin load failures.
@@ -282,6 +322,20 @@ jobs:
               MISSING=1
             fi
           done
+
+          # WebEngine runtime invariant: if we shipped the WebEngine DLL, the
+          # helper exe + ICU/resource paks MUST be present too, or the Equity
+          # tab crashes Chromium at view creation (the v4.1.0 regression). These
+          # are data files the dependency-closure gate can't see, so check here.
+          if [ -f "${BUILD_DIR}/Qt6WebEngineCore.dll" ]; then
+            for we in QtWebEngineProcess.exe resources/icudtl.dat \
+              resources/qtwebengine_resources.pak; do
+              if [ ! -f "${BUILD_DIR}/${we}" ]; then
+                echo "::error::Missing WebEngine runtime file: ${we} (Equity chart would crash)"
+                MISSING=1
+              fi
+            done
+          fi
           [ "$MISSING" -eq 1 ] && exit 1
           echo "=== $(find "${BUILD_DIR}" -type f | wc -l) files staged ==="
 
@@ -354,6 +408,62 @@ jobs:
           }
           Write-Host "Dependency closure OK - every imported DLL is bundled or provided by Windows."
 
+      # ── Clean-machine smoke test ──────────────────────────────────────────
+      # The dependency-closure gate above only inspects DLL IMPORTS. It cannot
+      # see missing runtime DATA files / helper exes (QtWebEngineProcess.exe,
+      # icudtl.dat, *.pak) or runtime-loaded plugins — those abort the app only
+      # when a screen is actually opened, which is exactly how v4.1.0's Equity
+      # tab crashed. This step launches the STAGED build with Qt/VS/vcpkg
+      # stripped from PATH (so it can use ONLY its bundled runtime + System32,
+      # like an end user's clean machine) and walks every screen via
+      # --smoke-test. A crash or a non-constructing screen fails the release
+      # before it ships. The '[Smoke] >>> constructing <id>' breadcrumbs name
+      # the exact screen if it aborts the process.
+      - name: Smoke-test staged build (clean PATH, all screens)
+        shell: pwsh
+        working-directory: fincept-qt
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $buildDir = Join-Path (Get-Location) 'build/Release'
+          $exe = Join-Path $buildDir 'FinceptTerminal.exe'
+          if (-not (Test-Path $exe)) { Write-Host "::error::exe not found at $exe"; exit 1 }
+
+          # Strip dev toolchains from PATH so ONLY bundled DLLs + System32 resolve
+          # (reproduces an end user's machine — the whole point of this gate).
+          $env:PATH = (($env:PATH -split ';') | Where-Object {
+            $_ -and ($_ -notmatch '(?i)\\Qt') -and ($_ -notmatch '(?i)vcpkg') -and
+            ($_ -notmatch '(?i)Microsoft Visual Studio')
+          }) -join ';'
+          # CI runners have no real GPU — force software GL and disable the
+          # Chromium GPU/sandbox so WebEngine init doesn't false-fail headless.
+          $env:QT_OPENGL = 'software'
+          $env:QTWEBENGINE_DISABLE_SANDBOX = '1'
+          $env:QTWEBENGINE_CHROMIUM_FLAGS = '--disable-gpu --no-sandbox --disable-gpu-compositing'
+
+          $out = Join-Path $buildDir 'smoke_stdout.txt'
+          $err = Join-Path $buildDir 'smoke_stderr.txt'
+          Write-Host "Launching: FinceptTerminal.exe --smoke-test (clean PATH)"
+          $p = Start-Process -FilePath $exe `
+                 -ArgumentList '--smoke-test','--profile','ci-smoke' `
+                 -WorkingDirectory $buildDir -PassThru `
+                 -RedirectStandardOutput $out -RedirectStandardError $err
+          if (-not $p.WaitForExit(600000)) {
+            Write-Host "::error::Smoke test hung (>600s) — likely a blocking dialog or a stalled screen"
+            try { $p.Kill($true) } catch {}
+            Write-Host "----- stderr tail -----"
+            Get-Content $err -Tail 50 -ErrorAction SilentlyContinue
+            exit 1
+          }
+          Write-Host "----- smoke stderr -----"
+          Get-Content $err -ErrorAction SilentlyContinue | Select-Object -Last 100
+          $code = $p.ExitCode
+          Write-Host "Smoke test exit code: $code"
+          if ($code -ne 0) {
+            Write-Host "::error::Smoke test failed (exit $code) — the last '[Smoke] >>> constructing <id>' line above names the screen that crashed/failed on the bundled runtime."
+            exit 1
+          }
+          Write-Host "Smoke test passed — every screen constructed on the bundled runtime."
+
       # ── Generate Installer ────────────────────────────────────────────────
       - name: Generate Installer (CPack IFW)
         shell: bash
@@ -364,6 +474,61 @@ jobs:
           command -v binarycreator || { echo "::error::binarycreator not found"; exit 1; }
           cpack -G IFW -C ${{ env.BUILD_TYPE }} --verbose
           ls -lh ${{ env.APP_NAME }}-*-setup* 2>/dev/null || ls -lh *.exe 2>/dev/null || true
+
+      # ── Validate installer PAYLOAD (not just the stage dir) ───────────────
+      # The smoke test above runs against build/Release — the *staged* dir,
+      # where every file exists. But CPack's install() rules decide what
+      # actually lands in the installer, and a too-narrow rule (e.g. the
+      # `*.dll`-only capture that shipped the v4.1.0 WebEngine crash) can drop
+      # files the stage dir has. Nothing re-checked the packaged output, so the
+      # regression shipped. Silently install to a temp dir and assert the
+      # runtime files the app needs are actually present in what the user gets.
+      - name: Verify installer payload (silent install + file tree)
+        shell: pwsh
+        working-directory: fincept-qt/build
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem -Filter "${{ env.APP_NAME }}-*-windows-x64-setup.exe" |
+                   Select-Object -First 1
+          if (-not $setup) { Write-Host "::error::installer not found for payload check"; exit 1 }
+          $dest = Join-Path $env:RUNNER_TEMP 'fincept-payload-check'
+          if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+          Write-Host "Silent-installing $($setup.Name) -> $dest"
+          # IFW silent install: controlscript.qs auto-advances for CLI instances.
+          $p = Start-Process -FilePath $setup.FullName -PassThru -Wait `
+                 -ArgumentList @(
+                   'install', '--default-answer', '--accept-licenses',
+                   '--accept-messages', '--confirm-command',
+                   "--root", $dest )
+          if ($p.ExitCode -ne 0) {
+            Write-Host "::error::Silent install failed (exit $($p.ExitCode))"; exit 1
+          }
+          # Essential files the installed tree MUST contain. WebEngine entries
+          # are conditional: only required if the WebEngine DLL was packaged.
+          $missing = 0
+          $required = @(
+            'FinceptTerminal.exe', 'Qt6Core.dll', 'Qt6Gui.dll', 'Qt6Widgets.dll',
+            'qt.conf', 'platforms/qwindows.dll', 'sqldrivers/qsqlite.dll'
+          )
+          if (Test-Path (Join-Path $dest 'Qt6WebEngineCore.dll')) {
+            $required += @(
+              'QtWebEngineProcess.exe',
+              'resources/icudtl.dat',
+              'resources/qtwebengine_resources.pak'
+            )
+          }
+          foreach ($f in $required) {
+            if (-not (Test-Path (Join-Path $dest $f))) {
+              Write-Host "::error::Installer payload missing: $f (would crash on a clean machine)"
+              $missing = 1
+            }
+          }
+          if ($missing) {
+            Write-Host "----- installed tree (top level) -----"
+            Get-ChildItem $dest | Select-Object Name | Format-Table -AutoSize
+            exit 1
+          }
+          Write-Host "Installer payload OK — all essential runtime files present in the shipped tree."
 
       # ── Upload ────────────────────────────────────────────────────────────
       # Narrow the glob to the installer output — the broader `*.exe` pattern

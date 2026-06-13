@@ -539,12 +539,20 @@ QString ThemeManager::build_global_qss() const {
         .arg(t.icon_hover)      // %19
         .arg(t.positive)        // %20
         .arg(t.negative)        // %21
-        .arg(t.warning)         // %22
-        .arg(t.positive_dim)    // %23
-        .arg(t.negative_dim)    // %24
-        .arg(t.accent_bg)       // %25
-        .arg(t.positive_bg)     // %26
-        .arg(t.negative_bg);    // %27
+        .arg(t.warning);        // %22
+    // NOTE: the chain stops at %22 on purpose. The QSS body's only higher
+    // "%NN" tokens are the URL-encoded '#' (%23) inside the inline SVG icon
+    // data-URIs (e.g. stroke='%2380808080'). QString::arg fills placeholders by
+    // ASCENDING number across the whole string, so a 23rd .arg() would land on
+    // those %23 SVG tokens — overwriting the icon stroke colors (producing the
+    // malformed '#dc262680808080' strokes) and emitting "Argument missing" for
+    // every arg past the last real placeholder. With exactly 22 args, %1..%22
+    // fill in call order and every %23 stays literal for Qt's QSS URL-decoder.
+    // Verified empirically against Qt 6.8.3. Do NOT add args for positive_dim /
+    // negative_dim / accent_bg / positive_bg / negative_bg here — they are not
+    // referenced anywhere in this stylesheet. If you need them, add a real
+    // %23+ placeholder AND escape the SVG '#' a different way (%% is NOT an
+    // arg() escape — confirmed — so that approach does not work).
 }
 
 QString ThemeManager::build_ads_qss() const {

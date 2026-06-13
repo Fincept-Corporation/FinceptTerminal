@@ -201,6 +201,70 @@ if(DEFINED ENV{CI})
     set(FINCEPT_ENABLE_LTO ON CACHE BOOL "" FORCE)
 endif()
 
+# ── Build concurrency cap (RAM-aware) ────────────────────────────────────────
+# THE most important knob on a memory-constrained machine, and the fix for
+# "the build hangs my whole computer". Ninja defaults to one compile job per
+# logical core. Each MSVC Qt/C++20 translation unit peaks at ~1.2-1.6 GB
+# (non-unity dev) up to ~3-4 GB (unity Release, batch 20) of RAM. Running one
+# per core (e.g. 12 on a 6c/12t laptop) therefore demands 15-48 GB; on a box
+# with ~16 GB the kernel spills to the pagefile and the ENTIRE MACHINE stalls,
+# not just the build. The linker is hungrier still and must never run two at
+# once.
+#
+# Ninja "job pools" cap concurrency independently of the -j the caller passes,
+# so the limit holds from a bare `cmake --build`, an IDE, or CI alike. We size
+# the compile pool from physical RAM: reserve headroom for the OS + (on AMD
+# APUs) the iGPU's shared carve-out + the linker, then divide the remainder by
+# a per-job RAM budget that depends on whether unity is on. Auto-sizing means a
+# 64 GB workstation still gets full core utilisation while a 16 GB laptop stops
+# thrashing. Override explicitly with -DFINCEPT_MAX_COMPILE_JOBS=N (>=1).
+if(CMAKE_GENERATOR MATCHES "Ninja")
+    cmake_host_system_information(RESULT _fincept_ram_mb    QUERY TOTAL_PHYSICAL_MEMORY)
+    cmake_host_system_information(RESULT _fincept_ncores    QUERY NUMBER_OF_LOGICAL_CORES)
+
+    # Per-compile RAM budget (MB). Unity TUs bundle up to BATCH_SIZE files into a
+    # single cl.exe and need far more headroom than a lone non-unity dev TU.
+    if(FINCEPT_DEV_BUILD)
+        set(_fincept_mb_per_job 2048)   # non-unity, /Z7, PCH
+    else()
+        set(_fincept_mb_per_job 3072)   # unity batch 20 + optimiser
+    endif()
+
+    # RAM kept free for the OS, background apps, the iGPU shared pool, and the
+    # link step (which runs concurrently with the tail of the compile phase).
+    set(_fincept_ram_reserve_mb 5120)
+
+    if(_fincept_ram_mb GREATER _fincept_ram_reserve_mb)
+        math(EXPR _fincept_ram_jobs
+             "(${_fincept_ram_mb} - ${_fincept_ram_reserve_mb}) / ${_fincept_mb_per_job}")
+    else()
+        set(_fincept_ram_jobs 1)
+    endif()
+
+    # Clamp to [2, logical cores]: never serialise to 1 on a healthy box, never
+    # oversubscribe past the core count even when RAM is plentiful.
+    if(_fincept_ram_jobs LESS 2)
+        set(_fincept_ram_jobs 2)
+    endif()
+    if(_fincept_ram_jobs GREATER _fincept_ncores)
+        set(_fincept_ram_jobs ${_fincept_ncores})
+    endif()
+
+    set(FINCEPT_MAX_COMPILE_JOBS "${_fincept_ram_jobs}" CACHE STRING
+        "Max concurrent compile jobs (Ninja job pool). Auto-sized from RAM; override to taste.")
+
+    set_property(GLOBAL PROPERTY JOB_POOLS
+        fincept_compile_pool=${FINCEPT_MAX_COMPILE_JOBS}
+        fincept_link_pool=1)
+    set(CMAKE_JOB_POOL_COMPILE fincept_compile_pool)
+    set(CMAKE_JOB_POOL_LINK    fincept_link_pool)
+
+    message(STATUS
+        "Build concurrency cap: ${FINCEPT_MAX_COMPILE_JOBS} compile job(s) + 1 link "
+        "(host ${_fincept_ram_mb} MB RAM / ${_fincept_ncores} cores, "
+        "${_fincept_mb_per_job} MB per-job budget). Override: -DFINCEPT_MAX_COMPILE_JOBS=N")
+endif()
+
 # MSVC compiler flags for maximum build throughput:
 #   /Z7        — embed debug info in .obj instead of shared PDB → no PDB write
 #                contention (major speedup with parallel compilation)
@@ -1919,6 +1983,7 @@ set(SCREEN_SOURCES
 set(APP_SOURCES
     src/app/main.cpp
     src/app/InstanceLock.cpp
+    src/app/ScreenSmokeTest.cpp
     # WindowFrame is split across multiple files; see WindowFrame.cpp header
     # comment for the layout. All variants stay outside unity build (see
     # SKIP_UNITY_BUILD_INCLUSION block below).
@@ -3167,19 +3232,44 @@ if(WIN32)
         get_filename_component(_fincept_qt_prefix "${Qt6_DIR}/../../.." ABSOLUTE)
         list(APPEND _fincept_qt_bin_hints "${_fincept_qt_prefix}/bin")
     endif()
+    # Dev redeploy trigger: wipe the windeployqt stamp on every configure so the
+    # next build re-runs windeployqt exactly once (see the dev/release split below).
+    if(FINCEPT_DEV_BUILD)
+        file(REMOVE "${CMAKE_BINARY_DIR}/windeployqt_dev.stamp")
+    endif()
     find_program(WINDEPLOYQT_EXE windeployqt HINTS ${_fincept_qt_bin_hints})
     unset(_fincept_qt_bin_hints)
     if(WINDEPLOYQT_EXE)
-        # Always deploy Qt DLLs/plugins next to the exe. windeployqt is
-        # idempotent and copy_if_different — incremental cost is ~1-2 s
-        # when nothing changed. The previous DEPLOY_QT=ON gate caused the
-        # exe to run against a stale plugin set after a clean rebuild,
-        # producing 0xc0000005 crashes on startup.
-        add_custom_command(TARGET FinceptTerminal POST_BUILD
-            COMMAND "${WINDEPLOYQT_EXE}"
-            ARGS "--no-translations" "--no-compiler-runtime" "$<TARGET_FILE:FinceptTerminal>"
-            COMMENT "Running windeployqt..."
-        )
+        # Deploy Qt DLLs/plugins next to the exe. windeployqt re-walks the WHOLE Qt
+        # dependency tree (every QtQuick/Controls QML + plugin + WebEngine .pak) on
+        # EVERY run — measured ~30 s on this project even when it copies nothing
+        # ("X is up to date" x1400). On every incremental relink that tax dominates
+        # the build, so we split by build type:
+        #   • Release → always run. Guarantees a correct, fresh plugin set; the old
+        #     DEPLOY_QT gate once shipped a stale set → 0xc0000005 crashes on launch.
+        #   • Dev     → run ONCE per configure via a stamp, then skip. The stamp is
+        #     deleted at configure time (above), so any CMake re-run — including the
+        #     auto-reconfigure CMake performs when you edit CMakeLists to add a Qt
+        #     module — forces one fresh redeploy. Plain .cpp edits skip windeployqt,
+        #     turning a ~35 s build into ~5 s. Force a redeploy by deleting
+        #     build/<preset>/windeployqt_dev.stamp or reconfiguring.
+        if(FINCEPT_DEV_BUILD)
+            add_custom_command(TARGET FinceptTerminal POST_BUILD
+                COMMAND "${CMAKE_COMMAND}"
+                    -D "WDQT=${WINDEPLOYQT_EXE}"
+                    -D "EXE=$<TARGET_FILE:FinceptTerminal>"
+                    -D "STAMP=${CMAKE_BINARY_DIR}/windeployqt_dev.stamp"
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/deploy_qt_once.cmake"
+                COMMENT "windeployqt (dev: once per configure, then skipped)..."
+                VERBATIM
+            )
+        else()
+            add_custom_command(TARGET FinceptTerminal POST_BUILD
+                COMMAND "${WINDEPLOYQT_EXE}"
+                ARGS "--no-translations" "--no-compiler-runtime" "$<TARGET_FILE:FinceptTerminal>"
+                COMMENT "Running windeployqt..."
+            )
+        endif()
     endif()
 
     # ── Optional: override sqldrivers from a known-consistent Qt install ──────
@@ -3568,6 +3658,32 @@ if(FINCEPT_BUILD_INSTALLER)
                 COMPONENT core
                 FILES_MATCHING
                 PATTERN "*.dll")
+        # Qt WebEngine runtime helper + data files. windeployqt / the CI stage
+        # step place these next to the exe in the build dir, but the *.dll
+        # pattern above silently drops them: QtWebEngineProcess.exe is an .exe,
+        # and the Chromium data lives in resources/*.pak + resources/icudtl.dat
+        # and translations/qtwebengine_locales/*.pak. If they're absent from the
+        # installed tree, constructing a QWebEngineView aborts the whole process
+        # (the v4.1.0 Equity-tab crash). These install() calls are OPTIONAL so a
+        # build without WebEngine (HAS_WEBENGINE=FALSE → no helper staged) still
+        # packages cleanly; the runtime probe in KLineChartWidget degrades to the
+        # Qt-Charts fallback in that case.
+        install(FILES "$<TARGET_FILE_DIR:FinceptTerminal>/QtWebEngineProcess.exe"
+                DESTINATION "." COMPONENT core OPTIONAL)
+        # Chromium resource paks + ICU data. The source resources/ tree is
+        # installed separately below (app assets); these are *additional* files
+        # the CI stage step dropped into the build dir's resources/ folder, so
+        # capture them by name from the staged dir rather than re-globbing.
+        install(FILES
+                "$<TARGET_FILE_DIR:FinceptTerminal>/resources/icudtl.dat"
+                "$<TARGET_FILE_DIR:FinceptTerminal>/resources/qtwebengine_resources.pak"
+                "$<TARGET_FILE_DIR:FinceptTerminal>/resources/qtwebengine_resources_100p.pak"
+                "$<TARGET_FILE_DIR:FinceptTerminal>/resources/qtwebengine_resources_200p.pak"
+                "$<TARGET_FILE_DIR:FinceptTerminal>/resources/qtwebengine_devtools_resources.pak"
+                DESTINATION "resources" COMPONENT core OPTIONAL)
+        # WebEngine locale paks (not covered by windeployqt --no-translations).
+        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/translations/qtwebengine_locales"
+                DESTINATION "translations" COMPONENT core OPTIONAL)
         # Python analytics scripts (4000+ files) — required at runtime by
         # PythonRunner / ExchangeService. Without this the Crypto tab and all
         # Python-backed screens crash on an installed build.

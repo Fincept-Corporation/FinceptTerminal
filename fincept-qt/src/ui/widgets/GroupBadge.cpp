@@ -137,7 +137,14 @@ void GroupBadge::paintEvent(QPaintEvent*) {
     // Letter
     p.setPen(QColor("#ffffff"));
     QFont f = p.font();
-    f.setPointSizeF(f.pointSizeF() - 1.0);
+    // The app font is defined in PIXELS (ThemeManager::current_font uses
+    // setPixelSize), so pointSizeF() returns -1 here. Subtracting from -1 yields
+    // a negative point size that QFont::setPointSizeF rejects with a warning and
+    // ignores. Shrink whichever metric the inherited font actually uses.
+    if (f.pixelSize() > 0)
+        f.setPixelSize(f.pixelSize() > 1 ? f.pixelSize() - 1 : 1);
+    else if (f.pointSizeF() > 0)
+        f.setPointSizeF(f.pointSizeF() - 1.0);
     f.setBold(true);
     p.setFont(f);
     const QString label = group_ == SymbolGroup::None

@@ -27,7 +27,7 @@ cmake --preset <win-release|linux-release|macos-release>
 cmake --build --preset <same-preset>
 ```
 
-> **Older or RAM-constrained machines:** add `--parallel 4` (or any small number) to cap concurrent compile jobs. The default saturates every core, which can overheat older CPUs and slow the rest of your system. Example: `cmake --build --preset macos-release --parallel 4`.
+> **RAM-constrained machines:** the build now **auto-caps** concurrent compiles from your available RAM (a Ninja job pool in `CMakeLists.txt`) — 12-wide MSVC/Qt compiles otherwise need 15–48 GB and will swap a 16 GB box until the whole OS hangs. Override per-machine with `-DFINCEPT_MAX_COMPILE_JOBS=N` (or cap ninja directly with `--parallel N`). Also keep **≥5 GB RAM free** while building: the 1000+ object link needs ~3–4 GB and pages badly when starved (a one-line rebuild can jump from ~5 s to minutes). Full rationale: *Build performance & machine requirements* in `CLAUDE.md`.
 
 Debug variants: `win-debug`, `linux-debug`, `macos-debug`. See `fincept-qt/CMakePresets.json`.
 
