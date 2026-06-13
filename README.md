@@ -1,3 +1,7 @@
+> [!IMPORTANT]
+> **Maintenance notice — June 2026**
+> Due to funding constraints, the public [Fincept Terminal](https://github.com/Fincept-Corporation/FinceptTerminal) is moving to **one update per month** and is **no longer maintained on a daily basis**. The team is now focused on a subscription-based **private edition** of the terminal and a new project, **[Quantcept](https://github.com/Fincept-Corporation/Quantcept)**. This open-source repo stays public and will not be deleted.
+
 # Fincept Terminal
 
 <div align="center">
