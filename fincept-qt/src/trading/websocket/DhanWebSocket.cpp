@@ -221,6 +221,19 @@ void DhanWebSocket::on_disconnected() {
     emit disconnected();
 }
 
+void DhanWebSocket::emit_tick(BrokerQuote merged) {
+    if (merged.timestamp == 0)
+        merged.timestamp = QDateTime::currentMSecsSinceEpoch();
+    // Dhan's quote/full packets carry the *previous* close in the close field but
+    // never send day change pre-computed — derive it here so the watchlist shows a
+    // real CHG/CHG% instead of +0.00 for every symbol. (mirrors get_quotes REST.)
+    if (merged.close > 0.0) {
+        merged.change = merged.ltp - merged.close;
+        merged.change_pct = (merged.ltp - merged.close) / merged.close * 100.0;
+    }
+    emit tick_received(merged);
+}
+
 void DhanWebSocket::on_binary_message(const QByteArray& data) {
     note_tick(); // any inbound frame (even a heartbeat) keeps the watchdog happy
 
@@ -250,18 +263,12 @@ void DhanWebSocket::on_binary_message(const QByteArray& data) {
         switch (response_code) {
             case 2: { // TICKER (8B payload: ltp f32, ltt u32)
                 BrokerQuote q = parse_ticker(payload, payload_len, exchange_segment, security_id);
-                BrokerQuote merged = merge_tick(fallback, q);
-                if (merged.timestamp == 0)
-                    merged.timestamp = QDateTime::currentMSecsSinceEpoch();
-                emit tick_received(merged);
+                emit_tick(merge_tick(fallback, q));
                 break;
             }
             case 4: { // QUOTE (42B payload)
                 BrokerQuote q = parse_quote(payload, payload_len, exchange_segment, security_id);
-                BrokerQuote merged = merge_tick(fallback, q);
-                if (merged.timestamp == 0)
-                    merged.timestamp = QDateTime::currentMSecsSinceEpoch();
-                emit tick_received(merged);
+                emit_tick(merge_tick(fallback, q));
                 break;
             }
             case 5: { // OI (4B payload: oi u32)
@@ -269,10 +276,7 @@ void DhanWebSocket::on_binary_message(const QByteArray& data) {
                     BrokerQuote q;
                     q.symbol = symbol_for_security(security_id, fallback);
                     q.oi = qint64(read_u32(payload));
-                    BrokerQuote merged = merge_tick(fallback, q);
-                    if (merged.timestamp == 0)
-                        merged.timestamp = QDateTime::currentMSecsSinceEpoch();
-                    emit tick_received(merged);
+                    emit_tick(merge_tick(fallback, q));
                 }
                 break;
             }
@@ -281,10 +285,7 @@ void DhanWebSocket::on_binary_message(const QByteArray& data) {
                     BrokerQuote q;
                     q.symbol = symbol_for_security(security_id, fallback);
                     q.close = read_f32(payload); // previous close carried into close field
-                    BrokerQuote merged = merge_tick(fallback, q);
-                    if (merged.timestamp == 0)
-                        merged.timestamp = QDateTime::currentMSecsSinceEpoch();
-                    emit tick_received(merged);
+                    emit_tick(merge_tick(fallback, q));
                 }
                 break;
             }
@@ -293,10 +294,7 @@ void DhanWebSocket::on_binary_message(const QByteArray& data) {
                 bool has_depth = false;
                 BrokerQuote q =
                     parse_full(payload, payload_len, exchange_segment, security_id, depth, has_depth);
-                BrokerQuote merged = merge_tick(fallback, q);
-                if (merged.timestamp == 0)
-                    merged.timestamp = QDateTime::currentMSecsSinceEpoch();
-                emit tick_received(merged);
+                emit_tick(merge_tick(fallback, q));
                 if (has_depth)
                     emit depth_received(depth);
                 break;

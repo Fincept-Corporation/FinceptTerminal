@@ -146,6 +146,11 @@ class AccountDataStream : public QObject {
 
     // WebSocket — polymorphic, null for brokers without WS
     QObject* ws_ = nullptr;
+    // Latches once the streaming socket is refused with a permission verdict
+    // (e.g. Kite 403 — API key has no active Connect/market-data subscription)
+    // so the failure is surfaced to the user exactly once, not on every retry.
+    // Reset when the socket reconnects.
+    bool ws_permission_denied_ = false;
 
     // Polling timers
     QTimer* quote_timer_ = nullptr;

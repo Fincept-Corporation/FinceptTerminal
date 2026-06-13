@@ -22,6 +22,10 @@ namespace indicators {
 
 QVector<double> sma(const QVector<double>& values, int period);
 
+/// Exponential moving average, seeded with the SMA of the first `period`
+/// values (pandas-ta convention). Output[i] is NaN for i < period - 1.
+QVector<double> ema(const QVector<double>& values, int period);
+
 QVector<double> vwap(const QVector<double>& highs,
                      const QVector<double>& lows,
                      const QVector<double>& closes,

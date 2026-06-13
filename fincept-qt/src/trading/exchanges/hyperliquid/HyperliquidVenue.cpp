@@ -1,7 +1,6 @@
 #include "trading/exchanges/hyperliquid/HyperliquidVenue.h"
 
 #include "core/logging/Logger.h"
-#include "services/alpha_arena/AlphaArenaRepo.h"
 #include "trading/exchanges/hyperliquid/HyperliquidSigner.h"
 
 #include <QAbstractSocket>
@@ -87,9 +86,8 @@ void HyperliquidVenue::reconcile_tick() {
     QJsonObject body;
     body[QStringLiteral("type")] = QStringLiteral("clearinghouseState");
     body[QStringLiteral("user")] = user_address_;
-    const QString comp_id = competition_id_;
     QPointer<HyperliquidVenue> self(this);
-    client_->info(body, [self, comp_id](Result<QJsonDocument> r) {
+    client_->info(body, [self](Result<QJsonDocument> r) {
         if (!self) return;
         if (r.is_err()) {
             LOG_WARN("Hyperliquid", QString("reconcile failed: %1")
@@ -108,28 +106,12 @@ void HyperliquidVenue::reconcile_tick() {
             if (!coin.isEmpty()) remote_qty.insert(coin, szi);
         }
 
-        // Walk local agents and their positions.
-        auto agents = fincept::services::alpha_arena::AlphaArenaRepo::instance()
-                          .agents_for(comp_id);
-        if (agents.is_err()) return;
-        for (const auto& agent : agents.value()) {
-            auto local = fincept::services::alpha_arena::AlphaArenaRepo::instance()
-                             .open_positions_for(agent.id);
-            if (local.is_err()) continue;
-            for (const auto& p : local.value()) {
-                const double r_qty = remote_qty.value(p.coin, 0.0);
-                if (std::fabs(r_qty - p.qty) > 1e-9) {
-                    emit self->position_drift(p.coin, p.qty, r_qty);
-                    QJsonObject pl;
-                    pl[QStringLiteral("coin")] = p.coin;
-                    pl[QStringLiteral("local_qty")] = p.qty;
-                    pl[QStringLiteral("remote_qty")] = r_qty;
-                    fincept::services::alpha_arena::AlphaArenaRepo::instance()
-                        .append_event(comp_id, agent.id,
-                                      QStringLiteral("position_drift"), pl);
-                }
-            }
-        }
+        // Local-vs-remote drift comparison was removed along with the legacy
+        // AlphaArenaRepo (its aa_* tables were dropped in migration v050).
+        // The new arena ledger lives in fincept::arena::ArenaStore — re-wire
+        // the position_drift signal against it when the live order path lands.
+        LOG_DEBUG("Hyperliquid",
+                  QString("reconcile: %1 remote position(s)").arg(remote_qty.size()));
     });
 }
 
@@ -161,10 +143,9 @@ void HyperliquidVenue::place_order(const OrderRequest& req,
     action[QStringLiteral("orders")] = orders;
     action[QStringLiteral("grouping")] = QStringLiteral("na");
 
-    // Pull agent priv key from SecureStorage handle. We expect the engine to
-    // have stored it under `alpha_arena/agent_key/<comp_id>`; the OrderRouter
-    // resolves the handle and passes it here. Until the wallet wiring lands
-    // on this codepath we surface a clear error.
+    // Pull agent priv key from SecureStorage handle. The engine stores it
+    // under `alpha_arena/agent_key/<comp_id>` (written by LiveModeGateDialog).
+    // Until the wallet wiring lands on this codepath we surface a clear error.
     Q_UNUSED(req);
     OrderAck a;
     a.status = QStringLiteral("rejected");

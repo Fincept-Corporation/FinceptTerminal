@@ -310,10 +310,15 @@ struct BrokerHolding {
     double quantity = 0;
     double avg_price = 0;
     double ltp = 0;
-    double pnl = 0;
+    double pnl = 0;          // overall P&L (current_value - invested_value)
     double pnl_pct = 0;
     double invested_value = 0;
     double current_value = 0;
+    // Previous-day close, for "Today's P&L" = quantity * (ltp - prev_close).
+    // Populated generically from the live quote feed (BrokerQuote.close) so it
+    // works for every broker without per-broker holdings-parser changes; 0 until
+    // the first tick (Today's P&L then shows 0 rather than a wrong number).
+    double prev_close = 0;
 };
 
 struct BrokerOrderInfo {

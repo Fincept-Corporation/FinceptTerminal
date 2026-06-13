@@ -117,6 +117,9 @@ class DhanWebSocket : public BrokerWebSocketBase {
     // Enrich symbol/exchange for a security id via InstrumentService.
     QString symbol_for_security(quint32 security_id, const QString& fallback) const;
 
+    // Stamp timestamp + derive day change on a merged quote, then emit tick_received.
+    void emit_tick(BrokerQuote merged);
+
     // little-endian readers
     static quint16 read_u16(const uchar* p);
     static quint32 read_u32(const uchar* p);

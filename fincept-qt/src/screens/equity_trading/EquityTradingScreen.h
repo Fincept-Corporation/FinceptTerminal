@@ -31,6 +31,10 @@ namespace fincept::feeds {
 class FeedPanel;
 }
 
+namespace fincept::screens {
+class PortfolioMonitorScreen;
+}
+
 namespace fincept::screens::equity {
 class EquityTickerBar;
 class EquityWatchlist;
@@ -90,6 +94,9 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void on_accounts_clicked(); // opens AccountManagementDialog
     void handle_token_expired(const QString& account_id);
     void on_order_submitted(const trading::UnifiedOrder& order);
+    // Inline multi-broker submit: confirm, gate per account (Semi-Auto), then
+    // broadcast the same order to every selected account on a worker thread.
+    void on_multi_broker_submit(const trading::UnifiedOrder& order, const QStringList& account_ids);
     void on_cancel_order(const QString& order_id);
     void on_cancel_all_orders();                                          // CANCEL ALL ORDERS button
     void on_close_all_positions();                                        // SQUARE OFF ALL button (positions)
@@ -203,10 +210,12 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     // (when resubscribe=true) re-points the live stream + hub at the new symbol set.
     void load_watchlists();
     void apply_active_watchlist(bool resubscribe);
-    // Effective live-subscription set = active watchlist ∪ open-position symbols,
-    // so symbols you hold (even if not in the list) get live WebSocket prices.
+    // Effective live-subscription set = active watchlist ∪ open-position symbols
+    // ∪ holding symbols, so symbols you hold (even if not in the list) get live
+    // WebSocket prices instead of only the 5-minute REST portfolio snapshot.
     QStringList effective_symbols() const;
     void update_position_symbols(const QStringList& syms); // re-subscribe when it changes
+    void update_holding_symbols(const QStringList& syms);  // re-subscribe when it changes
     // Push the open position for the displayed symbol onto the chart's overlay
     // card + entry line (from the live cache or the paper engine), or clear it
     // when the symbol is flat.
@@ -230,6 +239,7 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     QHash<QString, QString> symbol_suggestion_map_;
     QPushButton* mode_btn_ = nullptr;
     QPushButton* feeds_btn_ = nullptr;    // toggles the far-right feed monitor column
+    QPushButton* unified_btn_ = nullptr;  // toggles the all-accounts portfolio monitor column
     QPushButton* accounts_btn_ = nullptr; // opens AccountManagementDialog
     QLabel* exchange_label_ = nullptr;
     QLabel* clock_label_ = nullptr;
@@ -243,6 +253,18 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     equity::EquityOrderBook* orderbook_ = nullptr;
     equity::EquityBottomPanel* bottom_panel_ = nullptr;
     fincept::feeds::FeedPanel* feed_panel_ = nullptr; // collapsible far-right feed column
+    PortfolioMonitorScreen* monitor_panel_ = nullptr; // collapsible all-accounts portfolio column
+    QWidget* monitor_float_ = nullptr;                // top-level window while the monitor is detached
+
+    void float_monitor();  // reparent monitor_panel_ into its own window
+    void redock_monitor(); // bring it back into the splitter (slot 4)
+
+  protected:
+    // Watches monitor_float_ for Close to re-dock the monitor (feeds pattern,
+    // without a dedicated moc'd window class).
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
+  private:
     QSplitter* main_splitter_ = nullptr;              // kept to toggle the feed column width
 
     // ── Timers (only UI-local timers remain; data timers are in AccountDataStream) ──
@@ -283,6 +305,7 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     // moves it to view a past IST session). Open positions/holdings stay current.
     QDate orders_view_day_ = QDate::currentDate();
     QStringList position_symbols_; // symbols with open positions (transient, for live pricing)
+    QStringList holding_symbols_;  // symbols in holdings (transient, for live pricing)
     QVector<trading::BrokerPosition> live_positions_; // cached live positions for focused account
     double current_price_ = 0.0;  // last known LTP for selected symbol
 

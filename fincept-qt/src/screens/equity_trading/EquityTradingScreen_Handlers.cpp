@@ -519,6 +519,93 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
     }
 }
 
+// Inline multi-broker submit (BROKERS selector in the order panel). One explicit
+// confirmation listing every target account + its mode, then the same per-account
+// Semi-Auto gating and background broadcast the ALL dialog uses.
+void EquityTradingScreen::on_multi_broker_submit(const trading::UnifiedOrder& order,
+                                                 const QStringList& account_ids) {
+    if (account_ids.isEmpty())
+        return;
+
+    QStringList lines;
+    for (const QString& id : account_ids) {
+        const auto account = AccountManager::instance().get_account(id);
+        if (account.account_id.isEmpty())
+            continue;
+        const QString mode_tag = account.trading_mode == "live" ? tr("LIVE") : tr("PAPER");
+        lines << QString("• %1  [%2]").arg(account.display_name, mode_tag);
+    }
+    if (lines.isEmpty()) {
+        order_entry_->show_order_status(tr("Selected accounts no longer exist"), false);
+        return;
+    }
+
+    const QString side = order.side == trading::OrderSide::Buy ? tr("BUY") : tr("SELL");
+    const QString px = order.order_type == trading::OrderType::Market
+                           ? tr("MARKET")
+                           : QString::number(order.price, 'f', 2);
+    const auto ret = QMessageBox::question(
+        this, tr("Multi-Broker Order"),
+        tr("%1 %2 × %3 @ %4 on %5 account(s):\n\n%6")
+            .arg(side, QString::number(order.quantity), order.symbol, px)
+            .arg(lines.size())
+            .arg(lines.join("\n")),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (ret != QMessageBox::Yes)
+        return;
+
+    // Per-account Semi-Auto gate: queue those accounts for approval, broadcast
+    // the rest immediately (mirrors BroadcastOrderDialog::on_place_order).
+    QStringList immediate;
+    int queued = 0;
+    for (const QString& acct : account_ids) {
+        if (ActionCenter::instance().should_queue(acct, "placeorder")) {
+            const QString pid = ActionCenter::instance().queue_order(
+                acct, "placeorder", ActionCenter::serialize_unified_order(order));
+            if (!pid.isEmpty())
+                ++queued;
+        } else {
+            immediate.append(acct);
+        }
+    }
+    if (immediate.isEmpty()) {
+        order_entry_->show_order_status(tr("%1 order(s) queued for approval").arg(queued), true);
+        return;
+    }
+    order_entry_->show_order_status(tr("Placing on %1 account(s)…").arg(immediate.size()), true);
+
+    QPointer<EquityTradingScreen> self = this;
+    auto order_copy = order;
+    (void)QtConcurrent::run([self, immediate, order_copy, queued]() {
+        const auto results = trading::UnifiedTrading::instance().broadcast_order(immediate, order_copy);
+        QMetaObject::invokeMethod(
+            self,
+            [self, results, queued]() {
+                if (!self)
+                    return;
+                int ok_n = 0;
+                QStringList errors;
+                for (const auto& r : results) {
+                    if (r.response.success)
+                        ++ok_n;
+                    else
+                        errors << QString("%1: %2").arg(r.display_name, r.response.message);
+                }
+                QString msg = tr("✓ %1 placed").arg(ok_n);
+                if (queued > 0)
+                    msg += tr(", %1 queued").arg(queued);
+                if (!errors.isEmpty())
+                    msg += tr(" — ✗ %1").arg(errors.join("; "));
+                self->order_entry_->show_order_status(msg, errors.isEmpty());
+                // Repaint each target's blotter right away (paper panels too).
+                for (const auto& r : results)
+                    trading::DataStreamManager::instance().refresh_portfolio(r.account_id);
+                self->refresh_paper_panels();
+            },
+            Qt::QueuedConnection);
+    });
+}
+
 void EquityTradingScreen::on_chart_buy_requested(double price) {
     open_chart_order_ticket(true, price);
 }

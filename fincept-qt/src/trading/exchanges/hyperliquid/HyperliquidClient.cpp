@@ -63,6 +63,10 @@ void HyperliquidClient::post_json(const QString& url, const QJsonObject& body, J
     static QNetworkAccessManager s_nam;
     QNetworkRequest req(QUrl{url});
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    // 30s transfer timeout so a stalled connection errors instead of hanging a
+    // round forever. Safe for the live venue too: HL REST normally replies in
+    // well under a second, and a timed-out order surfaces as a venue error.
+    req.setTransferTimeout(30000);
     QPointer<HyperliquidClient> self(this);
     auto* reply = s_nam.post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
     connect(reply, &QNetworkReply::finished, this, [reply, cb]() {

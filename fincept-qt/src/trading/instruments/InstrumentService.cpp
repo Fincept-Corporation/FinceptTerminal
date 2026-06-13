@@ -708,6 +708,23 @@ bool InstrumentService::is_loaded(const QString& broker_id) const {
 
 // ── Private ───────────────────────────────────────────────────────────────────
 
+// When two instruments share a numeric token, by_token can only keep one. Dhan
+// reuses securityIds across exchange segments (e.g. 2885 is RELIANCE on NSE_EQ and
+// an expired EURINR option on CDS), so prefer the "primary" tradable — cash/index
+// over derivatives — to keep token→symbol/segment resolution pointing at the
+// equity the feed actually wants instead of a colliding (often expired) option.
+// Lower rank = preferred. Globally-unique-token brokers never hit a collision.
+static int inst_token_collision_rank(const Instrument& i) {
+    switch (i.instrument_type) {
+    case InstrumentType::EQ:    return 0;
+    case InstrumentType::INDEX: return 1;
+    case InstrumentType::FUT:   return 2;
+    case InstrumentType::CE:
+    case InstrumentType::PE:    return 3;
+    default:                    return 4;
+    }
+}
+
 void InstrumentService::build_cache(const QString& broker_id, const QVector<Instrument>& instruments) {
     QMutexLocker lock(&mutex_);
     Cache& cache = caches_[broker_id];
@@ -717,7 +734,12 @@ void InstrumentService::build_cache(const QString& broker_id, const QVector<Inst
 
     for (const auto& inst : instruments) {
         cache.by_symbol.insert({inst.symbol, inst.exchange}, inst);
-        cache.by_token.insert(inst.instrument_token, inst);
+        // by_token is keyed on the bare numeric token; survive cross-segment token
+        // collisions by keeping the higher-priority instrument (see ranker above).
+        auto existing = cache.by_token.find(inst.instrument_token);
+        if (existing == cache.by_token.end() ||
+            inst_token_collision_rank(inst) < inst_token_collision_rank(existing.value()))
+            cache.by_token.insert(inst.instrument_token, inst);
         cache.by_brsymbol.insert({inst.brsymbol, inst.brexchange}, inst);
     }
     cache.loaded = true;

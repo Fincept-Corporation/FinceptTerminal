@@ -26,6 +26,7 @@
 #include "screens/equity_trading/EquityTickerBar.h"
 #include "screens/equity_trading/EquityWatchlist.h"
 #include "screens/common/feeds/FeedPanel.h"
+#include "screens/portfolio_monitor/PortfolioMonitorScreen.h"
 #include "services/feeds/FeedMonitor.h"
 #include "screens/equity_trading/PortfolioReplicationDialog.h"
 #include "services/portfolio/PortfolioService.h"
@@ -139,8 +140,20 @@ void EquityTradingScreen::showEvent(QShowEvent* event) {
                 const int w = s.value("feeds_width").toInt();
                 if (w > 50 && main_splitter_) {
                     auto sizes = main_splitter_->sizes();
-                    if (sizes.size() == 4) {
+                    if (sizes.size() >= 4) {
                         sizes[3] = w;
+                        main_splitter_->setSizes(sizes);
+                    }
+                }
+            }
+            // Restore the unified all-accounts column (visibility + width).
+            if (s.value("unified_visible").toBool()) {
+                unified_btn_->setChecked(true); // toggled() shows the panel
+                const int w = s.value("unified_width").toInt();
+                if (w > 50 && main_splitter_) {
+                    auto sizes = main_splitter_->sizes();
+                    if (sizes.size() >= 5) {
+                        sizes[4] = w;
                         main_splitter_->setSizes(sizes);
                     }
                 }
@@ -202,6 +215,8 @@ void EquityTradingScreen::hideEvent(QHideEvent* event) {
         {"selected_exchange", selected_exchange_},
         {"feeds_visible", feed_panel_ != nullptr && feed_panel_->isVisible()},
         {"feeds_width", main_splitter_ != nullptr ? main_splitter_->sizes().value(3) : 0},
+        {"unified_visible", monitor_panel_ != nullptr && monitor_panel_->isVisible()},
+        {"unified_width", main_splitter_ != nullptr ? main_splitter_->sizes().value(4) : 0},
     });
     LOG_INFO(TAG, "Screen hidden — data streams paused, hub unsubscribed");
 }
@@ -337,6 +352,16 @@ void EquityTradingScreen::setup_ui() {
     feeds_btn_->setCursor(Qt::PointingHandCursor);
     cmd_layout->addWidget(feeds_btn_);
 
+    // UNIFIED — toggles the all-accounts portfolio monitor column (same
+    // interaction as FEEDS: checkable button ↔ collapsible splitter column).
+    unified_btn_ = new QPushButton(tr("UNIFIED"));
+    unified_btn_->setObjectName("eqApiBtn");
+    unified_btn_->setFixedHeight(22);
+    unified_btn_->setCheckable(true);
+    unified_btn_->setCursor(Qt::PointingHandCursor);
+    unified_btn_->setToolTip(tr("All-accounts positions & holdings (every connected broker)"));
+    cmd_layout->addWidget(unified_btn_);
+
     main_layout->addWidget(cmd_bar);
 
     // ── MAIN 3-PANEL SPLITTER ─────────────────────────────────────────────────
@@ -397,11 +422,19 @@ void EquityTradingScreen::setup_ui() {
     feed_panel_->setVisible(false);
     main_splitter->addWidget(feed_panel_);
 
-    main_splitter->setSizes({265, 555, 290, 0});
+    // FAR RIGHT 2: collapsible all-accounts portfolio monitor (hidden by default;
+    // toggled via the UNIFIED command-bar button). Aggregates positions/holdings
+    // across every connected INR broker — see screens/portfolio_monitor.
+    monitor_panel_ = new PortfolioMonitorScreen;
+    monitor_panel_->setVisible(false);
+    main_splitter->addWidget(monitor_panel_);
+
+    main_splitter->setSizes({265, 555, 290, 0, 0});
     main_splitter->setStretchFactor(0, 0);
     main_splitter->setStretchFactor(1, 1);
     main_splitter->setStretchFactor(2, 0);
     main_splitter->setStretchFactor(3, 0);
+    main_splitter->setStretchFactor(4, 0);
 
     main_layout->addWidget(main_splitter, 1);
 
@@ -411,12 +444,37 @@ void EquityTradingScreen::setup_ui() {
         feed_panel_->setVisible(on);
         if (on) {
             auto sizes = main_splitter_->sizes();
-            if (sizes.size() == 4 && sizes[3] < 50) {
+            if (sizes.size() >= 4 && sizes[3] < 50) {
                 sizes[3] = 300;
                 main_splitter_->setSizes(sizes);
             }
         }
     });
+    connect(unified_btn_, &QPushButton::toggled, this, [this](bool on) {
+        if (monitor_float_) {
+            // Detached: ON raises the floating window; OFF closes it (the
+            // close re-docks the panel hidden — see redock_monitor()).
+            if (on) {
+                monitor_float_->raise();
+                monitor_float_->activateWindow();
+            } else {
+                monitor_float_->close();
+            }
+            return;
+        }
+        monitor_panel_->setVisible(on); // showEvent → service activate + refresh
+        if (on) {
+            auto sizes = main_splitter_->sizes();
+            if (sizes.size() >= 5 && sizes[4] < 50) {
+                sizes[4] = 560; // wide enough for the 8-column tree
+                main_splitter_->setSizes(sizes);
+            }
+        }
+    });
+    connect(monitor_panel_, &PortfolioMonitorScreen::float_requested, this,
+            &EquityTradingScreen::float_monitor);
+    connect(monitor_panel_, &PortfolioMonitorScreen::dock_requested, this,
+            [this]() { if (monitor_float_) monitor_float_->close(); }); // close → redock
     connect(accounts_btn_, &QPushButton::clicked, this, &EquityTradingScreen::on_accounts_clicked);
     connect(watchlist_, &EquityWatchlist::symbol_selected, this, &EquityTradingScreen::on_symbol_selected);
     connect(watchlist_, &EquityWatchlist::symbol_added, this, &EquityTradingScreen::on_watchlist_symbol_added);
@@ -426,6 +484,8 @@ void EquityTradingScreen::setup_ui() {
     connect(watchlist_, &EquityWatchlist::watchlist_rename_requested, this, &EquityTradingScreen::on_watchlist_rename);
     connect(watchlist_, &EquityWatchlist::watchlist_delete_requested, this, &EquityTradingScreen::on_watchlist_delete);
     connect(order_entry_, &EquityOrderEntry::order_submitted, this, &EquityTradingScreen::on_order_submitted);
+    connect(order_entry_, &EquityOrderEntry::multi_broker_submit, this,
+            &EquityTradingScreen::on_multi_broker_submit);
     connect(order_entry_, &EquityOrderEntry::strategy_order_submitted, this, &EquityTradingScreen::on_strategy_submitted);
     connect(order_entry_, &EquityOrderEntry::broadcast_requested, this, [this](const trading::UnifiedOrder& order) {
         auto* dlg = new BroadcastOrderDialog(order, this);
@@ -777,18 +837,35 @@ void EquityTradingScreen::update_connection_status() {
     const auto accounts = AccountManager::instance().active_accounts();
     int connected = 0;
     int expired = 0;
+    int errored = 0;
+    QString first_error;
     for (const auto& a : accounts) {
         if (a.state == ConnectionState::Connected)
             ++connected;
         else if (a.state == ConnectionState::TokenExpired)
             ++expired;
+        else if (a.state == ConnectionState::Error) {
+            ++errored;
+            if (first_error.isEmpty())
+                first_error = a.error_message;
+        }
     }
+    // Default: no hover detail. Only the Error branch attaches the broker's reason
+    // (e.g. "no active Kite Connect subscription") as a tooltip.
+    conn_label_->setToolTip(QString());
     if (accounts.isEmpty()) {
         conn_label_->setText(tr("○ NO ACCOUNTS"));
         conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY()));
     } else if (expired > 0 && connected == 0) {
         conn_label_->setText(tr("\xe2\x9a\xa0 TOKEN EXPIRED \xe2\x80\x94 click ACCOUNTS"));
         conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::NEGATIVE()));
+    } else if (errored > 0 && connected == 0) {
+        // Authenticated but the broker refused live market data (e.g. Kite 403 — no
+        // active Kite Connect subscription). Account data may still load; only the
+        // live feed is gated. Full reason on hover.
+        conn_label_->setText(tr("\xe2\x9a\xa0 NO MARKET DATA \xe2\x80\x94 hover for details"));
+        conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::NEGATIVE()));
+        conn_label_->setToolTip(first_error);
     } else if (connected == accounts.size()) {
         conn_label_->setText(tr("● %1/%2 CONNECTED").arg(connected).arg(accounts.size()));
         conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::POSITIVE()));
@@ -854,6 +931,60 @@ void EquityTradingScreen::on_replicate_portfolio_requested() {
     // Reflect any new paper positions/holdings/funds in the panels. Safe to call
     // unconditionally — it no-ops unless the focused account is paper.
     refresh_paper_panels();
+}
+
+// ============================================================================
+// UNIFIED monitor detach / re-dock (feeds pop-out pattern)
+// ============================================================================
+
+void EquityTradingScreen::float_monitor() {
+    if (monitor_float_)
+        return; // already detached
+    // Top-level child window (Qt::Window flag, parented for auto-cleanup —
+    // same construction FloatingFeedWindow uses).
+    monitor_float_ = new QWidget(this, Qt::Window);
+    monitor_float_->setWindowTitle(tr("Unified Portfolio — All Accounts"));
+    monitor_float_->setObjectName("floatingMonitorWindow");
+    monitor_float_->setStyleSheet(
+        QString("#floatingMonitorWindow{background:%1;}").arg(fincept::ui::colors::BG_BASE()));
+    monitor_float_->resize(980, 620);
+    auto* lay = new QVBoxLayout(monitor_float_);
+    lay->setContentsMargins(0, 0, 0, 0);
+    lay->addWidget(monitor_panel_); // reparents out of the splitter
+    monitor_panel_->set_floating(true);
+    monitor_panel_->setVisible(true);
+    monitor_float_->installEventFilter(this); // Close → redock_monitor()
+    monitor_float_->show();
+}
+
+void EquityTradingScreen::redock_monitor() {
+    if (!monitor_float_)
+        return;
+    auto* win = monitor_float_;
+    monitor_float_ = nullptr; // clear first — eventFilter fires during teardown
+    // Back into splitter slot 4 (after the feed column).
+    main_splitter_->insertWidget(4, monitor_panel_);
+    main_splitter_->setStretchFactor(4, 0);
+    monitor_panel_->set_floating(false);
+    const bool show = unified_btn_ != nullptr && unified_btn_->isChecked();
+    monitor_panel_->setVisible(show);
+    if (show) {
+        auto sizes = main_splitter_->sizes();
+        if (sizes.size() >= 5 && sizes[4] < 50) {
+            sizes[4] = 560;
+            main_splitter_->setSizes(sizes);
+        }
+    }
+    win->removeEventFilter(this);
+    win->deleteLater();
+}
+
+bool EquityTradingScreen::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == monitor_float_ && event->type() == QEvent::Close) {
+        redock_monitor();
+        return false; // let the (now empty) window finish closing
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 } // namespace fincept::screens

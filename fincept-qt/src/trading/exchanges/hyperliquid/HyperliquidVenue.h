@@ -40,8 +40,8 @@ class HyperliquidVenue : public QObject,
     /// HyperliquidSigner).
     void set_user_address(const QString& addr);
 
-    /// Bind to the active competition so reconcile_tick can compare local
-    /// positions persisted under that competition against the venue.
+    /// Bind to the active competition — HyperliquidSigner reads the agent
+    /// wallet key from SecureStorage under "alpha_arena/agent_key/<comp_id>".
     void set_competition_id(const QString& comp_id);
 
     /// Open WS, subscribe to public mark/trades feeds, start reconcile loop.
@@ -68,7 +68,9 @@ class HyperliquidVenue : public QObject,
     }
 
   signals:
-    /// Local-vs-remote drift detected by the 30-s reconcile loop.
+    /// Local-vs-remote drift detected by the 30-s reconcile loop. Currently
+    /// never emitted: the legacy local ledger (AlphaArenaRepo) is gone; this
+    /// will be re-wired against fincept::arena::ArenaStore with live trading.
     void position_drift(QString coin, double local_qty, double remote_qty);
 
   private slots:

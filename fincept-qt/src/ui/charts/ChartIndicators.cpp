@@ -23,6 +23,24 @@ QVector<double> sma(const QVector<double>& values, int period) {
     return out;
 }
 
+QVector<double> ema(const QVector<double>& values, int period) {
+    const int n = values.size();
+    QVector<double> out(n, std::numeric_limits<double>::quiet_NaN());
+    if (period < 1 || n < period)
+        return out;
+
+    // Seed with SMA of the first `period` values, exactly as pandas-ta does.
+    double sum = 0;
+    for (int i = 0; i < period; ++i)
+        sum += values[i];
+    out[period - 1] = sum / period;
+
+    const double alpha = 2.0 / (period + 1);
+    for (int i = period; i < n; ++i)
+        out[i] = alpha * values[i] + (1.0 - alpha) * out[i - 1];
+    return out;
+}
+
 QVector<double> vwap(const QVector<double>& highs,
                      const QVector<double>& lows,
                      const QVector<double>& closes,

@@ -390,6 +390,12 @@ ApiResponse<QVector<BrokerHolding>> DhanBroker::get_holdings(const BrokerCredent
     int64_t ts = now_ts();
     auto resp = BrokerHttp::instance().get(BASE + "/v2/holdings", auth_headers(creds));
 
+    // Dhan reports "account has no holdings" as an ERROR envelope ("No holdings
+    // available") rather than an empty array — surface it as a successful empty
+    // result so a connected account isn't flagged as a failed fetch.
+    if (!is_token_expired(resp) && resp.raw_body.contains("No holdings available", Qt::CaseInsensitive))
+        return {true, QVector<BrokerHolding>{}, "", ts};
+
     if (!resp.success || resp.json.value("errorType").toString().length() > 0)
         return {false, std::nullopt, checked_error(resp, "get_holdings failed"), ts};
 
@@ -624,7 +630,11 @@ ApiResponse<QVector<BrokerCandle>> DhanBroker::get_history(const BrokerCredentia
         const int count = qMin(timestamps.size(), closes.size());
         for (int i = 0; i < count; ++i) {
             BrokerCandle c;
-            c.timestamp = static_cast<int64_t>(timestamps[i].toDouble());
+            // Dhan returns epoch SECONDS; BrokerCandle.timestamp is milliseconds
+            // (EquityChartPanel divides by 1000 and rolls the live bar against
+            // currentMSecsSinceEpoch). Without ×1000 candles land in Jan 1970 and
+            // the forming bar rolls on every tick ("chart goes every second").
+            c.timestamp = static_cast<int64_t>(timestamps[i].toDouble()) * 1000;
             c.open = opens.size() > i ? opens[i].toDouble() : 0.0;
             c.high = highs.size() > i ? highs[i].toDouble() : 0.0;
             c.low = lows.size() > i ? lows[i].toDouble() : 0.0;

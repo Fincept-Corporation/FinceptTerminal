@@ -30,8 +30,10 @@
 #include "datahub/DataHubMetaTypes.h"
 #include "mcp/McpInit.h"
 #include "mcp/ToolSelfTest.h"
+#include "services/alpha_arena/ArenaSelftest.h"
 #include "services/feeds/FeedSelfTest.h"
 #include "trading/PaperTradingSelftest.h"
+#include "trading/UnifiedPortfolioService.h"
 #include "trading/replication/PortfolioReplicationSelftest.h"
 #include "network/http/HttpClient.h"
 #include "python/PythonSetupManager.h"
@@ -53,7 +55,7 @@
 #include "services/options/FiiDiiService.h"
 #include "services/options/OISnapshotter.h"
 #include "services/options/OptionChainService.h"
-#include "services/alpha_arena/AlphaArenaEngine.h"
+#include "services/alpha_arena/ArenaEngine.h"
 #include "services/news/NewsService.h"
 #include "services/notebooks/NotebookLibraryService.h"
 #include "services/polymarket/PolymarketWebSocket.h"
@@ -425,10 +427,10 @@ int main(int argc, char* argv[]) {
         fincept::trading::ExchangeSessionManager::instance().ensure_registered_with_hub();
         // Prediction Markets — `prediction:polymarket:*`.
         fincept::services::polymarket::PolymarketWebSocket::instance().ensure_registered_with_hub();
-        // Alpha Arena engine — TickClock, ModelDispatcher, OrderRouter,
-        // PaperVenue. Not a DataHub Producer (callback-style by design).
-        // init() is idempotent; pre-resolves crash-recovery state.
-        fincept::services::alpha_arena::AlphaArenaEngine::instance().init();
+        // Alpha Arena engine — init() is idempotent and only scans for
+        // crashed competitions (no-op with none). Not a DataHub Producer
+        // (callback-style by design).
+        fincept::arena::ArenaEngine::instance().init();
         {
             auto& reg = fincept::services::prediction::PredictionExchangeRegistry::instance();
             reg.register_adapter(
@@ -745,6 +747,9 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v045();
     fincept::register_migration_v046();
     fincept::register_migration_v047();
+    fincept::register_migration_v048();
+    fincept::register_migration_v049();
+    fincept::register_migration_v050();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
@@ -908,8 +913,12 @@ int main(int argc, char* argv[]) {
             return fincept::algo::run_universe_scan_selftest();
         if (qstrcmp(argv[i], "--selftest-paper") == 0)
             return fincept::trading::run_paper_trading_selftest();
+        if (qstrcmp(argv[i], "--selftest-portfolio-monitor") == 0)
+            return fincept::trading::run_portfolio_monitor_selftest();
         if (qstrcmp(argv[i], "--selftest-portfolio-replication") == 0)
             return fincept::trading::replication::run_portfolio_replication_selftest();
+        if (qstrcmp(argv[i], "--selftest-arena") == 0)
+            return fincept::arena::run_arena_selftest();
     }
 
     // Start the scan-watch background service. Runs after Database::open() (which

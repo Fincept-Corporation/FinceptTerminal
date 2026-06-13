@@ -907,6 +907,7 @@ set(STORAGE_SOURCES
     src/storage/repositories/CustomIndexRepository.cpp
     src/storage/repositories/DataMappingRepository.cpp
     src/storage/repositories/AccountRepository.cpp
+    src/storage/repositories/OrderBasketRepository.cpp
 
     # Workflow migration
     src/storage/sqlite/migrations/v008_workflows.cpp
@@ -965,6 +966,9 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v045_scan_watch_universe.cpp
     src/storage/sqlite/migrations/v046_fno_algo.cpp
     src/storage/sqlite/migrations/v047_algo_multileg_trades.cpp
+    src/storage/sqlite/migrations/v048_instruments_exchange_unique.cpp
+    src/storage/sqlite/migrations/v049_order_baskets.cpp
+    src/storage/sqlite/migrations/v050_alpha_arena_rewrite.cpp
 
     # Historical OHLCV data store (Historify, Phase 3 §13)
     src/storage/HistoricalDataStore.cpp
@@ -993,6 +997,7 @@ set(LLM_SERVICE_SOURCES
     src/services/llm/LlmFinceptAsync.cpp
     src/services/llm/LlmToolLoop.cpp
     src/services/llm/ModelCatalog.cpp
+    src/services/llm/ProviderCatalog.cpp
 )
 
 # AI Chat screen — UI for chatting with the LLM service
@@ -1077,6 +1082,8 @@ set(TRADING_SOURCES
     src/trading/OrderMatcher.cpp
     src/trading/BrokerRegistry.cpp
     src/trading/UnifiedTrading.cpp
+    src/trading/UnifiedPortfolioService.cpp
+    src/trading/PortfolioMonitorSelftest.cpp
     src/trading/SmartOrderEngine.cpp
     src/trading/RateLimiter.cpp
     src/trading/ActionCenter.cpp
@@ -1213,18 +1220,20 @@ set(SERVICE_SOURCES
     src/services/cloud/NewsFeedCloudAdapter.cpp
     src/services/cloud/NotebookCloudAdapter.cpp
     src/services/akshare/AkShareService.cpp
-    src/services/alpha_arena/AlphaArenaJson.cpp
-    src/services/alpha_arena/Indicators.cpp
-    src/services/alpha_arena/ContextBuilder.cpp
-    src/services/alpha_arena/AlphaArenaRepo.cpp
-    src/services/alpha_arena/RiskEngine.cpp
-    src/services/alpha_arena/PaperVenue.cpp
-    src/services/alpha_arena/SecretRedemptionServer.cpp
-    src/services/alpha_arena/TickClock.cpp
-    src/services/alpha_arena/ModelDispatcher.cpp
-    src/services/alpha_arena/OrderRouter.cpp
-    src/services/alpha_arena/AlphaArenaEngine.cpp
-    src/services/alpha_arena/AlphaArenaService.cpp
+    src/services/alpha_arena/ArenaStore.cpp
+    src/services/alpha_arena/ArenaIndicators.cpp
+    src/services/alpha_arena/ArenaDecisionParser.cpp
+    src/services/alpha_arena/PaperExchange.cpp
+    src/services/alpha_arena/ArenaRisk.cpp
+    src/services/alpha_arena/ArenaModelRegistry.cpp
+    src/services/alpha_arena/ArenaPrompts.cpp
+    src/services/alpha_arena/ArenaLlmClient.cpp
+    src/services/alpha_arena/ArenaMarketData.cpp
+    src/services/alpha_arena/ArenaEngine.cpp
+    src/services/alpha_arena/HyperliquidLiveVenue.cpp
+    # Header-only Q_OBJECT interface — listed so AUTOMOC scans it (no sibling .cpp).
+    src/services/alpha_arena/ArenaMarketDataIface.h
+    src/services/alpha_arena/ArenaSelftest.cpp
     src/services/asia_markets/AsiaMarketsService.cpp
     src/services/crypto/TotpService.cpp
     src/services/python_cli/PythonCliService.cpp
@@ -1636,8 +1645,10 @@ set(SCREEN_SOURCES
     src/screens/common/PaperBlotterPanel.cpp
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
+    src/screens/equity_trading/BasketOrdersDialog.cpp
     src/screens/equity_trading/OrderConfirmDialog.cpp
     src/screens/equity_trading/PortfolioReplicationDialog.cpp
+    src/screens/portfolio_monitor/PortfolioMonitorScreen.cpp
     # Feed monitor (reusable across screens)
     src/screens/common/feeds/FeedCardView.cpp
     src/screens/common/feeds/FeedTableView.cpp
@@ -1854,9 +1865,10 @@ set(SCREEN_SOURCES
 
     # Alpha Arena
     src/screens/alpha_arena/AlphaArenaScreen.cpp
-    src/screens/alpha_arena/panels/LeaderboardPanel.cpp
-    src/screens/alpha_arena/panels/ModelChatPanel.cpp
-    src/screens/alpha_arena/panels/StatePanels.cpp
+    src/screens/alpha_arena/EquityCurveWidget.cpp
+    src/screens/alpha_arena/LeaderboardCards.cpp
+    src/screens/alpha_arena/ArenaTabs.cpp
+    src/screens/alpha_arena/NewCompetitionWizard.cpp
     src/screens/alpha_arena/panels/LiveModeGateDialog.cpp
 
     # Alternative Investments — partial-class split; see header.
@@ -2058,9 +2070,10 @@ set_source_files_properties(
     src/screens/algo_trading/StrategyListPanel.cpp
     src/screens/algo_trading/AlgoDeployDialog.cpp
     src/screens/alpha_arena/AlphaArenaScreen.cpp
-    src/screens/alpha_arena/panels/LeaderboardPanel.cpp
-    src/screens/alpha_arena/panels/ModelChatPanel.cpp
-    src/screens/alpha_arena/panels/StatePanels.cpp
+    src/screens/alpha_arena/EquityCurveWidget.cpp
+    src/screens/alpha_arena/LeaderboardCards.cpp
+    src/screens/alpha_arena/ArenaTabs.cpp
+    src/screens/alpha_arena/NewCompetitionWizard.cpp
     src/screens/alpha_arena/panels/LiveModeGateDialog.cpp
     src/screens/alt_investments/AltInvestmentsScreen.cpp
     src/screens/alt_investments/AltInvestmentsScreen_Layout.cpp
@@ -2110,8 +2123,10 @@ set_source_files_properties(
     src/screens/common/PaperBlotterPanel.cpp
     src/screens/equity_trading/AccountManagementDialog.cpp
     src/screens/equity_trading/BroadcastOrderDialog.cpp
+    src/screens/equity_trading/BasketOrdersDialog.cpp
     src/screens/equity_trading/OrderConfirmDialog.cpp
     src/screens/equity_trading/PortfolioReplicationDialog.cpp
+    src/screens/portfolio_monitor/PortfolioMonitorScreen.cpp
     # Feed monitor (reusable across screens)
     src/screens/common/feeds/FeedCardView.cpp
     src/screens/common/feeds/FeedTableView.cpp
@@ -2468,6 +2483,8 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v045_scan_watch_universe.cpp
     src/storage/sqlite/migrations/v046_fno_algo.cpp
     src/storage/sqlite/migrations/v047_algo_multileg_trades.cpp
+    src/storage/sqlite/migrations/v048_instruments_exchange_unique.cpp
+    src/storage/sqlite/migrations/v050_alpha_arena_rewrite.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
@@ -2540,18 +2557,18 @@ set_source_files_properties(
 # and Q_OBJECT-bearing helpers — exclude from unity to avoid the kind of
 # ODR clashes that masked compile errors in early Phase 5c integration.
 set_source_files_properties(
-    src/services/alpha_arena/AlphaArenaJson.cpp
-    src/services/alpha_arena/Indicators.cpp
-    src/services/alpha_arena/ContextBuilder.cpp
-    src/services/alpha_arena/AlphaArenaRepo.cpp
-    src/services/alpha_arena/RiskEngine.cpp
-    src/services/alpha_arena/PaperVenue.cpp
-    src/services/alpha_arena/SecretRedemptionServer.cpp
-    src/services/alpha_arena/TickClock.cpp
-    src/services/alpha_arena/ModelDispatcher.cpp
-    src/services/alpha_arena/OrderRouter.cpp
-    src/services/alpha_arena/AlphaArenaEngine.cpp
-    src/services/alpha_arena/AlphaArenaService.cpp
+    src/services/alpha_arena/ArenaStore.cpp
+    src/services/alpha_arena/ArenaIndicators.cpp
+    src/services/alpha_arena/ArenaDecisionParser.cpp
+    src/services/alpha_arena/PaperExchange.cpp
+    src/services/alpha_arena/ArenaRisk.cpp
+    src/services/alpha_arena/ArenaModelRegistry.cpp
+    src/services/alpha_arena/ArenaPrompts.cpp
+    src/services/alpha_arena/ArenaLlmClient.cpp
+    src/services/alpha_arena/ArenaMarketData.cpp
+    src/services/alpha_arena/ArenaEngine.cpp
+    src/services/alpha_arena/HyperliquidLiveVenue.cpp
+    src/services/alpha_arena/ArenaSelftest.cpp
     src/trading/exchanges/hyperliquid/HyperliquidClient.cpp
     src/trading/exchanges/hyperliquid/Keccak256.cpp
     src/trading/exchanges/hyperliquid/HyperliquidSigner.cpp
@@ -2617,6 +2634,11 @@ set_source_files_properties(
     src/algo_engine/fno/FnoLegResolver.cpp
     src/trading/PaperTradingSelftest.cpp
     src/trading/PaperMarkService.cpp
+    # Portfolio Monitor: file-local helpers (signed_qty/approx) would collide with
+    # sibling files' anonymous-namespace helpers inside a unity blob. (The screen
+    # cpp is excluded via the screens block above.)
+    src/trading/UnifiedPortfolioService.cpp
+    src/trading/PortfolioMonitorSelftest.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 

@@ -194,6 +194,23 @@ void ZerodhaWebSocket::send_unsubscribe(const QVector<quint32>& tokens) {
 }
 
 void ZerodhaWebSocket::send_mode(const QVector<quint32>& tokens) {
+    // Per-token mode: the one full_mode_token_ (selected symbol) streams "full"
+    // (184-byte, 5-level market depth) so the order book / depth table has data;
+    // every other token streams "quote" (44-byte LTP+OHLC+volume). "full" packets
+    // are 4x heavier to parse on the GUI thread per tick, so keeping the bulk on
+    // "quote" preserves snappy live LTP updates while still feeding depth.
+    QVector<quint32> full_toks, quote_toks;
+    for (quint32 t : tokens) {
+        if (full_mode_token_ != 0 && t == full_mode_token_)
+            full_toks.append(t);
+        else
+            quote_toks.append(t);
+    }
+    send_mode_batch("quote", quote_toks);
+    send_mode_batch("full", full_toks);
+}
+
+void ZerodhaWebSocket::send_mode_batch(const char* mode, const QVector<quint32>& tokens) {
     for (int start = 0; start < tokens.size(); start += kBatchSize) {
         QJsonArray arr;
         for (int j = start; j < std::min(start + kBatchSize, int(tokens.size())); ++j)
@@ -201,11 +218,30 @@ void ZerodhaWebSocket::send_mode(const QVector<quint32>& tokens) {
         QJsonObject msg;
         msg["a"] = "mode";
         QJsonArray v;
-        v.append("full");
+        v.append(QString::fromLatin1(mode));
         v.append(arr);
         msg["v"] = v;
         ws_->send(QJsonDocument(msg).toJson(QJsonDocument::Compact));
     }
+}
+
+void ZerodhaWebSocket::set_full_mode_token(quint32 token) {
+    if (token == full_mode_token_)
+        return;
+    const quint32 old = full_mode_token_;
+    full_mode_token_ = token;
+    if (!is_connected())
+        return; // mode is applied on the next (re)subscribe
+    // Re-send mode for just the affected tokens: the previous full token drops back
+    // to "quote", the new one moves to "full". send_mode() partitions by the
+    // (now updated) full_mode_token_.
+    QVector<quint32> changed;
+    if (old != 0 && subscribed_tokens_.contains(old))
+        changed.append(old);
+    if (token != 0 && subscribed_tokens_.contains(token))
+        changed.append(token);
+    if (!changed.isEmpty())
+        send_mode(changed);
 }
 
 void ZerodhaWebSocket::resubscribe_all() {
