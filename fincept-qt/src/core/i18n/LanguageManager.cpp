@@ -11,7 +11,8 @@ namespace fincept::i18n {
 
 namespace {
 constexpr const char* kSettingsKey = "general.language";
-constexpr const char* kDefaultCode = "en";
+// Default language is forced to Thai on first launch. Only Thai + English ship.
+constexpr const char* kDefaultCode = "th_TH";
 } // namespace
 
 LanguageManager& LanguageManager::instance() {
@@ -20,53 +21,44 @@ LanguageManager& LanguageManager::instance() {
 }
 
 QStringList LanguageManager::supported_languages() {
-    return {QStringLiteral("en"),
-            QStringLiteral("zh_CN"),
-            QStringLiteral("zh_HK"),
-            QStringLiteral("zh_TW"),
-            QStringLiteral("id_ID"),
-            QStringLiteral("vi_VN"),
-            QStringLiteral("tr_TR"),
-            QStringLiteral("de_DE"),
-            QStringLiteral("pt_BR"),
-            QStringLiteral("es_ES"),
-            QStringLiteral("fr_FR"),
-            QStringLiteral("it_IT")};
+    // Only Thai and English ship. Thai is the default; English is the base
+    // (source) language with no .qm.
+    return {QStringLiteral("th_TH"), QStringLiteral("en")};
 }
 
 QString LanguageManager::native_name(const QString& code) {
+    if (code == QLatin1String("th_TH")) return QString::fromUtf8("\xe0\xb9\x84\xe0\xb8\x97\xe0\xb8\xa2"); // ไทย
     if (code == QLatin1String("en"))    return QStringLiteral("English");
-    if (code == QLatin1String("zh_CN")) return QString::fromUtf8("\xe7\xae\x80\xe4\xbd\x93\xe4\xb8\xad\xe6\x96\x87"); // 简体中文
-    if (code == QLatin1String("zh_HK")) return QString::fromUtf8("\xe7\xb9\x81\xe9\xab\x94\xe4\xb8\xad\xe6\x96\x87 (\xe9\xa6\x99\xe6\xb8\xaf)"); // 繁體中文 (香港)
-    if (code == QLatin1String("zh_TW")) return QString::fromUtf8("\xe7\xb9\x81\xe9\xab\x94\xe4\xb8\xad\xe6\x96\x87 (\xe5\x8f\xb0\xe7\x81\xa3)"); // 繁體中文 (台灣)
-    if (code == QLatin1String("id_ID")) return QStringLiteral("Bahasa Indonesia");
-    if (code == QLatin1String("vi_VN")) return QString::fromUtf8("Ti\xe1\xba\xbfng Vi\xe1\xbb\x87t"); // Tiếng Việt
-    if (code == QLatin1String("tr_TR")) return QString::fromUtf8("T\xc3\xbcrk\xc3\xa7""e"); // Türkçe
-    if (code == QLatin1String("de_DE")) return QStringLiteral("Deutsch");
-    if (code == QLatin1String("pt_BR")) return QString::fromUtf8("Portugu\xc3\xaas (Brasil)"); // Português (Brasil)
-    if (code == QLatin1String("es_ES")) return QString::fromUtf8("Espa\xc3\xb1ol"); // Español
-    if (code == QLatin1String("fr_FR")) return QString::fromUtf8("Fran\xc3\xa7""ais"); // Français
-    if (code == QLatin1String("it_IT")) return QStringLiteral("Italiano");
     return code;
 }
 
 void LanguageManager::initialize() {
-    // Read the persisted preference. If it's set (even to "en"), respect it
-    // — the user has made an explicit choice we should not override.
-    const auto r = SettingsRepository::instance().get(
-        QString::fromLatin1(kSettingsKey), QString());
-    QString code = r.is_ok() ? r.value() : QString();
+    auto& repo = SettingsRepository::instance();
 
-    if (code.isEmpty()) {
-        // No saved preference — try the OS locale. The Settings save in
-        // set_language() will record whatever we picked, so subsequent runs
-        // skip this detection and honour the explicit value.
-        code = detect_system_language();
-        if (!code.isEmpty())
-            LOG_INFO("i18n", QStringLiteral("First launch — detected system language: %1").arg(code));
+    // One-time migration to the Thai-default policy. Older builds auto-detected
+    // and persisted the OS locale (commonly "en"), which would otherwise win
+    // over the forced Thai default. On the first run under this policy we drop
+    // that stale value and force Thai. Explicit language switches the user makes
+    // afterwards persist normally via set_language() and are honoured.
+    const auto migrated = repo.get(QStringLiteral("general.language_thai_default_v1"), QString());
+    const bool already_migrated = migrated.is_ok() && migrated.value() == QLatin1String("1");
+
+    QString code;
+    if (already_migrated) {
+        const auto r = repo.get(QString::fromLatin1(kSettingsKey), QString());
+        code = r.is_ok() ? r.value() : QString();
+    } else {
+        repo.set(QStringLiteral("general.language_thai_default_v1"), QStringLiteral("1"),
+                 QStringLiteral("general"));
+        LOG_INFO("i18n", QStringLiteral("Applying Thai-default policy — forcing default language"));
     }
-    if (code.isEmpty())
-        code = QString::fromLatin1(kDefaultCode);
+
+    // Only Thai + English ship. Anything unsupported (first launch, stale locale,
+    // or the migration above) falls back to the forced Thai default.
+    if (!supported_languages().contains(code)) {
+        code = QString::fromLatin1(kDefaultCode); // force Thai default
+        LOG_INFO("i18n", QStringLiteral("Defaulting language to %1").arg(code));
+    }
 
     set_language(code);
 }
