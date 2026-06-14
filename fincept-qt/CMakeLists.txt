@@ -2825,17 +2825,7 @@ target_include_directories(FinceptTerminal PRIVATE
 # rewritten by scanning the C++. English is the source language; no .qm exists
 # for it and LanguageManager falls back to the in-source tr() literals.
 set(FINCEPT_TS_FILES
-    translations/fincept_zh_CN.ts
-    translations/fincept_zh_HK.ts
-    translations/fincept_zh_TW.ts
-    translations/fincept_id_ID.ts
-    translations/fincept_vi_VN.ts
-    translations/fincept_tr_TR.ts
-    translations/fincept_de_DE.ts
-    translations/fincept_pt_BR.ts
-    translations/fincept_es_ES.ts
-    translations/fincept_fr_FR.ts
-    translations/fincept_it_IT.ts
+    translations/fincept_th_TH.ts
 )
 qt6_add_lrelease(FinceptTerminal
     TS_FILES ${FINCEPT_TS_FILES}

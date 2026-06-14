@@ -871,7 +871,14 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
         // InactivityGuard flag (which is the single source of truth for
         // "is the terminal locked?"); skipping the prompt here just
         // mirrors the unlocked state into the new frame.
-        if (auth_mgr.is_authenticated() && auth::PinManager::instance().has_pin()
+        if (auth::AuthManager::dev_bypass_enabled() && auth_mgr.is_authenticated()) {
+            // DEV BYPASS (FINCEPT_DEV_NO_LOGIN=1) — no PIN gate, straight to the
+            // dashboard. on_auth_state_changed() applies the same routing for any
+            // later auth refresh.
+            pin_gate_cleared_ = true;
+            set_shell_visible(true);
+            stack_->setCurrentIndex(1);
+        } else if (auth_mgr.is_authenticated() && auth::PinManager::instance().has_pin()
             && !pin_gate_cleared_) {
             LOG_INFO("WindowFrame", "Session restored — showing PIN unlock");
             lock_screen_->show_unlock();

@@ -49,6 +49,19 @@ void WindowFrame::on_auth_state_changed() {
     if (auth.is_loading())
         return;
 
+    // DEV BYPASS (FINCEPT_DEV_NO_LOGIN=1): the guest session is authenticated
+    // with an enterprise plan and no PIN — route straight to the dashboard and
+    // disable the inactivity auto-lock so the terminal never re-prompts.
+    if (auth::AuthManager::dev_bypass_enabled() && auth.is_authenticated()) {
+        locked_ = false;
+        pin_gate_cleared_ = true;
+        auth::InactivityGuard::instance().set_enabled(false);
+        auth::InactivityGuard::instance().set_terminal_locked(false);
+        set_shell_visible(true);
+        stack_->setCurrentIndex(1);
+        return;
+    }
+
     if (auth.is_authenticated()) {
         // Don't redirect if user is already on the app stack (dashboard/workspace
         // at index 1, or chat mode at index 2) — UNLESS the PIN gate hasn't been
