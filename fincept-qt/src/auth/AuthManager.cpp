@@ -25,6 +25,14 @@ AuthManager& AuthManager::instance() {
 
 AuthManager::AuthManager() {}
 
+bool AuthManager::dev_bypass_enabled() {
+    // DEV-ONLY: when FINCEPT_DEV_NO_LOGIN=1, skip the login + PIN gate and run
+    // with an in-memory guest enterprise session. Read once and cached so the
+    // value is stable for the whole process. Never enabled by default.
+    static const bool on = qEnvironmentVariableIntValue("FINCEPT_DEV_NO_LOGIN") == 1;
+    return on;
+}
+
 void AuthManager::set_loading(bool v) {
     if (is_loading_ != v) {
         is_loading_ = v;
@@ -196,12 +204,32 @@ void AuthManager::clear_session() {
 }
 
 bool AuthManager::needs_pin_setup() const {
+    if (dev_bypass_enabled())
+        return false; // dev bypass: never gate on PIN
     return session_.authenticated && !PinManager::instance().has_pin();
 }
 
 // ── Initialize ───────────────────────────────────────────────────────────────
 
 void AuthManager::initialize() {
+    if (dev_bypass_enabled()) {
+        LOG_WARN("Auth",
+                 "DEV BYPASS active (FINCEPT_DEV_NO_LOGIN=1) — skipping login/PIN and running "
+                 "with an in-memory guest enterprise session. DO NOT use in production.");
+        session_ = SessionData{};
+        session_.authenticated = true;
+        session_.device_id = generate_device_id();
+        session_.user_info.username = "dev";
+        session_.user_info.email = "dev@local";
+        session_.user_info.account_type = "enterprise";
+        session_.user_info.is_verified = true;
+        session_.subscription.account_type = "enterprise";
+        session_.has_subscription = true;
+        set_loading(false);
+        emit auth_state_changed();
+        return;
+    }
+
     set_loading(true);
     load_session();
 

@@ -18,6 +18,13 @@ class AuthManager : public QObject {
     bool is_authenticated() const { return session_.authenticated; }
     bool is_loading() const { return is_loading_; }
 
+    /// DEV-ONLY escape hatch. Returns true when the environment variable
+    /// FINCEPT_DEV_NO_LOGIN=1 is set, in which case initialize() injects an
+    /// in-memory "guest" enterprise session and the shell skips the login +
+    /// PIN gate entirely. Read once and cached for the whole process. Never
+    /// enabled by default — intended only for local development/testing.
+    static bool dev_bypass_enabled();
+
     /// Resolve the Fincept api_key for LLM/service callers WITHOUT touching the
     /// plaintext SQLite settings table. Prefers the live in-memory session;
     /// falls back to the encrypted SecureStorage copy (which load_session also

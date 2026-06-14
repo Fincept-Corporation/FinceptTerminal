@@ -20,6 +20,10 @@ cmake_install.cmake
 CTestTestfile.cmake
 _deps/
 
+# ── Local no-sudo dev toolchain (micromamba env + aqt Qt live at repo root) ──
+/.mamba/
+/bin/
+
 # ── Compiled binaries & libraries ───────────────────────────
 *.exe
 *.dll
