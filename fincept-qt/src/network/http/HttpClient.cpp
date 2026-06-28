@@ -22,6 +22,7 @@ QNetworkRequest HttpClient::build_request(const QString& url) const {
     QNetworkRequest req{qurl};
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     req.setHeader(QNetworkRequest::UserAgentHeader, "FinceptTerminal/4.0");
+    req.setTransferTimeout(30000);
 
     // Only attach auth on same-host requests — third-party absolute URLs (Slack/Discord/webhooks)
     // share this singleton and must NOT receive X-API-Key / X-Session-Token.
