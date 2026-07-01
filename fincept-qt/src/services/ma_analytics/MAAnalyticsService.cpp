@@ -301,6 +301,48 @@ void MAAnalyticsService::run_regression(const QJsonObject& params) {
                     "regression");
 }
 
+// Financial Statement Analysis
+
+void MAAnalyticsService::analyze_income_statement(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/financial_analysis_cli.py",
+        "analyze_income",
+        params,
+        "income_analysis");
+}
+
+void MAAnalyticsService::analyze_balance_sheet(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/financial_analysis_cli.py",
+        "analyze_balance",
+        params,
+        "balance_analysis");
+}
+
+void MAAnalyticsService::analyze_cashflow_statement(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/financial_analysis_cli.py",
+        "analyze_cashflow",
+        params,
+        "cashflow_analysis");
+}
+
+void MAAnalyticsService::analyze_comprehensive_financials(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/financial_analysis_cli.py",
+        "analyze_comprehensive",
+        params,
+        "financial_analysis");
+}
+
+void MAAnalyticsService::get_financial_key_metrics(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/financial_analysis_cli.py",
+        "get_key_metrics",
+        params,
+        "financial_key_metrics");
+}
+
 // ── Deal Comparison ──────────────────────────────────────────────────────────
 void MAAnalyticsService::compare_deals(const QJsonObject& params) {
     run_python_json("Analytics/corporateFinance/deal_comparison/deal_comparator.py", "compare", params,

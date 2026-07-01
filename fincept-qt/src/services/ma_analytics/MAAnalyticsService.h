@@ -86,6 +86,13 @@ class MAAnalyticsService : public QObject
     void run_monte_carlo(const QJsonObject& params);
     void run_regression(const QJsonObject& params);
 
+    // Financial Statement Analysis
+    void analyze_income_statement(const QJsonObject& params);
+    void analyze_balance_sheet(const QJsonObject& params);
+    void analyze_cashflow_statement(const QJsonObject& params);
+    void analyze_comprehensive_financials(const QJsonObject& params);
+    void get_financial_key_metrics(const QJsonObject& params);
+
     // ── Deal Comparison ─────────────────────────────────────────────────────
     void compare_deals(const QJsonObject& params);
     void rank_deals(const QJsonObject& params);
