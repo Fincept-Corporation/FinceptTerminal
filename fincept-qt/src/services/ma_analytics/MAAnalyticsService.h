@@ -92,6 +92,13 @@ class MAAnalyticsService : public QObject
     void analyze_cashflow_statement(const QJsonObject& params);
     void analyze_comprehensive_financials(const QJsonObject& params);
     void get_financial_key_metrics(const QJsonObject& params);
+    
+    // QuantStats Analytics
+    void quantstats_stats(const QJsonObject& params);
+    void quantstats_returns(const QJsonObject& params);
+    void quantstats_drawdown(const QJsonObject& params);
+    void quantstats_rolling(const QJsonObject& params);
+    void quantstats_full_report(const QJsonObject& params);
 
     // ── Deal Comparison ─────────────────────────────────────────────────────
     void compare_deals(const QJsonObject& params);

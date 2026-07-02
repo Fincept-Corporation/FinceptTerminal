@@ -343,6 +343,48 @@ void MAAnalyticsService::get_financial_key_metrics(const QJsonObject& params) {
         "financial_key_metrics");
 }
 
+// QuantStats Analytics
+
+void MAAnalyticsService::quantstats_stats(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/quantstats_analytics.py",
+        "stats",
+        params,
+        "quantstats_stats");
+}
+
+void MAAnalyticsService::quantstats_returns(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/quantstats_analytics.py",
+        "returns",
+        params,
+        "quantstats_returns");
+}
+
+void MAAnalyticsService::quantstats_drawdown(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/quantstats_analytics.py",
+        "drawdown",
+        params,
+        "quantstats_drawdown");
+}
+
+void MAAnalyticsService::quantstats_rolling(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/quantstats_analytics.py",
+        "rolling",
+        params,
+        "quantstats_rolling");
+}
+
+void MAAnalyticsService::quantstats_full_report(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/quantstats_analytics.py",
+        "full_report",
+        params,
+        "quantstats_full_report");
+}
+
 // ── Deal Comparison ──────────────────────────────────────────────────────────
 void MAAnalyticsService::compare_deals(const QJsonObject& params) {
     run_python_json("Analytics/corporateFinance/deal_comparison/deal_comparator.py", "compare", params,
