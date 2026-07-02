@@ -385,6 +385,48 @@ void MAAnalyticsService::quantstats_full_report(const QJsonObject& params) {
         "quantstats_full_report");
 }
 
+// Statsmodels Analytics
+
+void MAAnalyticsService::fit_arima(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/statsmodels_cli.py",
+        "arima",
+        params,
+        "arima");
+}
+
+void MAAnalyticsService::forecast_arima(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/statsmodels_cli.py",
+        "arima_forecast",
+        params,
+        "arima_forecast");
+}
+
+void MAAnalyticsService::fit_ols(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/statsmodels_cli.py",
+        "ols",
+        params,
+        "ols");
+}
+
+void MAAnalyticsService::descriptive_statistics(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/statsmodels_cli.py",
+        "descriptive",
+        params,
+        "descriptive_statistics");
+}
+
+void MAAnalyticsService::perform_pca(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/statsmodels_cli.py",
+        "pca",
+        params,
+        "pca");
+}
+
 // ── Deal Comparison ──────────────────────────────────────────────────────────
 void MAAnalyticsService::compare_deals(const QJsonObject& params) {
     run_python_json("Analytics/corporateFinance/deal_comparison/deal_comparator.py", "compare", params,
