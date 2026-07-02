@@ -419,6 +419,56 @@ void MAAnalyticsService::descriptive_statistics(const QJsonObject& params) {
         "descriptive_statistics");
 }
 
+// FFN Analytics
+
+void MAAnalyticsService::calculate_ffn_performance(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/ffn_wrapper/ffn_service.py",
+        "calculate_performance",
+        params,
+        "ffn_performance");
+}
+
+void MAAnalyticsService::calculate_ffn_drawdowns(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/ffn_wrapper/ffn_service.py",
+        "calculate_drawdowns",
+        params,
+        "ffn_drawdowns");
+}
+
+void MAAnalyticsService::calculate_ffn_rolling_metrics(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/ffn_wrapper/ffn_service.py",
+        "calculate_rolling_metrics",
+        params,
+        "ffn_rolling_metrics");
+}
+
+void MAAnalyticsService::calculate_ffn_risk_metrics(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/ffn_wrapper/ffn_service.py",
+        "risk_metrics",
+        params,
+        "ffn_risk_metrics");
+}
+
+void MAAnalyticsService::optimize_ffn_portfolio(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/ffn_wrapper/ffn_service.py",
+        "portfolio_optimization",
+        params,
+        "ffn_portfolio");
+}
+
+void MAAnalyticsService::run_ffn_full_analysis(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/ffn_wrapper/ffn_service.py",
+        "full_analysis",
+        params,
+        "ffn_full_analysis");
+}
+
 void MAAnalyticsService::perform_pca(const QJsonObject& params) {
     run_python_json(
         "Analytics/statsmodels_cli.py",

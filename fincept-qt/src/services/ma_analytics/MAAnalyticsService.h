@@ -106,6 +106,14 @@ class MAAnalyticsService : public QObject
     void fit_ols(const QJsonObject& params);
     void descriptive_statistics(const QJsonObject& params);
     void perform_pca(const QJsonObject& params);
+    
+    // FFN Analytics
+    void calculate_ffn_performance(const QJsonObject& params);
+    void calculate_ffn_drawdowns(const QJsonObject& params);
+    void calculate_ffn_rolling_metrics(const QJsonObject& params);
+    void calculate_ffn_risk_metrics(const QJsonObject& params);
+    void optimize_ffn_portfolio(const QJsonObject& params);
+    void run_ffn_full_analysis(const QJsonObject& params);
 
     // ── Deal Comparison ─────────────────────────────────────────────────────
     void compare_deals(const QJsonObject& params);
