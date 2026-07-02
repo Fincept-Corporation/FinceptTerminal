@@ -115,6 +115,14 @@ class MAAnalyticsService : public QObject
     void optimize_ffn_portfolio(const QJsonObject& params);
     void run_ffn_full_analysis(const QJsonObject& params);
 
+    // Functime Analytics
+    void functime_anomaly_detection(const QJsonObject& params);
+    void functime_forecast(const QJsonObject& params);
+    void functime_seasonality(const QJsonObject& params);
+    void functime_metrics(const QJsonObject& params);
+    void functime_confidence_intervals(const QJsonObject& params);
+    void functime_stationarity(const QJsonObject& params);
+
     // ── Deal Comparison ─────────────────────────────────────────────────────
     void compare_deals(const QJsonObject& params);
     void rank_deals(const QJsonObject& params);

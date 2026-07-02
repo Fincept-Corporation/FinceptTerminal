@@ -477,6 +477,56 @@ void MAAnalyticsService::perform_pca(const QJsonObject& params) {
         "pca");
 }
 
+// Functime Analytics
+
+void MAAnalyticsService::functime_forecast(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/functime_wrapper/functime_service.py",
+        "forecast",
+        params,
+        "functime_forecast");
+}
+
+void MAAnalyticsService::functime_anomaly_detection(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/functime_wrapper/functime_service.py",
+        "anomaly_detection",
+        params,
+        "functime_anomaly_detection");
+}
+
+void MAAnalyticsService::functime_seasonality(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/functime_wrapper/functime_service.py",
+        "seasonality",
+        params,
+        "functime_seasonality");
+}
+
+void MAAnalyticsService::functime_metrics(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/functime_wrapper/functime_service.py",
+        "metrics",
+        params,
+        "functime_metrics");
+}
+
+void MAAnalyticsService::functime_confidence_intervals(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/functime_wrapper/functime_service.py",
+        "confidence_intervals",
+        params,
+        "functime_confidence_intervals");
+}
+
+void MAAnalyticsService::functime_stationarity(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/functime_wrapper/functime_service.py",
+        "stationarity",
+        params,
+        "functime_stationarity");
+}
+
 // ── Deal Comparison ──────────────────────────────────────────────────────────
 void MAAnalyticsService::compare_deals(const QJsonObject& params) {
     run_python_json("Analytics/corporateFinance/deal_comparison/deal_comparator.py", "compare", params,
