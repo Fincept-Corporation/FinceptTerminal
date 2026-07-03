@@ -151,6 +151,14 @@ class MAAnalyticsService : public QObject
     void fortitudo_efficient_frontier(const QJsonObject& params);
     void fortitudo_exp_decay_probabilities(const QJsonObject& params);
 
+    // PyPME Analytics
+    void calculate_pme(const QJsonObject& params);
+    void calculate_verbose_pme(const QJsonObject& params);
+    void calculate_xpme(const QJsonObject& params);
+    void calculate_verbose_xpme(const QJsonObject& params);
+    void calculate_tessa_xpme(const QJsonObject& params);
+    void calculate_tessa_verbose_xpme(const QJsonObject& params);
+
     // ── Deal Comparison ─────────────────────────────────────────────────────
     void compare_deals(const QJsonObject& params);
     void rank_deals(const QJsonObject& params);

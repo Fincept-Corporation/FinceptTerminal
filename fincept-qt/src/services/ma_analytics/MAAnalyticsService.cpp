@@ -701,6 +701,55 @@ void MAAnalyticsService::fortitudo_exp_decay_probabilities(const QJsonObject& pa
         "exp_decay_probabilities");
 }
 
+// PyPME Analytics
+void MAAnalyticsService::calculate_pme(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/pypme_wrapper/pypme_service.py",
+        "pme",
+        params,
+        "pme");
+}
+
+void MAAnalyticsService::calculate_verbose_pme(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/pypme_wrapper/pypme_service.py",
+        "verbose_pme",
+        params,
+        "verbose_pme");
+}
+
+void MAAnalyticsService::calculate_xpme(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/pypme_wrapper/pypme_service.py",
+        "xpme",
+        params,
+        "xpme");
+}
+
+void MAAnalyticsService::calculate_verbose_xpme(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/pypme_wrapper/pypme_service.py",
+        "verbose_xpme",
+        params,
+        "verbose_xpme");
+}
+
+void MAAnalyticsService::calculate_tessa_xpme(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/pypme_wrapper/pypme_service.py",
+        "tessa_xpme",
+        params,
+        "tessa_xpme");
+}
+
+void MAAnalyticsService::calculate_tessa_verbose_xpme(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/pypme_wrapper/pypme_service.py",
+        "tessa_verbose_xpme",
+        params,
+        "tessa_verbose_xpme");
+}
+
 // ── Deal Comparison ──────────────────────────────────────────────────────────
 void MAAnalyticsService::compare_deals(const QJsonObject& params) {
     run_python_json("Analytics/corporateFinance/deal_comparison/deal_comparator.py", "compare", params,
