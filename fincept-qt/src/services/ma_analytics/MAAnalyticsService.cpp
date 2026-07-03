@@ -588,7 +588,6 @@ void MAAnalyticsService::generate_portfolio_report(const QJsonObject& params) {
 }
 
 // GS Quant Analytics
-
 void MAAnalyticsService::calculate_risk_metrics(const QJsonObject& params) {
     run_python_json(
         "Analytics/gs_quant_wrapper/gs_quant_service.py",
@@ -643,6 +642,63 @@ void MAAnalyticsService::calculate_statistics(const QJsonObject& params) {
         "statistics",
         params,
         "gs_statistics");
+}
+
+// Fortitudo Tech Analytics
+void MAAnalyticsService::fortitudo_check_status(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        "check_status",
+        params,
+        "fortitudo_check_status");
+}
+
+void MAAnalyticsService::fortitudo_portfolio_metrics(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        "portfolio_metrics",
+        params,
+        "fortitudo_portfolio_metrics");
+}
+
+void MAAnalyticsService::fortitudo_covariance_matrix(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        "covariance_matrix",
+        params,
+        "fortitudo_covariance_matrix");
+}
+
+void MAAnalyticsService::fortitudo_mean_variance_optimize(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        "mean_variance_optimize",
+        params,
+        "mean_variance_optimize");
+}
+
+void MAAnalyticsService::fortitudo_mean_cvar_optimize(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        "mean_cvar_optimize",
+        params,
+        "mean_cvar_optimize");
+}
+
+void MAAnalyticsService::fortitudo_efficient_frontier(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        "efficient_frontier",
+        params,
+        "efficient_frontier");
+}
+
+void MAAnalyticsService::fortitudo_exp_decay_probabilities(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        "exp_decay_probabilities",
+        params,
+        "exp_decay_probabilities");
 }
 
 // ── Deal Comparison ──────────────────────────────────────────────────────────

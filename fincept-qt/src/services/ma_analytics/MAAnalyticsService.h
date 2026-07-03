@@ -142,6 +142,15 @@ class MAAnalyticsService : public QObject
     void run_gs_backtest(const QJsonObject& params);
     void calculate_statistics(const QJsonObject& params);
 
+    // Fortitudo Tech Analytics
+    void fortitudo_check_status(const QJsonObject& params);
+    void fortitudo_portfolio_metrics(const QJsonObject& params);
+    void fortitudo_covariance_matrix(const QJsonObject& params);
+    void fortitudo_mean_variance_optimize(const QJsonObject& params);
+    void fortitudo_mean_cvar_optimize(const QJsonObject& params);
+    void fortitudo_efficient_frontier(const QJsonObject& params);
+    void fortitudo_exp_decay_probabilities(const QJsonObject& params);
+
     // ── Deal Comparison ─────────────────────────────────────────────────────
     void compare_deals(const QJsonObject& params);
     void rank_deals(const QJsonObject& params);
