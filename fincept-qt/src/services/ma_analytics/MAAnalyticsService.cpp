@@ -796,6 +796,54 @@ void MAAnalyticsService::calculate_bsm_iv(const QJsonObject& params) {
                     "bsm_iv", params, "bsm_iv");
 }
 
+// GluonTS Analytics
+void MAAnalyticsService::gluonts_check_status(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/gluonts_wrapper/gluonts_service.py",
+        "check_status",
+        params,
+        "gluonts_check_status");
+}
+
+void MAAnalyticsService::gluonts_probabilistic_forecast(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/gluonts_wrapper/gluonts_service.py",
+        "probabilistic_forecast",
+        params,
+        "gluonts_probabilistic_forecast");
+}
+
+void MAAnalyticsService::gluonts_quantile_forecast(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/gluonts_wrapper/gluonts_service.py",
+        "quantile_forecast",
+        params,
+        "gluonts_quantile_forecast");
+}
+
+void MAAnalyticsService::gluonts_distribution_fit(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/gluonts_wrapper/gluonts_service.py",
+        "distribution_fit",
+        params,
+        "gluonts_distribution_fit");
+}
+
+void MAAnalyticsService::gluonts_evaluate_forecast(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/gluonts_wrapper/gluonts_service.py",
+        "evaluate_forecast",
+        params,
+        "gluonts_evaluate_forecast");
+}
+
+void MAAnalyticsService::gluonts_seasonal_naive(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/gluonts_wrapper/gluonts_service.py",
+        "seasonal_naive",
+        params,
+        "gluonts_seasonal_naive");
+}
 // ── Deal Comparison ──────────────────────────────────────────────────────────
 void MAAnalyticsService::compare_deals(const QJsonObject& params) {
     run_python_json("Analytics/corporateFinance/deal_comparison/deal_comparator.py", "compare", params,

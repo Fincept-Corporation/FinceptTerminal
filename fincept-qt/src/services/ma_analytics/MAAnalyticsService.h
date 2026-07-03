@@ -172,6 +172,14 @@ class MAAnalyticsService : public QObject
     void calculate_bsm_greeks(const QJsonObject& params);
     void calculate_bsm_iv(const QJsonObject& params);
 
+    // GluonTS Analytics
+    void gluonts_check_status(const QJsonObject& params);
+    void gluonts_probabilistic_forecast(const QJsonObject& params);
+    void gluonts_quantile_forecast(const QJsonObject& params);
+    void gluonts_distribution_fit(const QJsonObject& params);
+    void gluonts_evaluate_forecast(const QJsonObject& params);
+    void gluonts_seasonal_naive(const QJsonObject& params);
+
     // ── Deal Comparison ─────────────────────────────────────────────────────
     void compare_deals(const QJsonObject& params);
     void rank_deals(const QJsonObject& params);
