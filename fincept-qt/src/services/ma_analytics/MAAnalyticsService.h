@@ -133,6 +133,15 @@ class MAAnalyticsService : public QObject
     void optimize_hrp(const QJsonObject& params);
     void generate_portfolio_report(const QJsonObject& params);
 
+    // GS Quant Analytics
+    void calculate_risk_metrics(const QJsonObject& params);
+    void analyze_portfolio(const QJsonObject& params);
+    void calculate_greeks(const QJsonObject& params);
+    void perform_var_analysis(const QJsonObject& params);
+    void perform_stress_test(const QJsonObject& params);
+    void run_gs_backtest(const QJsonObject& params);
+    void calculate_statistics(const QJsonObject& params);
+
     // ── Deal Comparison ─────────────────────────────────────────────────────
     void compare_deals(const QJsonObject& params);
     void rank_deals(const QJsonObject& params);

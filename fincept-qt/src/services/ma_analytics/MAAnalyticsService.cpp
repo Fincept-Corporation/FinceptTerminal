@@ -587,6 +587,64 @@ void MAAnalyticsService::generate_portfolio_report(const QJsonObject& params) {
         "portfolio_report");
 }
 
+// GS Quant Analytics
+
+void MAAnalyticsService::calculate_risk_metrics(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/gs_quant_wrapper/gs_quant_service.py",
+        "risk_metrics",
+        params,
+        "gs_risk_metrics");
+}
+
+void MAAnalyticsService::analyze_portfolio(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/gs_quant_wrapper/gs_quant_service.py",
+        "portfolio_analytics",
+        params,
+        "gs_portfolio");
+}
+
+void MAAnalyticsService::calculate_greeks(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/gs_quant_wrapper/gs_quant_service.py",
+        "greeks",
+        params,
+        "gs_greeks");
+}
+
+void MAAnalyticsService::perform_var_analysis(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/gs_quant_wrapper/gs_quant_service.py",
+        "var_analysis",
+        params,
+        "gs_var");
+}
+
+void MAAnalyticsService::perform_stress_test(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/gs_quant_wrapper/gs_quant_service.py",
+        "stress_test",
+        params,
+        "gs_stress_test");
+}
+
+void MAAnalyticsService::run_gs_backtest(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/gs_quant_wrapper/gs_quant_service.py",
+        "backtest",
+        params,
+        "gs_backtest");
+}
+
+void MAAnalyticsService::calculate_statistics(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/gs_quant_wrapper/gs_quant_service.py",
+        "statistics",
+        params,
+        "gs_statistics");
+}
+
 // ── Deal Comparison ──────────────────────────────────────────────────────────
 void MAAnalyticsService::compare_deals(const QJsonObject& params) {
     run_python_json("Analytics/corporateFinance/deal_comparison/deal_comparator.py", "compare", params,
