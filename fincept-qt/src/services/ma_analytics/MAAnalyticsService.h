@@ -159,6 +159,19 @@ class MAAnalyticsService : public QObject
     void calculate_tessa_xpme(const QJsonObject& params);
     void calculate_tessa_verbose_xpme(const QJsonObject& params);
 
+    // PyVollib Analytics
+    void calculate_black_price(const QJsonObject& params);
+    void calculate_black_greeks(const QJsonObject& params);
+    void calculate_black_iv(const QJsonObject& params);
+
+    void calculate_bs_price(const QJsonObject& params);
+    void calculate_bs_greeks(const QJsonObject& params);
+    void calculate_bs_iv(const QJsonObject& params);
+
+    void calculate_bsm_price(const QJsonObject& params);
+    void calculate_bsm_greeks(const QJsonObject& params);
+    void calculate_bsm_iv(const QJsonObject& params);
+
     // ── Deal Comparison ─────────────────────────────────────────────────────
     void compare_deals(const QJsonObject& params);
     void rank_deals(const QJsonObject& params);

@@ -750,6 +750,52 @@ void MAAnalyticsService::calculate_tessa_verbose_xpme(const QJsonObject& params)
         "tessa_verbose_xpme");
 }
 
+// PyVollib Analytics
+void MAAnalyticsService::calculate_black_price(const QJsonObject& params) {
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
+                    "black_price", params, "black_price");
+}
+
+void MAAnalyticsService::calculate_black_greeks(const QJsonObject& params) {
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
+                    "black_greeks", params, "black_greeks");
+}
+
+void MAAnalyticsService::calculate_black_iv(const QJsonObject& params) {
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
+                    "black_iv", params, "black_iv");
+}
+
+void MAAnalyticsService::calculate_bs_price(const QJsonObject& params) {
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
+                    "bs_price", params, "bs_price");
+}
+
+void MAAnalyticsService::calculate_bs_greeks(const QJsonObject& params) {
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
+                    "bs_greeks", params, "bs_greeks");
+}
+
+void MAAnalyticsService::calculate_bs_iv(const QJsonObject& params) {
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
+                    "bs_iv", params, "bs_iv");
+}
+
+void MAAnalyticsService::calculate_bsm_price(const QJsonObject& params) {
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
+                    "bsm_price", params, "bsm_price");
+}
+
+void MAAnalyticsService::calculate_bsm_greeks(const QJsonObject& params) {
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
+                    "bsm_greeks", params, "bsm_greeks");
+}
+
+void MAAnalyticsService::calculate_bsm_iv(const QJsonObject& params) {
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
+                    "bsm_iv", params, "bsm_iv");
+}
+
 // ── Deal Comparison ──────────────────────────────────────────────────────────
 void MAAnalyticsService::compare_deals(const QJsonObject& params) {
     run_python_json("Analytics/corporateFinance/deal_comparison/deal_comparator.py", "compare", params,
