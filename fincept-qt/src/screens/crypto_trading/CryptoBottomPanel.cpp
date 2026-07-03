@@ -925,6 +925,23 @@ void CryptoBottomPanel::set_live_balance(double balance, double equity, double u
     live_balance_label_->setText(QString("$%1").arg(balance, 0, 'f', 2));
     live_equity_label_->setText(QString("$%1").arg(equity, 0, 'f', 2));
     live_margin_label_->setText(QString("$%1").arg(used_margin, 0, 'f', 2));
+    // Clear any stale error tooltip left over from a prior unavailable state.
+    live_balance_label_->setToolTip(QString());
+    live_equity_label_->setToolTip(QString());
+    live_margin_label_->setToolTip(QString());
+}
+
+void CryptoBottomPanel::set_balance_unavailable(const QString& reason) {
+    if (!live_balance_label_)
+        return;
+    live_balance_label_->setText(tr("UNAVAILABLE"));
+    live_equity_label_->setText(QStringLiteral("—"));
+    live_margin_label_->setText(QStringLiteral("—"));
+    const QString tip = reason.isEmpty() ? tr("Balance unavailable")
+                                         : tr("Balance unavailable: %1").arg(reason);
+    live_balance_label_->setToolTip(tip);
+    live_equity_label_->setToolTip(tip);
+    live_margin_label_->setToolTip(tip);
 }
 
 } // namespace fincept::screens::crypto

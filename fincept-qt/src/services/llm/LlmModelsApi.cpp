@@ -2,6 +2,7 @@
 
 #include "services/llm/LlmService.h"
 
+#include "services/llm/ProviderCatalog.h"
 #include "auth/AuthManager.h"
 #include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
@@ -28,6 +29,11 @@ static constexpr const char* TAG = "LlmModelsApi";
 QString LlmService::get_models_url(const QString& provider, const QString& api_key, const QString& base_url) {
     Q_UNUSED(api_key) // Auth in headers, not URL.
     const QString p = provider.toLower();
+
+    // Blocked provider (AtlasCloud, removed) — no models URL, so the Fetch button
+    // can never reach it even if base_url was hand-pointed at the host.
+    if (ProviderCatalog::is_blocked(p, base_url))
+        return {};
 
     // Ollama uses /api/tags, not /v1/models — must short-circuit before the custom-base_url branch
     // or a user with base_url=http://localhost:11434 hits the wrong path and parses a 404 page.
@@ -70,7 +76,6 @@ QString LlmService::get_models_url(const QString& provider, const QString& api_k
     if (p == "xai")     return "https://api.x.ai/v1/models";
     if (p == "kimi")    return "https://api.moonshot.ai/v1/models";
     if (p == "aihubmix") return "https://aihubmix.com/v1/models"; // fallback if prefilled base_url was cleared
-    if (p == "atlascloud") return "https://api.atlascloud.ai/v1/models"; // fallback if prefilled base_url was cleared
     if (p == "fincept") return fincept::AppConfig::instance().api_base_url() + "/research/llm/models";
     // minimax has no public /v1/models — caller falls back to known models.
     return {};

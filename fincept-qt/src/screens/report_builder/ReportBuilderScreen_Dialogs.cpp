@@ -20,6 +20,7 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -449,7 +450,15 @@ void ReportBuilderScreen::on_export_pdf() {
     if (path.isEmpty())
         return;
     export_pdf_to(path);
-    QMessageBox::information(this, tr("Export PDF"), tr("Report exported successfully to:\n%1").arg(path));
+    // export_pdf_to can fail without throwing (painter-begin failure, unwritable
+    // path, disk full) — verify a non-empty PDF actually landed before claiming
+    // success, instead of always reporting success.
+    const QFileInfo out(path);
+    if (out.exists() && out.size() > 0) {
+        QMessageBox::information(this, tr("Export PDF"), tr("Report exported successfully to:\n%1").arg(path));
+    } else {
+        QMessageBox::warning(this, tr("Export PDF"), tr("Failed to export the report to:\n%1").arg(path));
+    }
 }
 
 void ReportBuilderScreen::export_pdf_to(const QString& path) {

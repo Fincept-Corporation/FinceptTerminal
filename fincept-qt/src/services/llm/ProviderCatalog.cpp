@@ -12,8 +12,18 @@ namespace fincept::ai_chat {
 const QStringList& ProviderCatalog::known_providers() {
     static const QStringList kProviders = {"openai",  "anthropic", "gemini",   "groq",  "deepseek",
                                            "openrouter", "minimax", "kimi", "ollama", "xai",   "fincept",
-                                           "astraflow", "astraflow_cn", "aihubmix", "atlascloud"};
+                                           "astraflow", "astraflow_cn", "aihubmix"};
     return kProviders;
+}
+
+// AtlasCloud is banned by Fincept and has been removed as a provider. This hard
+// block ensures it stays unreachable even if someone re-adds "atlascloud" to a
+// config row by hand or points an OpenAI-compatible provider's base_url at
+// api.atlascloud.ai.
+bool ProviderCatalog::is_blocked(const QString& provider, const QString& base_url) {
+    if (provider.toLower() == "atlascloud")
+        return true;
+    return base_url.toLower().contains(QStringLiteral("atlascloud"));
 }
 
 QString ProviderCatalog::display_name(const QString& provider_id) {
@@ -22,7 +32,7 @@ QString ProviderCatalog::display_name(const QString& provider_id) {
         {"groq", "Groq"},            {"deepseek", "DeepSeek"},        {"openrouter", "OpenRouter"},
         {"minimax", "MiniMax"},      {"kimi", "Kimi"},                {"ollama", "Ollama"},
         {"xai", "xAI"},              {"fincept", "Fincept LLM (recommended)"}, {"astraflow", "AstraFlow"},
-        {"astraflow_cn", "AstraFlow CN"}, {"aihubmix", "AIHubMix"},   {"atlascloud", "AtlasCloud"},
+        {"astraflow_cn", "AstraFlow CN"}, {"aihubmix", "AIHubMix"},
     };
     const QString id = provider_id.toLower();
     const auto it = kNames.find(id);
@@ -66,8 +76,6 @@ QString ProviderCatalog::default_base_url(const QString& provider) {
         return "https://api.modelverse.cn/v1"; // Astraflow China endpoint (UCloud)
     if (p == "aihubmix")
         return "https://aihubmix.com/v1"; // AIHubMix — OpenAI-compatible aggregator (500+ models)
-    if (p == "atlascloud")
-        return "https://api.atlascloud.ai/v1"; // AtlasCloud — OpenAI-compatible aggregator (300+ open models)
     return {};
 }
 
@@ -76,8 +84,9 @@ QStringList ProviderCatalog::fallback_models(const QString& provider) {
     if (p == "openai")
         return {"gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o3-mini"};
     if (p == "anthropic")
-        return {"claude-sonnet-4-5-20250514", "claude-opus-4-5", "claude-3-5-sonnet-20241022",
-                "claude-3-haiku-20240307"};
+        // Current, valid Anthropic model ids (a bad snapshot 404s on first chat).
+        return {"claude-opus-4-8", "claude-sonnet-5", "claude-sonnet-4-5-20250929",
+                "claude-opus-4-5-20251101", "claude-haiku-4-5"};
     if (p == "gemini")
         return {"gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"};
     if (p == "groq")
@@ -127,16 +136,6 @@ QStringList ProviderCatalog::fallback_models(const QString& provider) {
                 "gemini-2.5-flash", "gemini-2.5-pro",
                 "deepseek-chat", "deepseek-reasoner",
                 "qwen-max", "qwen-plus", "grok-4"};
-    if (p == "atlascloud")
-        // AtlasCloud — OpenAI-compatible aggregator (300+ models). Model ids are
-        // HuggingFace-style "org/model" strings (NOT short aliases). Note: a few ids
-        // listed by /v1/models are unprovisioned and return 400 (e.g. google/gemini-2.0-flash,
-        // openai/gpt-4o*). The list below is a verified-working starter set; use the
-        // Fetch button for the full live catalog (/v1/models).
-        return {"deepseek-ai/DeepSeek-V3.1", "deepseek-ai/deepseek-r1-0528",
-                "qwen/qwen3-32b", "Qwen/Qwen3-235B-A22B-Instruct-2507",
-                "zai-org/GLM-4.6", "moonshotai/Kimi-K2-Instruct", "MiniMaxAI/MiniMax-M2",
-                "google/gemini-2.5-flash", "anthropic/claude-haiku-4.5-20251001"};
     return {};
 }
 
@@ -156,7 +155,7 @@ QString ProviderCatalog::brand_color(const QString& provider) {
         {"groq", "#F55036"},     {"deepseek", "#4D6BFE"},  {"openrouter", "#8B5CF6"},
         {"minimax", "#FF4D6A"},  {"kimi", "#16D9C4"},      {"ollama", "#9CA3AF"},
         {"xai", "#E7E9EA"},      {"fincept", "#FF8800"},   {"astraflow", "#38BDF8"},
-        {"astraflow_cn", "#38BDF8"}, {"aihubmix", "#F59E0B"}, {"atlascloud", "#34D399"},
+        {"astraflow_cn", "#38BDF8"}, {"aihubmix", "#F59E0B"},
     };
     const auto it = kColors.find(provider.toLower());
     if (it != kColors.end()) return it.value();

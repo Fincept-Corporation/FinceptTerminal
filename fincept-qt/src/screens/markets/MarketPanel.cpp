@@ -114,6 +114,7 @@ void MarketPanel::build_ui() {
     el->setAlignment(Qt::AlignCenter);
     error_label_ = new QLabel;
     error_label_->setAlignment(Qt::AlignCenter);
+    error_label_->setWordWrap(true);  // narrow panels — wrap the failure message
     retry_btn_ = new QPushButton(tr("[RETRY]"));
     retry_btn_->setCursor(Qt::PointingHandCursor);
     retry_btn_->setFlat(true);
@@ -335,6 +336,24 @@ void MarketPanel::hub_resubscribe() {
                 emit refresh_finished();
             }
         });
+        // Failure path: every requested topic ends with either publish()
+        // (delivered above) or publish_error(). Without an error subscription
+        // the panel never learns of a producer failure, so the LOADING overlay
+        // spins forever and refresh_finished() never emits. Mirror the drain
+        // here, then — once the whole initial set has resolved with nothing
+        // delivered — switch to the inline error state so [RETRY] is reachable.
+        hub.subscribe_errors(this, topic, [this, sym](const QString& err) {
+            if (refresh_inflight_ && pending_initial_.remove(sym) && pending_initial_.isEmpty()) {
+                refresh_inflight_ = false;
+                emit refresh_finished();
+            }
+            if (!has_data_ && pending_initial_.isEmpty()) {
+                fetch_failed_ = true;
+                show_error(err.trimmed().isEmpty()
+                               ? tr("Failed to load market data")
+                               : tr("Load failed: %1").arg(err.trimmed()));
+            }
+        });
     }
     // force=true: on cold start, DataHub::subscribe auto-triggers a fetch,
     // but on user-initiated refresh_all() (F5 / auto-refresh tick / panel
@@ -388,6 +407,7 @@ void MarketPanel::show_data() {
 }
 
 void MarketPanel::show_error(const QString& msg) {
+    hide_loading();  // stop the spinner + hide the LOADING overlay
     table_->setVisible(false);
     error_widget_->setVisible(true);
     error_label_->setText(msg);

@@ -503,13 +503,23 @@ void SurfaceControlPanel::prefill_datasets() {
     dataset_combo_->blockSignals(false);
 }
 
+void SurfaceControlPanel::mark_synthetic(bool on) {
+    if (synthetic_ == on)
+        return;
+    synthetic_ = on;
+    set_capability(active_type_); // re-apply the badge with the new real/synthetic state
+}
+
 void SurfaceControlPanel::set_capability(ChartType type) {
     active_type_ = type;
     const auto& cap = capability_for(type);
 
-    // Tier badge
-    QColor bg = tier_color(cap.tier);
-    tier_badge_->setText(tier_name(cap.tier));
+    // Tier badge — when the displayed data is synthetic (demo/refresh with no real
+    // fetch) show DEMO regardless of the surface's *capability* tier, otherwise the
+    // rand() sample data reads as live/COMPUTED market data.
+    const SurfaceTier shown_tier = synthetic_ ? SurfaceTier::DEMO : cap.tier;
+    QColor bg = tier_color(shown_tier);
+    tier_badge_->setText(tier_name(shown_tier));
     tier_badge_->setStyleSheet(
         QString("background:%1; color:#000; font-size:9px; font-weight:bold; "
                 "padding:2px 6px; border-radius:2px; max-width:80px;")

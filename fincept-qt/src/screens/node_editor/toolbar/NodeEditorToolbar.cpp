@@ -109,7 +109,7 @@ void NodeEditorToolbar::retranslateUi() {
     if (import_btn_) import_btn_->setText(tr("IMPORT"));
     if (export_btn_) export_btn_->setText(tr("EXPORT"));
     if (templates_btn_) templates_btn_->setText(tr("TEMPLATES"));
-    if (deploy_btn_) deploy_btn_->setText(tr("DEPLOY"));
+    if (deploy_btn_) deploy_btn_->setText(tr("SAVE & RUN"));
     // Execute button text depends on running state; default to EXECUTE.
     if (execute_btn_) execute_btn_->setText(tr("EXECUTE"));
 }
@@ -213,7 +213,7 @@ void NodeEditorToolbar::build_ui() {
     connect(templates_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::templates_clicked);
 
     // ── Deploy ─────────────────────────────────────────────────────
-    deploy_btn_ = new QPushButton(tr("DEPLOY"));
+    deploy_btn_ = new QPushButton(tr("SAVE & RUN"));
     deploy_btn_->setStyleSheet(btn_style());
     layout->addWidget(deploy_btn_);
     connect(deploy_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::deploy_clicked);

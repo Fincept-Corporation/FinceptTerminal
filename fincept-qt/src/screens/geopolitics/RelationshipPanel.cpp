@@ -73,6 +73,19 @@ void RelationshipPanel::build_ui() {
                              .arg(ui::fonts::TINY)
                              .arg(ui::fonts::DATA_FAMILY()));
     hhl->addWidget(title_lbl_);
+
+    // The network below is illustrative sample data (see build_nodes), not a live
+    // feed — surface that honestly with a badge so the figures are never mistaken
+    // for real conflict/humanitarian metrics.
+    sample_badge_ = new QLabel(tr("SAMPLE DATA"), header);
+    sample_badge_->setToolTip(tr("Illustrative network — not sourced from a live data feed."));
+    sample_badge_->setStyleSheet(QString("color:#000; background:%1; font-size:%2px; font-weight:700;"
+                                         "font-family:%3; padding:2px 6px; border-radius:2px; letter-spacing:1px;")
+                                     .arg(ui::colors::WARNING())
+                                     .arg(ui::fonts::TINY)
+                                     .arg(ui::fonts::DATA_FAMILY));
+    hhl->addWidget(sample_badge_);
+
     hhl->addStretch();
 
     auto nodes = build_nodes();
@@ -113,6 +126,24 @@ void RelationshipPanel::build_ui() {
     auto* cvl = new QVBoxLayout(content);
     cvl->setContentsMargins(16, 16, 16, 16);
     cvl->setSpacing(16);
+
+    // Honesty banner — the nodes/dataset counts are hardcoded sample data.
+    {
+        QColor warnc(ui::colors::WARNING());
+        const QString warn_rgb = QString("%1,%2,%3").arg(warnc.red()).arg(warnc.green()).arg(warnc.blue());
+        sample_note_ = new QLabel(
+            tr("Sample data — this relationship network is illustrative and is not sourced from a live "
+               "feed. Node counts and connections are placeholders, not real-time conflict metrics."),
+            content);
+        sample_note_->setWordWrap(true);
+        sample_note_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:8px 10px;"
+                                            "background:rgba(%4,0.10); border:1px solid %1;")
+                                        .arg(ui::colors::WARNING())
+                                        .arg(ui::fonts::SMALL)
+                                        .arg(ui::fonts::DATA_FAMILY)
+                                        .arg(warn_rgb));
+        cvl->addWidget(sample_note_);
+    }
 
     // Helper: add a titled section with a 3-column card grid
     auto add_section = [&](const QString& title, const QString& color, const QString& type, QLabel** out) {
@@ -286,6 +317,14 @@ void RelationshipPanel::changeEvent(QEvent* event) {
 
 void RelationshipPanel::retranslateUi() {
     if (title_lbl_) title_lbl_->setText(tr("GEOPOLITICAL RELATIONSHIP NETWORK"));
+    if (sample_badge_) {
+        sample_badge_->setText(tr("SAMPLE DATA"));
+        sample_badge_->setToolTip(tr("Illustrative network — not sourced from a live data feed."));
+    }
+    if (sample_note_)
+        sample_note_->setText(
+            tr("Sample data — this relationship network is illustrative and is not sourced from a live "
+               "feed. Node counts and connections are placeholders, not real-time conflict metrics."));
     if (stats_lbl_)
         stats_lbl_->setText(tr("NODES: %1  |  CONFLICTS: %2  |  ORGANIZATIONS: %3")
                                 .arg(node_count_)

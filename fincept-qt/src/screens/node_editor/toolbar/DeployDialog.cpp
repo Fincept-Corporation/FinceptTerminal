@@ -17,7 +17,7 @@ static QString deploy_input_style() {
 }
 
 DeployDialog::DeployDialog(const QString& current_name, QWidget* parent) : QDialog(parent) {
-    setWindowTitle(tr("Deploy Workflow"));
+    setWindowTitle(tr("Save & Run Workflow"));
     setFixedSize(420, 320);
     setStyleSheet(QString("QDialog { background: %1; }").arg(ui::colors::BG_SURFACE()));
     build_ui(current_name);
@@ -36,7 +36,7 @@ void DeployDialog::build_ui(const QString& current_name) {
     root->setSpacing(12);
 
     // ── Title ──────────────────────────────────────────────────────
-    title_label_ = new QLabel(tr("DEPLOY WORKFLOW"));
+    title_label_ = new QLabel(tr("SAVE & RUN WORKFLOW"));
     title_label_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 14px;"
                                          "font-weight: bold; letter-spacing: 0.5px;")
                                     .arg(ui::colors::AMBER()));
@@ -107,7 +107,7 @@ void DeployDialog::build_ui(const QString& current_name) {
     });
     btn_row->addWidget(draft_btn_);
 
-    deploy_btn_ = new QPushButton(tr("DEPLOY"));
+    deploy_btn_ = new QPushButton(tr("SAVE & RUN"));
     deploy_btn_->setFixedHeight(28);
     deploy_btn_->setStyleSheet(
         QString("QPushButton {"
@@ -133,14 +133,14 @@ void DeployDialog::changeEvent(QEvent* event) {
 }
 
 void DeployDialog::retranslateUi() {
-    setWindowTitle(tr("Deploy Workflow"));
-    if (title_label_) title_label_->setText(tr("DEPLOY WORKFLOW"));
+    setWindowTitle(tr("Save & Run Workflow"));
+    if (title_label_) title_label_->setText(tr("SAVE & RUN WORKFLOW"));
     if (name_label_) name_label_->setText(tr("WORKFLOW NAME"));
     if (desc_label_) desc_label_->setText(tr("DESCRIPTION"));
     if (desc_edit_) desc_edit_->setPlaceholderText(tr("Describe what this workflow does..."));
     if (cancel_btn_) cancel_btn_->setText(tr("CANCEL"));
     if (draft_btn_) draft_btn_->setText(tr("SAVE DRAFT"));
-    if (deploy_btn_) deploy_btn_->setText(tr("DEPLOY"));
+    if (deploy_btn_) deploy_btn_->setText(tr("SAVE & RUN"));
 }
 
 } // namespace fincept::workflow

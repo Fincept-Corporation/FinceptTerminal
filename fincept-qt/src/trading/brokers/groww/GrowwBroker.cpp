@@ -493,6 +493,7 @@ ApiResponse<QVector<BrokerPosition>> GrowwBroker::get_positions(const BrokerCred
     int64_t ts = now_ts();
     auto hdrs = auth_headers(creds);
     QVector<BrokerPosition> positions;
+    QMap<QString, QVector<SymbolRef>> refs_by_segment; // for LTP hydration below
 
     auto fetch_segment = [&](const QString& segment) -> bool {
         QString url = QString("https://api.groww.in/v1/positions/user?segment=%1").arg(segment);
@@ -531,11 +532,18 @@ ApiResponse<QVector<BrokerPosition>> GrowwBroker::get_positions(const BrokerCred
             pos.exchange = p["exchange"].toString();
             pos.quantity = qty;
             pos.avg_price = avg;
-            pos.ltp = 0.0; // Not returned by positions endpoint; query live-data/ltp separately if needed.
+            pos.ltp = 0.0; // Not returned by positions endpoint — hydrated below via /live-data/ltp.
             pos.pnl = p["realised_pnl"].toDouble();
             pos.product_type = p["product"].toString();
-            // TODO: hydrate LTP to populate pnl_pct
-            pos.pnl_pct = (pos.avg_price > 0.0) ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 : 0.0;
+            pos.pnl_pct = 0.0;
+
+            SymbolRef ref;
+            ref.orig = pos.symbol;
+            ref.exchange = pos.exchange.isEmpty() ? QStringLiteral("NSE") : pos.exchange;
+            ref.trading_symbol = pos.symbol;
+            ref.segment = segment;
+            ref.exchange_symbol = groww_exchange(ref.exchange) + "_" + ref.trading_symbol;
+            refs_by_segment[segment].append(ref);
             positions.append(pos);
         }
         return true;
@@ -543,6 +551,24 @@ ApiResponse<QVector<BrokerPosition>> GrowwBroker::get_positions(const BrokerCred
 
     fetch_segment("CASH");
     fetch_segment("FNO");
+
+    // Hydrate LTP — the positions endpoint returns no price, which left value/P&L
+    // silently 0. Batch via the existing /v1/live-data/ltp plumbing (≤50/call).
+    QVector<BrokerQuote> ltp_quotes;
+    for (auto it = refs_by_segment.constBegin(); it != refs_by_segment.constEnd(); ++it)
+        fetch_ltp_batch(creds, it.key(), it.value(), ltp_quotes);
+    for (auto& pos : positions) {
+        for (const auto& q : ltp_quotes) {
+            if (q.symbol != pos.symbol || q.ltp <= 0.0)
+                continue;
+            pos.ltp = q.ltp;
+            if (pos.avg_price > 0.0)
+                pos.pnl_pct = ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0;
+            // realised_pnl (above) misses the open MTM — add the unrealised leg.
+            pos.pnl += (pos.ltp - pos.avg_price) * pos.quantity;
+            break;
+        }
+    }
 
     return {true, positions, "", ts};
 }
@@ -571,12 +597,40 @@ ApiResponse<QVector<BrokerHolding>> GrowwBroker::get_holdings(const BrokerCreden
         holding.quantity = h["quantity"].toInt();
         holding.avg_price = h["average_price"].toDouble();
         holding.invested_value = holding.quantity * holding.avg_price;
-        // TODO: hydrate LTP to populate current_value/pnl
-        holding.ltp = 0.0; // Not returned by holdings endpoint; query live-data/ltp separately if needed.
+        holding.ltp = 0.0; // Not returned by holdings endpoint — hydrated below via /live-data/ltp.
         holding.current_value = 0.0;
-        holding.pnl = 0.0; // Derived value — compute in the service layer once LTP is fetched.
+        holding.pnl = 0.0;
         holding.pnl_pct = 0.0;
         holdings.append(holding);
+    }
+
+    // Hydrate LTP and derive value/P&L — previously left 0, so holdings views
+    // without a live-quote subscription showed ₹0 for real positions. Demat
+    // holdings are equities → CASH segment; batch via /v1/live-data/ltp.
+    QVector<SymbolRef> refs;
+    refs.reserve(holdings.size());
+    for (const auto& h : holdings) {
+        SymbolRef ref;
+        ref.orig = h.symbol;
+        ref.exchange = h.exchange;
+        ref.trading_symbol = h.symbol;
+        ref.segment = QStringLiteral("CASH");
+        ref.exchange_symbol = groww_exchange(ref.exchange) + "_" + ref.trading_symbol;
+        refs.append(ref);
+    }
+    QVector<BrokerQuote> ltp_quotes;
+    fetch_ltp_batch(creds, QStringLiteral("CASH"), refs, ltp_quotes);
+    for (auto& holding : holdings) {
+        for (const auto& q : ltp_quotes) {
+            if (q.symbol != holding.symbol || q.ltp <= 0.0)
+                continue;
+            holding.ltp = q.ltp;
+            holding.current_value = holding.quantity * q.ltp;
+            holding.pnl = holding.current_value - holding.invested_value;
+            if (holding.invested_value > 0.0)
+                holding.pnl_pct = (holding.pnl / holding.invested_value) * 100.0;
+            break;
+        }
     }
 
     return {true, holdings, "", ts};

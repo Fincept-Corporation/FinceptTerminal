@@ -25,6 +25,7 @@ class HDXDataPanel : public QWidget {
 
   private slots:
     void on_hdx_results(const QString& context, QVector<fincept::services::geo::HDXDataset> datasets);
+    void on_error(const QString& context, const QString& message);
     void on_view_changed(int index);
 
   private:

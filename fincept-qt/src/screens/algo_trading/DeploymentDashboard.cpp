@@ -481,7 +481,7 @@ void DeploymentDashboard::build_ui() {
 
         eq_vl->addStretch();
 
-        eq_hint_ = new QLabel(tr("Select a deployment to view curve"), equity_placeholder_);
+        eq_hint_ = new QLabel(tr("Equity curve — not yet available"), equity_placeholder_);
         eq_hint_->setAlignment(Qt::AlignCenter);
         eq_hint_->setStyleSheet(
             QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
@@ -749,7 +749,7 @@ void DeploymentDashboard::retranslateUi() {
     if (total_trades_caption_)  total_trades_caption_->setText(tr("TOTAL TRADES"));
     if (avg_win_rate_caption_)  avg_win_rate_caption_->setText(tr("AVG WIN RATE"));
     if (eq_title_)   eq_title_->setText(tr("EQUITY CURVE"));
-    if (eq_hint_)    eq_hint_->setText(tr("Select a deployment to view curve"));
+    if (eq_hint_)    eq_hint_->setText(tr("Equity curve — not yet available"));
     if (refresh_btn_)  refresh_btn_->setText(tr("REFRESH"));
     if (stop_all_btn_) stop_all_btn_->setText(tr("STOP ALL"));
     if (dep_title_)    dep_title_->setText(tr("DEPLOYMENTS"));

@@ -5,6 +5,7 @@
 #include "services/llm/LlmContentExtractors.h"
 #include "services/llm/LlmRequestPolicy.h"
 #include "services/llm/ModelCatalog.h"
+#include "services/llm/ProviderCatalog.h"
 #include "auth/AuthManager.h"
 
 #include "core/logging/Logger.h"
@@ -284,6 +285,9 @@ bool LlmService::is_configured() const {
     ensure_config();
     if (provider_.isEmpty())
         return false;
+    // Blocked provider (AtlasCloud, removed) is never considered configured.
+    if (ProviderCatalog::is_blocked(provider_, base_url_))
+        return false;
     if (provider_requires_api_key(provider_))
         return !api_key_.isEmpty();
     return true;
@@ -329,6 +333,13 @@ int LlmService::resolved_max_tokens() const {
 QString LlmService::get_endpoint_url() const {
     // Called with mutex_ held.
     const QString& p = provider_;
+
+    // Blocked provider (AtlasCloud, removed) — refuse to resolve any endpoint,
+    // including a base_url that was hand-pointed at the host. do_request /
+    // do_streaming_request already block earlier with a clear message; this is
+    // the last-line backstop for any other caller.
+    if (ProviderCatalog::is_blocked(p, base_url_))
+        return {};
 
     // Fincept sync chat endpoint (async lives in fincept_async_request).
     if (p == "fincept") {
@@ -379,9 +390,6 @@ QString LlmService::get_endpoint_url() const {
         // Fallback for when the prefilled base_url was cleared; the custom-base_url
         // branch above wins whenever it's set (incl. regional/proxy overrides).
         return "https://aihubmix.com/v1/chat/completions";
-    if (p == "atlascloud")
-        // Fallback if the prefilled base_url was cleared; custom-base_url branch wins otherwise.
-        return "https://api.atlascloud.ai/v1/chat/completions";
     return {};
 }
 
@@ -421,6 +429,11 @@ QMap<QString, QString> LlmService::get_headers() const {
 
 LlmResponse LlmService::do_request(const QString& user_message, const std::vector<ConversationMessage>& history) {
     LlmResponse resp;
+
+    if (ProviderCatalog::is_blocked(provider_, base_url_)) {
+        resp.error = "AtlasCloud has been banned by Fincept and cannot be used.";
+        return resp;
+    }
 
     QString url = get_endpoint_url();
     if (url.isEmpty()) {
@@ -795,6 +808,12 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
     }
 
     LlmResponse resp;
+    if (ProviderCatalog::is_blocked(provider_, base_url_)) {
+        resp.error = "AtlasCloud has been banned by Fincept and cannot be used.";
+        on_chunk("", true);
+        return resp;
+    }
+
     QString url = get_endpoint_url();
     if (url.isEmpty()) {
         resp.error = "No endpoint URL for provider: " + provider_;
@@ -1097,6 +1116,13 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
 
 LlmResponse LlmService::chat(const QString& user_message, const std::vector<ConversationMessage>& history,
                              bool use_tools) {
+    // INTERIM serialization guard (see request_serialize_mutex_): held until return
+    // because do_request() reads provider_/api_key_/base_url_/model_ lock-free across
+    // the network call — a concurrent chat()/chat_streaming() worker rewriting them
+    // mid-flight could send one provider's API key to another provider's base_url.
+    // We run on a background thread, so this serializes LLM workers, not the UI.
+    // Proper fix (deferred): thread a per-request config context through do_request.
+    QMutexLocker request_lock(&request_serialize_mutex_);
     {
         QMutexLocker lock(&mutex_);
         ensure_config();
@@ -1104,9 +1130,9 @@ LlmResponse LlmService::chat(const QString& user_message, const std::vector<Conv
             return LlmResponse{.content = {}, .error = "No LLM provider configured"};
     }
     // Helpers read members directly. ensure_config() already wrote them under
-    // mutex; we release before the blocking network call to avoid serialising
-    // concurrent chats. Reassigning a local snapshot back to the members after
-    // unlocking would clobber any reload_config() that landed in the gap.
+    // mutex_, and request_lock keeps other workers from rewriting them before we
+    // return. Reassigning a local snapshot back to the members after unlocking
+    // mutex_ would clobber any reload_config() that landed in the gap.
 
     // thread_local guard avoids racing with concurrent chat_streaming calls from the floating bubble.
     detail::ToolPolicyGuard guard(use_tools ? ToolPolicy::All : ToolPolicy::None);
@@ -1184,6 +1210,15 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
          chat_session_id]() {
             if (!self)
                 return;
+
+            // INTERIM serialization guard (see request_serialize_mutex_): held until
+            // this worker finishes so a concurrent chat()/chat_streaming() worker
+            // can't rewrite the shared provider/key/url/model members below while
+            // do_streaming_request() reads them lock-free — that could send one
+            // provider's API key to another provider's base_url. QtConcurrent thread
+            // only; the UI is never blocked. Proper fix (deferred): thread a
+            // per-request config context through do_streaming_request.
+            QMutexLocker request_lock(&self->request_serialize_mutex_);
 
             // Snapshot under mutex so do_*_request see consistent state and don't race with reload_config().
             {

@@ -21,6 +21,14 @@ namespace fincept::trading {
 namespace {
 const QString kSessionTag = "ExchangeSession";
 
+// Bounded auto-restart policy for a WS subprocess that dies unexpectedly.
+// Capped + exponentially backed off so a python script that crashes on start
+// can't spin into a tight respawn loop.
+constexpr int kMaxWsRestartAttempts = 5;
+constexpr int kWsRestartBaseMs = 1000;     // first backoff; doubles each attempt
+constexpr int kWsRestartMaxMs = 30000;     // backoff ceiling
+constexpr qint64 kWsHealthyRunMs = 60000;  // uptime past which a drop earns a fresh budget
+
 // SecureStorage keys for per-exchange crypto credentials. Keeping three
 // separate keys (rather than one JSON blob) matches the existing `auth`
 // module convention and lets operators rotate fields independently.
@@ -263,8 +271,17 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
                                     .arg(static_cast<int>(err)));
         ws_connected_ = false;
     });
+    // A clean subprocess exit emits no python "status" line, so ws_connected_
+    // would otherwise stay stale (badge stuck on LIVE). Detect the death here,
+    // drop the flag, and attempt a bounded respawn. stop_ws() disconnects
+    // `this` before a deliberate terminate, so this only fires on unexpected
+    // exits.
+    connect(ws_process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+            [this](int code, QProcess::ExitStatus status) { handle_ws_finished(code, status); });
 
     ws_process_->start(python_path, args);
+    ws_should_run_ = true;
+    ws_uptime_.restart();
     LOG_INFO(kSessionTag, QString("WS stream start requested for %1/%2").arg(exchange_id_, primary_symbol));
     return true;
 }
@@ -279,12 +296,62 @@ void ExchangeSession::stop_ws() {
     auto* proc = ws_process_;
     ws_process_ = nullptr;
     ws_connected_ = false;
+    ws_should_run_ = false;  // deliberate stop — suppress the finished-driven respawn
     proc->disconnect(this);
     proc->terminate();
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), proc, &QObject::deleteLater);
     QTimer::singleShot(3000, proc, [proc]() {
         if (proc->state() != QProcess::NotRunning)
             proc->kill();
+    });
+}
+
+void ExchangeSession::handle_ws_finished(int exit_code, QProcess::ExitStatus status) {
+    ws_connected_ = false;
+    LOG_WARN(kSessionTag, QString("[%1] WS process exited (code=%2, %3)")
+                              .arg(exchange_id_)
+                              .arg(exit_code)
+                              .arg(status == QProcess::CrashExit ? "crash" : "normal"));
+
+    // Reap the finished process object. stop_ws() disconnects `this` before a
+    // deliberate terminate, so reaching here means an *unexpected* exit.
+    if (ws_process_) {
+        ws_process_->deleteLater();
+        ws_process_ = nullptr;
+    }
+
+    if (!ws_should_run_)
+        return;  // not supposed to be running — leave it down
+
+    // A stream that ran healthily and only just dropped earns a fresh restart
+    // budget; a fast crash-loop keeps burning the existing one.
+    if (ws_uptime_.isValid() && ws_uptime_.elapsed() >= kWsHealthyRunMs)
+        ws_restart_attempts_ = 0;
+
+    if (ws_restart_attempts_ >= kMaxWsRestartAttempts) {
+        LOG_ERROR(kSessionTag, QString("[%1] WS not restarting — gave up after %2 attempts")
+                                   .arg(exchange_id_)
+                                   .arg(ws_restart_attempts_));
+        return;
+    }
+
+    ++ws_restart_attempts_;
+    const int backoff_ms = qMin(kWsRestartBaseMs * (1 << (ws_restart_attempts_ - 1)), kWsRestartMaxMs);
+    LOG_INFO(kSessionTag, QString("[%1] WS restart attempt %2/%3 in %4ms")
+                              .arg(exchange_id_)
+                              .arg(ws_restart_attempts_)
+                              .arg(kMaxWsRestartAttempts)
+                              .arg(backoff_ms));
+
+    QPointer<ExchangeSession> self = this;
+    const QString primary = ws_primary_symbol_;
+    const QStringList all = ws_all_symbols_;
+    QTimer::singleShot(backoff_ms, this, [self, primary, all]() {
+        if (!self || !self->ws_should_run_)
+            return;
+        if (self->is_ws_active())
+            return;  // already back up (e.g. a manual restart beat us to it)
+        self->start_ws(primary, all);
     });
 }
 

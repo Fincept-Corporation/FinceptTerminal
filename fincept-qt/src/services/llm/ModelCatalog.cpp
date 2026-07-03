@@ -159,12 +159,6 @@ const CatalogEntry kCatalog[] = {
     // (user max_tokens still applies).
     {"aihubmix", "*", kNoPublishedCap},
 
-    // ── AtlasCloud (OpenAI-compatible aggregator) ───────────────────────────
-    // https://www.atlascloud.ai/docs/models/llm — serves 300+ open models
-    // (DeepSeek, Qwen, GLM, Kimi, MiniMax, Llama, ...); per-model cap varies and
-    // can't be derived from the id, so use a generous default (user max_tokens applies).
-    {"atlascloud", "*", kNoPublishedCap},
-
     // ── Fincept (proxies upstream) ──────────────────────────────────────
     // Fincept's /research/llm/async wraps various upstream models. We
     // don't know which one is selected server-side, so go with a generous

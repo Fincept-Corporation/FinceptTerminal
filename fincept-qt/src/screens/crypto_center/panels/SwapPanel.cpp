@@ -431,7 +431,7 @@ void SwapPanel::showEvent(QShowEvent* e) {
         hub.request(current_balance_topic_, /*force=*/true);
     }
     resubscribe_prices();
-    slippage_label_->setText(format_bps(slippage_bps()));
+    slippage_label_->setText(format_bps(slippage_pct() * 100));
     route_label_->setText(QStringLiteral("PumpSwap (auto)"));
 }
 
@@ -720,7 +720,7 @@ void SwapPanel::recompute_estimate() {
     out_amount_label_->setText(out_text);
     route_label_->setText(QStringLiteral("PumpSwap (auto)"));
     impact_label_->setText(tr("set by PumpSwap; capped by slippage"));
-    slippage_label_->setText(format_bps(slippage_bps()));
+    slippage_label_->setText(format_bps(slippage_pct() * 100));
 
     if (!is_supported_pair()) {
         // Show the estimate so the user understands what they're trying to
@@ -895,7 +895,11 @@ void SwapPanel::on_swap_clicked() {
 
     const auto pubkey = current_pubkey_;
     const int slip_pct = slippage_pct();
-    const int slip_bps_for_display = slippage_bps();
+    // Display the tolerance actually sent and enforced — slippage_pct() rounds
+    // the raw bps up to a whole percent (floor 1, cap 5) and PumpPortal re-clamps
+    // to [1,5]. Showing the raw bps here would advertise a tighter tolerance than
+    // is executed (e.g. 50 bps sends/enforces 1% but would read "0.50%").
+    const int slip_bps_for_display = slip_pct * 100;
     // The supported-pair gate above guarantees this is SOL→FNCPT or FNCPT→SOL.
     const bool buying_fncpt = is_native_sol(from_mint_) && is_fncpt(to_mint_);
     const auto action = buying_fncpt

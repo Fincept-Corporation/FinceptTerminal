@@ -545,13 +545,18 @@ void LockPanel::recompute_preview() {
             .arg(fincept::billing::TierConfig::label_for(tier_after)));
     }
 
-    // Submit gating
-    bool can_submit = !busy_
+    // Submit gating — the LOCK button must stay disabled until the on-chain
+    // program is actually deployed, so a demo-looking screen can never build a
+    // real staking transaction.
+    const bool program_ready =
+        fincept::wallet::StakingService::instance().program_is_configured();
+    bool can_submit = program_ready
+                       && !busy_
                        && !current_pubkey_.isEmpty()
                        && amount_ui > 0.0
                        && amount_ui <= fncpt_balance_ui_;
     lock_button_->setEnabled(can_submit);
-    if (!fincept::wallet::StakingService::instance().program_is_configured()) {
+    if (!program_ready) {
         status_label_->setText(
             tr("DEMO — fincept_lock not deployed; configure SecureStorage "
                "fincept.lock_program_id to enable real locks."));

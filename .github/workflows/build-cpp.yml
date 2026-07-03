@@ -274,6 +274,55 @@ jobs:
           fi
           echo "Binary verified: $BINARY ($(du -sh "$BINARY" | cut -f1))"
 
+      # ---- Run headless self-tests ----
+      # Exercise each of the freshly built binary's --selftest-* checks under Qt's
+      # offscreen platform (no display / GPU needed). A non-zero exit fails the
+      # job. Runs the build-tree binary (not the packaged AppImage / .app) so it
+      # needs no FUSE mount or codesigning. Skipped on cross-compiled targets
+      # (Windows arm64, macOS x64) whose binaries can't execute on the host
+      # runner's architecture. timeout-minutes bounds any unexpected hang.
+      - name: Run self-tests (headless)
+        if: "!(matrix.platform == 'Windows' && matrix.arch == 'arm64') && !(matrix.platform == 'macOS' && matrix.arch == 'x64')"
+        shell: bash
+        working-directory: fincept-qt
+        timeout-minutes: 10
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -euo pipefail
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            BINARY="build/Release/${{ matrix.exe }}"
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            if [ -f "build/${{ matrix.exe }}" ]; then
+              BINARY="build/${{ matrix.exe }}"
+            elif [ -f "build/${{ matrix.exe }}.app/Contents/MacOS/${{ matrix.exe }}" ]; then
+              BINARY="build/${{ matrix.exe }}.app/Contents/MacOS/${{ matrix.exe }}"
+            else
+              BINARY="build/${{ matrix.exe }}"
+            fi
+          else
+            BINARY="build/${{ matrix.exe }}"
+          fi
+          # No umbrella --selftest exists; run each registered self-test in its
+          # own process (shared DB/state would cross-contaminate one process).
+          for f in \
+            --selftest-tools \
+            --selftest-feeds \
+            --selftest-dock-layout \
+            --selftest-fno-algo \
+            --selftest-universe-scan \
+            --selftest-paper \
+            --selftest-portfolio-monitor \
+            --selftest-portfolio-replication \
+            --selftest-arena; do
+            echo "::group::self-test $f"
+            # --profile ci isolates each run in a fresh, migrated DB so a
+            # cached/drifted default profile can't cause false failures.
+            echo "Running: $BINARY --profile ci $f (QT_QPA_PLATFORM=$QT_QPA_PLATFORM)"
+            "$BINARY" --profile ci "$f"
+            echo "::endgroup::"
+          done
+
       # ---- Package: Windows (windeployqt + manual DLL sweep) ----
       - name: Package (Windows)
         if: runner.os == 'Windows'

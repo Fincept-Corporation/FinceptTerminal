@@ -24,8 +24,7 @@ inline bool provider_supports_streaming(const QString& provider) {
     return provider == "openai" || provider == "anthropic" || provider == "gemini" || provider == "google" ||
            provider == "groq" || provider == "deepseek" || provider == "openrouter" || provider == "minimax" ||
            provider == "kimi" || provider == "ollama" || provider == "xai" || provider == "fincept" ||
-           provider == "astraflow" || provider == "astraflow_cn" || provider == "aihubmix" ||
-           provider == "atlascloud";
+           provider == "astraflow" || provider == "astraflow_cn" || provider == "aihubmix";
 }
 
 inline bool provider_requires_api_key(const QString& provider) {
@@ -121,6 +120,16 @@ class LlmService : public QObject {
     LlmService();
 
     mutable QMutex mutex_;
+
+    // INTERIM serialization guard: held for the WHOLE duration of each LLM request
+    // (chat() and the chat_streaming() worker) because do_request/do_streaming_request
+    // read provider_/api_key_/base_url_/model_ lock-free across the network call — a
+    // concurrent worker rewriting them mid-flight could send one provider's API key
+    // to another provider's base_url. Only ever acquired on worker threads (never the
+    // UI thread), and always BEFORE mutex_, never while holding it. Proper fix
+    // (deferred): thread a per-request config context through do_*_request instead
+    // of reading shared members.
+    QMutex request_serialize_mutex_;
 
     // Lazily reloaded; mutable so const accessors can call ensure_config().
     mutable QString provider_;

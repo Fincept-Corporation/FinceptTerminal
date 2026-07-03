@@ -17,6 +17,12 @@ EquityPeersTab::EquityPeersTab(QWidget* parent) : QWidget(parent) {
     build_ui();
     auto& svc = services::equity::EquityResearchService::instance();
     connect(&svc, &services::equity::EquityResearchService::peers_loaded, this, &EquityPeersTab::on_peers_loaded);
+    // Dismiss the "LOADING PEERS…" overlay on failure — it's hidden only on success.
+    connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
+            [this](const QString& ctx, const QString&) {
+                if (ctx == "Peers" && loading_overlay_)
+                    loading_overlay_->hide_loading();
+            });
 }
 
 void EquityPeersTab::set_symbol(const QString& symbol) {

@@ -48,8 +48,15 @@ Result<void> McpClient::start() {
     connect(
         process_, &QProcess::readyReadStandardError, this,
         [this]() {
-            while (process_ && process_->canReadLine()) {
-                const QString line = QString::fromUtf8(process_->readLine()).trimmed();
+            // Read the STDERR channel explicitly. canReadLine()/readLine() operate on
+            // the *current* read channel (stdout by default), so the old code drained
+            // stdout — dropping server error logs and, worse, stealing buffered
+            // JSON-RPC response lines (which then hung the request for the full timeout).
+            if (!process_)
+                return;
+            const QByteArray chunk = process_->readAllStandardError();
+            for (const QByteArray& raw : chunk.split('\n')) {
+                const QString line = QString::fromUtf8(raw).trimmed();
                 if (!line.isEmpty())
                     append_log("[stderr] " + line);
             }
@@ -168,13 +175,36 @@ Result<QJsonObject> McpClient::initialize() {
 
     QJsonObject client_info;
     client_info["name"] = "FinceptTerminal";
-    client_info["version"] = "4.1.0";
+    client_info["version"] = FINCEPT_VERSION_STRING;
     params["clientInfo"] = client_info;
 
     QJsonObject capabilities;
     params["capabilities"] = capabilities;
 
-    return send_request("initialize", params, 120000); // 120s for slow servers
+    auto result = send_request("initialize", params, 120000); // 120s for slow servers
+    if (result.is_ok()) {
+        // Per the MCP spec the client MUST send an `initialized` notification after the
+        // initialize response. Spec-compliant servers (e.g. the official Python SDK)
+        // reject `tools/list` with "Received request before initialization was complete"
+        // and expose zero tools until they receive it.
+        send_notification("notifications/initialized", {});
+    }
+    return result;
+}
+
+void McpClient::send_notification(const QString& method, const QJsonObject& params) {
+    if (!is_running())
+        return;
+    // JSON-RPC 2.0 notification: same frame as a request but with NO "id" and no reply.
+    QJsonObject note;
+    note["jsonrpc"] = "2.0";
+    note["method"] = method;
+    if (!params.isEmpty())
+        note["params"] = params;
+    const QByteArray line = QJsonDocument(note).toJson(QJsonDocument::Compact) + "\n";
+    QMetaObject::invokeMethod(
+        process_, [this, line]() { if (process_) process_->write(line); }, Qt::QueuedConnection);
+    LOG_INFO(TAG, "RPC → " + method + " (notification)");
 }
 
 Result<std::vector<ExternalTool>> McpClient::list_tools() {

@@ -54,6 +54,10 @@ class SurfaceControlPanel : public QWidget {
     // Re-render sections to match the active surface's capability profile.
     // Called by the screen on every chip click.
     void set_capability(ChartType type);
+    /// Mark the currently-displayed data as synthetic (demo) or real (fetched). When
+    /// synthetic, the tier badge shows DEMO regardless of the surface's capability tier,
+    /// so rand() sample data never reads as live/COMPUTED market data.
+    void mark_synthetic(bool on);
 
     // Push min/max/mean/median/std/skew/kurt of the active surface's z matrix.
     void update_metrics(const std::vector<std::vector<float>>& z, const QString& units = "");
@@ -129,6 +133,7 @@ class SurfaceControlPanel : public QWidget {
     QLabel* dataset_lbl_ = nullptr;   // "Dataset:" (cached for retranslateUi)
     QLabel* spot_label_ = nullptr;
     QLabel* tier_badge_ = nullptr;
+    bool synthetic_ = false; // true while the displayed surface is demo/sample data
 
     // ── Static field labels (cached for retranslateUi) ──────────────────────
     QLabel* start_lbl_ = nullptr;

@@ -7,13 +7,23 @@
 #include "services/alpha_arena/HyperliquidLiveVenue.h"
 #include "storage/secure/SecureStorage.h"
 #include <QDateTime>
+#include <QEventLoop>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QPointer>
 #include <QUuid>
 
 namespace fincept::arena {
 
 static constexpr const char* TAG = "ArenaEngine";
+static constexpr int kKillMarksTimeoutMs = 2000;   // bounded wait; a kill must never hang
+
+static QString approval_summary(const AgentAction& act) {
+    return QStringLiteral("%1 %2 %3 $%4 @%5x")
+        .arg(act.kind == ActionKind::Open ? QStringLiteral("OPEN") : QStringLiteral("CLOSE"),
+             act.side.toUpper(), act.coin, QString::number(act.size_usd, 'f', 0),
+             QString::number(act.leverage, 'f', 0));
+}
 
 ArenaEngine& ArenaEngine::instance() {
     static ArenaEngine e;
@@ -115,6 +125,25 @@ Result<void> ArenaEngine::start(const QString& competition_id) {
     }
     ArenaStore::instance().set_competition_status(competition_id, "running");
     emit competition_status_changed(competition_id, "running");
+    // Re-surface HITL approvals persisted by a previous run — a hidden panel or
+    // an app restart must not lose them. resume_after_hitl re-checks agent
+    // status and executes at the venue's CURRENT marks, so an old seq is safe.
+    pending_hitl_.clear();
+    if (auto hitl_r = ArenaStore::instance().hitl_pending_for(competition_id); hitl_r.is_ok())
+        for (const auto& h : hitl_r.value()) {
+            PendingApproval pa;
+            pa.id = h.id;
+            pa.agent_id = h.agent_id;
+            pa.seq = h.round_seq;
+            pa.action.kind = h.kind == QLatin1String("close") ? ActionKind::Close : ActionKind::Open;
+            pa.action.coin = h.coin;
+            pa.action.side = h.side;
+            pa.action.size_usd = h.size_usd;
+            pa.action.leverage = h.leverage;
+            pa.action.reason = h.reason;
+            pending_hitl_.append(pa);
+            emit hitl_requested(pa.id, pa.agent_id, approval_summary(pa.action));
+        }
     timer_->start(comp_.cadence_seconds * 1000);
     marks_timer_->start(marks_interval_ms_);   // between-round live marks
     force_round();   // first round immediately
@@ -155,16 +184,42 @@ Result<void> ArenaEngine::stop() {
     round_in_flight_ = false;
     pending_agents_ = 0;
     round_notional_.clear();
-    pending_hitl_.clear();   // un-actioned approvals die with the run
+    pending_hitl_.clear();   // in-memory only — persisted rows survive for the next start()
     LOG_INFO(TAG, QStringLiteral("competition %1 stopped").arg(id));
     return Result<void>::ok();
 }
 
 Result<void> ArenaEngine::kill_all() {
     if (!venue_) return Result<void>::err("no active competition");
+    timer_->stop();              // no new round may start mid-kill
+    marks_timer_->stop();
+    refresh_marks_blocking();    // close at fresh prices, not last-tick marks
     for (const auto& a : agents_) venue_->close_all(a.id, round_seq_);
-    ArenaStore::instance().insert_event(active_id_, "", "kill_all", "{}");
-    return stop();
+    // Verify the book is actually flat. On a resumed venue whose marks are empty
+    // (crash-recovery reload + a marks refresh that timed out), close_all skips any
+    // position with no mark and leaves it OPEN — surface that instead of a clean ok.
+    int open_left = 0;
+    for (const auto& a : agents_) open_left += venue_->account(a.id).positions.size();
+    // Un-actioned HITL approvals are moot once we've closed out. Resolve them as
+    // rejected orders (auditable, never silently dropped) and drop the persisted
+    // rows so a later restart cannot resurrect them.
+    for (const auto& pa : pending_hitl_) {
+        ArenaStore::instance().delete_hitl_pending(pa.id);
+        reject_approval(pa, QStringLiteral("kill_all"));
+    }
+    pending_hitl_.clear();
+    ArenaStore::instance().insert_event(
+        active_id_, "", "kill_all",
+        open_left ? QStringLiteral("{\"positions_left_open\":%1}").arg(open_left) : QStringLiteral("{}"));
+    auto stopped = stop();
+    if (open_left > 0) {
+        LOG_ERROR(TAG, QStringLiteral("kill_all left %1 position(s) OPEN (no live marks to close at)").arg(open_left));
+        return Result<void>::err(
+            QStringLiteral("Kill incomplete: %1 position(s) could not be closed (no live marks) and remain open.")
+                .arg(open_left)
+                .toStdString());
+    }
+    return stopped;
 }
 
 Result<void> ArenaEngine::kill_agent(const QString& agent_id) {
@@ -174,14 +229,17 @@ Result<void> ArenaEngine::kill_agent(const QString& agent_id) {
         if (a.id == agent_id) { known = true; break; }
     if (!known) return Result<void>::err("unknown agent id");
 
-    const auto closes = venue_->close_all(agent_id, round_seq_);
-    for (const auto& o : closes) emit order_executed(o.agent_id, o.id, o.status);
-
+    // Halt FIRST (immediate-halt rule): an LLM callback landing during the
+    // marks refresh below must execute nothing for this agent.
     const QString reason = QStringLiteral("killed by user");
     ArenaStore::instance().set_agent_status(agent_id, "halted_user", reason);
     for (auto& a : agents_)
         if (a.id == agent_id) { a.status = "halted_user"; a.halt_reason = reason; }
     emit agent_status_changed(agent_id, "halted_user", reason);
+
+    refresh_marks_blocking();    // close at fresh prices, not last-tick marks
+    const auto closes = venue_->close_all(agent_id, round_seq_);
+    for (const auto& o : closes) emit order_executed(o.agent_id, o.id, o.status);
 
     ArenaStore::instance().insert_event(
         active_id_, agent_id, "agent_killed",
@@ -199,6 +257,17 @@ Result<void> ArenaEngine::kill_agent(const QString& agent_id) {
     s.balance = acct.balance;
     for (auto it = acct.upnl.begin(); it != acct.upnl.end(); ++it) s.unrealized_pnl += it.value();
     ArenaStore::instance().insert_equity_snapshot(s);
+    // If the (post-close) book still holds positions, the marks were missing and
+    // close_all left them OPEN — surface it instead of reporting a clean kill.
+    if (!acct.positions.isEmpty()) {
+        LOG_ERROR(TAG, QStringLiteral("kill_agent %1 left %2 position(s) OPEN (no live marks to close at)")
+                           .arg(agent_id)
+                           .arg(acct.positions.size()));
+        return Result<void>::err(
+            QStringLiteral("Kill incomplete: %1 position(s) could not be closed (no live marks) and remain open.")
+                .arg(acct.positions.size())
+                .toStdString());
+    }
     return Result<void>::ok();
 }
 
@@ -262,6 +331,32 @@ void ArenaEngine::run_marks_tick() {
         for (const auto& o : liqs) emit order_executed(o.agent_id, o.id, o.status);
         emit marks_updated();
     });
+}
+
+// Kill paths close positions immediately, but the venue's stored marks can be a
+// full marks-interval stale (or missing before the first tick — close_all then
+// leaves such positions open). Run one synchronous marks tick — set_marks plus
+// the mark_all sweep close_all's contract requires — with a bounded wait; on
+// timeout/error fall through and close at the stored marks: a kill never hangs.
+void ArenaEngine::refresh_marks_blocking() {
+    if (!venue_ || !market_) return;
+    QEventLoop loop;
+    QPointer<QEventLoop> alive(&loop);   // late (post-timeout) callbacks find it null
+    const quint64 epoch = epoch_;
+    market_->fetch_mids(comp_.instruments, [this, epoch, alive](Result<QHash<QString, double>> r) {
+        if (epoch == epoch_ && venue_ && r.is_ok()) {
+            venue_->set_marks(r.value());
+            const qint64 now = QDateTime::currentMSecsSinceEpoch();
+            const auto liqs = venue_->mark_all(now - last_mark_ts_, round_seq_);
+            last_mark_ts_ = now;
+            for (const auto& o : liqs) emit order_executed(o.agent_id, o.id, o.status);
+        }
+        if (alive) alive->quit();
+    });
+    QTimer::singleShot(kKillMarksTimeoutMs, &loop, &QEventLoop::quit);
+    // ExcludeUserInputEvents: this wait must not deliver clicks — a "New"/resume/
+    // second-kill within these <=2s would re-enter the engine and corrupt the kill.
+    loop.exec(QEventLoop::ExcludeUserInputEvents);
 }
 
 void ArenaEngine::run_round() {
@@ -464,13 +559,19 @@ void ArenaEngine::finish_agent(int seq, const AgentRow& agent, const ArenaLlmRes
             pa.action = act;
             pa.seq = seq;
             pending_hitl_.append(pa);
-            emit hitl_requested(pa.id, agent.id,
-                                QStringLiteral("%1 %2 %3 $%4 @%5x")
-                                    .arg(act.kind == ActionKind::Open ? QStringLiteral("OPEN")
-                                                                      : QStringLiteral("CLOSE"),
-                                         act.side.toUpper(), act.coin,
-                                         QString::number(act.size_usd, 'f', 0),
-                                         QString::number(act.leverage, 'f', 0)));
+            HitlPendingRow hp;
+            hp.id = pa.id;
+            hp.competition_id = active_id_;
+            hp.agent_id = agent.id;
+            hp.round_seq = seq;
+            hp.kind = act.kind == ActionKind::Open ? QStringLiteral("open") : QStringLiteral("close");
+            hp.coin = act.coin;
+            hp.side = act.side;
+            hp.size_usd = act.size_usd;
+            hp.leverage = act.leverage;
+            hp.reason = act.reason;
+            ArenaStore::instance().insert_hitl_pending(hp);   // survives hidden panel / restart
+            emit hitl_requested(pa.id, agent.id, approval_summary(act));
             continue;   // executed only after approval
         }
         if (act.kind == ActionKind::Open) round_notional_[agent.id] += act.size_usd;
@@ -484,45 +585,40 @@ void ArenaEngine::resume_after_hitl(const QString& approval_id, bool approved) {
     for (int i = 0; i < pending_hitl_.size(); ++i) {
         if (pending_hitl_[i].id != approval_id) continue;
         const PendingApproval pa = pending_hitl_.takeAt(i);
+        ArenaStore::instance().delete_hitl_pending(pa.id);   // actioned — drop the persisted row
         if (!approved) {
-            OrderRow rej;
-            rej.competition_id = active_id_;
-            rej.agent_id = pa.agent_id;
-            rej.round_seq = pa.seq;
-            rej.coin = pa.action.coin;
-            rej.side = pa.action.side;
-            rej.action = pa.action.kind == ActionKind::Open ? "open" : "close";
-            rej.notional_usd = pa.action.size_usd;
-            rej.leverage = pa.action.leverage;
-            rej.status = "rejected_risk";
-            rej.reject_reason = "HITL rejected";
-            auto r = ArenaStore::instance().insert_order(rej);
-            emit order_executed(pa.agent_id, r.is_ok() ? r.value() : QString(), rej.status);
+            reject_approval(pa, QStringLiteral("HITL rejected"));
             return;
         }
         if (!venue_) return;   // competition stopped between request and decision
         if (!agent_is_active(pa.agent_id)) {
             // Agent halted between the HITL request and the approval — same
             // immediate-halt rule as finish_agent: record, never execute.
-            OrderRow rej;
-            rej.competition_id = active_id_;
-            rej.agent_id = pa.agent_id;
-            rej.round_seq = pa.seq;
-            rej.coin = pa.action.coin;
-            rej.side = pa.action.side;
-            rej.action = pa.action.kind == ActionKind::Open ? "open" : "close";
-            rej.notional_usd = pa.action.size_usd;
-            rej.leverage = pa.action.leverage;
-            rej.status = "rejected_risk";
-            rej.reject_reason = "agent halted";
-            auto r = ArenaStore::instance().insert_order(rej);
-            emit order_executed(pa.agent_id, r.is_ok() ? r.value() : QString(), rej.status);
+            reject_approval(pa, QStringLiteral("agent halted"));
             return;
         }
         auto fill = venue_->execute(pa.agent_id, pa.action, pa.seq);
         if (fill.is_ok()) emit order_executed(pa.agent_id, fill.value().id, fill.value().status);
         return;
     }
+}
+
+// Reject one queued HITL action: persist a rejected order row (audit trail —
+// approvals are never silently dropped) and notify listeners.
+void ArenaEngine::reject_approval(const PendingApproval& pa, const QString& reason) {
+    OrderRow rej;
+    rej.competition_id = active_id_;
+    rej.agent_id = pa.agent_id;
+    rej.round_seq = pa.seq;
+    rej.coin = pa.action.coin;
+    rej.side = pa.action.side;
+    rej.action = pa.action.kind == ActionKind::Open ? "open" : "close";
+    rej.notional_usd = pa.action.size_usd;
+    rej.leverage = pa.action.leverage;
+    rej.status = "rejected_risk";
+    rej.reject_reason = reason;
+    auto r = ArenaStore::instance().insert_order(rej);
+    emit order_executed(pa.agent_id, r.is_ok() ? r.value() : QString(), rej.status);
 }
 
 void ArenaEngine::record_failure(const AgentRow& agent, const QString& kind) {

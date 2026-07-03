@@ -146,7 +146,8 @@ void FeeDiscountPanel::build_ui() {
 
     hint_ = new QLabel(
         tr("Hold ≥ %1 $FNCPT to qualify for the discount on premium screens, "
-           "AI reports, and deep backtests.")
+           "AI reports, and deep backtests. Projected only — the discount is "
+           "not yet applied automatically at checkout.")
             .arg(QLocale::system().toString(
                 static_cast<double>(
                     fincept::billing::FeeDiscountConfig::kThresholdRaw)
@@ -292,7 +293,7 @@ void FeeDiscountPanel::update_view() {
     const bool eligible = have_discount_ ? latest_.eligible
                                          : (fncpt_held_ >= threshold);
     if (eligible) {
-        heading_status_->setText(tr("● %1% OFF ACTIVE").arg(discount_pct));
+        heading_status_->setText(tr("● %1% OFF ELIGIBLE").arg(discount_pct));
         heading_status_->setObjectName(QStringLiteral("feeDiscountHeadStatusOk"));
         const double save = FeeDiscountConfig::kReferencePriceUsd * discount_pct / 100.0;
         const double net = FeeDiscountConfig::kReferencePriceUsd - save;
@@ -346,7 +347,8 @@ void FeeDiscountPanel::retranslateUi() {
     if (hint_)
         hint_->setText(
             tr("Hold ≥ %1 $FNCPT to qualify for the discount on premium screens, "
-               "AI reports, and deep backtests.")
+               "AI reports, and deep backtests. Projected only — the discount is "
+               "not yet applied automatically at checkout.")
                 .arg(QLocale::system().toString(
                     static_cast<double>(FeeDiscountConfig::kThresholdRaw)
                         / std::pow(10.0, FeeDiscountConfig::kThresholdDecimals),

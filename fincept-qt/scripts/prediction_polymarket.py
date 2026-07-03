@@ -181,8 +181,8 @@ def cmd_open_orders(payload: dict) -> None:
             "side": o.get("side"),
             "order_type": o.get("order_type", "GTC"),
             "price": float(o.get("price", 0)),
-            "size": float(o.get("original_size", 0)) / 1_000_000.0,
-            "filled": float(o.get("size_matched", 0)) / 1_000_000.0,
+            "size": float(o.get("original_size", 0)),
+            "filled": float(o.get("size_matched", 0)),
             "status": o.get("status", ""),
             "created_ms": int(o.get("created_at", 0)) * 1000,
             "expires_ms": int(o.get("expiration") or 0) * 1000,
@@ -206,7 +206,7 @@ def cmd_activity(payload: dict) -> None:
 
 
 def cmd_place_order(payload: dict) -> None:
-    from py_clob_client.clob_types import OrderArgs, OrderType
+    from py_clob_client.clob_types import OrderArgs, OrderType, PartialCreateOrderOptions
 
     client = _build_client(payload)
 
@@ -227,12 +227,17 @@ def cmd_place_order(payload: dict) -> None:
     if payload.get("expiration"):
         args.expiration = int(payload["expiration"])
 
-    options = {
-        "tick_size": str(payload.get("tick_size", "0.01")),
-        "neg_risk": bool(payload.get("neg_risk", False)),
-    }
+    # py_clob_client expects a PartialCreateOrderOptions (attribute access), not a
+    # plain dict, and create_and_post_order() accepts no order_type kwarg (it always
+    # posts GTC). Sign with create_order(), then publish with post_order() so the
+    # caller's FOK/FAK/GTD/GTC time-in-force is actually honored.
+    options = PartialCreateOrderOptions(
+        tick_size=str(payload.get("tick_size", "0.01")),
+        neg_risk=bool(payload.get("neg_risk", False)),
+    )
 
-    result = client.create_and_post_order(args, options, order_type=order_type)
+    signed = client.create_order(args, options)
+    result = client.post_order(signed, order_type)
     _emit({
         "ok": bool(result.get("success", False)),
         "order_id": result.get("orderID") or result.get("order_id") or "",

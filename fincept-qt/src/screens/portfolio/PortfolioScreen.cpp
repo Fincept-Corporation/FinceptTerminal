@@ -82,10 +82,14 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
             detail_wrapper_->update_correlation(matrix);
     });
     connect(&svc, &services::PortfolioService::spy_history_loaded, this,
-            [this](QStringList /*dates*/, QVector<double> /*closes*/) {
+            [this](QStringList /*dates*/, QVector<double> closes) {
+                // Feed the FFN view's BENCHMARK (SPY) column — it computes
+                // total return / CAGR / vol / Sharpe / max-DD from the closes.
+                if (ffn_view_)
+                    ffn_view_->set_benchmark(closes);
                 // Recompute metrics now that SPY data is available for OLS beta.
                 // The chart consumes the per-symbol benchmark_history_loaded
-                // signal below — SPY here is purely a Beta signal.
+                // signal below — SPY there may differ from this Beta fetch.
                 if (summary_loaded_)
                     services::PortfolioService::instance().compute_metrics(current_summary_);
             });

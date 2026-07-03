@@ -28,6 +28,10 @@ class PortfolioFFNView : public QWidget {
 
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
 
+    /// Benchmark (SPY) daily closes — feeds the BENCHMARK column of the
+    /// Overview and Benchmark tables (stats computed natively in C++).
+    void set_benchmark(const QVector<double>& closes);
+
   signals:
     void back_requested();
 
@@ -107,6 +111,7 @@ class PortfolioFFNView : public QWidget {
     portfolio::PortfolioSummary summary_;
     QString currency_;
     QJsonObject ffn_data_;
+    QVector<double> benchmark_closes_; // SPY daily closes (1y), via set_benchmark()
 };
 
 } // namespace fincept::screens

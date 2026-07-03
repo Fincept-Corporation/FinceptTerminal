@@ -679,7 +679,7 @@ ApiResponse<QVector<BrokerCandle>> MotilalBroker::get_history(const BrokerCreden
                 continue;
         }
         BrokerCandle c;
-        c.timestamp = d.isValid() ? QDateTime(d, QTime(15, 30)).toSecsSinceEpoch() : 0;
+        c.timestamp = d.isValid() ? QDateTime(d, QTime(15, 30)).toMSecsSinceEpoch() : 0; // BrokerCandle contract = ms
         c.open = o.value("open").toDouble();
         c.high = o.value("high").toDouble();
         c.low = o.value("low").toDouble();

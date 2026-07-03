@@ -30,6 +30,8 @@ class RelationshipPanel : public QWidget {
 
     // Static text widgets (cached for retranslateUi)
     QLabel* title_lbl_ = nullptr;
+    QLabel* sample_badge_ = nullptr; // "SAMPLE DATA" pill — data is hardcoded, not live
+    QLabel* sample_note_ = nullptr;  // honesty banner above the network
     QLabel* stats_lbl_ = nullptr;
     QLabel* sec_conflicts_ = nullptr;
     QLabel* sec_crisis_ = nullptr;

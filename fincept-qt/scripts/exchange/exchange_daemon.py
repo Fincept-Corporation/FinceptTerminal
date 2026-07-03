@@ -329,9 +329,49 @@ def _handle_fetch_balance(req_id, exchange_id, args):
     _respond(req_id, True, {"balances": non_zero})
 
 
+def _resolve_market_symbol(ex, symbol, exchange_id):
+    """Map the app's display symbol to a valid ccxt market symbol for this exchange.
+
+    Most venues use the same unified symbol the app sends, so an exact market match
+    is returned unchanged (zero behaviour change for exchanges that already work).
+    Only when there is no exact market — e.g. Hyperliquid, where the app sends
+    "BTC/USDT" but the tradable market is the perp "BTC/USDC:USDC" — do we resolve by
+    base currency, preferring the exchange's default market type. If nothing matches
+    we return the original symbol so ccxt raises a clear BadSymbol (now surfaced to
+    the user instead of being silently swallowed).
+    """
+    markets = getattr(ex, "markets", None) or {}
+    if symbol in markets:
+        return symbol
+    base = symbol.split("/")[0].split(":")[0].strip().upper()
+    if not base:
+        return symbol
+    want_swap = get_default_type(exchange_id) in ("swap", "future")
+    candidates = [
+        m for m in markets.values()
+        if (m.get("base") or "").upper() == base and m.get("active", True)
+    ]
+    if not candidates:
+        return symbol
+    # Prefer markets whose contract type matches the exchange default (swap for a
+    # perps DEX, spot otherwise), then linear (stablecoin-settled) over inverse.
+    candidates.sort(
+        key=lambda m: (bool(m.get("swap")) == want_swap, bool(m.get("linear", True))),
+        reverse=True,
+    )
+    return candidates[0].get("symbol", symbol)
+
+
 def _handle_place_order(req_id, exchange_id, args):
     ex = _get_exchange(exchange_id, need_auth=True)
     _ensure_markets(ex, exchange_id)
+
+    symbol = _resolve_market_symbol(ex, args["symbol"], exchange_id)
+    if symbol != args["symbol"]:
+        sys.stderr.write(
+            f"[exchange_daemon] order symbol {args['symbol']} -> {symbol} ({exchange_id})\n"
+        )
+        sys.stderr.flush()
 
     otype = args["type"]
     price = args.get("price")
@@ -360,7 +400,7 @@ def _handle_place_order(req_id, exchange_id, args):
         params["takeProfit"] = {"triggerPrice": args["tp"]}
 
     order = ex.create_order(
-        args["symbol"], otype, args["side"],
+        symbol, otype, args["side"],
         args["amount"], price, params,
     )
     _respond(req_id, True, {

@@ -6,7 +6,9 @@
 #include "core/logging/Logger.h"
 #include "mcp/McpManager.h"
 #include "mcp/McpProvider.h"
+#include "mcp/ToolRetriever.h"
 
+#include <QCoreApplication>
 #include <QJsonDocument>
 #include <QPromise>
 #include <QRegularExpression>
@@ -36,6 +38,14 @@ void McpService::initialize() {
     QObject::connect(&McpManager::instance(), &McpManager::servers_changed, [this]() {
         QMutexLocker lock(&mutex_);
         cache_time_ = QDateTime(); // force refresh on next get_all_tools()
+        // The Tool RAG index covers external tools too (ToolRetriever builds
+        // over get_all_tools()), so it must follow this cache. Queued, never
+        // inline: servers_changed can fire while McpManager's mutex is held
+        // (error paths), and the retriever rebuild takes ToolRetriever →
+        // McpService → McpManager locks — invalidating inline here would
+        // invert that order.
+        QMetaObject::invokeMethod(qApp, []() { ToolRetriever::instance().invalidate(); },
+                                  Qt::QueuedConnection);
         LOG_INFO(TAG, "Tool cache invalidated — external servers changed");
     });
 
@@ -371,7 +381,16 @@ ToolResult McpService::execute_tool(const QString& server_id, const QString& too
     if (server_id == INTERNAL_SERVER_ID)
         return McpProvider::instance().call_tool(tool_name, args);
 
-    // Route to external server
+    // Route to external server — through the same Phase 6.3 auth/destructive
+    // gate internal tools get inside call_tool_async (previously this path
+    // bypassed it entirely). The MCP wire carries no auth/destructiveness
+    // metadata, so external tools are gated destructive-by-default: the
+    // installed checker must approve them exactly like a destructive internal
+    // tool (agent-originated calls are denied unless the agent opts in).
+    if (auto denied = McpProvider::instance().check_authorization(
+            server_id + "__" + tool_name, AuthLevel::None, /*is_destructive=*/true))
+        return *denied;
+
     auto result = McpManager::instance().call_external_tool(server_id, tool_name, args);
     if (result.is_err())
         return ToolResult::fail(QString::fromStdString(result.error()));
@@ -483,11 +502,12 @@ void McpService::refresh_cache() {
     auto external = McpManager::instance().get_all_external_tools();
     for (auto& ext : external) {
         // External tools default category="" (their server doesn't tag) and
-        // is_destructive=false (we have no signal for it from the wire — the
-        // MCP spec doesn't carry it). Treat external tools as non-destructive
-        // until they tell us otherwise.
+        // is_destructive=true — the MCP spec carries no destructiveness
+        // signal on the wire, so treat external tools as destructive-by-
+        // default. Keeps tool_list / Tool RAG surfacing honest and matches
+        // execute_tool(), which gates them like destructive internal tools.
         cached_tools_.push_back({ext.server_id, ext.server_name, ext.name, ext.description,
-                                  ext.input_schema, false, QString{}, false});
+                                  ext.input_schema, false, QString{}, true});
     }
 
     // Invalidate filter-derived caches — they were computed against the

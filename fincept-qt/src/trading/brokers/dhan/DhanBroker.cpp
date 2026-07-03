@@ -336,6 +336,35 @@ ApiResponse<QJsonObject> DhanBroker::get_trade_book(const BrokerCredentials& cre
     return {true, resp.json, "", ts};
 }
 
+// ── LTP hydration ─────────────────────────────────────────────────────────────
+// Positions/holdings responses carry no price field. Batch-fetch last prices via
+// POST /v2/marketfeed/ltp (same endpoint as get_quotes) using the securityIds the
+// rows themselves carry, keyed "<segment>:<securityId>". Best-effort: on any
+// failure the map stays empty and rows keep ltp = 0 (never fabricate prices).
+static QMap<QString, double> fetch_ltp_by_security_id(const QMap<QString, QString>& headers,
+                                                      const QMap<QString, QJsonArray>& ids_by_segment) {
+    QMap<QString, double> ltp_map;
+    if (ids_by_segment.isEmpty())
+        return ltp_map;
+
+    QJsonObject body;
+    for (auto it = ids_by_segment.constBegin(); it != ids_by_segment.constEnd(); ++it)
+        body[it.key()] = it.value();
+
+    auto resp = BrokerHttp::instance().post_json(BASE + "/v2/marketfeed/ltp", body, headers);
+    if (!resp.success || resp.json.value("errorType").toString().length() > 0)
+        return ltp_map;
+
+    // Response: {"data": {"NSE_EQ": {"12345": {"last_price": 500.0}}}}
+    const auto data = resp.json.value("data").toObject();
+    for (auto seg_it = data.constBegin(); seg_it != data.constEnd(); ++seg_it) {
+        const auto tokens = seg_it.value().toObject();
+        for (auto tok_it = tokens.constBegin(); tok_it != tokens.constEnd(); ++tok_it)
+            ltp_map[seg_it.key() + ":" + tok_it.key()] = tok_it.value().toObject().value("last_price").toDouble();
+    }
+    return ltp_map;
+}
+
 // ── Get Positions ─────────────────────────────────────────────────────────────
 // GET /v2/positions — returns array directly
 ApiResponse<QVector<BrokerPosition>> DhanBroker::get_positions(const BrokerCredentials& creds) {
@@ -353,6 +382,8 @@ ApiResponse<QVector<BrokerPosition>> DhanBroker::get_positions(const BrokerCrede
 
     QVector<BrokerPosition> positions;
     positions.reserve(arr.size());
+    QVector<QString> ltp_keys; // parallel to positions: "<segment>:<securityId>"
+    QMap<QString, QJsonArray> ids_by_segment;
     for (const auto& v : arr) {
         auto p = v.toObject();
         double qty = p.value("netQty").toDouble();
@@ -371,15 +402,33 @@ ApiResponse<QVector<BrokerPosition>> DhanBroker::get_positions(const BrokerCrede
         pos.avg_price = qty > 0 ? buy_avg : sell_avg;
         if (pos.avg_price == 0.0) // older deployments do return avgCostPrice
             pos.avg_price = p.value("avgCostPrice").toDouble();
-        // Positions don't carry an LTP field; callers wanting live MTM must
-        // refresh via /v2/marketfeed/ltp. Leave 0 here.
-        // TODO: hydrate LTP to populate pnl_pct
+        // Positions don't carry an LTP field — hydrated below via /v2/marketfeed/ltp
+        // using the row's own securityId + exchangeSegment.
         pos.ltp = 0.0;
         pos.pnl = p.value("unrealizedProfit").toDouble();
         pos.day_pnl = p.value("realizedProfit").toDouble();
         pos.side = qty > 0 ? "LONG" : "SHORT";
-        pos.pnl_pct = (pos.avg_price > 0.0) ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 : 0.0;
+        pos.pnl_pct = 0.0;
+        const QString seg = p.value("exchangeSegment").toString();
+        const QString sec_id = p.value("securityId").toVariant().toString();
+        ltp_keys.append(seg + ":" + sec_id);
+        if (!seg.isEmpty() && !sec_id.isEmpty())
+            ids_by_segment[seg].append(sec_id);
         positions.append(pos);
+    }
+
+    // Hydrate live LTP so MTM/pnl_pct aren't silently 0 (best-effort, read-only).
+    const auto ltp_map = fetch_ltp_by_security_id(auth_headers(creds), ids_by_segment);
+    for (int i = 0; i < positions.size(); ++i) {
+        const double ltp = ltp_map.value(ltp_keys.at(i), 0.0);
+        if (ltp <= 0.0)
+            continue;
+        auto& pos = positions[i];
+        pos.ltp = ltp;
+        if (pos.avg_price > 0.0)
+            pos.pnl_pct = ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0;
+        if (pos.pnl == 0.0) // keep broker-reported MTM when present
+            pos.pnl = (pos.ltp - pos.avg_price) * pos.quantity;
     }
     return {true, positions, "", ts};
 }
@@ -407,6 +456,8 @@ ApiResponse<QVector<BrokerHolding>> DhanBroker::get_holdings(const BrokerCredent
 
     QVector<BrokerHolding> holdings;
     holdings.reserve(arr.size());
+    QVector<QString> ltp_keys; // parallel to holdings: "<segment>:<securityId>"
+    QMap<QString, QJsonArray> ids_by_segment;
     for (const auto& v : arr) {
         auto h = v.toObject();
         BrokerHolding holding;
@@ -414,15 +465,36 @@ ApiResponse<QVector<BrokerHolding>> DhanBroker::get_holdings(const BrokerCredent
         holding.exchange = h.value("exchange").toString();
         holding.quantity = h.value("totalQty").toDouble();
         holding.avg_price = h.value("avgCostPrice").toDouble();
-        // /v2/holdings does NOT return an LTP field. Caller must hydrate via
-        // /v2/marketfeed/ltp using securityId — leave zero rather than fabricate.
-        // TODO: hydrate LTP to populate current_value/pnl
+        // /v2/holdings does NOT return an LTP field — hydrated below via
+        // /v2/marketfeed/ltp using the row's own securityId.
         holding.ltp = 0.0;
         holding.invested_value = holding.quantity * holding.avg_price;
         holding.current_value = 0.0;
         holding.pnl = 0.0;
         holding.pnl_pct = 0.0;
+        // Holdings carry a plain exchange ("NSE"/"BSE"/"ALL") — quote on the
+        // matching equity segment (dhan_exchange defaults unknowns to NSE_EQ).
+        const QString seg = dhan_exchange(holding.exchange);
+        const QString sec_id = h.value("securityId").toVariant().toString();
+        ltp_keys.append(seg + ":" + sec_id);
+        if (!sec_id.isEmpty())
+            ids_by_segment[seg].append(sec_id);
         holdings.append(holding);
+    }
+
+    // Hydrate live LTP and derive value/P&L — previously left 0, so holdings views
+    // without a live-quote subscription showed ₹0 value/P&L for real positions.
+    const auto ltp_map = fetch_ltp_by_security_id(auth_headers(creds), ids_by_segment);
+    for (int i = 0; i < holdings.size(); ++i) {
+        const double ltp = ltp_map.value(ltp_keys.at(i), 0.0);
+        if (ltp <= 0.0)
+            continue;
+        auto& holding = holdings[i];
+        holding.ltp = ltp;
+        holding.current_value = holding.quantity * ltp;
+        holding.pnl = holding.current_value - holding.invested_value;
+        if (holding.invested_value > 0.0)
+            holding.pnl_pct = (holding.pnl / holding.invested_value) * 100.0;
     }
     return {true, holdings, "", ts};
 }

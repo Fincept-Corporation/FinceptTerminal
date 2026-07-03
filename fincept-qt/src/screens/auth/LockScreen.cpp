@@ -397,6 +397,19 @@ void LockScreen::build_unlock_page() {
     connect(unlock_btn_, &QPushButton::clicked, this, &LockScreen::on_unlock_submit);
     vl->addWidget(unlock_btn_);
 
+    // "Forgot PIN?" escape — a forgotten PIN is recoverable by signing in again
+    // (this clears the PIN). Without this link the only path was to fail the unlock
+    // kMaxAttempts times through escalating lockouts, which is minutes of dead-end.
+    auto* forgot_link = new QPushButton(tr("Forgot PIN?  Sign in again"));
+    forgot_link->setCursor(Qt::PointingHandCursor);
+    forgot_link->setStyleSheet(QString("QPushButton{color:%1; background:transparent; border:none;"
+                                       "font-size:12px; text-decoration:underline;"
+                                       "font-family:'Consolas','Courier New',monospace;}"
+                                       "QPushButton:hover{color:%2;}")
+                                   .arg(ui::colors::TEXT_DIM(), ui::colors::AMBER()));
+    connect(forgot_link, &QPushButton::clicked, this, [this]() { emit reauth_requested(); });
+    vl->addWidget(forgot_link, 0, Qt::AlignHCenter);
+
     vl->addStretch();
 
     connect(unlock_pin_input_, &QLineEdit::returnPressed, this, &LockScreen::on_unlock_submit);

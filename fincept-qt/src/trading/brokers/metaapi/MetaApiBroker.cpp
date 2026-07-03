@@ -725,7 +725,7 @@ ApiResponse<QVector<BrokerCandle>> MetaApiBroker::get_history(const BrokerCreden
 
             const QString time_str = c.value("time").toString();
             const auto dt = QDateTime::fromString(time_str, Qt::ISODate);
-            candle.timestamp = dt.isValid() ? dt.toSecsSinceEpoch() : 0;
+            candle.timestamp = dt.isValid() ? dt.toMSecsSinceEpoch() : 0; // BrokerCandle contract = ms
 
             candle.open = c.value("open").toDouble();
             candle.high = c.value("high").toDouble();
@@ -770,7 +770,7 @@ ApiResponse<QVector<BrokerCandle>> MetaApiBroker::get_history(const BrokerCreden
 
             const QString time_str = c.value("time").toString();
             const auto dt = QDateTime::fromString(time_str, Qt::ISODate);
-            candle.timestamp = dt.isValid() ? dt.toSecsSinceEpoch() : 0;
+            candle.timestamp = dt.isValid() ? dt.toMSecsSinceEpoch() : 0; // BrokerCandle contract = ms
 
             candle.open = c.value("open").toDouble();
             candle.high = c.value("high").toDouble();

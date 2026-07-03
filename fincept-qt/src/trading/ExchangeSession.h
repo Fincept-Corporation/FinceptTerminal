@@ -20,6 +20,7 @@
 
 #include "trading/TradingTypes.h"
 
+#include <QElapsedTimer>
 #include <QHash>
 #include <QJsonObject>
 #include <QMutex>
@@ -126,6 +127,11 @@ class ExchangeSession : public QObject {
     void handle_ws_line(const QString& line);
     void drain_ws_buffer();
 
+    /// QProcess::finished handler for the WS subprocess. Clears the connected
+    /// flag (so the polled UI badge drops to OFFLINE) and — if the stream was
+    /// still supposed to be up — schedules a bounded, backed-off respawn.
+    void handle_ws_finished(int exit_code, QProcess::ExitStatus status);
+
     /// Apply the exchange→requested symbol remap (e.g. on Hyperliquid,
     /// `BTC/USDC:USDC` → `BTC/USDT`). Returns the input unchanged when no
     /// remap is known. Thread-safe — takes the session mutex internally.
@@ -145,6 +151,9 @@ class ExchangeSession : public QObject {
 
     QProcess* ws_process_ = nullptr;
     std::atomic<bool> ws_connected_{false};
+    bool ws_should_run_ = false;   // true between a successful start_ws() and stop_ws()
+    int ws_restart_attempts_ = 0;  // consecutive auto-restarts; reset after a healthy run
+    QElapsedTimer ws_uptime_;      // since the current ws_process_ was spawned
     QString ws_primary_symbol_;
     QStringList ws_all_symbols_;
     QHash<QString, QString> ws_symbol_map_;  // exchange_symbol → requested_symbol

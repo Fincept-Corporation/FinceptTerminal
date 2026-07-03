@@ -111,11 +111,21 @@ void CryptoTradingScreen::async_fetch_live_balance() {
             [self, result]() {
                 if (!self)
                     return;
-                double total = result.value("total").toObject().value("USDT").toDouble();
-                double free = result.value("free").toObject().value("USDT").toDouble();
-                double used = result.value("used").toObject().value("USDT").toDouble();
-                self->bottom_panel_->set_live_balance(free, total, used);
-                self->order_entry_->set_balance(free);
+                // A daemon/bridge failure (e.g. bad API key) returns an "error"
+                // key or simply omits the balance keys — both would otherwise
+                // decode to 0.0 and render a misleading $0.00 that looks exactly
+                // like a genuinely empty account. Surface an explicit unavailable
+                // state instead, and leave the order-entry balance untouched.
+                if (result.contains("error") || !result.contains("total")) {
+                    self->bottom_panel_->set_balance_unavailable(
+                        result.value("error").toString(QStringLiteral("no data")));
+                } else {
+                    double total = result.value("total").toObject().value("USDT").toDouble();
+                    double free = result.value("free").toObject().value("USDT").toDouble();
+                    double used = result.value("used").toObject().value("USDT").toDouble();
+                    self->bottom_panel_->set_live_balance(free, total, used);
+                    self->order_entry_->set_balance(free);
+                }
                 self->live_inflight_.fetch_sub(1);
             },
             Qt::QueuedConnection);

@@ -378,8 +378,9 @@ ApiResponse<QVector<BrokerCandle>> AlpacaBroker::get_history(const BrokerCredent
     for (const auto& v : bars_arr) {
         auto b = v.toObject();
         BrokerCandle c;
-        // Parse RFC3339 timestamp string to epoch seconds
-        c.timestamp = QDateTime::fromString(b.value("t").toString(), Qt::ISODateWithMs).toSecsSinceEpoch();
+        // Parse RFC3339 timestamp → epoch MILLISECONDS (BrokerCandle.timestamp contract;
+        // seconds here render candles in Jan 1970 on the chart).
+        c.timestamp = QDateTime::fromString(b.value("t").toString(), Qt::ISODateWithMs).toMSecsSinceEpoch();
         c.open = b.value("o").toDouble();
         c.high = b.value("h").toDouble();
         c.low = b.value("l").toDouble();
@@ -463,7 +464,8 @@ static QMap<QString, QString> alpaca_data_headers(const BrokerCredentials& creds
 static BrokerCandle parse_bar(const QJsonObject& b, const QString& symbol = {}) {
     BrokerCandle c;
     Q_UNUSED(symbol);
-    c.timestamp = QDateTime::fromString(b.value("t").toString(), Qt::ISODateWithMs).toSecsSinceEpoch();
+    // Epoch MILLISECONDS (BrokerCandle contract); seconds → candles in Jan 1970.
+    c.timestamp = QDateTime::fromString(b.value("t").toString(), Qt::ISODateWithMs).toMSecsSinceEpoch();
     c.open = b.value("o").toDouble();
     c.high = b.value("h").toDouble();
     c.low = b.value("l").toDouble();

@@ -36,6 +36,9 @@ public:
     explicit EquityChart(QWidget* parent = nullptr);
 
     void set_candles(const QVector<trading::BrokerCandle>& candles);
+    // Live-tick path: update the forming (last) bar in place, or append a new
+    // bar when the timestamp rolls past the current last one.
+    void update_last_candle(const trading::BrokerCandle& candle);
     void clear();
 
     // Draw/clear a dashed horizontal line at an open position's entry price.

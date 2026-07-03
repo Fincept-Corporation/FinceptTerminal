@@ -1,9 +1,10 @@
 #pragma once
 // HyperliquidSigner — EIP-712 typed-data signer for Hyperliquid actions.
 //
-// STATE (Phase 5c): fully wired. keccak256 (Keccak256.h) + ECDSA over
-// secp256k1 (OpenSSL) + EIP-712 typed data are linked; is_wired() returns true
-// and sign_action() produces a live signature.
+// STATE: the signing primitives (keccak256 + secp256k1 ECDSA + EIP-712 typed
+// data) are linked, but the live ORDER path is NOT production-ready — is_wired()
+// returns false so the Alpha Arena live gate stays closed (no real wallet key is
+// captured) until order placement + signature vectors are verified.
 //
 // EIP-712 shape (reference):
 //        struct HyperliquidSignTransaction { name: string, version: string,

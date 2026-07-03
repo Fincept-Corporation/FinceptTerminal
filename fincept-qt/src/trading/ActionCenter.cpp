@@ -5,6 +5,7 @@
 #include "storage/repositories/SettingsRepository.h"
 #include "storage/sqlite/Database.h"
 #include "trading/AccountManager.h"
+#include "trading/BrokerRegistry.h"
 #include "trading/TradingEvents.h"
 #include "trading/UnifiedTrading.h"
 
@@ -325,17 +326,67 @@ ActionCenter::Stats ActionCenter::get_stats(const QString& account_id) const {
 
 QString ActionCenter::execute_pending(const PendingOrder& po, bool& ok, QString& err) {
     ok = false;
-    if (po.order_type == "placeorder" || po.order_type == "smartorder" ||
-        po.order_type == "placegttorder") {
-        // Smart/GTT collapse to a standard place via UnifiedTrading for now —
-        // the serialized order carries the same fields. (place_smart_order /
-        // GTT-specific routing can be wired here later without changing the
-        // queue/approve contract.)
+    if (po.order_type == "placeorder" || po.order_type == "smartorder") {
+        // Smart collapses to a standard place via UnifiedTrading for now —
+        // the serialized order carries the same fields. (place_smart_order
+        // routing can be wired here later without changing the queue/approve
+        // contract.)
         UnifiedOrder order = deserialize_unified_order(po.order_data);
         UnifiedOrderResponse resp = UnifiedTrading::instance().place_order(po.account_id, order);
         ok = resp.success;
         err = resp.message;
         return resp.order_id;
+    }
+
+    if (po.order_type == "placegttorder") {
+        // A GTT is a RESTING trigger at the broker — it must NEVER collapse
+        // into an immediate place_order (that fires the order right away).
+        // Route to the broker's native GTT API; when the account has no GTT
+        // path, fail loudly so the user is not misled into an instant fill.
+        auto account = AccountManager::instance().get_account(po.account_id);
+        if (account.account_id.isEmpty()) {
+            err = "Account not found: " + po.account_id;
+            return {};
+        }
+        if (account.trading_mode == "paper") {
+            err = "GTT not supported for paper accounts";
+            return {};
+        }
+        auto* broker = BrokerRegistry::instance().get(account.broker_id);
+        if (!broker) {
+            err = "Broker not found: " + account.broker_id;
+            return {};
+        }
+        const UnifiedOrder base = deserialize_unified_order(po.order_data);
+        if (base.stop_price <= 0.0) {
+            err = "GTT order missing trigger_price";
+            return {};
+        }
+        GttOrder gtt;
+        gtt.symbol = base.symbol;
+        gtt.exchange = base.exchange;
+        gtt.type = GttOrderType::Single;
+        gtt.last_price = po.order_data.value("last_price").toDouble();
+        GttTrigger trig;
+        trig.trigger_price = base.stop_price; // deserialize maps trigger_price/stop_price here
+        trig.limit_price = base.price;
+        trig.quantity = base.quantity;
+        trig.side = base.side;
+        // GTT legs are Market or Limit only: SL-M fires at market on trigger,
+        // Limit / SL carry their limit price.
+        trig.order_type = (base.order_type == OrderType::Market || base.order_type == OrderType::StopLoss)
+                              ? OrderType::Market
+                              : OrderType::Limit;
+        trig.product = base.product_type;
+        gtt.triggers.append(trig);
+
+        const auto creds = AccountManager::instance().load_credentials(po.account_id);
+        // Brokers without a gtt_place override return the base-class
+        // "GTT not supported for this broker" — surfaced as a rejection.
+        const GttPlaceResponse resp = broker->gtt_place(creds, gtt);
+        ok = resp.success;
+        err = resp.error;
+        return resp.gtt_id;
     }
 
     if (po.order_type == "basketorder") {

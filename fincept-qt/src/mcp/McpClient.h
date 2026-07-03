@@ -76,6 +76,8 @@ class McpClient : public QObject {
     int next_id_ = 1;
 
     Result<QJsonObject> send_request(const QString& method, const QJsonObject& params, int timeout_ms = 30000);
+    // Fire-and-forget JSON-RPC notification (no id, no response) — e.g. notifications/initialized.
+    void send_notification(const QString& method, const QJsonObject& params = {});
     void handle_line(const QByteArray& line);
     void append_log(const QString& line);
     void cleanup_process(); // deletes process_ safely (call only after thread is stopped/not started)

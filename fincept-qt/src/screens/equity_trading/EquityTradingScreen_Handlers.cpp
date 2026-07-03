@@ -462,10 +462,20 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
                     return;
                 }
                 pt_fill_order(pt_order.id, fill_price);
+                // Register the protective SL/TP bracket against the filled position.
+                // check_sl_tp_triggers runs every tick but ran against an EMPTY registry
+                // because set_sl_tp was never called on the equity path — so equity paper
+                // stops gave zero protection until now.
+                if (order.stop_loss > 0 || order.take_profit > 0)
+                    OrderMatcher::instance().set_sl_tp(portfolio_id, order.symbol, pt_order.id, order.stop_loss,
+                                                       order.take_profit);
                 order_entry_->show_order_status(
                     tr("Paper order filled: %1 @ %2").arg(order.symbol).arg(fill_price, 0, 'f', 2), true);
             } else {
                 OrderMatcher::instance().add_order(pt_order);
+                if (order.stop_loss > 0 || order.take_profit > 0)
+                    OrderMatcher::instance().set_sl_tp(portfolio_id, order.symbol, pt_order.id, order.stop_loss,
+                                                       order.take_profit);
                 order_entry_->show_order_status(tr("Paper order queued: %1").arg(order.symbol), true);
             }
         } catch (const std::exception& e) {

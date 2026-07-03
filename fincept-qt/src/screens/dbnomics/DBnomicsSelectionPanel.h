@@ -74,6 +74,7 @@ class DBnomicsSelectionPanel : public QWidget {
   private:
     void build_ui();
     void retranslateUi();
+    void renumber_slots();
     void tick_anim();
     QWidget* build_search_section();
     QWidget* build_provider_section();

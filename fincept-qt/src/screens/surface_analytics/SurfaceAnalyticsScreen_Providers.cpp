@@ -39,6 +39,8 @@ namespace fincept::surface {
 using namespace fincept::ui;
 
 void SurfaceAnalyticsScreen::on_vol_surface_received(const fincept::DatabentoVolSurfaceResult& r) {
+    if (r.success && control_panel_)
+        control_panel_->mark_synthetic(false); // real Databento data replaced the demo surface
     if (data_inspector_)
         data_inspector_->set_status(r.success ? tr("Vol surface loaded") : tr("Vol fetch failed"), r.success);
     if (!r.success) {
@@ -103,6 +105,8 @@ void SurfaceAnalyticsScreen::on_vol_surface_received(const fincept::DatabentoVol
 }
 
 void SurfaceAnalyticsScreen::on_ohlcv_received(const fincept::DatabentoOhlcvResult& r) {
+    if (r.success && control_panel_)
+        control_panel_->mark_synthetic(false); // real data replaced the demo surface
     if (data_inspector_) {
         data_inspector_->set_status(r.success ? tr("OHLCV loaded") : tr("OHLCV fetch failed"), r.success);
         if (!r.success)
@@ -130,6 +134,8 @@ void SurfaceAnalyticsScreen::on_ohlcv_received(const fincept::DatabentoOhlcvResu
 }
 
 void SurfaceAnalyticsScreen::on_futures_received(const fincept::DatabentoFuturesResult& r) {
+    if (r.success && control_panel_)
+        control_panel_->mark_synthetic(false); // real data replaced the demo surface
     if (data_inspector_) {
         data_inspector_->set_status(r.success ? tr("Futures curve loaded") : tr("Futures fetch failed"), r.success);
         if (!r.success)
@@ -147,6 +153,8 @@ void SurfaceAnalyticsScreen::on_futures_received(const fincept::DatabentoFutures
 }
 
 void SurfaceAnalyticsScreen::on_surface_received(const fincept::DatabentoSurfaceResult& r) {
+    if (r.success && control_panel_)
+        control_panel_->mark_synthetic(false); // real data replaced the demo surface
     if (data_inspector_) {
         data_inspector_->set_status(r.success ? tr("Surface loaded") : tr("Surface fetch failed"), r.success);
         if (!r.success)

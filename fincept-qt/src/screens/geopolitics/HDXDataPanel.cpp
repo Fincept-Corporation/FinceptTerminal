@@ -26,6 +26,22 @@ HDXDataPanel::HDXDataPanel(QWidget* parent) : QWidget(parent) {
 void HDXDataPanel::connect_service() {
     auto& svc = GeopoliticsService::instance();
     connect(&svc, &GeopoliticsService::hdx_results_loaded, this, &HDXDataPanel::on_hdx_results);
+    // Without this the panel hangs on "Loading HDX data…" forever whenever the
+    // fetch fails (and re-fires the failing request on every tab switch).
+    connect(&svc, &GeopoliticsService::error_occurred, this, &HDXDataPanel::on_error);
+}
+
+void HDXDataPanel::on_error(const QString& context, const QString& message) {
+    Q_UNUSED(context);
+    // Stop the perpetual spinner and surface the failure in its place.
+    if (datasets_table_)
+        datasets_table_->setRowCount(0);
+    if (dataset_count_)
+        dataset_count_->setText(QStringLiteral("0"));
+    if (loading_label_) {
+        loading_label_->setText(tr("Failed to load HDX data:\n%1").arg(message));
+        loading_label_->show();
+    }
 }
 
 void HDXDataPanel::build_ui() {

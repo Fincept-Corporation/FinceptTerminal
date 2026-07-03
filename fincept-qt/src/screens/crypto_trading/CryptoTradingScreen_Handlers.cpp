@@ -27,6 +27,7 @@
 
 #include <QCompleter>
 #include <QDateTime>
+#include <QMessageBox>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -232,9 +233,19 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
     try {
         if (trading_mode_ == TradingMode::Paper) {
             auto ticker = ExchangeService::instance().get_cached_price(selected_symbol_);
+            // A paper market order fills immediately at the live price. Before the first
+            // tick (cold start / just-switched exchange) there is none — refuse rather than
+            // fill at a bogus $1000, which would corrupt paper cost-basis and P&L.
+            if (order_type == "market" && !(ticker.last > 0)) {
+                QMessageBox::warning(this, tr("Price Unavailable"),
+                                     tr("Live price for %1 is not available yet. Wait for the first tick, "
+                                        "or place a limit order.")
+                                         .arg(selected_symbol_));
+                return;
+            }
             std::optional<double> price_opt;
             if (order_type == "market")
-                price_opt = ticker.last > 0 ? ticker.last : 1000.0;
+                price_opt = ticker.last;
             else if (price > 0)
                 price_opt = price;
 
@@ -244,8 +255,12 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
 
             auto order = pt_place_order(portfolio_id_, selected_symbol_, side, order_type, qty, price_opt, stop_opt);
             if (order_type == "market") {
-                double fill = ticker.last > 0 ? ticker.last : price_opt.value_or(1000.0);
-                pt_fill_order(order.id, fill);
+                pt_fill_order(order.id, ticker.last);
+                // A market order fills immediately, so attach any SL/TP bracket to the
+                // resulting position here. The limit/stop branch does this for resting
+                // orders; skipping it left market entries silently unprotected.
+                if (sl > 0 || tp > 0)
+                    OrderMatcher::instance().set_sl_tp(portfolio_id_, selected_symbol_, order.id, sl, tp);
             } else {
                 OrderMatcher::instance().add_order(order);
                 if (sl > 0 || tp > 0)
@@ -253,31 +268,56 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
             }
             refresh_portfolio();
         } else {
+            // A live order is real money with no undo, and single orders previously
+            // had NO confirmation — one click or a held Ctrl+Enter fired real funds.
+            // Gate it behind an explicit confirm (close-all/cancel-all already do).
+            const QString px_txt =
+                order_type == "market" ? tr("market price") : QString::number(price, 'f', 8);
+            const QString confirm_msg = tr("Place a LIVE %1 %2 order with real funds?\n\n%3   qty %4   @ %5")
+                                            .arg(side.toUpper(), order_type.toUpper(), selected_symbol_)
+                                            .arg(qty)
+                                            .arg(px_txt);
+            if (QMessageBox::question(this, tr("Confirm Live Order"), confirm_msg,
+                                      QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+                return;
+
             // In-flight guard: place_exchange_order is dispatched to a worker and
             // we return to the GUI thread immediately, so the submit button must
             // be disabled for the lifetime of the POST — otherwise a double-click
             // or held Ctrl+Enter fires a second real exchange order (CR-07).
             order_entry_->set_submit_busy(true);
 
-            // Read the reduce-only flag on the UI thread before dispatching.
+            // Snapshot everything the worker needs on the UI thread (symbol / reduce-only
+            // could otherwise be mutated concurrently while the POST is in flight).
             const bool reduce_only = order_entry_->reduce_only();
+            const QString sym = selected_symbol_;
             QPointer<CryptoTradingScreen> self = this;
             QPointer<crypto::CryptoOrderEntry> oe = order_entry_;
-            (void)QtConcurrent::run([self, oe, side, order_type, qty, price, stop_price, sl, tp, reduce_only]() {
+            (void)QtConcurrent::run([self, oe, sym, side, order_type, qty, price, stop_price, sl, tp, reduce_only]() {
                 // stop_price drives Stop / Stop-Limit triggers; sl/tp attach native
                 // bracket legs; reduce_only is honoured on perps. The daemon maps
                 // these to ccxt unified params (triggerPrice / stopLoss / takeProfit).
-                // Re-enable the button on completion regardless of success/throw so
-                // the user is never stuck on a permanently disabled SENDING… button.
+                QJsonObject result;
+                QString err;
                 try {
-                    if (self) {
-                        ExchangeService::instance().place_exchange_order(self->selected_symbol_, side, order_type, qty,
-                                                                         price, stop_price, sl, tp, reduce_only);
-                    }
+                    result = ExchangeService::instance().place_exchange_order(sym, side, order_type, qty, price,
+                                                                              stop_price, sl, tp, reduce_only);
                 } catch (const std::exception& e) {
+                    err = QString::fromUtf8(e.what());
                     LOG_ERROR(TAG, QString("Live order failed: %1").arg(e.what()));
                 } catch (...) {
+                    err = QStringLiteral("unknown error");
                     LOG_ERROR(TAG, "Live order failed: unknown exception");
+                }
+                // The daemon reports rejections IN-BAND ({"success":false,"error":…} or a
+                // timeout {"error":…}) — it never throws, so an empty catch does NOT mean
+                // the order filled. A present "error" (or explicit success:false) is a
+                // rejection: surface it instead of leaving it identical to a fill.
+                if (err.isEmpty() && (result.contains("error") || !result.value("success").toBool(true))) {
+                    err = result.value("error").toString();
+                    if (err.isEmpty())
+                        err = QStringLiteral("The exchange rejected the order.");
+                    LOG_ERROR(TAG, QString("Live order rejected: %1").arg(err));
                 }
                 // order_entry_ is a child of the screen, so if self is alive the
                 // order-entry widget is too. Posting onto self is sufficient.
@@ -285,11 +325,14 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
                     return;
                 QMetaObject::invokeMethod(
                     self,
-                    [self, oe]() {
+                    [self, oe, err]() {
                         if (oe)
                             oe->set_submit_busy(false);
-                        if (self)
-                            self->refresh_live_data();
+                        if (!self)
+                            return;
+                        if (!err.isEmpty())
+                            QMessageBox::warning(self, tr("Order Failed"), tr("Live order failed:\n%1").arg(err));
+                        self->refresh_live_data();
                     },
                     Qt::QueuedConnection);
             });

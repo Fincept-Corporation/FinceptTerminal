@@ -169,6 +169,12 @@ EquityFinancialsTab::EquityFinancialsTab(QWidget* parent) : QWidget(parent) {
     auto& svc = services::equity::EquityResearchService::instance();
     connect(&svc, &services::equity::EquityResearchService::financials_loaded, this,
             &EquityFinancialsTab::on_financials_loaded);
+    // Dismiss the "LOADING FINANCIALS…" overlay on failure — it's hidden only on success.
+    connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
+            [this](const QString& ctx, const QString&) {
+                if (ctx == "Financials" && loading_overlay_)
+                    loading_overlay_->hide_loading();
+            });
 }
 
 void EquityFinancialsTab::set_symbol(const QString& symbol) {

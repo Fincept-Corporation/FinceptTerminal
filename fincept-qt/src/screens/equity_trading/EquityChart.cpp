@@ -390,6 +390,57 @@ void EquityChart::set_candles(const QVector<trading::BrokerCandle>& candles) {
     update_last_price_marker();
 }
 
+void EquityChart::update_last_candle(const trading::BrokerCandle& candle) {
+    if (candle.timestamp <= 0 || candle.open <= 0.0 || candle.high <= 0.0 ||
+        candle.low <= 0.0 || candle.close <= 0.0)
+        return;
+
+    if (candles_.isEmpty() || candle.timestamp > candles_.last().timestamp) {
+        // Roll-forward: a new forming bar. Reuse the bulk path (rebuild +
+        // overlays + axes) -- it runs at most once per bar interval.
+        QVector<trading::BrokerCandle> next = candles_;
+        next.append(candle);
+        set_candles(next);
+        return;
+    }
+    if (candle.timestamp != candles_.last().timestamp)
+        return; // tick for an older bar -- the next history reload reconciles
+
+    // Per-tick hot path: replace the forming bar in place.
+    candles_.last() = candle;
+
+    const auto sets = series_->sets();
+    QCandlestickSet* last_set = sets.isEmpty() ? nullptr : sets.last();
+    if (last_set &&
+        static_cast<int64_t>(last_set->timestamp()) == synth_ts_for(candles_.size() - 1)) {
+        last_set->setOpen(candle.open);
+        last_set->setHigh(candle.high);
+        last_set->setLow(candle.low);
+        last_set->setClose(candle.close);
+    } else {
+        // The last candle has no candlestick set (it was invalid when the
+        // history loaded) -- rebuild once so the forming bar is rendered.
+        rebuild_chart();
+    }
+
+    // Grow the price axis when the tick pierces the current bounds. Passing
+    // the sets' own raw synthetic range leaves the time axis untouched.
+    if (bounds_dirty_)
+        recompute_bounds();
+    if (cached_min_price_ > 0.0 &&
+        (candle.low < cached_min_price_ || candle.high > cached_max_price_)) {
+        cached_min_price_ = std::min(cached_min_price_, candle.low);
+        cached_max_price_ = std::max(cached_max_price_, candle.high);
+        const auto cur = series_->sets();
+        if (!cur.isEmpty())
+            update_axes(cached_min_price_, cached_max_price_,
+                        static_cast<qint64>(cur.first()->timestamp()),
+                        static_cast<qint64>(cur.last()->timestamp()));
+    }
+
+    update_last_price_marker();
+}
+
 void EquityChart::recompute_bounds() {
     const auto& sets = series_->sets();
     if (sets.isEmpty()) {

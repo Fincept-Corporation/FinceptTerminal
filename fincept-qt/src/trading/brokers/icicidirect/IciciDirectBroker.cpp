@@ -564,7 +564,7 @@ ApiResponse<QVector<BrokerCandle>> IciciDirectBroker::get_history(const BrokerCr
         QDateTime when = QDateTime::fromString(dt, Qt::ISODate);
         if (!when.isValid())
             when = QDateTime::fromString(dt, "yyyy-MM-dd hh:mm:ss");
-        c.timestamp = when.isValid() ? when.toSecsSinceEpoch() : 0;
+        c.timestamp = when.isValid() ? when.toMSecsSinceEpoch() : 0; // BrokerCandle contract = ms
         c.open = jnum(o, "open");
         c.high = jnum(o, "high");
         c.low = jnum(o, "low");

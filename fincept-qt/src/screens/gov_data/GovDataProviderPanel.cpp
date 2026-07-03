@@ -161,8 +161,15 @@ void GovDataProviderPanel::build_ui() {
         auto* combo = new QComboBox;
         combo->setObjectName("govPortalCombo");
         combo->addItems(options_.portal_combo_items);
+        // Portal switching is not yet wired: the universal CKAN connector script
+        // (datagovuk_api.py) hardcodes the data.gov.uk endpoint and takes no
+        // portal argument, so the selector is informational and shown disabled.
+        combo->setEnabled(false);
         if (!options_.portal_combo_tooltip.isEmpty())
             combo->setToolTip(options_.portal_combo_tooltip);
+        else
+            combo->setToolTip(tr("Portal switching is not yet functional — this panel "
+                                 "queries data.gov.uk only."));
         combo->setStyleSheet(
             QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
                     " font-size:10px; font-weight:700; padding:2px 8px; min-width:160px; }"

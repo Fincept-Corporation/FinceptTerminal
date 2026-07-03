@@ -1089,7 +1089,6 @@ set(TRADING_SOURCES
     src/trading/ActionCenter.cpp
     src/trading/OptionsStrategyBuilder.cpp
     src/trading/StrategyPortfolio.cpp
-    src/trading/WebhookListener.cpp
     src/trading/OrderValidator.cpp
     src/trading/LatencyTracker.cpp
     src/trading/TradingNotificationBridge.cpp
@@ -2690,7 +2689,6 @@ set_source_files_properties(
     src/trading/ActionCenter.cpp
     src/trading/StrategyPortfolio.cpp
     src/trading/OptionsStrategyBuilder.cpp
-    src/trading/WebhookListener.cpp
     # Phase 3 storage/core — file-scope kLog / anonymous-namespace helpers
     src/storage/HistoricalDataStore.cpp
     src/core/HealthMonitor.cpp

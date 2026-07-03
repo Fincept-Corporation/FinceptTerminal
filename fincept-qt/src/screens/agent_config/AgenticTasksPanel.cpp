@@ -785,14 +785,19 @@ void AgenticTasksPanel::on_cancel_clicked() {
 
 void AgenticTasksPanel::on_delete_clicked() {
     if (selected_task_id_.isEmpty()) return;
-    // Use existing delete_task action via run_python_stdin. There's no
-    // dedicated wrapper on AgentService — Phase 2 may add one. For now,
-    // request a list refresh; the delete itself happens via the existing
-    // PLANNER tab tooling. To keep Phase 1 self-contained we still wire it
-    // here by routing through the cancel + list pattern.
-    services::AgentService::instance().cancel_task(selected_task_id_);
+    auto& svc = services::AgentService::instance();
+    const QString id = selected_task_id_;
+    // Cancel first (signals a running subprocess to stop), then actually remove the
+    // record. Previously this only called cancel_task, so the row lingered in a
+    // "cancelled" state — a scheduled/recurring task kept being re-fired and there was
+    // no way to truly delete it (runaway token/credit cost). delete_task removes it.
+    svc.cancel_task(id);
+    svc.delete_task(id);
     selected_task_id_.clear();
     refresh_list();
+    // delete_task is async — refresh once more after it has been applied so the row
+    // actually disappears rather than reappearing from the pre-delete snapshot.
+    QTimer::singleShot(500, this, [this]() { refresh_list(); });
 }
 
 QString AgenticTasksPanel::status_color_for(const QString& status) {

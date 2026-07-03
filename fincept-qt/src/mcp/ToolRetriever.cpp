@@ -4,6 +4,7 @@
 
 #include "core/logging/Logger.h"
 #include "mcp/McpProvider.h"
+#include "mcp/McpService.h"
 
 #include <QJsonObject>
 #include <QRegularExpression>
@@ -295,10 +296,14 @@ void ToolRetriever::rebuild_index_locked() {
     vocabulary_.clear();
     avg_doc_length_ = 0.0;
 
-    // list_all_tools() returns disabled tools too — we want them in the
-    // index so we can mark them "disabled" if needed, but for v1 we exclude
-    // them at search time so they never surface to the LLM.
-    const auto tool_list = McpProvider::instance().list_all_tools();
+    // Index the unified catalog — internal registry tools PLUS tools
+    // discovered from running external MCP servers (McpService merges the
+    // two, cached 5 s). Building only over McpProvider::list_all_tools()
+    // left external tools invisible to Tool RAG's tool_list. Disabled
+    // internal tools are excluded upstream by list_tools(); the
+    // is_tool_enabled() check at search time still guards against tools
+    // disabled after the index was built (external names always pass it).
+    const auto tool_list = McpService::instance().get_all_tools();
     docs_.reserve(tool_list.size());
 
     for (const auto& t : tool_list) {

@@ -72,6 +72,8 @@ class AgentService : public QObject
     QString resume_task(const QString& task_id);
     QString pause_task(const QString& task_id);
     QString cancel_task(const QString& task_id);
+    /// Permanently remove a task record (cancel only signals a running task to stop).
+    QString delete_task(const QString& task_id);
     QString list_tasks(const QString& status_filter = {}, int limit = 50);
     QString get_task(const QString& task_id);
     /// HITL: user replies to a clarifying question persisted on the task row.

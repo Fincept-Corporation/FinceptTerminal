@@ -7,6 +7,15 @@
 
 namespace fincept::arena {
 
+/// One queued HITL approval (live mode): a parsed action awaiting a human
+/// decision. Persisted so a hidden panel or an app restart cannot lose it.
+struct HitlPendingRow {
+    QString id, competition_id, agent_id, kind, coin, side, reason;   // kind: "open" | "close"
+    int round_seq = 0;
+    double size_usd = 0, leverage = 1;
+    qint64 ts = 0;
+};
+
 class ArenaStore : public BaseRepository<CompetitionRow> {
   public:
     static ArenaStore& instance();
@@ -55,6 +64,12 @@ class ArenaStore : public BaseRepository<CompetitionRow> {
     Result<void> insert_event(const QString& competition_id, const QString& agent_id,
                               const QString& type, const QString& payload_json);
     Result<QVector<QString>> recent_events(const QString& competition_id, int limit); // "ts|agent|type|payload"
+
+    // HITL pending approvals (live mode). arena_hitl_pending is store-managed
+    // (created lazily, no migration); rows survive stop()/restart until actioned.
+    Result<void> insert_hitl_pending(HitlPendingRow h);                   // fills ts (id = approval id)
+    Result<void> delete_hitl_pending(const QString& id);
+    Result<QVector<HitlPendingRow>> hitl_pending_for(const QString& competition_id); // oldest-first
 };
 
 } // namespace fincept::arena

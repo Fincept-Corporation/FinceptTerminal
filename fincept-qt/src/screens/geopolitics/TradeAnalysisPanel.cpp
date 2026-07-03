@@ -353,7 +353,10 @@ void TradeAnalysisPanel::build_ui() {
         p["integration_type"] = bloc_combo->currentData().toString();
         p["trade_creation"] = tc_spin->value();
         p["trade_diversion"] = td_spin->value();
-        GeopoliticsService::instance().analyze_trade_benefits(p); // reuses benefits endpoint with trading_blocs type
+        // Trading-bloc integration maps to the benefits/costs mode (trade creation vs.
+        // diversion are welfare effects). A dedicated `trading_blocs` backend mode exists
+        // in trade_geopolitics.py but is not yet exposed by GeopoliticsService.
+        GeopoliticsService::instance().analyze_trade_benefits(p);
     });
     p2l->addWidget(run2);
     run_buttons_.append(run2);
@@ -417,7 +420,12 @@ void TradeAnalysisPanel::build_ui() {
         p["liberalization_type"] = lib_combo->currentData().toString();
         p["tariff_reduction"] = tariff_cut_spin->value();
         p["gdp_size"] = gdp_spin->value();
-        GeopoliticsService::instance().analyze_trade_restrictions(p); // reuses restrictions endpoint
+        // Barrier *removal* is trade liberalization — its economic impact maps to the
+        // benefits/costs analysis, NOT the trade-restrictions analysis (which models
+        // *imposing* tariffs/quotas, the opposite direction). Route to the benefits mode.
+        // A dedicated `barrier_removal` backend mode exists in trade_geopolitics.py but is
+        // not yet exposed by GeopoliticsService.
+        GeopoliticsService::instance().analyze_trade_benefits(p);
     });
     p3l->addWidget(run3);
     run_buttons_.append(run3);

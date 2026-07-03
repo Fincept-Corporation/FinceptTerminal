@@ -333,7 +333,9 @@ void NewCompetitionWizard::on_next_or_create() {
 bool NewCompetitionWizard::engage_live_gates() {
     if (!fincept::trading::hyperliquid::HyperliquidSigner::is_wired()) {
         QMessageBox::critical(this, windowTitle(),
-            tr("Live mode unavailable: the Hyperliquid signer failed to initialise in this build."));
+            tr("Live trading on Hyperliquid is not yet available in this build — paper mode is "
+               "fully supported. (Live mode is disabled so no real wallet key is stored for a "
+               "path that cannot execute a trade.)"));
         return false;
     }
 #ifndef FINCEPT_UNSAFE_DISABLE_GEOFENCE

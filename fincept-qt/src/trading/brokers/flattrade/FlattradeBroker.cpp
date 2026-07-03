@@ -427,16 +427,18 @@ ApiResponse<QVector<BrokerHolding>> FlattradeBroker::get_holdings(const BrokerCr
         return {false, std::nullopt, "get_holdings: invalid response", ts};
 
     QVector<BrokerHolding> holdings;
+    QVector<QString> quote_syms; // "EXCH:TSYM:TOKEN" for LTP hydration below
 
     for (const QJsonValue& v : doc.array()) {
         QJsonObject o = v.toObject();
 
-        QString symbol, exchange;
+        QString symbol, exchange, token;
         QJsonArray exch_tsym = o.value("exch_tsym").toArray();
         if (!exch_tsym.isEmpty()) {
             QJsonObject et = exch_tsym[0].toObject();
             symbol = et.value("tsym").toString();
             exchange = et.value("exch").toString();
+            token = et.value("token").toString();
         }
         if (symbol.isEmpty())
             continue;
@@ -456,14 +458,37 @@ ApiResponse<QVector<BrokerHolding>> FlattradeBroker::get_holdings(const BrokerCr
         h.exchange = exchange;
         h.quantity = total_qty;
         h.avg_price = o.value("upldprc").toString().toDouble();
-        // Holdings response carries no LTP field — hydrate via GetQuotes for live MTM.
-        // TODO: hydrate LTP to populate current_value/pnl
+        // Holdings response carries no LTP field — hydrated below via GetQuotes.
         h.ltp = 0.0;
         h.invested_value = total_qty * h.avg_price;
         h.current_value = 0.0;
         h.pnl = 0.0;
         h.pnl_pct = 0.0;
+        if (!token.isEmpty())
+            quote_syms.append(exchange + ":" + symbol + ":" + token);
         holdings.append(h);
+    }
+
+    // Hydrate LTP and derive value/P&L via the existing GetQuotes plumbing (the
+    // exch_tsym rows carry the numeric token it needs). Previously left 0, so
+    // holdings views without a live-quote subscription showed ₹0 for real
+    // positions. Best-effort: on failure rows keep ltp = 0.
+    if (!quote_syms.isEmpty()) {
+        auto quotes = get_quotes(creds, quote_syms);
+        if (quotes.success && quotes.data.has_value()) {
+            for (auto& h : holdings) {
+                for (const auto& q : quotes.data.value()) {
+                    if (q.symbol != h.symbol || q.ltp <= 0.0)
+                        continue;
+                    h.ltp = q.ltp;
+                    h.current_value = h.quantity * q.ltp;
+                    h.pnl = h.current_value - h.invested_value;
+                    if (h.invested_value > 0.0)
+                        h.pnl_pct = (h.pnl / h.invested_value) * 100.0;
+                    break;
+                }
+            }
+        }
     }
 
     return {true, holdings, "", ts};

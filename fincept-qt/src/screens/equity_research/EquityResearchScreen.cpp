@@ -61,6 +61,13 @@ EquityResearchScreen::EquityResearchScreen(QWidget* parent) : QWidget(parent) {
     auto& svc = services::equity::EquityResearchService::instance();
     connect(&svc, &services::equity::EquityResearchService::quote_loaded, this, &EquityResearchScreen::on_quote_loaded);
     connect(&svc, &services::equity::EquityResearchService::info_loaded, this, &EquityResearchScreen::on_info_loaded);
+    // Reset the quote bar off "Loading…" when the quote fetch fails (it's otherwise
+    // updated only on the success path, so a failed symbol shows "Loading…" forever).
+    connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
+            [this](const QString& ctx, const QString&) {
+                if (ctx == "Quote" && price_label_)
+                    price_label_->setText(tr("Unavailable"));
+            });
 
     // Keep the BUY/SELL buttons in sync as broker accounts connect/disconnect or
     // are added/removed, so they appear/disappear without needing a tab re-show.

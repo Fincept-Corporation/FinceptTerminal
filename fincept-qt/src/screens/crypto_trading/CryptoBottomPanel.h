@@ -34,6 +34,11 @@ class CryptoBottomPanel : public QWidget {
     void set_live_positions(const QJsonArray& positions);
     void set_live_orders(const QJsonArray& orders);
     void set_live_balance(double balance, double equity, double used_margin);
+    /// Live balance could not be fetched (bad API key / daemon error). Shows an
+    /// explicit UNAVAILABLE state instead of a misleading $0.00 (which is
+    /// indistinguishable from a genuinely empty account). `reason` goes into a
+    /// tooltip.
+    void set_balance_unavailable(const QString& reason);
     void set_mode(bool is_paper);
 
     // New live tabs

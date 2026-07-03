@@ -151,6 +151,40 @@ EquitySnapshotRow map_equity(QSqlQuery& q) {
 constexpr const char* kEquityCols =
     "competition_id, agent_id, round_seq, ts, equity, balance, unrealized_pnl";
 
+HitlPendingRow map_hitl(QSqlQuery& q) {
+    HitlPendingRow h;
+    h.id = q.value(0).toString();
+    h.competition_id = q.value(1).toString();
+    h.agent_id = q.value(2).toString();
+    h.round_seq = q.value(3).toInt();
+    h.kind = q.value(4).toString();
+    h.coin = q.value(5).toString();
+    h.side = q.value(6).toString();
+    h.size_usd = q.value(7).toDouble();
+    h.leverage = q.value(8).toDouble();
+    h.reason = q.value(9).toString();
+    h.ts = q.value(10).toLongLong();
+    return h;
+}
+constexpr const char* kHitlCols =
+    "id, competition_id, agent_id, round_seq, kind, coin, side, size_usd, leverage, reason, ts";
+
+// arena_hitl_pending postdates migration v050 — create it lazily (same pattern
+// as workflow_audit_log) so existing profiles pick it up without a migration.
+Result<void> ensure_hitl_table() {
+    static bool ready = false;
+    if (ready) return Result<void>::ok();
+    auto r = Database::instance().exec(
+        "CREATE TABLE IF NOT EXISTS arena_hitl_pending ("
+        "  id TEXT PRIMARY KEY, competition_id TEXT NOT NULL, agent_id TEXT NOT NULL,"
+        "  round_seq INTEGER NOT NULL DEFAULT 0, kind TEXT NOT NULL DEFAULT 'open',"
+        "  coin TEXT NOT NULL DEFAULT '', side TEXT NOT NULL DEFAULT '',"
+        "  size_usd REAL NOT NULL DEFAULT 0, leverage REAL NOT NULL DEFAULT 1,"
+        "  reason TEXT NOT NULL DEFAULT '', ts INTEGER NOT NULL DEFAULT 0)");
+    if (r.is_ok()) ready = true;
+    return r;
+}
+
 } // namespace
 
 ArenaStore& ArenaStore::instance() {
@@ -211,9 +245,11 @@ Result<void> ArenaStore::set_cadence(const QString& id, int seconds) {
 }
 
 Result<void> ArenaStore::delete_competition_cascade(const QString& id) {
+    if (auto hr = ensure_hitl_table(); hr.is_err())
+        return hr;
     for (const char* table : {"arena_agents", "arena_rounds", "arena_decisions", "arena_orders",
                               "arena_positions", "arena_accounts", "arena_equity_snapshots",
-                              "arena_events"}) {
+                              "arena_events", "arena_hitl_pending"}) {
         auto r = exec_write(
             QStringLiteral("DELETE FROM %1 WHERE competition_id = ?").arg(QLatin1String(table)),
             {id});
@@ -492,6 +528,34 @@ Result<QVector<QString>> ArenaStore::recent_events(const QString& competition_id
                    .arg(q.value(1).toString(), q.value(2).toString(), q.value(3).toString());
     std::reverse(out.begin(), out.end());  // oldest-first
     return Result<QVector<QString>>::ok(std::move(out));
+}
+
+// ── HITL pending approvals ───────────────────────────────────────────────────
+
+Result<void> ArenaStore::insert_hitl_pending(HitlPendingRow h) {
+    if (auto r = ensure_hitl_table(); r.is_err())
+        return r;
+    h.ts = now_millis();
+    return exec_write(
+        "INSERT OR REPLACE INTO arena_hitl_pending (id, competition_id, agent_id, round_seq,"
+        " kind, coin, side, size_usd, leverage, reason, ts) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        {h.id, h.competition_id, h.agent_id, h.round_seq, nn(h.kind), nn(h.coin), nn(h.side),
+         h.size_usd, h.leverage, nn(h.reason), h.ts});
+}
+
+Result<void> ArenaStore::delete_hitl_pending(const QString& id) {
+    if (auto r = ensure_hitl_table(); r.is_err())
+        return r;
+    return exec_write("DELETE FROM arena_hitl_pending WHERE id = ?", {id});
+}
+
+Result<QVector<HitlPendingRow>> ArenaStore::hitl_pending_for(const QString& competition_id) {
+    if (auto r = ensure_hitl_table(); r.is_err())
+        return Result<QVector<HitlPendingRow>>::err(r.error());
+    return query_list_as<HitlPendingRow>(
+        QStringLiteral("SELECT %1 FROM arena_hitl_pending WHERE competition_id = ? ORDER BY ts ASC")
+            .arg(kHitlCols),
+        {competition_id}, map_hitl);
 }
 
 } // namespace fincept::arena

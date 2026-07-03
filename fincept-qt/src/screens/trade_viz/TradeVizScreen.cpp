@@ -93,6 +93,22 @@ class TradeFlowChordWidget : public QWidget {
         const int h = height();
         const int cx = w / 2;
         const int cy = h / 2;
+
+        // ── Honest provenance note ───────────────────────────────────────────
+        // This chord is rendered from a static, compile-time bilateral-trade
+        // table (g_partners[]), NOT a live feed. Label it so the visualization
+        // is never mistaken for real-time data.
+        {
+            QFont nf(FONT, 8);
+            nf.setBold(true);
+            p.setFont(nf);
+            p.setPen(QColor(ui::colors::AMBER()));
+            p.drawText(QRect(10, 6, w - 20, 16), Qt::AlignLeft | Qt::AlignTop,
+                       QCoreApplication::translate(
+                           "TradeFlowChordWidget",
+                           "Illustrative — US bilateral trade, 2024 estimates (static)"));
+        }
+
         const int radius = std::min(cx, cy) - 65;
         if (radius < 60)
             return;

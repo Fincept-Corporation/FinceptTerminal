@@ -686,7 +686,7 @@ int main(int argc, char* argv[]) {
                 log.set_tag_level(tag, lvl_map.value(level));
         }
     }
-    LOG_INFO("App", "Fincept Terminal v4.1.0 starting...");
+    LOG_INFO("App", "Fincept Terminal v" FINCEPT_VERSION_STRING " starting...");
     LOG_INFO("App", QString("TLS backend: %1 (available: %2)")
                         .arg(QSslSocket::activeBackend(),
                              QSslSocket::availableBackends().join(", ")));

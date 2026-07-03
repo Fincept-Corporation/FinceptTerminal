@@ -407,7 +407,14 @@ void UpdateService::launch_installer(const QString& path) {
 
     // startDetached is the right call here — we want the installer to outlive
     // this process so the user can restart and finish installation.
+#ifdef Q_OS_MACOS
+    // The macOS release asset is a .dmg, which is NOT executable — startDetached(path)
+    // always fails on it and silently drops to reveal-in-Finder. `open` mounts the dmg
+    // (or launches a .pkg) so the user can actually complete the install.
+    const bool started = QProcess::startDetached(QStringLiteral("/usr/bin/open"), {path});
+#else
     const bool started = QProcess::startDetached(path, {});
+#endif
     if (!started) {
         LOG_WARN("UpdateService", "startDetached failed — falling back to reveal-in-file-manager");
         reveal_in_file_manager(path);

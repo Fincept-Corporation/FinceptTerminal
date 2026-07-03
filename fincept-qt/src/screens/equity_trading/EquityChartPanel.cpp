@@ -52,8 +52,10 @@ EquityChartPanel::EquityChartPanel(QWidget* parent) : QWidget(parent) {
         delete kline_;
         kline_ = nullptr;
         fallback_ = new EquityChart(this);
-        connect(fallback_, &EquityChart::timeframe_changed, this,
-                &EquityChartPanel::timeframe_changed);
+        connect(fallback_, &EquityChart::timeframe_changed, this, [this](const QString& tf) {
+            have_bar_ = false; // fresh history will arrive for the new timeframe
+            emit timeframe_changed(tf);
+        });
         connect(fallback_, &EquityChart::buy_requested, this, &EquityChartPanel::buy_requested);
         connect(fallback_, &EquityChart::sell_requested, this, &EquityChartPanel::sell_requested);
         connect(fallback_, &EquityChart::add_to_watchlist_requested, this,
@@ -124,29 +126,30 @@ QString EquityChartPanel::current_timeframe() const {
 }
 
 void EquityChartPanel::set_candles(const QVector<trading::BrokerCandle>& candles) {
+    if (!fallback_ && !kline_)
+        return;
+
     if (fallback_) {
         fallback_->set_candles(candles);
-        return;
+    } else {
+        QJsonArray arr;
+        for (const auto& c : candles) {
+            QJsonObject o;
+            // BrokerCandle.timestamp is milliseconds; KLineChartWidget expects
+            // seconds (it multiplies by 1000 internally).
+            o[QStringLiteral("timestamp")] = static_cast<double>(c.timestamp / 1000);
+            o[QStringLiteral("open")] = c.open;
+            o[QStringLiteral("high")] = c.high;
+            o[QStringLiteral("low")] = c.low;
+            o[QStringLiteral("close")] = c.close;
+            o[QStringLiteral("volume")] = c.volume;
+            arr.append(o);
+        }
+        kline_->set_candles(arr);
     }
-    if (!kline_)
-        return;
 
-    QJsonArray arr;
-    for (const auto& c : candles) {
-        QJsonObject o;
-        // BrokerCandle.timestamp is milliseconds; KLineChartWidget expects
-        // seconds (it multiplies by 1000 internally).
-        o[QStringLiteral("timestamp")] = static_cast<double>(c.timestamp / 1000);
-        o[QStringLiteral("open")] = c.open;
-        o[QStringLiteral("high")] = c.high;
-        o[QStringLiteral("low")] = c.low;
-        o[QStringLiteral("close")] = c.close;
-        o[QStringLiteral("volume")] = c.volume;
-        arr.append(o);
-    }
-    kline_->set_candles(arr);
-
-    // Seed forming-bar state from the most recent candle for live updates.
+    // Seed forming-bar state from the most recent candle for live updates
+    // (both backends extend this baseline in on_quote()).
     if (!candles.isEmpty()) {
         const auto& last = candles.last();
         have_bar_ = true;
@@ -162,7 +165,7 @@ void EquityChartPanel::set_candles(const QVector<trading::BrokerCandle>& candles
 }
 
 void EquityChartPanel::on_quote(const trading::BrokerQuote& quote) {
-    if (fallback_ || !kline_) // fallback chart has no incremental-update API
+    if (!fallback_ && !kline_)
         return;
     if (!have_bar_) // need a loaded history baseline to extend
         return;
@@ -188,6 +191,14 @@ void EquityChartPanel::on_quote(const trading::BrokerQuote& quote) {
             bar_high_ = px;
         if (px < bar_low_)
             bar_low_ = px;
+    }
+
+    if (fallback_) {
+        // Qt-Charts backend — hand the forming bar over as a BrokerCandle; the
+        // chart updates its last bar in place (or appends on roll-forward).
+        fallback_->update_last_candle(
+            trading::BrokerCandle{bar_ts_ms_, bar_open_, bar_high_, bar_low_, bar_close_, bar_vol_});
+        return;
     }
 
     QJsonObject o;

@@ -236,14 +236,18 @@ QWidget* AsiaMarketsScreen::create_header() {
     hl->addLayout(title_col);
     hl->addStretch(1);
 
-    // Region buttons
+    // Region buttons — region filtering is not yet wired to the query layer.
+    // AKShare endpoints are inherently region-specific (the endpoint you pick
+    // already determines CN A/B, HK or US) and the connector scripts take no
+    // region argument, so these are shown disabled until real filtering exists.
     const QStringList region_labels = {"CN A", "CN B", "HK", "US"};
     for (int i = 0; i < regions_.size(); ++i) {
         auto* btn = new QPushButton(region_labels[i]);
         btn->setObjectName("asiaRegionBtn");
-        btn->setCursor(Qt::PointingHandCursor);
+        btn->setEnabled(false);
+        btn->setToolTip(tr("Region filtering is not yet functional — endpoints are "
+                           "region-specific; choose the relevant endpoint from the list."));
         btn->setProperty("active", i == 0);
-        connect(btn, &QPushButton::clicked, this, [this, i]() { on_region_changed(i); });
         hl->addWidget(btn);
         region_btns_.append(btn);
     }

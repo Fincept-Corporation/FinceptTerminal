@@ -1046,14 +1046,18 @@ void NodeEditorScreen::on_deploy() {
     wf.id = current_workflow_id_;
     wf.name = dlg.workflow_name();
     wf.description = dlg.workflow_description();
-    wf.status = dlg.is_deploy() ? WorkflowStatus::Idle : WorkflowStatus::Draft;
+    // There is no scheduler or webhook runtime, so a saved workflow is never a
+    // live deployment. Persist it as a Draft rather than an "idle" (active,
+    // waiting-for-trigger) deployment so listings don't imply it will run again.
+    wf.status = WorkflowStatus::Draft;
 
     toolbar_->set_workflow_name(wf.name);
     WorkflowService::instance().save_workflow(wf);
 
     if (dlg.is_deploy()) {
-        LOG_INFO("NodeEditor", QString("Deployed workflow: %1").arg(wf.name));
-        // Auto-execute after deploy
+        LOG_INFO("NodeEditor", QString("Saved and ran workflow once: %1").arg(wf.name));
+        // "Deploy" is save + run once. There is no scheduler/webhook listener to
+        // fire trigger.* / schedule nodes again, so the workflow does not stay active.
         on_execute();
     } else {
         LOG_INFO("NodeEditor", QString("Saved draft: %1").arg(wf.name));

@@ -784,6 +784,15 @@ void PolymarketScreen::on_adapter_error(const QString& ctx, const QString& msg) 
     browse_panel_->set_loading(false);
     LOG_WARN("PredictionMarkets", ctx + ": " + msg);
     if (status_bar_) status_bar_->set_selected(QString("%1: %2").arg(ctx, msg));
+    // A place_order failure/rejection lands here because run_py's error path emits
+    // error_occurred and skips the order_placed signal. Reset the order ticket from
+    // "Submitting…" and surface the reason, else the submit button stays disabled.
+    if (ctx == QStringLiteral("place_order") && detail_panel_) {
+        pred::OrderResult r;
+        r.ok = false;
+        r.error_message = msg;
+        detail_panel_->on_order_result(r);
+    }
 }
 
 // ── WebSocket handlers ──────────────────────────────────────────────────────

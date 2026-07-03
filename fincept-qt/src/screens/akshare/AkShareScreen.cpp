@@ -391,6 +391,10 @@ QWidget* AkShareScreen::create_params_panel() {
     param_period_ = new QComboBox;
     param_period_->addItems({"daily", "weekly", "monthly"});
     param_period_->setFixedWidth(90);
+    // Not wired: AKShare endpoints take `period` positionally per-function, so a
+    // generic pass-through is unsafe. Disable rather than pretend it filters.
+    param_period_->setEnabled(false);
+    param_period_->setToolTip(tr("Period is fixed to the endpoint default (not yet configurable)"));
 
     // Execute button
     exec_btn_ = new QPushButton(tr("EXECUTE"));

@@ -520,15 +520,16 @@ ApiResponse<QVector<BrokerCandle>> UpstoxBroker::get_history(const BrokerCredent
             BrokerCandle candle;
             // v3 returns ISO8601 string; some endpoints/snapshots return epoch ms.
             // Try string first, fall back to numeric.
+            // BrokerCandle.timestamp contract is MILLISECONDS (seconds → candles in Jan 1970).
             const QString ts_str = c[0].toString();
             if (!ts_str.isEmpty()) {
-                candle.timestamp = QDateTime::fromString(ts_str, Qt::ISODate).toSecsSinceEpoch();
+                candle.timestamp = QDateTime::fromString(ts_str, Qt::ISODate).toMSecsSinceEpoch();
                 if (candle.timestamp == 0)
-                    candle.timestamp = QDateTime::fromString(ts_str, Qt::ISODateWithMs).toSecsSinceEpoch();
+                    candle.timestamp = QDateTime::fromString(ts_str, Qt::ISODateWithMs).toMSecsSinceEpoch();
             }
             if (candle.timestamp == 0) {
-                const qint64 ms = c[0].toVariant().toLongLong();
-                candle.timestamp = ms > 1'000'000'000'000LL ? ms / 1000 : ms;
+                const qint64 v = c[0].toVariant().toLongLong();
+                candle.timestamp = v > 1'000'000'000'000LL ? v : v * 1000; // seconds → ms
             }
             candle.open = c[1].toDouble();
             candle.high = c[2].toDouble();

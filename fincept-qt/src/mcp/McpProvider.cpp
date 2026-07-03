@@ -224,52 +224,16 @@ QFuture<ToolResult> McpProvider::call_tool_async(const QString& name, const QJso
             return fail_now("Tool '" + resolved + "' has no handler");
     }
 
-    // Phase 6.3: authorization gate. We don't import AuthManager here to
-    // avoid pulling auth headers into McpTypes.h consumers — instead we
-    // expose a hook that the app installs at startup.
-    //
-    // No-checker semantics:
-    //   • AuthLevel <= Authenticated and is_destructive flag → log + pass
-    //     (the flag is a hint for the Phase 6.12 modal; not a hard gate
-    //     until that UI lands)
-    //   • AuthLevel >= Verified → fail closed (genuine privilege escalation
-    //     that must not happen unauthenticated)
-    if (auth_required != AuthLevel::None || is_destructive) {
-        AuthChecker checker;
-        {
-            QMutexLocker lock(&mutex_);
-            checker = auth_checker_;
-        }
-        if (checker) {
-            if (!checker(auth_required, is_destructive)) {
-                LOG_WARN(TAG, QString("Tool '%1' blocked: auth_required=%2 is_destructive=%3")
-                                  .arg(name, auth_level_str(auth_required))
-                                  .arg(is_destructive ? "true" : "false"));
-                QPromise<ToolResult> p;
-                p.start();
-                p.addResult(ToolResult::fail(QString("Tool '%1' requires %2 auth")
-                                                 .arg(name, auth_level_str(auth_required))));
-                p.finish();
-                return p.future();
-            }
-        } else if (auth_required >= AuthLevel::Verified) {
-            // Fail-closed: Verified/Subscribed/ExplicitConfirm cannot be
-            // safely evaluated without a checker. Refuse the call.
-            LOG_WARN(TAG, QString("Tool '%1' blocked: no AuthChecker registered (required=%2)")
-                              .arg(name, auth_level_str(auth_required)));
-            QPromise<ToolResult> p;
-            p.start();
-            p.addResult(ToolResult::fail("Tool requires user confirmation but no authorisation hook is installed"));
-            p.finish();
-            return p.future();
-        } else if (is_destructive) {
-            // Advisory log only — the modal that prompts on this flag is
-            // Phase 6.12 work. Tools tagged Authenticated+destructive still
-            // run today; once the modal ships, install the checker and the
-            // upper branch starts gating them.
-            LOG_INFO(TAG, QString("Tool '%1' is destructive (flag is advisory; install McpProvider::set_auth_checker to gate)")
-                              .arg(name));
-        }
+    // Phase 6.3: authorization gate — shared with McpService's external-tool
+    // dispatch via check_authorization() so internal and external calls apply
+    // identical auth/destructive rules. See that method for the no-checker
+    // semantics.
+    if (auto denied = check_authorization(name, auth_required, is_destructive)) {
+        QPromise<ToolResult> p;
+        p.start();
+        p.addResult(*denied);
+        p.finish();
+        return p.future();
     }
 
     // Phase 3: validate + inject defaults before invoking the handler.
@@ -467,6 +431,51 @@ void McpProvider::clear() {
 void McpProvider::set_auth_checker(AuthChecker checker) {
     QMutexLocker lock(&mutex_);
     auth_checker_ = std::move(checker);
+}
+
+std::optional<ToolResult> McpProvider::check_authorization(const QString& name, AuthLevel auth_required,
+                                                           bool is_destructive) const {
+    // We don't import AuthManager here to avoid pulling auth headers into
+    // McpTypes.h consumers — instead we expose a hook that the app installs
+    // at startup.
+    //
+    // No-checker semantics:
+    //   • AuthLevel <= Authenticated and is_destructive flag → log + pass
+    //     (the flag is a hint for the Phase 6.12 modal; not a hard gate
+    //     until that UI lands)
+    //   • AuthLevel >= Verified → fail closed (genuine privilege escalation
+    //     that must not happen unauthenticated)
+    if (auth_required == AuthLevel::None && !is_destructive)
+        return std::nullopt;
+
+    AuthChecker checker;
+    {
+        QMutexLocker lock(&mutex_);
+        checker = auth_checker_;
+    }
+    if (checker) {
+        if (!checker(auth_required, is_destructive)) {
+            LOG_WARN(TAG, QString("Tool '%1' blocked: auth_required=%2 is_destructive=%3")
+                              .arg(name, auth_level_str(auth_required))
+                              .arg(is_destructive ? "true" : "false"));
+            return ToolResult::fail(QString("Tool '%1' requires %2 auth")
+                                        .arg(name, auth_level_str(auth_required)));
+        }
+    } else if (auth_required >= AuthLevel::Verified) {
+        // Fail-closed: Verified/Subscribed/ExplicitConfirm cannot be
+        // safely evaluated without a checker. Refuse the call.
+        LOG_WARN(TAG, QString("Tool '%1' blocked: no AuthChecker registered (required=%2)")
+                          .arg(name, auth_level_str(auth_required)));
+        return ToolResult::fail("Tool requires user confirmation but no authorisation hook is installed");
+    } else if (is_destructive) {
+        // Advisory log only — the modal that prompts on this flag is
+        // Phase 6.12 work. Tools tagged Authenticated+destructive still
+        // run today; once the modal ships, install the checker and the
+        // upper branch starts gating them.
+        LOG_INFO(TAG, QString("Tool '%1' is destructive (flag is advisory; install McpProvider::set_auth_checker to gate)")
+                          .arg(name));
+    }
+    return std::nullopt;
 }
 
 // ============================================================================

@@ -54,6 +54,10 @@ void SurfaceAnalyticsScreen::refresh_surface_bar() {
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 void SurfaceAnalyticsScreen::load_demo_data() {
+    // This fills every surface with rand() sample data — tell the badge so it shows
+    // DEMO instead of the surface's LIVE/COMPUTED capability tier.
+    if (control_panel_)
+        control_panel_->mark_synthetic(true);
     QString qsym = current_symbol_or_default();
     std::string sym = qsym.toStdString();
     float spot = spot_for(qsym);

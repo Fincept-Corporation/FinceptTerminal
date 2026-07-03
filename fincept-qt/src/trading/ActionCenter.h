@@ -139,8 +139,9 @@ class ActionCenter : public QObject {
     // Row mapper for the pending_orders table.
     static PendingOrder map_row(class QSqlQuery& q);
 
-    // Execute a queued order against UnifiedTrading. Returns the broker order id
-    // (empty on failure) and sets `ok`/`err`.
+    // Execute a queued order against UnifiedTrading (placegttorder routes to the
+    // broker's native gtt_place — never an immediate order). Returns the broker
+    // order id / GTT id (empty on failure) and sets `ok`/`err`.
     QString execute_pending(const PendingOrder& po, bool& ok, QString& err);
 };
 

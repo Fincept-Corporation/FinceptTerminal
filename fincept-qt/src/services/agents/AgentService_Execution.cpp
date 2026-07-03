@@ -692,6 +692,16 @@ QString AgentService::schedule_list() {
     return req_id;
 }
 
+QString AgentService::delete_task(const QString& task_id) {
+    const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    QJsonObject params;
+    params["task_id"] = task_id;
+    // "delete_task" removes the record via the state manager; "agentic_cancel_task"
+    // only sets a cooperative stop signal and leaves the row behind.
+    run_python_stdin(QStringLiteral("delete_task"), params, {}, [](bool, QJsonObject) {});
+    return req_id;
+}
+
 QString AgentService::schedule_delete(const QString& schedule_id) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QJsonObject params;

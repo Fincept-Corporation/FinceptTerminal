@@ -232,7 +232,13 @@ QByteArray HyperliquidSigner::action_struct_hash(const QJsonObject& action) {
 }
 
 bool HyperliquidSigner::is_wired() {
-    return true;
+    // The keccak/ECDSA primitives are linked, but the live ORDER path is NOT
+    // production-ready: HyperliquidVenue::place_order still hardcodes the asset id
+    // and rejects every order with "hl_live_path_not_yet_wired", and the signer's
+    // recovery id / EIP-712 domain are not yet known-vector-verified. Report
+    // not-wired so the Alpha Arena live gate refuses to capture (and persist) a
+    // real wallet private key for a path that cannot actually execute a trade.
+    return false;
 }
 
 Result<SignedAction> HyperliquidSigner::sign_action(const QJsonObject& action,

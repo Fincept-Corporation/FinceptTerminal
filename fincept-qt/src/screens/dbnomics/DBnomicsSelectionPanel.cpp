@@ -521,7 +521,14 @@ void DBnomicsSelectionPanel::add_comparison_slot() {
                                       "border: 1px solid rgba(220,38,38,0.3); font-size: 11px; font-weight: 700; }"
                                       "QPushButton:hover { background: rgba(220,38,38,0.25); }")
                                   .arg(col::NEGATIVE()));
-    connect(remove_btn, &QPushButton::clicked, this, [this, slot_idx]() { emit remove_slot_clicked(slot_idx); });
+    // Resolve the slot's index from its live layout position at click time — a
+    // baked-in slot_idx goes stale once an earlier slot is removed and the
+    // remaining widgets shift up.
+    connect(remove_btn, &QPushButton::clicked, this, [this, slot_widget]() {
+        const int idx = slots_layout_->indexOf(slot_widget);
+        if (idx >= 0)
+            emit remove_slot_clicked(idx);
+    });
     header_layout->addWidget(remove_btn);
     slot_layout->addWidget(header_row);
 
@@ -536,7 +543,11 @@ void DBnomicsSelectionPanel::add_comparison_slot() {
                                       .arg(col::TEXT_TERTIARY())
                                       .arg(col::BORDER_DIM())
                                       .arg(col::AMBER()));
-    connect(add_series_btn, &QPushButton::clicked, this, [this, slot_idx]() { emit add_to_slot_clicked(slot_idx); });
+    connect(add_series_btn, &QPushButton::clicked, this, [this, slot_widget]() {
+        const int idx = slots_layout_->indexOf(slot_widget);
+        if (idx >= 0)
+            emit add_to_slot_clicked(idx);
+    });
     slot_layout->addWidget(add_series_btn);
 
     slots_layout_->addWidget(slot_widget);
@@ -558,6 +569,23 @@ void DBnomicsSelectionPanel::remove_comparison_slot(int index) {
     }
     if (slot_count_ > 0)
         --slot_count_;
+
+    // Remaining slot widgets shifted up — renumber their SLOT labels so the
+    // visible numbering stays 1..N and matches their new layout positions.
+    renumber_slots();
+}
+
+void DBnomicsSelectionPanel::renumber_slots() {
+    if (!slots_layout_)
+        return;
+    for (int i = 0; i < slots_layout_->count(); ++i) {
+        QLayoutItem* it = slots_layout_->itemAt(i);
+        QWidget* slot_widget = it ? it->widget() : nullptr;
+        if (!slot_widget)
+            continue;
+        if (auto* lbl = slot_widget->findChild<QLabel*>(QStringLiteral("dbnSlotLabel")))
+            lbl->setText(tr("SLOT %1").arg(i + 1));
+    }
 }
 
 void DBnomicsSelectionPanel::clear_slots() {
@@ -792,8 +820,11 @@ void DBnomicsSelectionPanel::update_slot_series(int slot_index, const QVector<se
                     "QPushButton:hover { color: %2; }")
                 .arg(col::TEXT_TERTIARY())
                 .arg(col::NEGATIVE()));
-        connect(remove_btn, &QPushButton::clicked, this,
-                [this, slot_index, series_id]() { emit remove_from_slot_clicked(slot_index, series_id); });
+        connect(remove_btn, &QPushButton::clicked, this, [this, slot_widget, series_id]() {
+            const int idx = slots_layout_->indexOf(slot_widget);
+            if (idx >= 0)
+                emit remove_from_slot_clicked(idx, series_id);
+        });
         row_layout->addWidget(remove_btn);
 
         slot_layout->addWidget(row);

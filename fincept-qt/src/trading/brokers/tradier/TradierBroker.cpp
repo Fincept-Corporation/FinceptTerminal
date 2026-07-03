@@ -6,6 +6,7 @@
 #include <QTimeZone>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QUrlQuery>
 
 #include <algorithm>
@@ -50,6 +51,15 @@ QJsonArray TradierBroker::normalize_array(const QJsonValue& val) {
 
 bool TradierBroker::is_token_expired(const BrokerHttpResponse& resp) {
     return (resp.status_code == 401);
+}
+
+// OCC option symbols: ROOT (1-6 letters) + YYMMDD + C/P + 8-digit strike,
+// e.g. AAPL240119C00150000. Their quotes are per-share while cost_basis (and
+// thus avg_price) bakes the 100x contract multiplier, so P&L math must scale
+// the quoted mark to match.
+static bool is_occ_option(const QString& symbol) {
+    static const QRegularExpression re(QStringLiteral("^[A-Z]{1,6}\\d{6}[CP]\\d{8}$"));
+    return re.match(symbol).hasMatch();
 }
 
 QString TradierBroker::checked_error(const BrokerHttpResponse& resp, const QString& fallback) {
@@ -336,9 +346,35 @@ ApiResponse<QVector<BrokerPosition>> TradierBroker::get_positions(const BrokerCr
         // multiplier (cost_basis is the full notional); we do NOT un-bake it here.
         pos.avg_price = (qty != 0) ? o.value("cost_basis").toDouble() / qty : 0.0;
         pos.side = qty > 0 ? "LONG" : "SHORT";
-        // TODO: hydrate LTP for current_value/pnl — the positions endpoint carries no
-        // price, so ltp/pnl/pnl_pct stay 0 (do not fabricate prices).
+        // ltp/pnl/pnl_pct hydrated below — the positions endpoint carries no price.
         positions.append(pos);
+    }
+
+    // Hydrate LTP via the existing /v1/markets/quotes plumbing (read-only,
+    // batched). Without this, views with no live-quote subscription showed $0
+    // value/P&L for real positions. Best-effort: on failure rows keep ltp = 0.
+    if (!positions.isEmpty()) {
+        QVector<QString> syms;
+        syms.reserve(positions.size());
+        for (const auto& p : positions)
+            syms.append(p.symbol);
+        auto quotes = get_quotes(creds, syms);
+        if (quotes.success && quotes.data.has_value()) {
+            for (auto& pos : positions) {
+                for (const auto& q : quotes.data.value()) {
+                    if (q.symbol != pos.symbol || q.ltp <= 0.0)
+                        continue;
+                    pos.ltp = q.ltp;
+                    // Scale option marks by the 100x contract multiplier to match
+                    // the cost_basis-derived avg_price (see is_occ_option).
+                    const double mark = is_occ_option(pos.symbol) ? q.ltp * 100.0 : q.ltp;
+                    pos.pnl = (mark - pos.avg_price) * pos.quantity;
+                    if (pos.avg_price > 0.0)
+                        pos.pnl_pct = ((mark - pos.avg_price) / pos.avg_price) * 100.0;
+                    break;
+                }
+            }
+        }
     }
 
     return {true, positions, "", ts};
@@ -384,9 +420,35 @@ ApiResponse<QVector<BrokerHolding>> TradierBroker::get_holdings(const BrokerCred
         // Prefer the API cost_basis; fall back to qty*avg_price when it's absent.
         const double cost_basis = o.value("cost_basis").toDouble();
         h.invested_value = (cost_basis != 0.0) ? cost_basis : h.quantity * h.avg_price;
-        // TODO: hydrate LTP for current_value/pnl — the positions endpoint carries no
-        // price, so ltp/current_value/pnl/pnl_pct stay 0 (do not fabricate prices).
+        // ltp/current_value/pnl hydrated below — the endpoint carries no price.
         holdings.append(h);
+    }
+
+    // Hydrate LTP and derive value/P&L via the existing /v1/markets/quotes
+    // plumbing (read-only, batched). Best-effort: on failure rows keep ltp = 0.
+    if (!holdings.isEmpty()) {
+        QVector<QString> syms;
+        syms.reserve(holdings.size());
+        for (const auto& h : holdings)
+            syms.append(h.symbol);
+        auto quotes = get_quotes(creds, syms);
+        if (quotes.success && quotes.data.has_value()) {
+            for (auto& h : holdings) {
+                for (const auto& q : quotes.data.value()) {
+                    if (q.symbol != h.symbol || q.ltp <= 0.0)
+                        continue;
+                    h.ltp = q.ltp;
+                    // Scale option marks by the 100x contract multiplier so
+                    // current_value is on the same basis as cost_basis.
+                    const double mark = is_occ_option(h.symbol) ? q.ltp * 100.0 : q.ltp;
+                    h.current_value = h.quantity * mark;
+                    h.pnl = h.current_value - h.invested_value;
+                    if (h.invested_value > 0.0)
+                        h.pnl_pct = (h.pnl / h.invested_value) * 100.0;
+                    break;
+                }
+            }
+        }
     }
 
     return {true, holdings, "", ts};

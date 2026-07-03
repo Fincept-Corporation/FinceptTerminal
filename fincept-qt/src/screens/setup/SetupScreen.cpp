@@ -47,6 +47,14 @@ SetupScreen::SetupScreen(QWidget* parent) : QWidget(parent) {
     timeout_timer_->setInterval(15 * 60 * 1000);
     connect(timeout_timer_, &QTimer::timeout, this, &SetupScreen::on_setup_timeout);
 
+    // Reveal the Skip button ~45s in (not only after the full 15-min timeout) so
+    // first-run users are never trapped waiting on the Python setup. Independent
+    // of on_setup_timeout(), which still owns the real Timeout state at 15 min.
+    QTimer::singleShot(45 * 1000, this, [this]() {
+        if (skip_btn_)
+            skip_btn_->setVisible(true);
+    });
+
     net_meter_ = new fincept::net::NetSpeedMeter(this);
     connect(net_meter_, &fincept::net::NetSpeedMeter::speed_changed,
             this, &SetupScreen::on_net_speed);

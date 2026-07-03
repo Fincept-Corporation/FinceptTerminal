@@ -25,7 +25,7 @@ StatusBar::StatusBar(QWidget* parent) : QWidget(parent) {
         return l;
     };
 
-    hl->addWidget(mk("v4.1.0", "sbVersion"));
+    hl->addWidget(mk("v" FINCEPT_VERSION_STRING, "sbVersion"));
     hl->addWidget(mk("  |  ", "sbSep"));
     const char* feeds[] = {"EQ", "FX", "CM", "FI", "CR"};
     for (auto& f : feeds) {

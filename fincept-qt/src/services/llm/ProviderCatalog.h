@@ -13,6 +13,11 @@ namespace fincept::ai_chat {
 class ProviderCatalog {
   public:
     static const QStringList& known_providers();
+    /// Hard block for retired/forbidden providers (currently AtlasCloud). Returns
+    /// true for the blocked provider id AND for any base_url pointing at its host,
+    /// so it can't be reached even by manually pointing an OpenAI-compatible
+    /// provider at the endpoint. Enforced at every request chokepoint in LlmService.
+    static bool is_blocked(const QString& provider, const QString& base_url = {});
     static QString display_name(const QString& provider_id);
     static QStringList fallback_models(const QString& provider);
     static QString default_base_url(const QString& provider);

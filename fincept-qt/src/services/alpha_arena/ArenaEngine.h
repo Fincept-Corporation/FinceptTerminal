@@ -23,8 +23,8 @@ class ArenaEngine : public QObject {
     Result<void> start(const QString& competition_id);            // load + begin ticking
     Result<void> pause();                                         // status "paused", timer stops
     Result<void> resume();                                        // status "running"
-    Result<void> stop();                                          // status "ended"; positions stay
-    Result<void> kill_all();                                      // close every position + stop
+    Result<void> stop();      // status "ended"; positions stay; pending HITL rows persist
+    Result<void> kill_all();  // refresh marks, close every position, reject pending HITL + stop
     /// Per-agent kill switch: close that agent's positions now, halt it
     /// ("halted_user"), snapshot its equity. Competition keeps running.
     Result<void> kill_agent(const QString& agent_id);
@@ -36,6 +36,7 @@ class ArenaEngine : public QObject {
     /// HITL (live mode): approve/reject a queued action by approval id.
     /// Approved actions execute at the venue's CURRENT marks; rejections are
     /// persisted as "rejected_risk" orders with reason "HITL rejected".
+    /// Pending approvals persist in the store and re-surface on start().
     void resume_after_hitl(const QString& approval_id, bool approved);
 
     // Crash recovery: competitions found "running" at init(); UI can resume or dismiss.
@@ -87,6 +88,8 @@ class ArenaEngine : public QObject {
     void record_failure(const AgentRow& agent, const QString& kind);
     bool agent_is_active(const QString& agent_id) const;   // CURRENT status in agents_
     void run_marks_tick();                                  // between-round live marks
+    void refresh_marks_blocking();                          // kill paths: bounded-wait marks
+                                                            // refresh + sweep → close fresh
 
     QString active_id_;
     CompetitionRow comp_;
@@ -103,7 +106,9 @@ class ArenaEngine : public QObject {
     MarketSnapshot last_snapshot_;
     QHash<QString, double> round_notional_;   // agent_id → Σ new notional this round
     struct PendingApproval { QString id, agent_id; AgentAction action; int seq = 0; };
-    QVector<PendingApproval> pending_hitl_;   // live mode only; cleared on stop()/kill_all()
+    void reject_approval(const PendingApproval& pa, const QString& reason);   // rejected order + signal
+    QVector<PendingApproval> pending_hitl_;   // live mode only; mirrors arena_hitl_pending rows
+                                              // (survive stop(), reload on start; kill_all rejects)
     std::unique_ptr<PaperExchange> venue_;
     IArenaMarketData* market_ = nullptr;      // owned (parent=this)
     IArenaLlmClient* llm_ = nullptr;          // owned (parent=this)

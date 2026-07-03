@@ -103,6 +103,16 @@ class McpProvider {
     using AuthChecker = std::function<bool(AuthLevel required, bool is_destructive)>;
     void set_auth_checker(AuthChecker checker);
 
+    /// Run the Phase 6.3 authorization gate for one call WITHOUT executing
+    /// anything. Returns std::nullopt when the call may proceed, or a
+    /// ready-to-return failure ToolResult when blocked. Shared by
+    /// call_tool_async (internal tools) and McpService::execute_tool
+    /// (external tools, gated destructive-by-default) so both paths apply
+    /// identical auth/destructive-confirmation rules. `name` is used for
+    /// logging and error messages only.
+    std::optional<ToolResult> check_authorization(const QString& name, AuthLevel auth_required,
+                                                  bool is_destructive) const;
+
     // ── LLM Integration ────────────────────────────────────────────────────
 
     /// Format all enabled tools for OpenAI function calling

@@ -164,6 +164,13 @@ EquityTechnicalsTab::EquityTechnicalsTab(QWidget* parent) : QWidget(parent) {
     auto& svc = services::equity::EquityResearchService::instance();
     connect(&svc, &services::equity::EquityResearchService::technicals_loaded, this,
             &EquityTechnicalsTab::on_technicals_loaded);
+    // Without this a failed fetch/compute leaves the overlay spinning "COMPUTING
+    // INDICATORS…" forever (the overlay is hidden only on the success path).
+    connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
+            [this](const QString& ctx, const QString&) {
+                if ((ctx == "Technicals" || ctx == "Historical") && loading_overlay_)
+                    loading_overlay_->hide_loading();
+            });
 }
 
 void EquityTechnicalsTab::set_symbol(const QString& symbol) {
