@@ -302,7 +302,6 @@ void MAAnalyticsService::run_regression(const QJsonObject& params) {
 }
 
 // Financial Statement Analysis
-
 void MAAnalyticsService::analyze_income_statement(const QJsonObject& params) {
     run_python_json(
         "Analytics/financial_analysis_cli.py",
@@ -344,7 +343,6 @@ void MAAnalyticsService::get_financial_key_metrics(const QJsonObject& params) {
 }
 
 // QuantStats Analytics
-
 void MAAnalyticsService::quantstats_stats(const QJsonObject& params) {
     run_python_json(
         "Analytics/quantstats_analytics.py",
@@ -386,7 +384,6 @@ void MAAnalyticsService::quantstats_full_report(const QJsonObject& params) {
 }
 
 // Statsmodels Analytics
-
 void MAAnalyticsService::fit_arima(const QJsonObject& params) {
     run_python_json(
         "Analytics/statsmodels_cli.py",
@@ -420,7 +417,6 @@ void MAAnalyticsService::descriptive_statistics(const QJsonObject& params) {
 }
 
 // FFN Analytics
-
 void MAAnalyticsService::calculate_ffn_performance(const QJsonObject& params) {
     run_python_json(
         "Analytics/ffn_wrapper/ffn_service.py",
@@ -478,7 +474,6 @@ void MAAnalyticsService::perform_pca(const QJsonObject& params) {
 }
 
 // Functime Analytics
-
 void MAAnalyticsService::functime_forecast(const QJsonObject& params) {
     run_python_json(
         "Analytics/functime_wrapper/functime_service.py",
@@ -525,6 +520,71 @@ void MAAnalyticsService::functime_stationarity(const QJsonObject& params) {
         "stationarity",
         params,
         "functime_stationarity");
+}
+
+// PyPortfolioOpt Analytics
+void MAAnalyticsService::optimize_portfolio(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py",
+        "optimize",
+        params,
+        "portfolio_optimize");
+}
+
+void MAAnalyticsService::generate_efficient_frontier(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py",
+        "efficient_frontier",
+        params,
+        "efficient_frontier");
+}
+
+void MAAnalyticsService::calculate_discrete_allocation(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py",
+        "discrete_allocation",
+        params,
+        "discrete_allocation");
+}
+
+void MAAnalyticsService::run_portfolio_backtest(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py",
+        "backtest",
+        params,
+        "portfolio_backtest");
+}
+
+void MAAnalyticsService::calculate_risk_decomposition(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py",
+        "risk_decomposition",
+        params,
+        "risk_decomposition");
+}
+
+void MAAnalyticsService::optimize_black_litterman(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py",
+        "black_litterman",
+        params,
+        "black_litterman");
+}
+
+void MAAnalyticsService::optimize_hrp(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py",
+        "hrp",
+        params,
+        "hrp_optimization");
+}
+
+void MAAnalyticsService::generate_portfolio_report(const QJsonObject& params) {
+    run_python_json(
+        "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py",
+        "generate_report",
+        params,
+        "portfolio_report");
 }
 
 // ── Deal Comparison ──────────────────────────────────────────────────────────

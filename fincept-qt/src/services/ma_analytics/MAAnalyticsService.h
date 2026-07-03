@@ -123,6 +123,16 @@ class MAAnalyticsService : public QObject
     void functime_confidence_intervals(const QJsonObject& params);
     void functime_stationarity(const QJsonObject& params);
 
+    // PyPortfolioOpt Analytics
+    void optimize_portfolio(const QJsonObject& params);
+    void generate_efficient_frontier(const QJsonObject& params);
+    void calculate_discrete_allocation(const QJsonObject& params);
+    void run_portfolio_backtest(const QJsonObject& params);
+    void calculate_risk_decomposition(const QJsonObject& params);
+    void optimize_black_litterman(const QJsonObject& params);
+    void optimize_hrp(const QJsonObject& params);
+    void generate_portfolio_report(const QJsonObject& params);
+
     // ── Deal Comparison ─────────────────────────────────────────────────────
     void compare_deals(const QJsonObject& params);
     void rank_deals(const QJsonObject& params);
