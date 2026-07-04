@@ -844,6 +844,18 @@ void MAAnalyticsService::gluonts_seasonal_naive(const QJsonObject& params) {
         params,
         "gluonts_seasonal_naive");
 }
+
+void MAAnalyticsService::run_fixed_income_command(
+    const QString& command,
+    const QJsonObject& params)
+{
+    run_python_json(
+        "Analytics/fixedIncome/cli.py",
+        command,
+        params,
+        "fixed_income_" + command);
+}
+
 // ── Deal Comparison ──────────────────────────────────────────────────────────
 void MAAnalyticsService::compare_deals(const QJsonObject& params) {
     run_python_json("Analytics/corporateFinance/deal_comparison/deal_comparator.py", "compare", params,

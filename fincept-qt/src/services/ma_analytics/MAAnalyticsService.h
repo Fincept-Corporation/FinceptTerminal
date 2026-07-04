@@ -180,6 +180,11 @@ class MAAnalyticsService : public QObject
     void gluonts_evaluate_forecast(const QJsonObject& params);
     void gluonts_seasonal_naive(const QJsonObject& params);
 
+    // Fixed Income Analytics
+    void run_fixed_income_command(
+        const QString& command,
+        const QJsonObject& params);
+
     // ── Deal Comparison ─────────────────────────────────────────────────────
     void compare_deals(const QJsonObject& params);
     void rank_deals(const QJsonObject& params);
