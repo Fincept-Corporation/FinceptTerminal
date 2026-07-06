@@ -1251,6 +1251,100 @@ std::vector<ToolDef> get_ma_analytics_tools() {
             QJsonObject{{"valuation_results", obj("Output of a comprehensive valuation.")}}, {"valuation_results"}));
     }
 
+
+    // ════════════════════════════════════════════════════════════════════
+    // ANALYTICS LIBRARIES (PR #349 backends) — expose all as MCP tools so the
+    // AI/agents can reach them (previously linked but unwired).
+    // ════════════════════════════════════════════════════════════════════
+    {
+        using MASvc = fincept::services::ma::MAAnalyticsService;
+        auto num=[](const char* d){return QJsonObject{{"type","number"},{"description",d}};};
+        auto str=[](const char* d){return QJsonObject{{"type","string"},{"description",d}};};
+        auto arr=[](const char* d){return QJsonObject{{"type","array"},{"description",d}};};
+        auto obj=[](const char* d){return QJsonObject{{"type","object"},{"description",d}};};
+        const QJsonObject ret{{"returns",arr("Periodic returns series/matrix.")},{"benchmark",arr("Optional benchmark returns.")}};
+        const QJsonObject pf{{"returns",arr("Asset returns matrix.")},{"weights",arr("Portfolio weights.")},{"prices",arr("Asset prices matrix.")}};
+        const QJsonObject ppo{{"prices",arr("Historical prices.")},{"expected_returns",arr("Expected returns.")},{"cov_matrix",arr("Covariance matrix.")},{"weights",arr("Weights.")}};
+        const QJsonObject ts{{"data",arr("Time-series values.")},{"horizon",num("Forecast horizon.")}};
+        const QJsonObject sm{{"data",arr("Input data series/matrix.")},{"order",arr("(p,d,q) for ARIMA.")},{"formula",str("Regression formula (OLS).")}};
+        const QJsonObject vollib{{"flag",str("'c' (call) or 'p' (put).")},{"S",num("Spot.")},{"F",num("Forward (black model).")},{"K",num("Strike.")},{"t",num("Time to expiry (years).")},{"r",num("Risk-free rate.")},{"sigma",num("Volatility.")},{"price",num("Option price (for IV).")}};
+        const QJsonObject pme{{"cashflows",arr("Fund cashflows.")},{"dates",arr("Cashflow dates.")},{"index_prices",arr("Benchmark index values.")}};
+        const QJsonObject fin{{"income_statement",obj("Income statement.")},{"balance_sheet",obj("Balance sheet.")},{"cash_flow",obj("Cash-flow statement.")}};
+        const QJsonObject startup{{"metrics",obj("Startup metrics (ARR, burn, growth, …).")}};
+        const QJsonObject gen{{"params",obj("Analytic parameters (JSON).")}};
+        (void)startup; (void)gen;  // startup already wired above; gen is a spare passthrough schema
+        tools.push_back(make_ma_tool("ma_income_analysis", "Financial analysis: analyze income statement.", "income_analysis", &MASvc::analyze_income_statement, fin, {}));
+        tools.push_back(make_ma_tool("ma_balance_analysis", "Financial analysis: analyze balance sheet.", "balance_analysis", &MASvc::analyze_balance_sheet, fin, {}));
+        tools.push_back(make_ma_tool("ma_cashflow_analysis", "Financial analysis: analyze cashflow statement.", "cashflow_analysis", &MASvc::analyze_cashflow_statement, fin, {}));
+        tools.push_back(make_ma_tool("ma_financial_analysis", "Financial analysis: analyze comprehensive financials.", "financial_analysis", &MASvc::analyze_comprehensive_financials, fin, {}));
+        tools.push_back(make_ma_tool("ma_financial_key_metrics", "Financial analysis: get financial key metrics.", "financial_key_metrics", &MASvc::get_financial_key_metrics, fin, {}));
+        tools.push_back(make_ma_tool("ma_quantstats_stats", "QuantStats: quantstats stats.", "quantstats_stats", &MASvc::quantstats_stats, ret, {}));
+        tools.push_back(make_ma_tool("ma_quantstats_returns", "QuantStats: quantstats returns.", "quantstats_returns", &MASvc::quantstats_returns, ret, {}));
+        tools.push_back(make_ma_tool("ma_quantstats_drawdown", "QuantStats: quantstats drawdown.", "quantstats_drawdown", &MASvc::quantstats_drawdown, ret, {}));
+        tools.push_back(make_ma_tool("ma_quantstats_rolling", "QuantStats: quantstats rolling.", "quantstats_rolling", &MASvc::quantstats_rolling, ret, {}));
+        tools.push_back(make_ma_tool("ma_quantstats_full_report", "QuantStats: quantstats full report.", "quantstats_full_report", &MASvc::quantstats_full_report, ret, {}));
+        tools.push_back(make_ma_tool("ma_arima", "statsmodels: fit arima.", "arima", &MASvc::fit_arima, sm, {}));
+        tools.push_back(make_ma_tool("ma_arima_forecast", "statsmodels: forecast arima.", "arima_forecast", &MASvc::forecast_arima, sm, {}));
+        tools.push_back(make_ma_tool("ma_ols", "statsmodels: fit ols.", "ols", &MASvc::fit_ols, sm, {}));
+        tools.push_back(make_ma_tool("ma_descriptive_statistics", "statsmodels: descriptive statistics.", "descriptive_statistics", &MASvc::descriptive_statistics, sm, {}));
+        tools.push_back(make_ma_tool("ma_ffn_performance", "FFN: calculate ffn performance.", "ffn_performance", &MASvc::calculate_ffn_performance, pf, {}));
+        tools.push_back(make_ma_tool("ma_ffn_drawdowns", "FFN: calculate ffn drawdowns.", "ffn_drawdowns", &MASvc::calculate_ffn_drawdowns, pf, {}));
+        tools.push_back(make_ma_tool("ma_ffn_rolling_metrics", "FFN: calculate ffn rolling metrics.", "ffn_rolling_metrics", &MASvc::calculate_ffn_rolling_metrics, pf, {}));
+        tools.push_back(make_ma_tool("ma_ffn_risk_metrics", "FFN: calculate ffn risk metrics.", "ffn_risk_metrics", &MASvc::calculate_ffn_risk_metrics, pf, {}));
+        tools.push_back(make_ma_tool("ma_ffn_portfolio", "FFN: optimize ffn portfolio.", "ffn_portfolio", &MASvc::optimize_ffn_portfolio, pf, {}));
+        tools.push_back(make_ma_tool("ma_ffn_full_analysis", "FFN: run ffn full analysis.", "ffn_full_analysis", &MASvc::run_ffn_full_analysis, pf, {}));
+        tools.push_back(make_ma_tool("ma_pca", "statsmodels: perform pca.", "pca", &MASvc::perform_pca, sm, {}));
+        tools.push_back(make_ma_tool("ma_functime_forecast", "functime: functime forecast.", "functime_forecast", &MASvc::functime_forecast, ts, {}));
+        tools.push_back(make_ma_tool("ma_functime_anomaly_detection", "functime: functime anomaly detection.", "functime_anomaly_detection", &MASvc::functime_anomaly_detection, ts, {}));
+        tools.push_back(make_ma_tool("ma_functime_seasonality", "functime: functime seasonality.", "functime_seasonality", &MASvc::functime_seasonality, ts, {}));
+        tools.push_back(make_ma_tool("ma_functime_metrics", "functime: functime metrics.", "functime_metrics", &MASvc::functime_metrics, ts, {}));
+        tools.push_back(make_ma_tool("ma_functime_confidence_intervals", "functime: functime confidence intervals.", "functime_confidence_intervals", &MASvc::functime_confidence_intervals, ts, {}));
+        tools.push_back(make_ma_tool("ma_functime_stationarity", "functime: functime stationarity.", "functime_stationarity", &MASvc::functime_stationarity, ts, {}));
+        tools.push_back(make_ma_tool("ma_portfolio_optimize", "PyPortfolioOpt: optimize portfolio.", "portfolio_optimize", &MASvc::optimize_portfolio, ppo, {}));
+        tools.push_back(make_ma_tool("ma_efficient_frontier", "PyPortfolioOpt: generate efficient frontier.", "efficient_frontier", &MASvc::generate_efficient_frontier, ppo, {}));
+        tools.push_back(make_ma_tool("ma_discrete_allocation", "PyPortfolioOpt: calculate discrete allocation.", "discrete_allocation", &MASvc::calculate_discrete_allocation, ppo, {}));
+        tools.push_back(make_ma_tool("ma_portfolio_backtest", "PyPortfolioOpt: run portfolio backtest.", "portfolio_backtest", &MASvc::run_portfolio_backtest, ppo, {}));
+        tools.push_back(make_ma_tool("ma_risk_decomposition", "PyPortfolioOpt: calculate risk decomposition.", "risk_decomposition", &MASvc::calculate_risk_decomposition, ppo, {}));
+        tools.push_back(make_ma_tool("ma_black_litterman", "PyPortfolioOpt: optimize black litterman.", "black_litterman", &MASvc::optimize_black_litterman, ppo, {}));
+        tools.push_back(make_ma_tool("ma_hrp_optimization", "PyPortfolioOpt: optimize hrp.", "hrp_optimization", &MASvc::optimize_hrp, ppo, {}));
+        tools.push_back(make_ma_tool("ma_portfolio_report", "PyPortfolioOpt: generate portfolio report.", "portfolio_report", &MASvc::generate_portfolio_report, ppo, {}));
+        tools.push_back(make_ma_tool("ma_gs_risk_metrics", "GS Quant: calculate risk metrics.", "gs_risk_metrics", &MASvc::calculate_risk_metrics, pf, {}));
+        tools.push_back(make_ma_tool("ma_gs_portfolio", "GS Quant: analyze portfolio.", "gs_portfolio", &MASvc::analyze_portfolio, pf, {}));
+        tools.push_back(make_ma_tool("ma_gs_greeks", "GS Quant: calculate greeks.", "gs_greeks", &MASvc::calculate_greeks, pf, {}));
+        tools.push_back(make_ma_tool("ma_gs_var", "GS Quant: perform var analysis.", "gs_var", &MASvc::perform_var_analysis, pf, {}));
+        tools.push_back(make_ma_tool("ma_gs_stress_test", "GS Quant: perform stress test.", "gs_stress_test", &MASvc::perform_stress_test, pf, {}));
+        tools.push_back(make_ma_tool("ma_gs_backtest", "GS Quant: run gs backtest.", "gs_backtest", &MASvc::run_gs_backtest, pf, {}));
+        tools.push_back(make_ma_tool("ma_gs_statistics", "GS Quant: calculate statistics.", "gs_statistics", &MASvc::calculate_statistics, pf, {}));
+        tools.push_back(make_ma_tool("ma_fortitudo_check_status", "Fortitudo Tech: fortitudo check status.", "fortitudo_check_status", &MASvc::fortitudo_check_status, pf, {}));
+        tools.push_back(make_ma_tool("ma_fortitudo_portfolio_metrics", "Fortitudo Tech: fortitudo portfolio metrics.", "fortitudo_portfolio_metrics", &MASvc::fortitudo_portfolio_metrics, pf, {}));
+        tools.push_back(make_ma_tool("ma_fortitudo_covariance_matrix", "Fortitudo Tech: fortitudo covariance matrix.", "fortitudo_covariance_matrix", &MASvc::fortitudo_covariance_matrix, pf, {}));
+        tools.push_back(make_ma_tool("ma_fortitudo_mean_variance_optimize", "Fortitudo Tech: fortitudo mean variance optimize.", "fortitudo_mean_variance_optimize", &MASvc::fortitudo_mean_variance_optimize, pf, {}));
+        tools.push_back(make_ma_tool("ma_fortitudo_mean_cvar_optimize", "Fortitudo Tech: fortitudo mean cvar optimize.", "fortitudo_mean_cvar_optimize", &MASvc::fortitudo_mean_cvar_optimize, pf, {}));
+        tools.push_back(make_ma_tool("ma_fortitudo_efficient_frontier", "Fortitudo Tech: fortitudo efficient frontier.", "fortitudo_efficient_frontier", &MASvc::fortitudo_efficient_frontier, pf, {}));
+        tools.push_back(make_ma_tool("ma_fortitudo_exp_decay_probabilities", "Fortitudo Tech: fortitudo exp decay probabilities.", "fortitudo_exp_decay_probabilities", &MASvc::fortitudo_exp_decay_probabilities, pf, {}));
+        tools.push_back(make_ma_tool("ma_pme", "PyPME: calculate pme.", "pme", &MASvc::calculate_pme, pme, {}));
+        tools.push_back(make_ma_tool("ma_verbose_pme", "PyPME: calculate verbose pme.", "verbose_pme", &MASvc::calculate_verbose_pme, pme, {}));
+        tools.push_back(make_ma_tool("ma_xpme", "PyPME: calculate xpme.", "xpme", &MASvc::calculate_xpme, pme, {}));
+        tools.push_back(make_ma_tool("ma_verbose_xpme", "PyPME: calculate verbose xpme.", "verbose_xpme", &MASvc::calculate_verbose_xpme, pme, {}));
+        tools.push_back(make_ma_tool("ma_tessa_xpme", "PyPME: calculate tessa xpme.", "tessa_xpme", &MASvc::calculate_tessa_xpme, pme, {}));
+        tools.push_back(make_ma_tool("ma_tessa_verbose_xpme", "PyPME: calculate tessa verbose xpme.", "tessa_verbose_xpme", &MASvc::calculate_tessa_verbose_xpme, pme, {}));
+        tools.push_back(make_ma_tool("ma_black_price", "py_vollib: calculate black price.", "black_price", &MASvc::calculate_black_price, vollib, {}));
+        tools.push_back(make_ma_tool("ma_black_greeks", "py_vollib: calculate black greeks.", "black_greeks", &MASvc::calculate_black_greeks, vollib, {}));
+        tools.push_back(make_ma_tool("ma_black_iv", "py_vollib: calculate black iv.", "black_iv", &MASvc::calculate_black_iv, vollib, {}));
+        tools.push_back(make_ma_tool("ma_bs_price", "py_vollib: calculate bs price.", "bs_price", &MASvc::calculate_bs_price, vollib, {}));
+        tools.push_back(make_ma_tool("ma_bs_greeks", "py_vollib: calculate bs greeks.", "bs_greeks", &MASvc::calculate_bs_greeks, vollib, {}));
+        tools.push_back(make_ma_tool("ma_bs_iv", "py_vollib: calculate bs iv.", "bs_iv", &MASvc::calculate_bs_iv, vollib, {}));
+        tools.push_back(make_ma_tool("ma_bsm_price", "py_vollib: calculate bsm price.", "bsm_price", &MASvc::calculate_bsm_price, vollib, {}));
+        tools.push_back(make_ma_tool("ma_bsm_greeks", "py_vollib: calculate bsm greeks.", "bsm_greeks", &MASvc::calculate_bsm_greeks, vollib, {}));
+        tools.push_back(make_ma_tool("ma_bsm_iv", "py_vollib: calculate bsm iv.", "bsm_iv", &MASvc::calculate_bsm_iv, vollib, {}));
+        tools.push_back(make_ma_tool("ma_gluonts_check_status", "GluonTS: gluonts check status.", "gluonts_check_status", &MASvc::gluonts_check_status, ts, {}));
+        tools.push_back(make_ma_tool("ma_gluonts_probabilistic_forecast", "GluonTS: gluonts probabilistic forecast.", "gluonts_probabilistic_forecast", &MASvc::gluonts_probabilistic_forecast, ts, {}));
+        tools.push_back(make_ma_tool("ma_gluonts_quantile_forecast", "GluonTS: gluonts quantile forecast.", "gluonts_quantile_forecast", &MASvc::gluonts_quantile_forecast, ts, {}));
+        tools.push_back(make_ma_tool("ma_gluonts_distribution_fit", "GluonTS: gluonts distribution fit.", "gluonts_distribution_fit", &MASvc::gluonts_distribution_fit, ts, {}));
+        tools.push_back(make_ma_tool("ma_gluonts_evaluate_forecast", "GluonTS: gluonts evaluate forecast.", "gluonts_evaluate_forecast", &MASvc::gluonts_evaluate_forecast, ts, {}));
+        tools.push_back(make_ma_tool("ma_gluonts_seasonal_naive", "GluonTS: gluonts seasonal naive.", "gluonts_seasonal_naive", &MASvc::gluonts_seasonal_naive, ts, {}));
+    }
+
     LOG_DEBUG(TAG, QString("Registered %1 MA Analytics tools").arg(tools.size()));
     return tools;
 }
