@@ -92,6 +92,27 @@ static void run_ma_async(const QString& context, std::function<void()> trigger,
         });
 }
 
+// Compact registration for the analytics library wrappers (skfolio, options,
+// valuation, …). Each forwards its args straight to the Python analytic and
+// waits on `context`, which matches the service method's run_python_json result
+// context (so results route unambiguously).
+using MaMethod = void (fincept::services::ma::MAAnalyticsService::*)(const QJsonObject&);
+static ToolDef make_ma_tool(const char* name, const char* desc, const QString& context,
+                            MaMethod method, QJsonObject props, QStringList required) {
+    ToolDef t;
+    t.name = name;
+    t.description = desc;
+    t.category = "ma-analytics";
+    t.input_schema.properties = std::move(props);
+    t.input_schema.required = std::move(required);
+    t.handler = [method, context](const QJsonObject& args) -> ToolResult {
+        return run_ma_sync(context, [&, method]() {
+            (fincept::services::ma::MAAnalyticsService::instance().*method)(args);
+        });
+    };
+    return t;
+}
+
 std::vector<ToolDef> get_ma_analytics_tools() {
     std::vector<ToolDef> tools;
 
@@ -1108,6 +1129,126 @@ std::vector<ToolDef> get_ma_analytics_tools() {
             });
         };
         tools.push_back(std::move(t));
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // ANALYTICS LIBRARY WRAPPERS — skfolio, options, valuation
+    // (linked service methods exposed so the AI/agents can actually call them)
+    // ════════════════════════════════════════════════════════════════════
+    {
+        using MASvc = fincept::services::ma::MAAnalyticsService;
+        auto num = [](const char* d) { return QJsonObject{{"type", "number"}, {"description", d}}; };
+        auto str = [](const char* d) { return QJsonObject{{"type", "string"}, {"description", d}}; };
+        auto arr = [](const char* d) { return QJsonObject{{"type", "array"}, {"description", d}}; };
+        auto obj = [](const char* d) { return QJsonObject{{"type", "object"}, {"description", d}}; };
+
+        // ── skfolio (portfolio optimization / risk) ──────────────────────
+        const QJsonObject skf_props{
+            {"prices", arr("Historical prices matrix, or use 'returns'.")},
+            {"returns", arr("Asset returns matrix (rows=periods, cols=assets).")},
+            {"optimization_method", str("mean_risk | hrp | herc | nco | risk_budgeting | max_diversification | "
+                                        "equal_weight | inverse_volatility")},
+            {"objective_function", str("minimize_risk | maximize_return | maximize_ratio | maximize_utility")},
+            {"risk_measure", str("variance | cvar | max_drawdown | standard_deviation | …")},
+        };
+        tools.push_back(make_ma_tool("ma_skfolio_optimize",
+            "skfolio: optimize a portfolio (mean-risk, HRP, HERC, NCO, risk budgeting, …). Returns weights + metrics.",
+            "skfolio_optimize", &MASvc::skfolio_optimize, skf_props, {}));
+        tools.push_back(make_ma_tool("ma_skfolio_efficient_frontier",
+            "skfolio: compute the efficient frontier (weights, returns, risks, sharpe).",
+            "skfolio_efficient_frontier", &MASvc::skfolio_efficient_frontier, skf_props, {}));
+        tools.push_back(make_ma_tool("ma_skfolio_risk_metrics",
+            "skfolio: portfolio risk metrics for given weights/returns.",
+            "skfolio_risk_metrics", &MASvc::skfolio_risk_metrics, skf_props, {}));
+        tools.push_back(make_ma_tool("ma_skfolio_stress_test",
+            "skfolio: stress-test a portfolio against scenarios.",
+            "skfolio_stress_test", &MASvc::skfolio_stress_test,
+            QJsonObject{{"returns", arr("Asset returns matrix.")}, {"weights", arr("Portfolio weights.")},
+                        {"scenarios", obj("Stress scenarios.")}}, {}));
+        tools.push_back(make_ma_tool("ma_skfolio_backtest",
+            "skfolio: walk-forward backtest of an optimization strategy.",
+            "skfolio_backtest", &MASvc::skfolio_backtest,
+            QJsonObject{{"prices", arr("Historical prices.")},
+                        {"optimization_method", str("Strategy to backtest.")},
+                        {"rebalance_freq", str("Rebalance frequency (e.g. 'M', 'Q').")}}, {}));
+        tools.push_back(make_ma_tool("ma_skfolio_compare_strategies",
+            "skfolio: compare multiple optimization strategies side by side.",
+            "skfolio_compare_strategies", &MASvc::skfolio_compare_strategies,
+            QJsonObject{{"prices", arr("Historical prices.")}, {"strategies", arr("List of strategy configs.")}}, {}));
+        tools.push_back(make_ma_tool("ma_skfolio_risk_attribution",
+            "skfolio: decompose portfolio risk by asset/factor.",
+            "skfolio_risk_attribution", &MASvc::skfolio_risk_attribution, skf_props, {}));
+        tools.push_back(make_ma_tool("ma_skfolio_hyperparameter_tune",
+            "skfolio: cross-validated hyperparameter tuning for an optimizer.",
+            "skfolio_hyperparameter_tune", &MASvc::skfolio_hyperparameter_tune,
+            QJsonObject{{"prices", arr("Historical prices.")}, {"param_grid", obj("Grid of parameters.")},
+                        {"cv_method", str("Cross-validation method.")}}, {}));
+        tools.push_back(make_ma_tool("ma_skfolio_measures",
+            "skfolio: compute a named risk/return measure for a series.",
+            "skfolio_measures", &MASvc::skfolio_measures,
+            QJsonObject{{"returns", arr("Returns series.")}, {"measure_name", str("Measure to compute.")}}, {}));
+        tools.push_back(make_ma_tool("ma_skfolio_validate_model",
+            "skfolio: validate an optimization model (in/out-of-sample).",
+            "skfolio_validate_model", &MASvc::skfolio_validate_model, skf_props, {}));
+        tools.push_back(make_ma_tool("ma_skfolio_scenario_analysis",
+            "skfolio: scenario analysis over a portfolio.",
+            "skfolio_scenario_analysis", &MASvc::skfolio_scenario_analysis,
+            QJsonObject{{"returns", arr("Returns matrix.")}, {"scenarios", obj("Scenarios.")}}, {}));
+        tools.push_back(make_ma_tool("ma_skfolio_generate_report",
+            "skfolio: generate a full portfolio analytics report.",
+            "skfolio_generate_report", &MASvc::skfolio_generate_report, skf_props, {}));
+
+        // ── Options analytics ────────────────────────────────────────────
+        const QJsonObject opt_props{
+            {"chain", arr("Option chain rows, e.g. [{strike, ce_oi, pe_oi, ce_iv, pe_iv, ce_price, pe_price}].")},
+            {"spot", num("Underlying spot price.")},
+            {"expiry", str("Expiry date (YYYY-MM-DD).")},
+            {"interest_rate", num("Risk-free rate (decimal, e.g. 0.07).")},
+            {"lot_size", num("Contract lot size.")},
+        };
+        tools.push_back(make_ma_tool("ma_options_gamma_exposure",
+            "Options Gamma Exposure (GEX): net/call/put GEX, gamma call/put walls, PCR.",
+            "options_gex", &MASvc::options_gamma_exposure, opt_props, {"chain", "spot"}));
+        tools.push_back(make_ma_tool("ma_options_iv_smile",
+            "Options implied-volatility smile + skew across strikes for one expiry.",
+            "options_iv_smile", &MASvc::options_iv_smile, opt_props, {"chain", "spot"}));
+        tools.push_back(make_ma_tool("ma_options_iv_surface",
+            "Options implied-volatility surface across expiries and strikes.",
+            "options_iv_surface", &MASvc::options_iv_surface,
+            QJsonObject{{"expiries", arr("Per-expiry chains: [{expiry, chain:[…]}].")}, {"spot", num("Spot.")},
+                        {"interest_rate", num("Risk-free rate.")}}, {"expiries", "spot"}));
+        tools.push_back(make_ma_tool("ma_options_open_interest",
+            "Options OI tracker: PCR, max-pain, OI change, per-strike OI/volume.",
+            "options_oi", &MASvc::options_open_interest, opt_props, {"chain", "spot"}));
+        tools.push_back(make_ma_tool("ma_options_straddle_sim",
+            "Simulate a short/long straddle with adjustments over an intraday candle series.",
+            "options_straddle", &MASvc::options_straddle_sim,
+            QJsonObject{{"candles", arr("OHLC candle series.")}, {"underlying", str("Underlying symbol.")},
+                        {"expiry", str("Expiry date.")}, {"lots", num("Number of lots.")},
+                        {"lot_size", num("Lot size.")}, {"strike_step", num("Strike step.")}},
+            {"candles"}));
+        tools.push_back(make_ma_tool("ma_options_strategy_payoff",
+            "Multi-leg options strategy payoff: breakevens, max profit/loss, net greeks, PnL curve.",
+            "options_strategy_payoff", &MASvc::options_strategy_payoff,
+            QJsonObject{{"legs", arr("Strategy legs: [{type:'CE'|'PE', side:'buy'|'sell', strike, qty, premium, iv}].")},
+                        {"spot", num("Spot.")}, {"interest_rate", num("Risk-free rate.")},
+                        {"lot_size", num("Lot size.")}},
+            {"legs", "spot"}));
+
+        // ── Corporate-finance valuation summary ──────────────────────────
+        tools.push_back(make_ma_tool("ma_valuation_comprehensive",
+            "Comprehensive valuation across methods (DCF, multiples, …) for the given target metrics.",
+            "valuation_comprehensive", &MASvc::valuation_comprehensive,
+            QJsonObject{{"target_metrics", obj("Target company metrics (revenue, ebitda, growth, etc.).")}},
+            {"target_metrics"}));
+        tools.push_back(make_ma_tool("ma_valuation_executive_summary",
+            "Generate an executive summary from prior valuation results.",
+            "valuation_executive_summary", &MASvc::valuation_executive_summary,
+            QJsonObject{{"valuation_results", obj("Output of a comprehensive valuation.")}}, {"valuation_results"}));
+        tools.push_back(make_ma_tool("ma_valuation_football_field",
+            "Build a football-field valuation range chart from valuation results.",
+            "valuation_football_field", &MASvc::valuation_football_field,
+            QJsonObject{{"valuation_results", obj("Output of a comprehensive valuation.")}}, {"valuation_results"}));
     }
 
     LOG_DEBUG(TAG, QString("Registered %1 MA Analytics tools").arg(tools.size()));
