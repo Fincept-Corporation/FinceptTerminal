@@ -856,6 +856,59 @@ void MAAnalyticsService::run_fixed_income_command(
         "fixed_income_" + command);
 }
 
+// skfolio Analytics — script dispatches on the operation name (args[0]); the
+// result context is skfolio_-prefixed so it never collides with the same-named
+// commands in PyPortfolioOpt / GS Quant / Fortitudo backends.
+static const char* kSkfolioScript = "Analytics/python_skfolio_lib/skfolio_service.py";
+
+void MAAnalyticsService::skfolio_optimize(const QJsonObject& params) {
+    run_python_json(kSkfolioScript, "optimize", params, "skfolio_optimize");
+}
+
+void MAAnalyticsService::skfolio_efficient_frontier(const QJsonObject& params) {
+    run_python_json(kSkfolioScript, "efficient_frontier", params, "skfolio_efficient_frontier");
+}
+
+void MAAnalyticsService::skfolio_risk_metrics(const QJsonObject& params) {
+    run_python_json(kSkfolioScript, "risk_metrics", params, "skfolio_risk_metrics");
+}
+
+void MAAnalyticsService::skfolio_stress_test(const QJsonObject& params) {
+    run_python_json(kSkfolioScript, "stress_test", params, "skfolio_stress_test");
+}
+
+void MAAnalyticsService::skfolio_backtest(const QJsonObject& params) {
+    run_python_json(kSkfolioScript, "backtest", params, "skfolio_backtest");
+}
+
+void MAAnalyticsService::skfolio_compare_strategies(const QJsonObject& params) {
+    run_python_json(kSkfolioScript, "compare_strategies", params, "skfolio_compare_strategies");
+}
+
+void MAAnalyticsService::skfolio_risk_attribution(const QJsonObject& params) {
+    run_python_json(kSkfolioScript, "risk_attribution", params, "skfolio_risk_attribution");
+}
+
+void MAAnalyticsService::skfolio_hyperparameter_tune(const QJsonObject& params) {
+    run_python_json(kSkfolioScript, "hyperparameter_tune", params, "skfolio_hyperparameter_tune");
+}
+
+void MAAnalyticsService::skfolio_measures(const QJsonObject& params) {
+    run_python_json(kSkfolioScript, "measures", params, "skfolio_measures");
+}
+
+void MAAnalyticsService::skfolio_validate_model(const QJsonObject& params) {
+    run_python_json(kSkfolioScript, "validate_model", params, "skfolio_validate_model");
+}
+
+void MAAnalyticsService::skfolio_scenario_analysis(const QJsonObject& params) {
+    run_python_json(kSkfolioScript, "scenario_analysis", params, "skfolio_scenario_analysis");
+}
+
+void MAAnalyticsService::skfolio_generate_report(const QJsonObject& params) {
+    run_python_json(kSkfolioScript, "generate_report", params, "skfolio_generate_report");
+}
+
 // ── Deal Comparison ──────────────────────────────────────────────────────────
 void MAAnalyticsService::compare_deals(const QJsonObject& params) {
     run_python_json("Analytics/corporateFinance/deal_comparison/deal_comparator.py", "compare", params,

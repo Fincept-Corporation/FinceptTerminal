@@ -185,6 +185,22 @@ class MAAnalyticsService : public QObject
         const QString& command,
         const QJsonObject& params);
 
+    // skfolio Analytics (portfolio optimization / risk). Contexts are skfolio_-
+    // prefixed because several commands (efficient_frontier, risk_metrics,
+    // backtest, stress_test, generate_report) collide with other backends.
+    void skfolio_optimize(const QJsonObject& params);
+    void skfolio_efficient_frontier(const QJsonObject& params);
+    void skfolio_risk_metrics(const QJsonObject& params);
+    void skfolio_stress_test(const QJsonObject& params);
+    void skfolio_backtest(const QJsonObject& params);
+    void skfolio_compare_strategies(const QJsonObject& params);
+    void skfolio_risk_attribution(const QJsonObject& params);
+    void skfolio_hyperparameter_tune(const QJsonObject& params);
+    void skfolio_measures(const QJsonObject& params);
+    void skfolio_validate_model(const QJsonObject& params);
+    void skfolio_scenario_analysis(const QJsonObject& params);
+    void skfolio_generate_report(const QJsonObject& params);
+
     // ── Deal Comparison ─────────────────────────────────────────────────────
     void compare_deals(const QJsonObject& params);
     void rank_deals(const QJsonObject& params);
