@@ -1,4 +1,3 @@
-// src/screens/equity_research/EquityResearchScreen.h
 #pragma once
 #include "core/symbol/IGroupLinked.h"
 #include "screens/common/IStatefulScreen.h"
@@ -21,6 +20,7 @@ class EquityTechnicalsTab;
 class EquityPeersTab;
 class EquityNewsTab;
 class EquitySentimentTab;
+class EquityValuationTab;
 
 class EquityResearchScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
     Q_OBJECT
@@ -32,9 +32,6 @@ class EquityResearchScreen : public QWidget, public IStatefulScreen, public IGro
     QVariantMap save_state() const override;
     QString state_key() const override { return "equity_research"; }
 
-    // IGroupLinked — receives group broadcasts and calls load_symbol();
-    // also publishes when load_symbol() is triggered internally via the
-    // existing EventBus wiring (see .cpp).
     void set_group(SymbolGroup g) override { link_group_ = g; }
     SymbolGroup group() const override { return link_group_; }
     void on_group_symbol_changed(const SymbolRef& ref) override;
@@ -55,6 +52,7 @@ class EquityResearchScreen : public QWidget, public IStatefulScreen, public IGro
     // Opens the "Download Price Data (CSV)" dialog and exports yfinance OHLCV
     // history for current_symbol_ to a user-chosen file.
     void on_download_csv_clicked();
+    void on_financials_loaded(services::equity::FinancialsData data);
 
   private:
     void build_ui();
@@ -69,31 +67,29 @@ class EquityResearchScreen : public QWidget, public IStatefulScreen, public IGro
     // AND the current symbol is tradable via those (Indian) brokers (.NS/.BO).
     void update_trade_buttons();
 
-    // Title bar
-    QLabel* title_label_ = nullptr;
+    QLabel* title_label_  = nullptr;
     QLabel* symbol_label_ = nullptr;
     QPushButton* buy_btn_ = nullptr;
     QPushButton* sell_btn_ = nullptr;
     QLabel* hint_label_ = nullptr;
 
-    // Quote bar
-    QLabel* sym_label_ = nullptr;
-    QLabel* price_label_ = nullptr;
+    QLabel* sym_label_    = nullptr;
+    QLabel* price_label_  = nullptr;
     QLabel* change_label_ = nullptr;
-    QLabel* vol_label_ = nullptr;
-    QLabel* hl_label_ = nullptr;
+    QLabel* vol_label_    = nullptr;
+    QLabel* hl_label_     = nullptr;
     QLabel* mktcap_label_ = nullptr;
-    QLabel* rec_label_ = nullptr;
+    QLabel* rec_label_    = nullptr;
 
-    // Tabs
-    QTabWidget* tab_widget_ = nullptr;
-    EquityOverviewTab* overview_tab_ = nullptr;
+    QTabWidget*          tab_widget_     = nullptr;
+    EquityOverviewTab*   overview_tab_   = nullptr;
     EquityFinancialsTab* financials_tab_ = nullptr;
-    EquityAnalysisTab* analysis_tab_ = nullptr;
+    EquityAnalysisTab*   analysis_tab_   = nullptr;
     EquityTechnicalsTab* technicals_tab_ = nullptr;
     EquityPeersTab* peers_tab_ = nullptr;
     EquityNewsTab* news_tab_ = nullptr;
     EquitySentimentTab* sentiment_tab_ = nullptr;
+    EquityValuationTab* valuation_tab_ = nullptr;
 
     QTimer* refresh_timer_ = nullptr;
     QString current_symbol_;
