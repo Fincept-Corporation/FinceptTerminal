@@ -1272,6 +1272,22 @@ if __name__ == "__main__":
         sys.exit(1)
 
     command = sys.argv[1]
+    # ── Qt bridge: accept (command, single JSON object) and expand into the
+    # positional argv the handlers below expect. No effect on the legacy CLI form.
+    _QT_ARGMAP = {"comprehensive_management_analysis": [["investor_data", "json"]], "pension_analysis": [["plan_type", "raw"], ["participant_data", "json"]]}
+    if len(sys.argv) == 3 and command in _QT_ARGMAP:
+        try:
+            _qp = json.loads(sys.argv[2])
+            if isinstance(_qp, dict) and (not _QT_ARGMAP[command] or _QT_ARGMAP[command][0][0] in _qp):
+                _qav = [sys.argv[0], command]
+                for _qn, _qk in _QT_ARGMAP[command]:
+                    if _qn in _qp and _qp[_qn] is not None:
+                        _qav.append(json.dumps(_qp[_qn]) if _qk == 'json' else str(_qp[_qn]))
+                    else:
+                        _qav.append('null')
+                sys.argv = _qav
+        except Exception:
+            pass
 
     try:
         if command == "comprehensive_management_analysis":

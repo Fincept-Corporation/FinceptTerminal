@@ -1005,6 +1005,21 @@ if __name__ == "__main__":
 
     command = sys.argv[1]
 
+    # ── Qt bridge: expand (command, single JSON object) into the positional argv
+    # that comprehensive_analysis reads. Other commands take their params dict
+    # directly (see the stdin/argv[2] fallback below). No effect on legacy CLI form.
+    _QT_ARGMAP = {"comprehensive_analysis": [["returns_data", "json"], ["weights", "json"], ["market_returns", "json"]]}
+    if len(sys.argv) == 3 and command in _QT_ARGMAP:
+        try:
+            _qp = json.loads(sys.argv[2])
+            if isinstance(_qp, dict) and _QT_ARGMAP[command][0][0] in _qp:
+                _qav = [sys.argv[0], command]
+                for _qn, _qk in _QT_ARGMAP[command]:
+                    _qav.append(json.dumps(_qp[_qn]) if (_qn in _qp and _qp[_qn] is not None) else "null")
+                sys.argv = _qav
+        except Exception:
+            pass
+
     # Read params from stdin if available (C++ execute_with_stdin pipes data here)
     stdin_params = None
     try:
@@ -1014,6 +1029,14 @@ if __name__ == "__main__":
                 stdin_params = json.loads(stdin_data)
     except (json.JSONDecodeError, OSError):
         pass
+
+    # Fallback: the Qt bridge (run_python_json) passes the params object as argv[2],
+    # not stdin — so the stdin-based commands still receive their dict.
+    if stdin_params is None and len(sys.argv) > 2:
+        try:
+            stdin_params = json.loads(sys.argv[2])
+        except (json.JSONDecodeError, ValueError):
+            pass
 
     try:
         if command == "calculate_portfolio_metrics":

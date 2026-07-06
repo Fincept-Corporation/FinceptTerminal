@@ -113,6 +113,25 @@ static ToolDef make_ma_tool(const char* name, const char* desc, const QString& c
     return t;
 }
 
+// Variant for the multi-command dispatcher methods (portfolio management): binds
+// a fixed `command` and forwards the tool args as that command's params.
+using MaCmdMethod = void (fincept::services::ma::MAAnalyticsService::*)(const QString&, const QJsonObject&);
+static ToolDef make_ma_cmd_tool(const char* name, const char* desc, const QString& context,
+                                MaCmdMethod method, const QString& command, QJsonObject props, QStringList required) {
+    ToolDef t;
+    t.name = name;
+    t.description = desc;
+    t.category = "ma-analytics";
+    t.input_schema.properties = std::move(props);
+    t.input_schema.required = std::move(required);
+    t.handler = [method, context, command](const QJsonObject& args) -> ToolResult {
+        return run_ma_sync(context, [&, method, command]() {
+            (fincept::services::ma::MAAnalyticsService::instance().*method)(command, args);
+        });
+    };
+    return t;
+}
+
 std::vector<ToolDef> get_ma_analytics_tools() {
     std::vector<ToolDef> tools;
 
@@ -1343,6 +1362,38 @@ std::vector<ToolDef> get_ma_analytics_tools() {
         tools.push_back(make_ma_tool("ma_gluonts_distribution_fit", "GluonTS: gluonts distribution fit.", "gluonts_distribution_fit", &MASvc::gluonts_distribution_fit, ts, {}));
         tools.push_back(make_ma_tool("ma_gluonts_evaluate_forecast", "GluonTS: gluonts evaluate forecast.", "gluonts_evaluate_forecast", &MASvc::gluonts_evaluate_forecast, ts, {}));
         tools.push_back(make_ma_tool("ma_gluonts_seasonal_naive", "GluonTS: gluonts seasonal naive.", "gluonts_seasonal_naive", &MASvc::gluonts_seasonal_naive, ts, {}));
+    }
+
+
+    // ════════════════════════════════════════════════════════════════════
+    // PORTFOLIO MANAGEMENT (CFA suite) — normalized to (command + JSON), exposed
+    // as MCP tools. Contexts are per-script-prefixed (command names repeat).
+    // ════════════════════════════════════════════════════════════════════
+    {
+        using MASvc = fincept::services::ma::MAAnalyticsService;
+        auto num=[](const char* d){return QJsonObject{{"type","number"},{"description",d}};};
+        auto str=[](const char* d){return QJsonObject{{"type","string"},{"description",d}};};
+        auto arr=[](const char* d){return QJsonObject{{"type","array"},{"description",d}};};
+        auto obj=[](const char* d){return QJsonObject{{"type","object"},{"description",d}};};
+        (void)num;(void)str;(void)obj;
+        tools.push_back(make_ma_cmd_tool("ma_am_value_added", "Active management: value added.", "am_value_added", &MASvc::run_active_management, "value_added", QJsonObject{{"portfolio_returns", arr("portfolio returns.")}, {"benchmark_returns", arr("benchmark returns.")}, {"weights", arr("weights.")}}, {"portfolio_returns", "benchmark_returns", "weights"}));
+        tools.push_back(make_ma_cmd_tool("ma_am_information_ratio", "Active management: information ratio.", "am_information_ratio", &MASvc::run_active_management, "information_ratio", QJsonObject{{"portfolio_returns", arr("portfolio returns.")}, {"benchmark_returns", arr("benchmark returns.")}}, {"portfolio_returns", "benchmark_returns"}));
+        tools.push_back(make_ma_cmd_tool("ma_am_tracking_risk", "Active management: tracking risk.", "am_tracking_risk", &MASvc::run_active_management, "tracking_risk", QJsonObject{{"portfolio_returns", arr("portfolio returns.")}, {"benchmark_returns", arr("benchmark returns.")}}, {"portfolio_returns", "benchmark_returns"}));
+        tools.push_back(make_ma_cmd_tool("ma_am_comprehensive_analysis", "Active management: comprehensive analysis.", "am_comprehensive_analysis", &MASvc::run_active_management, "comprehensive_analysis", QJsonObject{{"portfolio_data", arr("portfolio data.")}, {"benchmark_data", arr("benchmark data.")}}, {"portfolio_data", "benchmark_data"}));
+        tools.push_back(make_ma_cmd_tool("ma_am_manager_selection", "Active management: manager selection.", "am_manager_selection", &MASvc::run_active_management, "manager_selection", QJsonObject{{"manager_candidates", arr("manager candidates.")}}, {"manager_candidates"}));
+        tools.push_back(make_ma_cmd_tool("ma_em_comprehensive_analysis", "Economics & markets: comprehensive analysis.", "em_comprehensive_analysis", &MASvc::run_economics_markets, "comprehensive_analysis", QJsonObject{{"cycle_phase_str", str("cycle phase str.")}, {"economic_data", arr("economic data.")}}, {"cycle_phase_str", "economic_data"}));
+        tools.push_back(make_ma_cmd_tool("ma_em_business_cycle_analysis", "Economics & markets: business cycle analysis.", "em_business_cycle_analysis", &MASvc::run_economics_markets, "business_cycle_analysis", QJsonObject{{"cycle_phase_str", str("cycle phase str.")}}, {"cycle_phase_str"}));
+        tools.push_back(make_ma_cmd_tool("ma_em_equity_risk_premium", "Economics & markets: equity risk premium.", "em_equity_risk_premium", &MASvc::run_economics_markets, "equity_risk_premium", QJsonObject{{"risk_free_rate", num("risk free rate.")}, {"market_risk_premium", num("market risk premium.")}}, {"risk_free_rate", "market_risk_premium"}));
+        tools.push_back(make_ma_cmd_tool("ma_pmg_comprehensive_management_analysis", "Portfolio management: comprehensive management analysis.", "pmg_comprehensive_management_analysis", &MASvc::run_portfolio_management, "comprehensive_management_analysis", QJsonObject{{"investor_data", arr("investor data.")}}, {"investor_data"}));
+        tools.push_back(make_ma_cmd_tool("ma_pmg_pension_analysis", "Portfolio management: pension analysis.", "pmg_pension_analysis", &MASvc::run_portfolio_management, "pension_analysis", QJsonObject{{"plan_type", str("plan type.")}, {"participant_data", arr("participant data.")}}, {"plan_type", "participant_data"}));
+        tools.push_back(make_ma_cmd_tool("ma_ppl_asset_allocation", "Portfolio planning: asset allocation.", "ppl_asset_allocation", &MASvc::run_portfolio_planning, "asset_allocation", QJsonObject{{"age", num("age.")}, {"risk_tolerance", str("risk tolerance.")}, {"time_horizon", num("time horizon.")}}, {"age", "risk_tolerance", "time_horizon"}));
+        tools.push_back(make_ma_cmd_tool("ma_ppl_retirement_planning", "Portfolio planning: retirement planning.", "ppl_retirement_planning", &MASvc::run_portfolio_planning, "retirement_planning", QJsonObject{{"current_age", num("current age.")}, {"retirement_age", num("retirement age.")}, {"current_savings", num("current savings.")}, {"annual_contribution", num("annual contribution.")}}, {"current_age", "retirement_age", "current_savings", "annual_contribution"}));
+        tools.push_back(make_ma_cmd_tool("ma_rmg_comprehensive_risk_analysis", "Risk management: comprehensive risk analysis.", "rmg_comprehensive_risk_analysis", &MASvc::run_risk_management, "comprehensive_risk_analysis", QJsonObject{{"returns_data", arr("returns data.")}, {"weights", arr("weights.")}, {"portfolio_value", num("portfolio value.")}}, {"returns_data", "weights", "portfolio_value"}));
+        tools.push_back(make_ma_cmd_tool("ma_pan_comprehensive_analysis", "Portfolio analytics: comprehensive analysis.", "pan_comprehensive_analysis", &MASvc::run_portfolio_analytics, "comprehensive_analysis", QJsonObject{{"returns_data", obj("Map of asset -> returns array.")}, {"weights", arr("Portfolio weights.")}, {"market_returns", arr("Market returns.")}}, {"returns_data"}));
+        tools.push_back(make_ma_cmd_tool("ma_pan_calculate_portfolio_metrics", "Portfolio analytics: calculate portfolio metrics.", "pan_calculate_portfolio_metrics", &MASvc::run_portfolio_analytics, "calculate_portfolio_metrics", QJsonObject{{"holdings", arr("Portfolio holdings.")}}, {"holdings"}));
+        tools.push_back(make_ma_cmd_tool("ma_pan_tax_report", "Portfolio analytics: tax report.", "pan_tax_report", &MASvc::run_portfolio_analytics, "tax_report", QJsonObject{{"holdings", arr("Holdings with cost basis/lots.")}}, {}));
+        tools.push_back(make_ma_cmd_tool("ma_pan_pme_analysis", "Portfolio analytics: pme analysis.", "pan_pme_analysis", &MASvc::run_portfolio_analytics, "pme_analysis", QJsonObject{{"cashflows", arr("Fund cashflows.")}, {"index_prices", arr("Benchmark index values.")}}, {}));
+        tools.push_back(make_ma_cmd_tool("ma_pan_allocation_analysis", "Portfolio analytics: allocation analysis.", "pan_allocation_analysis", &MASvc::run_portfolio_analytics, "allocation_analysis", QJsonObject{{"holdings", arr("Holdings by asset class/sector.")}}, {}));
     }
 
     LOG_DEBUG(TAG, QString("Registered %1 MA Analytics tools").arg(tools.size()));

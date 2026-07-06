@@ -950,6 +950,27 @@ void MAAnalyticsService::valuation_football_field(const QJsonObject& params) {
     run_python_json(kValuationSummaryScript, "football_field", params, "valuation_football_field");
 }
 
+// Portfolio Management (CFA suite) — generic per-script dispatchers. Contexts are
+// "<prefix>_<command>" so results route unambiguously (command names repeat).
+void MAAnalyticsService::run_active_management(const QString& command, const QJsonObject& params) {
+    run_python_json("Analytics/portfolioManagement/active_management.py", command, params, "am_" + command);
+}
+void MAAnalyticsService::run_economics_markets(const QString& command, const QJsonObject& params) {
+    run_python_json("Analytics/portfolioManagement/economics_markets.py", command, params, "em_" + command);
+}
+void MAAnalyticsService::run_portfolio_management(const QString& command, const QJsonObject& params) {
+    run_python_json("Analytics/portfolioManagement/portfolio_management.py", command, params, "pmg_" + command);
+}
+void MAAnalyticsService::run_portfolio_planning(const QString& command, const QJsonObject& params) {
+    run_python_json("Analytics/portfolioManagement/portfolio_planning.py", command, params, "ppl_" + command);
+}
+void MAAnalyticsService::run_risk_management(const QString& command, const QJsonObject& params) {
+    run_python_json("Analytics/portfolioManagement/risk_management.py", command, params, "rmg_" + command);
+}
+void MAAnalyticsService::run_portfolio_analytics(const QString& command, const QJsonObject& params) {
+    run_python_json("Analytics/portfolioManagement/portfolio_analytics.py", command, params, "pan_" + command);
+}
+
 // ── Deal Comparison ──────────────────────────────────────────────────────────
 void MAAnalyticsService::compare_deals(const QJsonObject& params) {
     run_python_json("Analytics/corporateFinance/deal_comparison/deal_comparator.py", "compare", params,

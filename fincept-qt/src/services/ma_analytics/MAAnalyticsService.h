@@ -214,6 +214,16 @@ class MAAnalyticsService : public QObject
     void valuation_executive_summary(const QJsonObject& params);
     void valuation_football_field(const QJsonObject& params);
 
+    // Portfolio Management (CFA suite). Each script dispatches on `command`; the
+    // result context is per-script-prefixed because command names repeat across
+    // scripts (e.g. comprehensive_analysis appears in 3 of them).
+    void run_active_management(const QString& command, const QJsonObject& params);      // am_
+    void run_economics_markets(const QString& command, const QJsonObject& params);      // em_
+    void run_portfolio_management(const QString& command, const QJsonObject& params);   // pmg_
+    void run_portfolio_planning(const QString& command, const QJsonObject& params);     // ppl_
+    void run_risk_management(const QString& command, const QJsonObject& params);        // rmg_
+    void run_portfolio_analytics(const QString& command, const QJsonObject& params);    // pan_
+
     // ── Deal Comparison ─────────────────────────────────────────────────────
     void compare_deals(const QJsonObject& params);
     void rank_deals(const QJsonObject& params);
