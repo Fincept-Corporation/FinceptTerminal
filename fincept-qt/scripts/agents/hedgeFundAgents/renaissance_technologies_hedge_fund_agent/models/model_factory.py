@@ -164,9 +164,11 @@ def create_ollama_model(config: ModelConfig) -> Any:
     try:
         from agno.models.ollama import Ollama
 
+        # Ollama takes sampling params via an `options` dict — passing
+        # temperature directly raises "unexpected keyword argument 'temperature'".
         return Ollama(
             id=config.model_id,
-            temperature=config.temperature,
+            options={"temperature": config.temperature},
         )
     except ImportError:
         return {

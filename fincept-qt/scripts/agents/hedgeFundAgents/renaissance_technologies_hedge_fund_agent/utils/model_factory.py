@@ -249,11 +249,16 @@ class ModelFactory:
         """Create Ollama local model"""
         from agno.models.ollama import Ollama
 
+        # Ollama uses `host` (not base_url) and takes sampling params via an
+        # `options` dict (num_predict is its max-tokens key) — passing
+        # temperature/max_tokens directly raises "unexpected keyword argument".
         return Ollama(
             id=config.model_id,
             host=config.base_url or self.PROVIDER_BASE_URLS["ollama"],
-            temperature=config.temperature,
-            max_tokens=config.max_tokens
+            options={
+                "temperature": config.temperature,
+                "num_predict": config.max_tokens,
+            },
         )
 
     def _create_openai_like_model(self, config: ModelConfig):

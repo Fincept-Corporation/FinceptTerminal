@@ -378,6 +378,11 @@ class ModelsRegistry:
                 "internlm", "dashscope", "siliconflow",
             }
 
+            # Providers whose SDK constructor names the endpoint `host` rather than
+            # `base_url`. agno.models.ollama.Ollama takes host=... — passing base_url
+            # raises "Ollama.__init__() got an unexpected keyword argument 'base_url'".
+            HOST_NOT_BASE_URL_PROVIDERS = {"ollama"}
+
             # Always pop base_url from kwargs so it never leaks via catch-all
             kwarg_base_url = kwargs.pop("base_url", None)
 
@@ -435,23 +440,43 @@ class ModelsRegistry:
 
             if provider_lower not in NO_BASE_URL_PROVIDERS:
                 if effective_base_url:
-                    model_kwargs["base_url"] = effective_base_url
+                    if provider_lower in HOST_NOT_BASE_URL_PROVIDERS:
+                        model_kwargs["host"] = effective_base_url
+                    else:
+                        model_kwargs["base_url"] = effective_base_url
 
             # Add optional parameters with provider-specific name mapping
             # Google Gemini uses max_output_tokens instead of max_tokens
             USES_MAX_OUTPUT_TOKENS = {"google", "vertexai"}
 
-            if "temperature" in kwargs:
-                model_kwargs["temperature"] = kwargs.pop("temperature")
-            if "max_tokens" in kwargs:
-                max_tok = kwargs.pop("max_tokens")
+            if provider_lower in HOST_NOT_BASE_URL_PROVIDERS:
+                # Ollama's constructor has no temperature/max_tokens fields — sampling
+                # params ride in an `options` dict (num_predict is its max-tokens key).
+                # Passing them top-level raises "unexpected keyword argument 'temperature'".
+                ollama_options = dict(model_kwargs.pop("options", {}) or {})
+                temp = kwargs.pop("temperature", None)
+                if temp is not None:
+                    ollama_options["temperature"] = temp
+                max_tok = kwargs.pop("max_tokens", None)
                 if max_tok is not None:
-                    if provider_lower in USES_MAX_OUTPUT_TOKENS:
-                        model_kwargs["max_output_tokens"] = max_tok
-                    else:
-                        model_kwargs["max_tokens"] = max_tok
-            if "max_completion_tokens" in kwargs:
-                model_kwargs["max_completion_tokens"] = kwargs.pop("max_completion_tokens")
+                    ollama_options["num_predict"] = max_tok
+                max_ctok = kwargs.pop("max_completion_tokens", None)
+                if max_ctok is not None:
+                    ollama_options.setdefault("num_predict", max_ctok)
+                if ollama_options:
+                    model_kwargs["options"] = ollama_options
+            else:
+                if "temperature" in kwargs:
+                    model_kwargs["temperature"] = kwargs.pop("temperature")
+                if "max_tokens" in kwargs:
+                    max_tok = kwargs.pop("max_tokens")
+                    if max_tok is not None:
+                        if provider_lower in USES_MAX_OUTPUT_TOKENS:
+                            model_kwargs["max_output_tokens"] = max_tok
+                        else:
+                            model_kwargs["max_tokens"] = max_tok
+                if "max_completion_tokens" in kwargs:
+                    model_kwargs["max_completion_tokens"] = kwargs.pop("max_completion_tokens")
 
             # Add remaining kwargs (filter out None values)
             for k, v in kwargs.items():

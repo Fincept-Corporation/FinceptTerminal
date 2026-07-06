@@ -108,7 +108,10 @@ class AgentFactory:
         # Any provider configured with a custom base_url (e.g. minimax served
         # on an Anthropic-compatible endpoint, OpenRouter, LM Studio, etc.)
         # is routed through OpenAIChat with that base_url.
-        if base_url:
+        # Ollama is excluded: it has a native agno class that takes `host` (not
+        # base_url), and routing it here would hit /chat/completions instead of
+        # Ollama's /v1/chat/completions endpoint. It's handled in its own branch.
+        if base_url and provider != "ollama":
             from agno.models.openai import OpenAIChat
             # Override Agno's default role_map which maps "system"→"developer".
             # Custom endpoints (MiniMax, OpenRouter, etc.) expect standard roles.
@@ -164,7 +167,21 @@ class AgentFactory:
 
         if provider == "ollama":
             from agno.models.ollama import Ollama
-            return Ollama(id=model_id, temperature=temperature, num_predict=max_tokens)
+            # Ollama's constructor uses `host` (not base_url) and takes sampling
+            # params via an `options` dict — num_predict is its max-tokens key.
+            # Passing temperature/max_tokens/base_url directly raises
+            # "Ollama.__init__() got an unexpected keyword argument ...".
+            options = {}
+            if temperature is not None:
+                options["temperature"] = temperature
+            if max_tokens is not None:
+                options["num_predict"] = max_tokens
+            ol_kwargs = {"id": model_id}
+            if base_url:
+                ol_kwargs["host"] = base_url
+            if options:
+                ol_kwargs["options"] = options
+            return Ollama(**ol_kwargs)
 
         if provider in ("openrouter",):
             from agno.models.openai import OpenAIChat
