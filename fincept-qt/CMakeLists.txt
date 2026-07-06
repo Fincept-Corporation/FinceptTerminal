@@ -571,6 +571,21 @@ else()
     )
 endif()
 
+# ── Qt 6.13+ compatibility: vendored QZipReader/QZipWriter ───────────────────
+# Qt removed the private QZipReader/QZipWriter classes from QtCore in 6.13.
+# QXlsx (Excel I/O) — including upstream master — still #include
+# <private/qzipreader_p.h>, so building it against Qt >=6.13 fails to compile.
+# Per the Qt maintainer's guidance (github issue #347, option 1: "copy the code
+# into the project") we vendor Qt's own qzip implementation under third_party/qzip
+# (same LGPL-3.0/GPL/commercial terms we already ship Qt under) and point QXlsx at
+# it. On Qt <6.13 this is inert — Qt still provides the class, so nothing changes.
+# Set -DFINCEPT_FORCE_VENDOR_QZIP=ON to exercise the vendored path on Qt <6.13.
+option(FINCEPT_FORCE_VENDOR_QZIP "Force the vendored QZip backend (test the Qt 6.13 path on older Qt)" OFF)
+set(FINCEPT_VENDOR_QZIP FALSE)
+if(FINCEPT_HAS_PRIVATE_HEADERS AND (Qt6_VERSION VERSION_GREATER_EQUAL 6.13.0 OR FINCEPT_FORCE_VENDOR_QZIP))
+    set(FINCEPT_VENDOR_QZIP TRUE)
+endif()
+
 # ── QXlsx (Excel file I/O) ────────────────────────────────────────────────────
 # Only fetched and built when Qt6::GuiPrivate is available.
 # A stub INTERFACE target is created when unavailable so all
@@ -603,6 +618,39 @@ if(FINCEPT_HAS_PRIVATE_HEADERS)
             -UQT_NO_CAST_TO_ASCII   -UQT_NO_URL_CAST_FROM_STRING
             -w -Wno-error
         )
+    endif()
+
+    # Qt >=6.13: build the vendored qzip and make QXlsx use it instead of Qt's
+    # (now-removed) private QZipReader/QZipWriter. Prepending the include dir makes
+    # QXlsx's `#include <private/qzipreader_p.h>` resolve to our copy; the static
+    # lib supplies the symbols. Inert on Qt <6.13 (FINCEPT_VENDOR_QZIP is FALSE).
+    if(FINCEPT_VENDOR_QZIP)
+        message(STATUS "Qt ${Qt6_VERSION}: using vendored QZipReader/QZipWriter for QXlsx (third_party/qzip)")
+        add_library(fincept_qzip STATIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/qzip/qzip.cpp)
+        target_include_directories(fincept_qzip PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/qzip           # QXlsx: <private/qzipreader_p.h>
+            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/qzip/private)  # qzip.cpp: "qzipreader_p.h"
+        target_link_libraries(fincept_qzip PUBLIC Qt6::Core)
+        if(WIN32)
+            find_package(Qt6ZlibPrivate REQUIRED)
+            target_link_libraries(fincept_qzip PRIVATE Qt6::ZlibPrivate)
+        else()
+            find_package(ZLIB REQUIRED)
+            target_link_libraries(fincept_qzip PRIVATE ZLIB::ZLIB)
+        endif()
+        set_target_properties(fincept_qzip PROPERTIES UNITY_BUILD OFF)
+        if(MSVC)
+            target_compile_options(fincept_qzip PRIVATE /W0 /WX-)
+        else()
+            target_compile_options(fincept_qzip PRIVATE -w -Wno-error)
+        endif()
+        # BEFORE so our <private/qzipreader_p.h> wins over any Qt private include dir.
+        target_include_directories(QXlsx BEFORE PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/qzip)
+        # Plain signature — QXlsx's own CMakeLists links with the plain form, and
+        # CMake forbids mixing plain and keyword target_link_libraries on one target.
+        # $<BUILD_INTERFACE:> keeps fincept_qzip out of QXlsx's export set (QXlsx runs
+        # install(TARGETS ... EXPORT); a local static lib can't appear in that export).
+        target_link_libraries(QXlsx $<BUILD_INTERFACE:fincept_qzip>)
     endif()
 else()
     # Stub target — satisfies target_link_libraries without pulling in QXlsx
