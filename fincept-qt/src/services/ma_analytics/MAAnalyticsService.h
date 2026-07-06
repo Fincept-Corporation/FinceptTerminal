@@ -86,6 +86,105 @@ class MAAnalyticsService : public QObject
     void run_monte_carlo(const QJsonObject& params);
     void run_regression(const QJsonObject& params);
 
+    // Financial Statement Analysis
+    void analyze_income_statement(const QJsonObject& params);
+    void analyze_balance_sheet(const QJsonObject& params);
+    void analyze_cashflow_statement(const QJsonObject& params);
+    void analyze_comprehensive_financials(const QJsonObject& params);
+    void get_financial_key_metrics(const QJsonObject& params);
+
+    // QuantStats Analytics
+    void quantstats_stats(const QJsonObject& params);
+    void quantstats_returns(const QJsonObject& params);
+    void quantstats_drawdown(const QJsonObject& params);
+    void quantstats_rolling(const QJsonObject& params);
+    void quantstats_full_report(const QJsonObject& params);
+
+    // Statsmodels Analytics
+    void fit_arima(const QJsonObject& params);
+    void forecast_arima(const QJsonObject& params);
+    void fit_ols(const QJsonObject& params);
+    void descriptive_statistics(const QJsonObject& params);
+    void perform_pca(const QJsonObject& params);
+    
+    // FFN Analytics
+    void calculate_ffn_performance(const QJsonObject& params);
+    void calculate_ffn_drawdowns(const QJsonObject& params);
+    void calculate_ffn_rolling_metrics(const QJsonObject& params);
+    void calculate_ffn_risk_metrics(const QJsonObject& params);
+    void optimize_ffn_portfolio(const QJsonObject& params);
+    void run_ffn_full_analysis(const QJsonObject& params);
+
+    // Functime Analytics
+    void functime_anomaly_detection(const QJsonObject& params);
+    void functime_forecast(const QJsonObject& params);
+    void functime_seasonality(const QJsonObject& params);
+    void functime_metrics(const QJsonObject& params);
+    void functime_confidence_intervals(const QJsonObject& params);
+    void functime_stationarity(const QJsonObject& params);
+
+    // PyPortfolioOpt Analytics
+    void optimize_portfolio(const QJsonObject& params);
+    void generate_efficient_frontier(const QJsonObject& params);
+    void calculate_discrete_allocation(const QJsonObject& params);
+    void run_portfolio_backtest(const QJsonObject& params);
+    void calculate_risk_decomposition(const QJsonObject& params);
+    void optimize_black_litterman(const QJsonObject& params);
+    void optimize_hrp(const QJsonObject& params);
+    void generate_portfolio_report(const QJsonObject& params);
+
+    // GS Quant Analytics
+    void calculate_risk_metrics(const QJsonObject& params);
+    void analyze_portfolio(const QJsonObject& params);
+    void calculate_greeks(const QJsonObject& params);
+    void perform_var_analysis(const QJsonObject& params);
+    void perform_stress_test(const QJsonObject& params);
+    void run_gs_backtest(const QJsonObject& params);
+    void calculate_statistics(const QJsonObject& params);
+
+    // Fortitudo Tech Analytics
+    void fortitudo_check_status(const QJsonObject& params);
+    void fortitudo_portfolio_metrics(const QJsonObject& params);
+    void fortitudo_covariance_matrix(const QJsonObject& params);
+    void fortitudo_mean_variance_optimize(const QJsonObject& params);
+    void fortitudo_mean_cvar_optimize(const QJsonObject& params);
+    void fortitudo_efficient_frontier(const QJsonObject& params);
+    void fortitudo_exp_decay_probabilities(const QJsonObject& params);
+
+    // PyPME Analytics
+    void calculate_pme(const QJsonObject& params);
+    void calculate_verbose_pme(const QJsonObject& params);
+    void calculate_xpme(const QJsonObject& params);
+    void calculate_verbose_xpme(const QJsonObject& params);
+    void calculate_tessa_xpme(const QJsonObject& params);
+    void calculate_tessa_verbose_xpme(const QJsonObject& params);
+
+    // PyVollib Analytics
+    void calculate_black_price(const QJsonObject& params);
+    void calculate_black_greeks(const QJsonObject& params);
+    void calculate_black_iv(const QJsonObject& params);
+
+    void calculate_bs_price(const QJsonObject& params);
+    void calculate_bs_greeks(const QJsonObject& params);
+    void calculate_bs_iv(const QJsonObject& params);
+
+    void calculate_bsm_price(const QJsonObject& params);
+    void calculate_bsm_greeks(const QJsonObject& params);
+    void calculate_bsm_iv(const QJsonObject& params);
+
+    // GluonTS Analytics
+    void gluonts_check_status(const QJsonObject& params);
+    void gluonts_probabilistic_forecast(const QJsonObject& params);
+    void gluonts_quantile_forecast(const QJsonObject& params);
+    void gluonts_distribution_fit(const QJsonObject& params);
+    void gluonts_evaluate_forecast(const QJsonObject& params);
+    void gluonts_seasonal_naive(const QJsonObject& params);
+
+    // Fixed Income Analytics
+    void run_fixed_income_command(
+        const QString& command,
+        const QJsonObject& params);
+
     // ── Deal Comparison ─────────────────────────────────────────────────────
     void compare_deals(const QJsonObject& params);
     void rank_deals(const QJsonObject& params);
