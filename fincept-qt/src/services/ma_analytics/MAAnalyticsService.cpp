@@ -674,7 +674,7 @@ void MAAnalyticsService::fortitudo_mean_variance_optimize(const QJsonObject& par
         "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
         "mean_variance_optimize",
         params,
-        "mean_variance_optimize");
+        "fortitudo_mean_variance_optimize");
 }
 
 void MAAnalyticsService::fortitudo_mean_cvar_optimize(const QJsonObject& params) {
@@ -682,7 +682,7 @@ void MAAnalyticsService::fortitudo_mean_cvar_optimize(const QJsonObject& params)
         "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
         "mean_cvar_optimize",
         params,
-        "mean_cvar_optimize");
+        "fortitudo_mean_cvar_optimize");
 }
 
 void MAAnalyticsService::fortitudo_efficient_frontier(const QJsonObject& params) {
@@ -690,7 +690,7 @@ void MAAnalyticsService::fortitudo_efficient_frontier(const QJsonObject& params)
         "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
         "efficient_frontier",
         params,
-        "efficient_frontier");
+        "fortitudo_efficient_frontier");
 }
 
 void MAAnalyticsService::fortitudo_exp_decay_probabilities(const QJsonObject& params) {
@@ -698,7 +698,7 @@ void MAAnalyticsService::fortitudo_exp_decay_probabilities(const QJsonObject& pa
         "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
         "exp_decay_probabilities",
         params,
-        "exp_decay_probabilities");
+        "fortitudo_exp_decay_probabilities");
 }
 
 // PyPME Analytics
